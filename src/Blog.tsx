@@ -1,5 +1,6 @@
 import { tr } from "../shared/i18n";
 import { useShopDisplay } from "./money";
+import { articleKinds } from "../shared/article-features";
 import { createRequestId } from "./request-id";
 import { ArticleImageChooser } from "./ArticleImages";
 import type { ArticleFile } from "../server/article-files";
@@ -22,8 +23,8 @@ import type { Workspace } from "./App";
 const ArticleEditor = lazy(() => import("./ArticleEditor"));
 export type Navigate = (href: string) => void;
 type Run = (fn: () => Promise<void>) => Promise<void>;
-const freshContent = (date: string): Content => ({
-  category: "blogs",
+const freshContent = (date: string, category: PostCategory = "blogs"): Content => ({
+  category,
   title: "",
   slug: "",
   date,
@@ -46,7 +47,7 @@ export function BlogEditor({
 }) {
   const api = useApi();
   const { shopToday } = useShopDisplay();
-  const fresh = () => freshContent(shopToday());
+  const fresh = () => freshContent(shopToday(), articleKinds(shop.published)[0] || "blogs");
   const [posts, setPosts] = useState<Post[]>([]),
     [current, setCurrent] = useState<Post>();
   const [content, setContent] = useState<Content>(fresh),
@@ -198,8 +199,7 @@ export function BlogEditor({
                         update("category", event.target.value as PostCategory)
                       }
                     >
-                      <option value="blogs">{tr("ブログ")}</option>
-                      <option value="announcements">{tr("お知らせ")}</option>
+                      {(["blogs", "announcements"] as const).filter(kind=>articleKinds(shop.published).includes(kind)||current?.draft.category===kind).map(kind=><option key={kind} value={kind}>{postLabel(kind)}</option>)}
                     </select>
                   </label>
                   <label className="field">
@@ -485,10 +485,12 @@ export function RecentPosts({
   posts,
   basePath,
   navigate,
+  archive = "blogs",
 }: {
   posts: PostSummary[];
   basePath: string;
   navigate: Navigate;
+  archive?: PostCategory;
 }) {
   if (!posts.length) return null;
   return (
@@ -497,13 +499,13 @@ export function RecentPosts({
         <h2>{tr("お店からのお便り")}</h2>
         <a
           data-article-link
-          href={`${basePath}/blogs`}
+          href={`${basePath}/${archive}`}
           onClick={(e) => {
             e.preventDefault();
-            navigate(`${basePath}/blogs`);
+            navigate(`${basePath}/${archive}`);
           }}
         >
-          {tr("ブログ一覧 →")}</a>
+          {archive === "blogs" ? tr("ブログ一覧 →") : tr("お知らせ一覧 →")}</a>
       </div>
       <div className="recent-post-list">
         {posts.map((post) => (

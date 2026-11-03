@@ -5,6 +5,7 @@ import {useApi} from "./api";
 import {DictationButton} from "./DictationButton";
 import { RequestImagePicker } from "./RequestImagePicker";
 import type {ShopConfig} from "../server/domain";
+import type { Plan } from "./App";
 
 // Capture the rendered page with its computed styles, without granting screen sharing.
 // Cross-origin images without CORS are represented by their labelled image frame.
@@ -60,7 +61,7 @@ export async function capturePage(root: HTMLElement) {
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/png");
 }
-export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost}: {
+export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, initialPlanId, onPlan}: {
   shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
   local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
   /** The screen being edited (tree ID, display name and exported file), sent with the request. */
@@ -70,6 +71,8 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   /** True while the captured screen is shown, so the live preview below can be hidden. */
   onActiveChange?: (active: boolean) => void;
   triggerHost?: HTMLElement | null;
+  initialPlanId?: string;
+  onPlan?: (plan: Plan) => void;
 }) {
   const api = useApi();
   const [image, setImage] = useState("");
@@ -96,6 +99,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   useEffect(() => () => onActiveChange?.(false), []);
   const close = () => { stopDictation.current?.(); setImage(""); setResult(undefined); setError(""); };
   const identify = () => run(async () => {
+    if (initialPlanId) { setResult({ id: initialPlanId, explanation: tr("赤ペンと依頼をもとに、初回テーマを修正して再確認します。"), candidates: [{ id: "appearance", label: tr("ページの雰囲気") }] }); setTarget("appearance"); return; }
     const media = {mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1]};
     setResult(undefined); setTarget("");
     const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, displayed: config, local, ...(screen ? { screen } : {})});
@@ -136,9 +140,13 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         </div>
       </form>
       {result && <div className="notice"><p>{result.explanation}</p><label>{tr("変更する対象を確認")}<select value={target} onChange={e => setTarget(e.target.value)}><option value="">{tr("対象を選んでください")}</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {
+          if (initialPlanId) {
+            const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlanId}/theme`, { instruction, imageIds, media: { mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1] } });
+            onPlan?.(response.plan); close(); return;
+          }
           const proposed = await api<{config: ShopConfig}>(`/api/shops/${shopId}/visual/propose`, {id: result.id, target, instruction, imageIds});
           onLocalChange(proposed.config);
-        })}>{tr("この対象をローカルに変更")}</button></div>}
+        })}>{initialPlanId ? tr("テーマを修正して確認") : tr("この対象をローカルに変更")}</button></div>}
     </>}
   </div>}
   </>;

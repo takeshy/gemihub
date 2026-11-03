@@ -12,7 +12,7 @@ export const conversationInputSchema = z.object({ intent: requestIntentSchema, r
 export const chatReferenceSchema = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), requestId: z.uuid() });
 export type ChatReference = z.infer<typeof chatReferenceSchema>;
 export function conversationContext(chat: ShopChat, limit=24) {
-  return chat.messages.slice(-limit).map(message=>({role:message.role,text:message.detail.partial?tr("（途中で終了した発言）{0}", message.text):message.text}));
+  return chat.messages.slice(-limit).map(message=>({role:message.role,text:(message.detail.partial?tr("（途中で終了した発言）{0}", message.text):message.text)+(message.detail.imageIds?.length?`\nAttached image IDs: ${message.detail.imageIds.join(", ")}`:"")}));
 }
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 export async function conversations(store: Store, shop: Shop, email: string) {

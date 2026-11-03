@@ -20,6 +20,8 @@ What the settings in `spec.md` mean and how changes are requested, approved, pub
 - `hours`: `start`, `end`, `closedWeekdays`, `holidays` (dates).
 - `rules`: `interval`, `advanceDays`, `leadMinutes`, `sameDay`, `cancelHours`, and `payment` (`enabled`, `refundTiers`).
 - `pages[]`, `header`, `footer`, `appearance`: customer-facing pages and design.
+- `appearance.articles`: separate `blogs` and `announcements` choices. If absent, both remain enabled for existing shops.
+- `appearance.theme`: the reviewed first-creation HTML/CSS around application-provided navigation, content and footer slots. It cannot supply scripts, booking forms or authentication logic.
 
 # Country, currency and time zone
 
@@ -30,6 +32,12 @@ Changing country does not convert menu amounts. Review prices before accepting n
 New shops use the browser's preferred language: Japanese means JP, other languages mean US. A supported US browser time zone is used; otherwise US defaults to America/New_York. Missing language falls back to JP. Reconnecting or changing interface language does not change an existing shop. The browser supplies a time-zone cookie before login; these values are only initial defaults, not authorization.
 
 # Publication
+
+Before the first preview, gemihub asks for the shop name and whether a logo is available. Blog, announcements, staff introduction and products/services are separate choices. Staff and product introductions add pages; they do not create factual staff or price records.
+
+Attached reference pages guide the theme's layout, typography and composition. The screenshot itself is not pasted into the page. Images requested as logos or photos are used as assets. An independent model context reviews every attachment's purpose, duplicate navigation and the requested design; failed themes are repaired and reviewed, up to three generation attempts. A failed review never silently passes. Candidates are saved so a temporary review failure can resume without generating again.
+
+After the theme sample appears, the owner can circle an area in red and request a theme revision. The reviewed replacement stays unpublished and preserves booking, price, staff and rule settings. Return to questions restores the same private interview for factual corrections.
 
 A new shop is first published provisionally: only the owner who created it can view the pages. After checking the screens, the owner publishes it publicly. Later changes are reflected to the public pages when approved.
 

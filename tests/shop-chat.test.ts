@@ -24,10 +24,14 @@ test("begin asks the first question and supports initial shop creation without r
   async function api(path:string,body:unknown){const response=await fetch(prefix+path,{method:"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json"},body:JSON.stringify(body)});return{status:response.status,body:await response.json()};}
   const start={intent:"create-shop",requestId:randomUUID(),begin:true};
   const opened=(await api("/conversations",start)).body;
-  assert.equal(opened.messages.length,1);assert.equal(opened.messages[0].role,"assistant");assert.equal(opened.messages[0].text,"どういう業種のお店ですか？");assert.equal(called,0);
+  assert.equal(opened.messages.length,1);assert.equal(opened.messages[0].role,"assistant");assert.equal(opened.messages[0].text,"お店の名前を教えてください。");assert.equal(called,0);
   assert.equal((await api("/conversations",start)).body.messages.length,1,"retrying begin does not duplicate the opening question");
   const first=await api("/system/question",{question:"はじめまして",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
   assert.equal(first.status,200);assert.equal(first.body.ready,false);
+  const named=await api("/system/question",{question:"月のアトリエです",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
+  assert.match(named.body.answer,/ロゴ/);
+  const logo=await api("/system/question",{question:"ロゴはありません",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
+  assert.equal(logo.body.answer,"どういう業種のお店ですか？");
   const second=await api("/system/question",{question:"ネイルサロンです。",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
   assert.equal(second.status,200);assert.equal(second.body.ready,false);assert.match(second.body.answer,/ほしい機能を次から選んでください。\n1\./);
   const third=await api("/system/question",{question:"1、2、3",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
@@ -42,7 +46,7 @@ test("begin asks the first question and supports initial shop creation without r
   const plan=await api("/plan",{text:"ネイルサロンのページ",intent:"create-shop",chat:reference});
   assert.equal(plan.status,200);assert.equal(plan.body.requiresSetup,true);assert.equal((await store.shop(shop.id))!.published,null);
   const combined=(await api("/conversations",{...start,requestId:randomUUID()})).body;
-  const complete=await api("/system/question",{question:"ネイルサロンです。紹介と予約だけでいいです。他のページは不要です。",intent:"create-shop",revision:0,chat:{id:combined.id,requestId:randomUUID()}});
+  const complete=await api("/system/question",{question:"店名は月のアトリエです。ロゴはありません。ネイルサロンです。紹介と予約だけでいいです。他のページは不要です。",intent:"create-shop",revision:0,chat:{id:combined.id,requestId:randomUUID()}});
   assert.equal(complete.body.ready,false,"even a prematurely ready model must wait for the final answer");
   assert.equal(complete.body.answer,"ほかに伝えたいことはありますか？");
 });

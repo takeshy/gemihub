@@ -6,7 +6,7 @@ import { menuImageLimit, type MenuImageData } from "../server/menu-image-domain"
 import { RequestImagePicker } from "./RequestImagePicker";
 import { ImageUploadStatus } from "./ImageUploadStatus";
 
-export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image" }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string }) {
+export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image", style }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string; style?: React.CSSProperties }) {
   const api = useApi();
   const ref = useRef<HTMLSpanElement>(null);
   const [visible, setVisible] = useState(false);
@@ -32,7 +32,7 @@ export function MenuImage({ imageId, imageBase, suffix = "", name, className = "
     return () => { disposed = true; if (url) URL.revokeObjectURL(url); };
   }, [imageId, imageBase, suffix, visible, api]);
   if (!imageId) return null;
-  return <span ref={ref} className={className}>{image?.id === imageId ? <img src={image.url} alt={tr("{0}の画像", name)} /> : <span>{error ? tr("画像を読み込めませんでした") : tr("画像を読み込み中…")}</span>}</span>;
+  return <span ref={ref} className={className} style={style}>{image?.id === imageId ? <img src={image.url} alt={tr("{0}の画像", name)} /> : <span>{error ? tr("画像を読み込めませんでした") : tr("画像を読み込み中…")}</span>}</span>;
 }
 
 export function MenuImageEditor({ shopId, imageId, name, change, uploading, label = tr("メニュー画像（任意）"), imageBase, pickerBase, uploadPath }: { label?: string; imageBase?: string; pickerBase?: string; uploadPath?: string; shopId: string; imageId?: string; name: string; change: (imageId: string | undefined) => void; uploading?: (busy: boolean) => void }) {

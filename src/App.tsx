@@ -17,7 +17,7 @@ import { DataManagement } from "./DataManagement";
 import { ShopOverview } from "./ShopOverview";
 import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
-import { SiteHeader, SiteFooter } from "./SiteChrome";
+import { SiteHeader, SiteFooter, ThemeBody } from "./SiteChrome";
 import { CustomPage } from "./CustomPage";
 import { LiveSettings } from "./LiveSettings";
 import { LocalPreview } from "./LocalPreview";
@@ -34,6 +34,7 @@ import { LegacyNotes } from "./LegacyNotes";
 import { JudgeStart, JudgeMenu, JudgeBar, AccessPassword } from "./JudgeAccess";
 import { ShopReset } from "./ShopReset";
 import { ImageLibrary } from "./ImageLibrary";
+import { articleKinds } from "../shared/article-features";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
 import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
@@ -44,6 +45,7 @@ export type Plan = {
   summary: string[];
   approved: boolean;
   requiresSetup?: boolean;
+  themeReview?: { attempts: number; approved: boolean };
   chat?: ChatReference;
   base: number;
 };
@@ -408,7 +410,7 @@ function Dashboard({
             ...(shop ? [["customers", "♧", tr("お客様")]] : []),
             ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")]] : []),
             ["inquiries", "✉", tr("お問い合わせ")],
-            ["blog", "✎", tr("ブログ・お知らせ")],
+            ...(articleKinds(shop.published).length ? [["blog", "✎", articleKinds(shop.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
             ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
             ...(shop?.isOwner ? [["images", "▧", tr("画像管理")], ["data", "▤", tr("データ管理")]] : []),
             ["settings", "⚙", tr("公開の設定")],
@@ -1333,7 +1335,7 @@ export function PublicShop({
   const c = data.config;
   return (
     <ShopRegionContext.Provider value={regionOf(c)}>
-    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}`}>
+    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${c.appearance?.theme ? " custom-theme" : ""}`}>
       {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
       <nav className="public-nav">
@@ -1352,7 +1354,7 @@ export function PublicShop({
           </button>
         ))}
         {
-          (["blogs", "announcements"] as const).map((cat) => (
+          articleKinds(c).map((cat) => (
             <button
               key={cat}
               className={category === cat ? "active" : ""}
@@ -1364,13 +1366,14 @@ export function PublicShop({
         {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
       </nav>
       </SiteHeader>}
+      <ThemeBody config={c} imageBase={`${base}/images`}>
       {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label={tr("会員登録・ログイン")}>
         <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{tr("Googleアカウントでご利用いただけます。")}</p></div>
         <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><a className="button primary" href={data.authUrl}>{tr("会員登録")}</a></div><div><span>{tr("登録済みの方")}</span><a className="button" href={data.authUrl}>{tr("ログイン")}</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
       </section>}
       {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
         c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
-      ) : category ? (
+      ) : category && articleKinds(c).includes(category) ? (
         <PublicBlog
           baseApi={base}
           basePath={basePath}
@@ -1382,7 +1385,8 @@ export function PublicShop({
         <>
           {pane === "mine" && (
             <RecentPosts
-              posts={data.recentPosts || []}
+              posts={(data.recentPosts || []).filter(post=>articleKinds(c).includes(post.category))}
+              archive={articleKinds(c)[0]}
               basePath={basePath}
               navigate={navigate}
             />
@@ -1668,7 +1672,8 @@ export function PublicShop({
           )}
         </>
       )}
-      {!hideFooter && <SiteFooter config={c} />}
+      </ThemeBody>
+      {!hideFooter && <SiteFooter config={c} imageBase={`${base}/images`} />}
     </div>
     </ShopRegionContext.Provider>
   );

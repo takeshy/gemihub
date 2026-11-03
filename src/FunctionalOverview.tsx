@@ -13,7 +13,7 @@ function Icon({ kind }: { kind: keyof typeof paths }) {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[kind]} /></svg>;
 }
 
-export function FunctionalOverview({ pages = [] }: { pages?: string[] }) {
+export function FunctionalOverview({ pages = [], articles }: { pages?: string[]; articles?: { blogs: boolean; announcements: boolean } }) {
   return <div className="functional-overview" aria-label={tr("用意するページと機能")}>
     <section className="feature-customer">
       <div className="feature-audience"><span>{tr("お客様")}</span><h4>{tr("お客様が使うページ")}</h4></div>
@@ -29,7 +29,7 @@ export function FunctionalOverview({ pages = [] }: { pages?: string[] }) {
       <div className="feature-cards">
         <div><Icon kind="calendar" /><h5>{tr("予約を管理")}</h5><p>{tr("いつ・誰の予約があるか")}<br />{tr("一覧で確認できます。")}</p></div>
         <div><Icon kind="people" /><h5>{tr("お客様を覚える")}</h5><p>{tr("来店の記録やメモを")}<br />{tr("まとめて残せます。")}</p></div>
-        <div><Icon kind="news" /><h5>{tr("お知らせを届ける")}</h5><p>{tr("ブログやお知らせを")}<br />{tr("ページに載せられます。")}</p></div>
+        {(!articles || articles.blogs || articles.announcements)&&<div><Icon kind="news" /><h5>{tr("お知らせを届ける")}</h5><p>{!articles||articles.blogs&&articles.announcements?tr("ブログやお知らせをページに載せられます。"):articles.blogs?tr("ブログをページに載せられます。"):tr("お知らせをページに載せられます。")}</p></div>}
         <div><Icon kind="mail" /><h5>{tr("メールでお知らせ")}</h5><p>{tr("予約の受付やキャンセルを")}<br />{tr("メールでお知らせします。")}</p></div>
       </div>
     </section>

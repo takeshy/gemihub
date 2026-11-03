@@ -32,7 +32,7 @@ try{
     const plan={id:planId,shopId:shop.id,base:0,config:proposed,source:null,approved:false,requiresSetup:true,createdAt:Date.now(),summary:['Proposed pages'],chat:{id:chat.id,requestId}};
     await store.put('plan',planId,plan);await attachChatPlan(store,shop,shop.owner,plan.chat,planId);
     const response=await context.request.post(origin+'/api/demo-login',{headers:{Origin:origin},data:{role:'owner',email:shop.owner}});assert.equal(response.status(),200);
-    const back=page.getByRole('button',{name:language==='ja'?'直したいことを伝える':'Describe what to change',exact:true});
+    const back=page.getByRole('button',{name:language==='ja'?'聞き取りに戻る':'Return to questions',exact:true});
     const composer=page.getByRole('textbox',{name:language==='ja'?'AIに伝えたいこと':'Your message to AI',exact:true});
     const log=page.getByRole('log',{name:language==='ja'?'AIとのチャット':'Chat with AI',exact:true});
     const starts=[];page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/conversations'))starts.push(request.url());});

@@ -24,7 +24,7 @@ test("language contexts isolate concurrent requests and preserve interpolation v
 
 test("English demo onboarding waits for the final answer and accepts English feature choices", () => requestLocale.run("en", () => {
   const messages: {role:string;text:string}[] = [{role:"assistant",text:openingQuestions["create-shop"]}];
-  for (const [text, expected] of [["A nail salon", /Choose the features/], ["Booking and blog", /other pages/], ["No other pages", /Anything else/], ["Nothing else, please proceed", /put together screens/]] as const) {
+  for (const [text, expected] of [["Moon Atelier", /logo/], ["No logo", /shop|industry|business/i], ["A nail salon", /Choose the features/], ["Booking and blog", /other pages/], ["No other pages", /Anything else/], ["Nothing else, please proceed", /put together screens/]] as const) {
     const result=initialSetupDemoReply(text,messages);
     assert.match(result.answer,expected);
     messages.push({role:"user",text},{role:"assistant",text:result.answer});

@@ -73,6 +73,12 @@ try {
   await open("onboarding", "AIとお店をつくる");
   await capture("02-start-guide.jpg", ".interview");
   await page.getByRole("button", {name:"はじめる",exact:true}).click();
+  await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("月のアトリエ");
+  await page.getByRole("button",{name:"送信",exact:true}).click();
+  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText(/使いたいロゴはありますか/).waitFor();
+  await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("なし");
+  await page.getByRole("button",{name:"送信",exact:true}).click();
+  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText("どういう業種のお店ですか？",{exact:true}).waitFor();
   await page
     .getByRole("textbox", { name: "AIに伝えたいこと" })
     .fill(

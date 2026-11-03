@@ -25,6 +25,7 @@ output "shared_vm_registration" {
           FIRESTORE_DATABASE_ID                                           = google_firestore_database.app.name
           GOOGLE_CLOUD_LOCATION                                           = var.vertex_location
           VERTEX_MODEL                                                    = var.vertex_model
+          VERTEX_REVIEW_MODEL                                             = var.vertex_review_model
           GEMINI_MODEL                                                    = var.vertex_model
           GEMINI_IMAGE_MODEL                                              = var.image_model
           VERTEX_IMAGE_LOCATION                                           = var.image_location
@@ -32,6 +33,7 @@ output "shared_vm_registration" {
           PAYPAL_ENVIRONMENT                                              = var.paypal_environment
           ADMIN_EMAILS                                                    = join(",", var.admin_emails)
           OPENAI_MODEL                                                    = var.openai_model
+          OPENAI_REVIEW_MODEL                                             = var.openai_review_model
           OPENAI_IMAGE_MODEL                                              = var.openai_image_model
           VERTEX_LIVE_MODEL                                               = var.live_model
           VERTEX_LIVE_LOCATION                                            = var.live_location

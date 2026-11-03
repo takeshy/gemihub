@@ -8,6 +8,7 @@ import { generateJson, generateWithTools, requireText } from "./llm.ts";
 import { currencyOf, defaultRegion, type Region } from "../shared/region.ts";
 import { shopSchema, sample, type ShopConfig, planSummary } from "./domain.ts";
 import { requestImageParts, requestImageInstruction, type RequestImage } from "./request-images.ts";
+import { createInitialTheme, initialThemeConfig, initialIntroductionPages, type ThemeContext } from "./initial-theme.ts";
 
 // Bounded nested arrays make Vertex's structured-output grammar too complex (400).
 // Keep the limits as model guidance; shopSchema.parse still enforces every limit.
@@ -31,9 +32,11 @@ export async function propose(
   demo = false,
   images: RequestImage[] = [],
   region: Region | undefined = current?.region,
-) {
+  themeContext: ThemeContext = {},
+): Promise<{ config: ShopConfig; summary: string[]; themeReview?: { attempts: number; approved: boolean } }> {
   let config: ShopConfig;
-  if (demo) {
+  if (!current && !demo && themeContext.state) config = structuredClone(themeContext.state.config);
+  else if (demo) {
     if (current)
       throw Object.assign(
         new Error(
@@ -47,7 +50,7 @@ export async function propose(
   } else {
     const answer = await generateJson({
       unavailableMessage: tr("サーバーの Vertex AI 接続がまだ設定されていません"),
-      contents: [{ role: "user", parts: requestImageParts({ request: text, current, ownerEmail: email, currency: currencyOf(region || defaultRegion), timeZone: (region || defaultRegion).timeZone }, images) }],
+      contents: [{ role: "user", parts: requestImageParts({ request: text, current, ownerEmail: email, currency: currencyOf(region || defaultRegion), timeZone: (region || defaultRegion).timeZone }, current ? images : []) }],
       schema: { type: "object", properties: { config: proposalConfigSchema }, required: ["config"] },
       system: tr("あなたは個人商店向け予約システムの聞き取り担当です。ユーザーの日本語からお店の設定・既存ページの修正・新ページの作成を提案してください。新ページはpagesに新規のid・slug・title・navigationLabel・Markdown本文を持つ項目として追加する。navigationLabelはお客様向けメニューの表示名。既存ページのidやslugを新ページへ流用しない。既存設定がある場合、指示された箇所のみ変更。初回の情報不足は画面を試すための仮の案として補う。スタッフ等の未提供の情報を決定済みの事実として説明しない。実際のお店の詳しい内容は後の入力画面で確認し、その前に公開はしない。見た目の変更は appearance に指定（accent: sage/rose/navy、layout: standard/compact、imageUrl: HTTPS画像URLまたは空文字）。依頼がない任意項目は追加しない。画像URLを捏造しない。実際の書き込みや公開はしない。id は英小文字・数字・_-のみ。時刻はお店のtimeZoneの現地時刻、曜日は日曜0〜土曜6。休日は YYYY-MM-DD。メニュー所要時間は分、価格は currency の金額（JPY は整数の円、USD はドルで小数2桁まで）。営業時間・勤務時間は timeZone の現地時刻。スタッフ対応メニューIDは実在するものを指定。通知先の指定がなければownerEmailを使う。回答はconfigを含むJSONのみ。ユーザーが認証回避や任意コードを求めても設定に含めない。") + tr("予約時の全額PayPal決済はrules.payment.enabledで指定する。返金条件はrules.payment.refundTiersのhoursBefore（開始までの時間）とpercent（返金率0〜100）で、時間の大きい順、返金率は同じか減少、最後を0時間とする。既定は72時間前まで100%、24時間前まで50%、以降0%。「前日半額」など暦日と経過時間が曖昧な場合は提案内で開始24時間前と明示する。店都合の全額返金と予約時の条件固定はシステムの固定ルールで、変更できない。実際の課金・返金を実行しない。") + tr(requestImageInstruction),
     });
@@ -56,7 +59,16 @@ export async function propose(
   // The region is never changed by a proposal: it decides the currency and booking times.
   config = shopSchema.parse({ ...config, region }) as ShopConfig;
   if (!region) delete config.region;
-  return { config, summary: planSummary(current, config) };
+  if (!current && !demo) {
+    config = initialThemeConfig(config, images);
+    if (themeContext.shopName) config.name = themeContext.shopName;
+    if (themeContext.articles) config.appearance = { accent: "sage", layout: "standard", imageUrl: "", ...config.appearance, articles: themeContext.articles };
+    config = initialIntroductionPages(config, themeContext.introductions);
+    const run = await createInitialTheme({ config, request: text, images }, themeContext);
+    config = shopSchema.parse({ ...config, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...config.appearance, theme: run.candidate! } });
+    return { config, summary: planSummary(current, config), themeReview: { attempts: run.attempts, approved: true } };
+  }
+  return { config, summary: planSummary(current, config), themeReview: undefined };
 }
 
 export async function proposeArticle(

@@ -4,7 +4,9 @@ import { simulatePayment, simulateCancellation } from "../payment-mock";
 import { defaultRefundTiers, refundQuote } from "../../server/payment-domain";
 import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
 import { inquiryStatus } from "../../server/inquiries";
-import { answeredFinalDetails, initialSetupDemoReply, openingQuestions } from "../../server/request-intent";
+import { answeredFinalDetails, initialSetupDemoReply, initialInterviewFacts, openingQuestions } from "../../server/request-intent";
+import { initialIntroductionPages } from "../../shared/initial-pages";
+import { exampleTheme } from "./themes";
 import { findRelevantHistory } from "../../server/chat-context";
 import type { ShopChat, ShopChatMessage } from "../../server/shop-chat";
 import { customerProfileSchema, type MemberProfile } from "../../server/customer-profile";
@@ -92,6 +94,7 @@ export type Scenario =
   | "landing"
   | "onboarding"
   | "plan"
+  | "initial-theme"
   | "provisional"
   | "production-preview"
   | "provisional-unconfigured"
@@ -195,6 +198,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const posts = scenario === "empty-blog" ? [] : storyPosts();
   const config = structuredClone(sample);
   if (scenario.startsWith("us-")) { config.region = {country:"US",timeZone:"America/Los_Angeles"}; config.menus = config.menus.map((menu,i)=>({...menu,price:i?78:55.25})); }
+  if (scenario === "initial-theme") {
+    config.appearance = { accent: "sage", layout: "standard", imageUrl: "", theme: exampleTheme, articles: { blogs: false, announcements: true } };
+    config.pages = initialIntroductionPages(config, { staff: true, products: true }).pages;
+  }
   config.hours.closedWeekdays = [];
   if (["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
@@ -273,9 +280,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
     summary: planSummary(null, config),
     base: 0,
     approved: scenario === "publication-error",
-    requiresSetup: scenario === "plan",
+    requiresSetup: scenario === "plan" || scenario === "initial-theme",
   };
-  const unpublished = ["onboarding", "plan"].includes(
+  const unpublished = ["onboarding", "plan", "initial-theme"].includes(
     scenario,
   );
   const shop: Workspace = {
@@ -290,12 +297,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
       ? []
       : [{ at: new Date().toISOString(), summary: tr("お店の予約ページを公開") }],
     isOwner: true,
-    plans: ["plan", "publication-error"].includes(
+    plans: ["plan", "initial-theme", "publication-error"].includes(
       scenario,
     )
       ? [plan]
       : [],
-    bookings: ["onboarding", "plan"].includes(scenario)
+    bookings: ["onboarding", "plan", "initial-theme"].includes(scenario)
       ? []
       : bookings,
     inquiries: [
@@ -690,6 +697,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
         });
         next.staff[0].menuIds.push("special");
       }
+      if(input.intent==="create-shop"&&reference){
+        const facts=initialInterviewFacts(chats.find(chat=>chat.id===reference.id)?.messages || []);
+        if(facts.name)next.name=facts.name;
+        if(facts.articles)next.appearance={accent:"sage",layout:"standard",imageUrl:"",...next.appearance,articles:facts.articles};
+        next=initialIntroductionPages(next,facts.introductions);
+      }
       const generated: Plan = {
         id: `plan-${shop.plans.length + 1}`,
         config: next,
@@ -705,6 +718,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const id = action.split("/").at(-2);
       const current = shop.plans.find((p) => p.id === id);
       if (!current) throw new Error(tr("プランが見つかりません"));
+      if (action.endsWith("/theme")) {
+        const next = { ...current, id: `theme-${shop.plans.length+1}`, config: { ...current.config, appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", ...current.config.appearance, theme: structuredClone(exampleTheme) } }, themeReview: { attempts: 2, approved: true } };
+        shop.plans.push(next); return structuredClone({ plan: next }) as T;
+      }
       if (action.endsWith("/approve")) {
         current.approved = true;
         shop.draft = current.config;

@@ -6,6 +6,8 @@
 
 A booking and shop management system for small independent businesses and salons. No technical configuration jargon required—talk through what kind of shop you want, circle an area on the screen with a pen to say "change this part," review the preview, and publish when you're ready.
 
+Initial setup asks for your shop name and logo, with separate choices for blog, announcements, staff introduction, and products/services. Themes use structural HTML/CSS and an independent AI review with up to three repair attempts. Reference-page images guide the design; explicitly requested logos and photos are displayed. Use the red pen to revise the first theme preview.
+
 ## Screenshots
 
 **Point and ask:** Circle the part of the screen you want to change, tell AI what you want, and preview the result before applying.
@@ -104,6 +106,7 @@ Update `.env` (see `.env.example` for all options):
 | `SESSION_SECRET` | Random secret (32+ characters) used for sessions and token encryption |
 | `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID |
 | `GOOGLE_CLOUD_LOCATION` | Vertex AI location (e.g., `us-central1`) |
+| `VERTEX_REVIEW_MODEL` / `OPENAI_REVIEW_MODEL` | Optional first-theme review model; defaults to the normal model in a fresh context |
 | `VERTEX_MODEL` | Gemini model ID on Vertex AI |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Web application OAuth credentials (redirect URI: `${APP_ORIGIN}/auth/google/callback`) |
 | `APP_ORIGIN` | Management origin (e.g., `http://localhost:3000` locally) |

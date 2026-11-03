@@ -14,7 +14,7 @@ import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } fr
 import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } from "./staff-accounts.ts";
 import { inquiryStatus, inquiryStatusSchema } from "./inquiries.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, type ChatReference } from "./shop-chat.ts";
-import { answeredFinalDetails, finalDetailsQuestion, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
+import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
 import {
   createServer,
@@ -28,6 +28,7 @@ import { resolve, extname } from "node:path";
 import { z } from "zod";
 import { Store, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
+import { createInitialTheme, initialThemeConfig, initialIntroductionPages, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { listDataSheets, readDataTable, writeDataRow } from "./data-management.ts";
@@ -61,6 +62,7 @@ import {
   trashFile,
 } from "./google.ts";
 import { regionOf, currencyOf, dateIn, formatMinor } from "../shared/region.ts";
+import { themeImageIds } from "../shared/presentation.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
@@ -144,6 +146,8 @@ type Plan = {
   summary: string[];
   approved: boolean;
   requiresSetup?: boolean;
+  themeRunId?: string;
+  themeReview?: { attempts: number; approved: boolean };
   chat?: ChatReference;
   local?: boolean;
   scope?: ReleaseScope;
@@ -210,6 +214,7 @@ export function createApp(
     generateImage?: typeof generateImage;
     articleMetadata?: typeof generateArticleMetadata;
     assistant?: typeof converse;
+    initialTheme?: typeof createInitialTheme;
   } = { propose, proposeArticle, identifyVisual, explainSystem },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
@@ -1170,6 +1175,34 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          const initialThemeRoute = action.match(/^plans\/([^/]+)\/theme$/);
+          if (initialThemeRoute && method === "POST") {
+            assertOwner(user, fresh);
+            const original = await store.get<Plan>("plan", initialThemeRoute[1]);
+            if (!original || original.shopId !== fresh.id || !original.requiresSetup || original.approved || fresh.published || original.base !== fresh.revision) fail(409, tr("初回テーマの確認画面を開き直してください。"));
+            const input = z.object({ instruction: z.string().trim().min(1).max(4000), imageIds: requestImageIdsSchema.default([]), media: mediaSchema }).parse(await body(req, 12000000));
+            if (input.media.data.length > 5600000) fail(400, tr("4MB以下の PNG を指定してください"));
+            const id = digest(`${fresh.id}:theme-correction:${original.id}:${input.instruction}:${input.imageIds.join(",")}:${digest(input.media.data)}`);
+            const completed = await store.get<Plan>("plan", id);
+            if (completed) return json(res, { plan: completed });
+            const previous = original.themeRunId ? await store.get<ThemeRun>("initialThemeRun", original.themeRunId) : undefined;
+            const chat = original.chat ? await readConversation(store, fresh, user!.email, original.chat.id) : undefined;
+            const ids = [...new Set([...(previous?.imageIds || (chat ? await conversationImageIds(store, fresh, chat, []) : themeImageIds(original.config.appearance?.theme))), ...input.imageIds])];
+            const images = await readRequestImages(store, fresh, ids, crmFiles, store.memory || !ids.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
+            const state = await store.get<ThemeRun>("initialThemeRun", id);
+            const base = structuredClone(original.config);
+            const request = `${previous?.request || (chat ? conversationContext(chat).map(m => `${m.role}: ${m.text}`).join("\n") : original.request || "")}\nCurrent accepted theme: ${JSON.stringify(original.config.appearance?.theme || null)}\nCorrection: ${input.instruction}`;
+            const reviewed = await (intelligence.initialTheme || createInitialTheme)({ config: base, request, images, screen: input.media }, { state, save: next => store.put("initialThemeRun", id, next) });
+            const config = shopSchema.parse({ ...base, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...base.appearance, theme: reviewed.candidate } });
+            validateProposedImages(config, original.config, images);
+            const plan: Plan = { ...original, id, config, themeRunId: id, themeReview: { attempts: reviewed.attempts, approved: true }, createdAt: Date.now(), summary: planSummary(null, config), approved: false };
+            await store.put("plan", id, plan);
+            if (chat && original.chat) {
+              const reply = chat.messages.find(m => m.role === "assistant" && m.requestId === original.chat!.requestId);
+              if (reply?.detail.planId === original.id) await store.put("shopChatMessage", reply.id, { ...reply, detail: { ...reply.detail, planId: id } });
+            }
+            return json(res, { plan });
+          }
           const libraryRoute = action.match(/^images(?:\/([a-f0-9]{64})(?:\/(rename|archive))?)?$/);
           if (libraryRoute && (method === "GET" || method === "POST")) {
             assertOwner(user, fresh);
@@ -1450,7 +1483,8 @@ export function createApp(
             const images = await readRequestImages(store, fresh, imageIds, crmFiles, store.memory || !imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
             const excluded = new Set(savedChat?.messages.slice(-25).map(message=>message.id) || []);
             const relatedHistory = await searchConversationHistory(store,fresh,user!.email,input.question,excluded);
-            const response = await intelligence.explainSystem(input.intent ? `${requestIntentInstruction[input.intent]}\n${input.question}` : input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: savedChat ? conversationContext({...savedChat,messages:savedChat.messages.filter(message => message.requestId !== input.chat!.requestId)}) : input.messages, history: fresh.history, initialSetup:!fresh.published, relatedHistory, searchHistory:query=>searchConversationHistory(store,fresh,user!.email,query,excluded), ...(images.length ? { images } : {}) });
+            const interview = !fresh.published ? initialInterviewFacts(savedChat?.messages || [...input.messages, { role: "user", text: input.question, detail: { imageIds: input.imageIds } }]) : undefined;
+            const response = interview?.question ? { answer: interview.question, changeRequest: true, ready: false } : await intelligence.explainSystem(input.intent ? `${requestIntentInstruction[input.intent]}\n${input.question}` : input.question, config, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, { messages: savedChat ? conversationContext({...savedChat,messages:savedChat.messages.filter(message => message.requestId !== input.chat!.requestId)}) : input.messages, history: fresh.history, initialSetup:!fresh.published, relatedHistory, searchHistory:query=>searchConversationHistory(store,fresh,user!.email,query,excluded), ...(images.length ? { images } : {}) });
             if (fresh.published && !same(config, await effective(fresh))) fail(409, tr("回答中にお店の仕様が変わりました。現在の仕様を更新して質問し直してください"));
             let answer: {answer:string;changeRequest:boolean;ready?:boolean} = input.intent === "consult" ? { ...response, changeRequest: false, ready: false } : response;
             if(input.intent==="create-shop"&&answer.ready&&!answeredFinalDetails(savedChat?.messages || [...input.messages,{role:"user",text:input.question}])) answer={answer:tr(finalDetailsQuestion),changeRequest:true,ready:false};
@@ -1719,6 +1753,8 @@ export function createApp(
             const images = await readRequestImages(store, fresh, planImageIds, crmFiles, store.memory || !planImageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
             const relatedHistory = input.intent ? await searchConversationHistory(store,fresh,user!.email,input.text,new Set(savedChat?.messages.slice(-24).map(message=>message.id) || [])) : [];
             const historicalContext = relatedHistory.length ? tr("参照用の過去の会話です。今回の変更依頼でも、反映済みという意味でもありません。現在の設定を優先してください。\n{0}\n今回の会話と依頼:\n", JSON.stringify(relatedHistory)) : "";
+            const themeRunId = !current && !input.config ? digest(`${fresh.id}:initial-theme:${chatPlanId || input.text}:${planImageIds.join(",")}`) : undefined;
+            const themeState = themeRunId ? await store.get<ThemeRun>("initialThemeRun", themeRunId) : undefined;
             const proposed = input.config
               ? {
                   config: releaseConfig!,
@@ -1734,7 +1770,14 @@ export function createApp(
                   images,
                   // A new shop takes the region from the owner's first visit; later ones keep their own.
                   (visual?.config || current) ? (visual?.config || current)!.region : fresh.regionDefault,
+                  themeRunId ? { state: themeState, ...(savedChat ? { shopName: initialInterviewFacts(savedChat.messages).name, articles: initialInterviewFacts(savedChat.messages).articles, introductions: initialInterviewFacts(savedChat.messages).introductions } : {}), save: state => store.put("initialThemeRun", themeRunId, state) } : undefined,
                 );
+            if (!current && savedChat) {
+              const facts = initialInterviewFacts(savedChat.messages);
+              if (facts.name) proposed.config.name = facts.name;
+              if (facts.articles) proposed.config.appearance = { accent: "sage", layout: "standard", imageUrl: "", ...proposed.config.appearance, articles: facts.articles };
+              proposed.config = initialIntroductionPages(proposed.config, facts.introductions);
+            }
             if (input.intent === "new-page") {
               const added = proposed.config.pages.filter(page => !current!.pages.some(existing => existing.id === page.id));
               if (!added.length) fail(400, tr("新しいページが見つかりませんでした。追加したいページをもう一度教えてください"));
@@ -1757,6 +1800,7 @@ export function createApp(
               shopId: fresh.id,
               base: fresh.revision,
               ...proposed,
+              ...(themeRunId ? { themeRunId } : {}),
               approved: false,
               requiresSetup: !current && !input.config,
               createdAt: Date.now(),

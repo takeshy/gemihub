@@ -93,12 +93,12 @@ export function toOpenAiInput(contents: Content[]): OpenAiInput[] {
 }
 
 /** Generates JSON text matching the schema. Callers keep validating with zod. */
-export async function generateJson(input: { system: string; contents: Content[]; schema: Record<string, unknown>; location?: string; unavailableMessage?: string }): Promise<string> {
+export async function generateJson(input: { system: string; contents: Content[]; schema: Record<string, unknown>; location?: string; unavailableMessage?: string; purpose?: "review" }): Promise<string> {
   const provider = await requireText(input.unavailableMessage || tr("AI の接続がまだ設定されていません"));
   await beforeModelCall();
   if (provider === "openai") {
     const response = await openai().responses.create({
-      model: process.env.OPENAI_MODEL!,
+      model: input.purpose === "review" ? process.env.OPENAI_REVIEW_MODEL || process.env.OPENAI_MODEL! : process.env.OPENAI_MODEL!,
       instructions: input.system,
       input: toOpenAiInput(input.contents),
       text: { format: { type: "json_schema", name: "result", schema: input.schema, strict: false } },
@@ -106,7 +106,7 @@ export async function generateJson(input: { system: string; contents: Content[];
     return response.output_text || "{}";
   }
   const response = await vertexClient(input.location).models.generateContent({
-    model: process.env.VERTEX_MODEL!, contents: input.contents,
+    model: input.purpose === "review" ? process.env.VERTEX_REVIEW_MODEL || process.env.VERTEX_MODEL! : process.env.VERTEX_MODEL!, contents: input.contents,
     config: { responseMimeType: "application/json", responseJsonSchema: input.schema, systemInstruction: input.system },
   });
   return response.text || "{}";

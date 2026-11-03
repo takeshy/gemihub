@@ -60,6 +60,18 @@ variable "image_model" {
   type        = string
 }
 
+variable "vertex_review_model" {
+  description = "Optional first-theme review model; empty uses vertex_model in a separate context."
+  type        = string
+  default     = ""
+}
+
+variable "openai_review_model" {
+  description = "Optional first-theme review model; empty uses openai_model in a separate context."
+  type        = string
+  default     = ""
+}
+
 variable "vertex_location" {
   type    = string
   default = "global"

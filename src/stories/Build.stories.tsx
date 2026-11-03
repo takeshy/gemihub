@@ -22,6 +22,11 @@ export const PlanReview: Story = {
   args: { scenario: "plan" },
 };
 
+export const InitialTheme: Story = {
+  name: "初回テーマ・赤ペン修正・お知らせと紹介ページ",
+  args: { scenario: "initial-theme" },
+};
+
 export const ProductionPreview: Story = {
   name: "本番公開前に各画面を確認",
   args: { scenario: "production-preview" },

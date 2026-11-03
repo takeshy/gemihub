@@ -5,11 +5,12 @@ import { ApiProvider, useApi } from "./api";
 import { createPreviewClient, sampleFixtures, type Fixtures } from "./local-preview";
 import type { ShopConfig } from "../server/domain";
 import { postKey } from "../server/post-domain";
-import { ChromePreview } from "./SiteChrome";
+import { ChromePreview, ThemeBody } from "./SiteChrome";
+import { articleKinds } from "../shared/article-features";
 
 export type PreviewScreen = { id: string; name: string; description: string; pane?: string; category?: "blogs" | "announcements"; article?: boolean; pageSlug?: string };
 export function previewScreens(config: ShopConfig): PreviewScreen[] {
-  return [
+  return ([
     { id: "reserve", name: tr("予約"), description: tr("メニュー・担当者・日時を選んで予約"), pane: "reserve" },
     { id: "about", name: tr("お店のこと"), description: tr("お店の紹介・アクセス・メニュー"), pane: "about" },
     { id: "mine", name: tr("マイページ"), description: tr("自分の予約を確認・キャンセル"), pane: "mine" },
@@ -19,7 +20,7 @@ export function previewScreens(config: ShopConfig): PreviewScreen[] {
     { id: "announcements", name: tr("お知らせ一覧"), description: tr("営業日などの案内を一覧で見る"), category: "announcements" },
     { id: "announcements:article", name: tr("お知らせ記事"), description: tr("お店からの案内を読む"), category: "announcements", article: true },
     ...config.pages.map(page => ({ id: `page:${page.id}`, name: page.title, description: tr("追加するページ"), pageSlug: page.slug })),
-  ];
+  ] as PreviewScreen[]).filter(screen => !screen.category || articleKinds(config).includes(screen.category));
 }
 
 export type PreviewLocation = { id: string; name: string; articleKey?: string };
@@ -54,7 +55,7 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
  * The first-publication review: the screens that will be prepared, by name only, and a sample of
  * the theme (header, footer, colours and layout) with placeholder content instead of screen captures.
  */
-export function ScreenGallery({ config, shopId }: { config: ShopConfig; shopId: string }) {
+export function ScreenGallery({ config, shopId, themeRef }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null> }) {
   const accent = config.appearance?.accent || "sage";
   const layout = config.appearance?.layout || "standard";
   return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}>
@@ -63,10 +64,10 @@ export function ScreenGallery({ config, shopId }: { config: ShopConfig; shopId: 
     <p className="small muted">{tr("全画面に共通のヘッダー・フッターが付きます。")}</p>
     <h4>{tr("ページの雰囲気")}</h4>
     <p className="small muted">{tr("色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。")}</p>
-    <div className="theme-preview" inert aria-hidden="true">
-      <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/images`} />
-      <div className={`public-shop accent-${accent} layout-${layout}`}><div className="theme-placeholder"><span>{tr("ここに各種画面の内容が入ります")}</span></div></div>
-      <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/images`} />
+    <div className="theme-preview" ref={themeRef} inert aria-hidden="true">
+      <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/menu-images`} />
+      <div className={`public-shop accent-${accent} layout-${layout}${config.appearance?.theme?" custom-theme":""}`}><ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><div className="theme-placeholder"><span>{tr("ここに各種画面の内容が入ります")}</span></div></ThemeBody></div>
+      <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/menu-images`} />
     </div>
   </section>;
 }

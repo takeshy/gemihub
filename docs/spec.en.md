@@ -192,3 +192,11 @@ The separate former gemihub service is now kiokuflow. This service uses the name
 ## JP / US country and time-zone settings
 
 Each shop selects JP (JPY, Asia/Tokyo) or US (USD, one of seven US zones) in Shop information. Missing region is JP for compatibility. Prices use major currency units; payment/refund records use integer yen or cents and snapshot their currency. Region changes do not convert menu prices, and AI/design proposals cannot change region. Dates, availability, Calendar bounds, filters, mail and Drive exports follow the shop, including summer-time transitions. First visits use the browser's preferred language, and new-shop defaults use that language and a supported browser time zone, independently of later language choices. See [system settings](system/shop-settings.md) and [verification](i18n.md#region-verification).
+
+## First shop theme and interview
+
+Ask for the real shop name and whether the owner has a logo before proposing screens. Accept no logo or later; if a logo is available, ask for its attachment. Offer separate choices for shop introduction, booking, blog, announcements, inquiries, staff introduction, and products/services. Only selected article kinds appear; legacy settings without flags retain both. Staff and product introductions create custom pages without inventing booking staff or prices.
+
+For first creation only, generate structural HTML/CSS around trusted navigation, page content, and footer slots. Reference-page images guide design; display an image itself when explicitly requested as a photo or logo. A separate reviewer context checks the request, every attachment's purpose, duplicate menus, and layout. Repair and review up to three attempts; reject incomplete reviews and persist candidates for retries. Scripts, independent forms, external CSS and unsafe URLs are rejected, CSS is scoped, and booking/payment/authentication remain application components. Optional VERTEX_REVIEW_MODEL / OPENAI_REVIEW_MODEL override the normal model for review.
+
+After the first theme sample, use Make changes and red-pen instructions. A reviewed replacement is saved without changing business settings or publishing. Return to questions is available for correcting interview facts and restores the original private conversation.

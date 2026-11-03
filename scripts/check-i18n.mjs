@@ -23,7 +23,7 @@ assert.deepEqual(missing,[],'Missing English translations');
 console.log(`Checked ${Object.keys(english).length} translations, placeholders, and ${used} source references.`);
 // Find untranslated source copy too, rather than checking only existing tr calls.
 const raw=[];
-const sourceConstants=new Set(['initialFeatureQuestion','additionalPagesQuestion','finalDetailsQuestion','adaptiveQuestionInstruction','requestImageInstruction']);
+const sourceConstants=new Set(['initialFeatureQuestion','additionalPagesQuestion','finalDetailsQuestion','shopNameQuestion','logoQuestion','logoUploadQuestion','adaptiveQuestionInstruction','requestImageInstruction']);
 for(const file of files.filter(file=>!file.endsWith('.stories.tsx'))){
  const text=fs.readFileSync(file,'utf8'),source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true);
  function visit(n){

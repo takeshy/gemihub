@@ -37,6 +37,7 @@ const patterns={
  '/^AIに依頼する/':'/^Ask AI/',
  '/画像を添付$/':'/Attach image$/',
  '/お店のことを話す/':'/Tell us about your shop/',
+ '/使いたいロゴはありますか/':'/Do you have a logo/',
  '/ほしい機能を次から選んでください。/':'/Choose the features/',
  '/予約一覧/':'/Bookings/',
  '/山田 花子 様/':'/Hanako Yamada/',

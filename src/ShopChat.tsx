@@ -98,7 +98,7 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
   const messages=chat?.messages || [];
   const extraPages=viewPlan?.config.pages.filter(page=>!currentConfig?.pages.some(existing=>existing.id===page.id)) || [];
   if(published&&!isOwner)return <p className="muted">{tr("変更は店主が行います。質問はメニューの「相談・質問」からどうぞ。")}</p>;
-  if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={busy} onBack={()=>void run(returnToChat)} onAccept={()=>void run(()=>onAccept(viewPlan))}/></div>;
+  if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={busy} onBack={()=>void run(returnToChat)} onAccept={()=>void run(()=>onAccept(viewPlan))} onPlan={plan=>{setViewPlan(plan);setPlans(items=>[plan,...items.filter(item=>item.id!==plan.id)]);}}/></div>;
   return <div className="shop-request shop-chat">
     {published&&chat&&<div className="request-intents-reset"><button type="button" className="text-button" disabled={busy} onClick={()=>start("modify")}>{tr("新しい会話をはじめる")}</button></div>}
     <p>{description}</p>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { paymentRulesSchema, type BookingPayment } from "./payment-domain.ts";
 import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
 import { regionSchema, regionOf, currencyOf, validPrice, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
+import { themeSchema } from "../shared/presentation.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const shopSchema = z
   .object({
@@ -14,6 +15,8 @@ export const shopSchema = z
       accent: z.enum(["sage", "rose", "navy"]),
       layout: z.enum(["standard", "compact"]),
       imageUrl: z.union([z.literal(""), z.url({protocol: /^https$/}).max(2048)]),
+      theme: themeSchema.optional(),
+      articles: z.object({ blogs: z.boolean(), announcements: z.boolean() }).optional(),
     }).optional(),
     notificationEmail: z.email(),
     /** Country and time zone; absent means Japan. Decides currency, booking times and dates. */

@@ -101,6 +101,10 @@ try{
     const onboarding=entries.find(entry=>entry.id.endsWith("--onboarding"));
     await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(onboarding.id)}&viewMode=story`);
     await page.getByRole("button",{name:"はじめる",exact:true}).click();
+    await log.getByText("お店の名前を教えてください。",{exact:true}).waitFor();
+    await composer.fill("月のアトリエ");await page.getByRole("button",{name:"送信",exact:true}).click();
+    await log.getByText(/使いたいロゴはありますか/).waitFor();
+    await composer.fill("なし");await page.getByRole("button",{name:"送信",exact:true}).click();
     await log.getByText("どういう業種のお店ですか？",{exact:true}).waitFor();
     await composer.fill("ネイルサロンです。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await log.getByText(/ほしい機能を次から選んでください。/).waitFor();

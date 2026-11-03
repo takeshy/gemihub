@@ -67,7 +67,7 @@ export function artifacts(config: ShopConfig, shell: string, readAsset?: ReadBui
   return {
     ...driveSnapshot(c, shell, readAsset, menuImages),
     ...Object.fromEntries((["header", "footer"] as const).flatMap(part => [[`web/parts/${part}.html`, renderChrome(inline, part)], [`web/parts/${part}.json`, JSON.stringify(c[part], null, 2)]])),
-    ...Object.fromEntries(c.pages.flatMap(page => [[`web/pages/${page.slug}.html`, renderCustomPage(inline.pages.find(item => item.id === page.id)!, shell)], [`web/pages/${page.slug}.json`, JSON.stringify(page, null, 2)]])),
+    ...Object.fromEntries(c.pages.flatMap(page => [[`web/pages/${page.slug}.html`, renderCustomPage(inline.pages.find(item => item.id === page.id)!, shell, "", inline)], [`web/pages/${page.slug}.json`, JSON.stringify(page, null, 2)]])),
     "web/pages/index.json": JSON.stringify(c.pages.map(({ id, slug, title, navigationLabel }) => ({ id, slug, title, navigationLabel })), null, 2),
     "admin/system.svg": systemSvg(c),
     "admin/index.html": shell,
