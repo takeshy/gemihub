@@ -95,6 +95,7 @@ import {
   mediaSchema,
   visualTargets,
   validateVisualChange,
+  proposeVisualAppearance,
   type VisualRequest,
 } from "./visual.ts";
 import { artifacts, checklist, renderShop } from "./artifacts.ts";
@@ -222,7 +223,8 @@ export function createApp(
     assistant?: typeof converse;
     initialTheme?: typeof createInitialTheme;
     settings?: typeof proposeSettings;
-  } = { propose, proposeArticle, identifyVisual, explainSystem },
+    visualAppearance?: typeof proposeVisualAppearance;
+  } = { propose, proposeArticle, identifyVisual, explainSystem, visualAppearance: proposeVisualAppearance },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
   paymentGateway: PaymentGateway = paypalGateway(),
@@ -1439,7 +1441,9 @@ export function createApp(
             if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
               fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
             const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
-            const proposed = await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, input.instruction), visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images);
+            const proposed = input.target === "appearance" && intelligence.visualAppearance
+              ? await intelligence.visualAppearance(visual.config, input.instruction, images)
+              : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, input.instruction), visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images);
             validateProposedImages(proposed.config, visual.config, images);
             const config = validateVisualChange(visual.config, proposed.config, input.target);
             return json(res, { config, summary: planSummary(visual.config, config) });
@@ -2418,7 +2422,7 @@ export function createApp(
               back.searchParams.set("paypal", "return");
               const returnUrl = back.href;
               back.searchParams.set("paypal", "cancel");
-              const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href, currencyOf(regionOf(config)));
+              const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href, currencyOf(regionOf(config)), config.name);
               return json(res, { ok: false, checkout: checkoutView(checkout) });
             }
             await store.transaction(async () => {

@@ -15,6 +15,8 @@ export type Checkout = {
   returnUrl: string; cancelUrl: string; synced?: string;
   /** The shop's currency when the checkout began; absent on older checkouts, which are yen. */
   currency?: Currency;
+  /** Keep checkout branding stable if the shop is renamed while payment is pending. */
+  brandName?: string;
 };
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
 export async function paymentHolds(store: Store, shopId: string, exclude?: string) {
@@ -46,18 +48,18 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
     if (["creating", "awaiting_approval"].includes(c.phase) && c.expires <= Date.now()) { c.phase = "expired"; await save(c); return c; }
     if (c.phase !== "creating") return c;
     const currency = c.currency || "JPY";
-    const order = await gateway.create(c.id, toMinor(c.booking.price, currency), c.returnUrl, c.cancelUrl, currency);
+    const order = await gateway.create(c.id, toMinor(c.booking.price, currency), c.returnUrl, c.cancelUrl, currency, c.brandName);
     c.orderId = order.id;
     c.approvalUrl = approvalUrl(order, c.environment);
     c.phase = "awaiting_approval";
     await save(c);
     return c;
   }
-  async function begin(booking: Booking, policy: RefundTiers, returnUrl: string, cancelUrl: string, currency: Currency = "JPY") {
+  async function begin(booking: Booking, policy: RefundTiers, returnUrl: string, cancelUrl: string, currency: Currency = "JPY", brandName?: string) {
     await gateway.ready();
     let c = await store.get<Checkout>("checkout", booking.id);
     if (!c) {
-      c = { id: booking.id, shopId: booking.shopId, customer: booking.customer, booking: structuredClone(booking), policy: structuredClone(policy), environment: gateway.environment, phase: "creating", createdAt: Date.now(), expires: Date.now() + 10 * 60000, returnUrl, cancelUrl, currency };
+      c = { id: booking.id, shopId: booking.shopId, customer: booking.customer, booking: structuredClone(booking), policy: structuredClone(policy), environment: gateway.environment, phase: "creating", createdAt: Date.now(), expires: Date.now() + 10 * 60000, returnUrl, cancelUrl, currency, ...(brandName ? { brandName } : {}) };
       await save(c);
     }
     return create(c);

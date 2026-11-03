@@ -18,7 +18,7 @@ export interface PaymentGateway {
   environment: PayPalEnvironment;
   ready(): Promise<void>;
   /** `amount` is in minor units (yen or cents) of `currency`. */
-  create(id: string, amount: number, returnUrl: string, cancelUrl: string, currency?: Currency): Promise<PayPalOrder>;
+  create(id: string, amount: number, returnUrl: string, cancelUrl: string, currency?: Currency, brandName?: string): Promise<PayPalOrder>;
   order(id: string): Promise<PayPalOrder>;
   capture(id: string, requestId: string): Promise<PayPalOrder>;
   refund(captureId: string, amount: number, requestId: string, currency?: Currency): Promise<PayPalRefund>;
@@ -66,10 +66,10 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
   return {
     environment,
     async ready() { await credentials(); },
-    async create(id, amount, returnUrl, cancelUrl, currency = "JPY") {
+    async create(id, amount, returnUrl, cancelUrl, currency = "JPY", brandName) {
       return orderSchema.parse(await request("/v2/checkout/orders", {
         intent: "CAPTURE", purchase_units: [{ custom_id: id, amount: { currency_code: currency, value: paypalValue(amount, currency) } }],
-        payment_source: { paypal: { experience_context: { user_action: "PAY_NOW", shipping_preference: "NO_SHIPPING", return_url: returnUrl, cancel_url: cancelUrl } } },
+        payment_source: { paypal: { experience_context: { user_action: "PAY_NOW", shipping_preference: "NO_SHIPPING", ...(brandName?.trim() ? { brand_name: [...brandName.trim()].slice(0, 127).join("") } : {}), return_url: returnUrl, cancel_url: cancelUrl } } },
       }, `create-${id}`));
     },
     async order(id) { return orderSchema.parse(await request(`/v2/checkout/orders/${encodeURIComponent(id)}`)); },

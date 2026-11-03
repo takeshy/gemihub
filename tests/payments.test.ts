@@ -220,14 +220,16 @@ test("PayPal adapter uses Sandbox OAuth, integer JPY, stable request IDs and red
     return Response.json({ id: "order1", status: "CREATED", links: [{ rel: "payer-action", href: "https://www.sandbox.paypal.com/checkoutnow?token=order1" }] });
   };
   try {
-    const g = paypalGateway(fetcher); await g.create("booking1", 5501, "https://shop.invalid/r", "https://shop.invalid/c");
+    const g = paypalGateway(fetcher); await g.create("booking1", 5501, "https://shop.invalid/r", "https://shop.invalid/c", "JPY", "Moon Atelier");
     await g.refund("capture1", 2750, "stable-refund");
     assert.ok(seen.every(s => s.url.startsWith("https://api-m.sandbox.paypal.com/")));
     assert.equal(seen[1].data.purchase_units[0].amount.value, "5501");
     assert.equal(seen[1].data.payment_source.paypal.experience_context.shipping_preference, "NO_SHIPPING");
+    assert.equal(seen[1].data.payment_source.paypal.experience_context.brand_name, "Moon Atelier");
     await g.create("usd-booking", 5501, "https://shop.invalid/r", "https://shop.invalid/c", "USD");
     await g.refund("usd-capture", 2750, "usd-refund", "USD");
     assert.deepEqual(seen[3].data.purchase_units[0].amount, {currency_code:"USD",value:"55.01"});
+    assert.equal(seen[3].data.payment_source.paypal.experience_context.brand_name, undefined, "older checkouts keep their original branding");
     assert.deepEqual(seen[4].data.amount, {currency_code:"USD",value:"27.50"});
     assert.equal(seen[2].data.amount.value, "2750"); assert.equal(seen[2].headers["PayPal-Request-Id"], "stable-refund");
     assert.throws(() => approvalUrl({ id: "x", status: "CREATED", links: [{ rel: "approve", href: "https://evil.invalid" }] }, "sandbox"));
