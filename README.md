@@ -318,3 +318,7 @@ Google OAuth for gemihub.net reuses `projects/495062043717/secrets/google-client
 This app serves `gemihub.net`, so it detects existing note users after owner Google login by reading the legacy `settings.json`. Matching users reach `/settings/migration`, which explains the move and links to `https://kiokuflow.net/settings/migration`. They authenticate there with the same Google account to copy their workspace. Tokens, settings contents and folder IDs never appear in the handoff URL or session response.
 
 Existing note users must finish migration before creating or managing a shop. There is no pre-migration bypass. After kiokuflow verifies the copy and moves the old `settings.json` to Trash, Check migration completion verifies its absence before opening the shop workflow. Customer/staff login does not run the detector. The copy and resumable state belong to kiokuflow; this app never modifies or deletes old note files.
+
+## License
+
+[MIT](LICENSE) © 2026 takeshy. Third-party notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

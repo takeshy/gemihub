@@ -345,3 +345,7 @@ Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と 
 `gemihub.net` はこの予約サービスが配信するため、旧ノート利用者の検出もこちらで行います。店主のGoogleログイン後、旧ノート用の `settings.json` を読み取り専用で確認し、該当する方を設定の `/settings/migration` へ案内します。案内から `https://kiokuflow.net/settings/migration` へ進み、同じGoogleアカウントで認証してデータをコピーします。トークン・設定ファイル・フォルダIDをブラウザや移行URLへ渡しません。
 
 旧設定がある間は、店舗を自動作成せず、店舗の管理APIも保留します。引き継ぎ前にお店づくりへ進む選択肢はありません。kiokuflow側でコピーと検証を完了して旧 `settings.json` をゴミ箱へ移した後、「移行完了を確認する」で旧設定がなくなったことを再確認して店舗画面へ進みます。お客様・スタッフ用ログインには、この検出・案内を挟みません。ノート本体のコピーと再開処理はkiokuflow側の責務で、こちらでは旧ファイルを変更・削除しません。
+
+## ライセンス
+
+[MIT](LICENSE) © 2026 takeshy。サードパーティの著作権・ライセンス表記は [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください。
