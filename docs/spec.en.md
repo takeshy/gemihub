@@ -16,7 +16,7 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 - When restoring a pending settings save from browser storage, always fetch the saved settings. Automatically recover a completed save when the selected section already matches. Otherwise preserve its request ID for retry and offer to discard pending changes after fetching the latest saved configuration, without writing shop data. Keep retry state if the read fails or publication is unfinished.
 
-- In owner-enabled shops, Staff and shifts includes Owner information for the owner's name and photo. Save updates customer-facing screens. Retain the profile under staff ID `owner` without adding a second booking resource or an additional staff login; opening hours and all services still determine owner availability, and Calendar access uses consent granted during owner sign-in.
+- In owner-enabled shops, Staff and shifts includes Owner information for the owner's name, photo, working days, hours and services. Save updates customer-facing screens. Retain the profile under staff ID `owner` without adding a second booking resource or an additional staff login; configured owner shifts and services restrict availability just like additional staff, within shop opening hours. Existing name/photo-only profiles keep automatic shop availability until working conditions are edited. Calendar access uses consent granted during owner sign-in.
 
 - Describe what to change returns to the private conversation that produced the proposal, including after reopening the review. Preserve conversation history and in-session drafts, focus the composer, and stay on the review for retry if restoration fails. Do not restart setup or create a replacement conversation when a saved reference exists.
 

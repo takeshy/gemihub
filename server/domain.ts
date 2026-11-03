@@ -58,6 +58,8 @@ export const shopSchema = z
           start: clock,
           end: clock,
           imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+          /** Owner rows inherit shop availability until working conditions are explicitly edited. */
+          customAvailability: z.literal(true).optional(),
         }),
       )
       .max(30),
@@ -112,11 +114,12 @@ export const shopSchema = z
   });
 export type ShopConfig = z.infer<typeof shopSchema>;
 export const ownerStaffId = "owner";
-/** With no additional staff, the owner handles all menus during shop hours. */
+/** Preserve automatic shop availability until the owner explicitly configures a shift. */
 export function bookingStaff(config: Pick<ShopConfig, "staff" | "menus" | "hours" | "ownerBooking">): ShopConfig["staff"] {
   if (config.staff.length && !config.ownerBooking) return config.staff;
   const profile = config.staff.find(staff => staff.id === ownerStaffId);
-  const owner = { id: ownerStaffId, name: profile?.name ?? tr("店主"), ...(profile?.imageId ? { imageId: profile.imageId } : {}), menuIds: config.menus.map(menu => menu.id), weekdays: [0, 1, 2, 3, 4, 5, 6], start: config.hours.start, end: config.hours.end };
+  const opening = [config.hours, ...(config.hours.weekdayHours || [])];
+  const owner = profile?.customAvailability ? profile : { id: ownerStaffId, name: profile?.name ?? tr("店主"), ...(profile?.imageId ? { imageId: profile.imageId } : {}), menuIds: config.menus.map(menu => menu.id), weekdays: [0, 1, 2, 3, 4, 5, 6], start: opening.map(hours => hours.start).sort()[0], end: opening.map(hours => hours.end).sort().at(-1)! };
   return [...config.staff.filter(staff => staff.id !== ownerStaffId), owner];
 }
 export const bookingStaffName = (config: ShopConfig | null | undefined, id: string) => config?.staff.find(staff => staff.id === id)?.name || (id === ownerStaffId ? tr("店主") : id);
@@ -258,8 +261,8 @@ export function slots(
         p.menuIds.includes(menuId) &&
         menu.options.every(option => p.menuIds.includes(option.id)) &&
         p.weekdays.includes(weekday) &&
-        zonedDate(date, p.id === ownerStaffId && (config.ownerBooking || !config.staff.length) ? hours.start : p.start, timeZone).getTime() <= start.getTime() &&
-        zonedDate(date, p.id === ownerStaffId && (config.ownerBooking || !config.staff.length) ? hours.end : p.end, timeZone).getTime() >= end.getTime() &&
+        zonedDate(date, p.start, timeZone).getTime() <= start.getTime() &&
+        zonedDate(date, p.end, timeZone).getTime() >= end.getTime() &&
         !bookings.some(
           (b) =>
             b.status === "active" &&

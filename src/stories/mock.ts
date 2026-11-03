@@ -110,6 +110,7 @@ export type Scenario =
   | "staff-login"
   | "calendar-disconnected"
   | "owner-only"
+  | "owner-shifts"
   | "menu-addons"
   | "manage-addons"
   | "weekday-hours"
@@ -187,6 +188,7 @@ export function scenarioProps(scenario: Scenario) {
           "staff-login": "staff",
           "calendar-disconnected": "staff",
           "owner-only": "staff",
+          "owner-shifts": "staff",
           "calendar-connected": "staff",
           "calendar-member": "staff",
           "calendar-missing-staff": "staff",
@@ -430,7 +432,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
     loginUrl: shop.isOwner ? "/auth/google" : `/staff-login/${shop.id}`,
   };
   let ownerCalendarConsent = scenario !== "calendar-disconnected";
-  if (scenario === "owner-only") { config.staff = []; config.ownerBooking = true; config.staff = bookingStaff(config); shop.published = config; }
+  if (scenario === "owner-only" || scenario === "owner-shifts") {
+    config.staff = []; config.ownerBooking = true; config.staff = bookingStaff(config);
+    if (scenario === "owner-shifts") config.staff[0] = {...config.staff[0], customAvailability:true, weekdays:[1,2,4,5], start:"10:00", end:"17:00", menuIds:[config.menus[0].id]};
+    shop.published = config;
+  }
   const staffLogins = config.staff.filter(staff => staff.id !== ownerStaffId).map(staff => ({ staffId: staff.id, name: staff.name, email: staff.id === "aoi" ? shop.owner : "haru@example.com", accepted: staff.id === "aoi", connected: staff.id === "aoi" && calendarConnection.connected }));
   let visualConfig = structuredClone(config);
   const extraData = { id: "100", title: tr("店販の記録"), headers: [tr("商品"), tr("個数"), tr("金額"), tr("確認済み")], rows: [{ row: 2, values: [tr("ヘアオイル"), 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };

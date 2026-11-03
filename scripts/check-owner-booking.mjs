@@ -3,7 +3,7 @@ import {mkdir,readFile} from 'node:fs/promises';
 import {chromium,expect} from 'playwright/test';
 import {Store} from '../server/store.ts';
 import {createApp} from '../server/app.ts';
-import {sample,ownerStaffId} from '../server/domain.ts';
+import {sample,ownerStaffId,shopDate} from '../server/domain.ts';
 import {digest} from '../server/auth.ts';
 import {encrypt} from '../server/google.ts';
 import {requestLocale} from '../server/i18n.ts';
@@ -35,7 +35,7 @@ try{
   await owner.locator('input[type=file]').setInputFiles({name:'owner.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64')});
   await expect(owner.locator('img')).toBeVisible();await staff.getByRole('button',{name:label('保存'),exact:true}).click();
   await expect.poll(async()=>(await store.shop(shop.id)).published.staff.map(person=>({id:person.id,name:person.name}))).toEqual([{id:ownerStaffId,name:'Owner Morita'}]);
-  await expect(page.locator('.staff-accounts,.staff-calendar')).toHaveCount(0);await page.reload();await expect(page.getByLabel(label('店主の名前'),{exact:true})).toHaveValue('Owner Morita');await expect(page.locator('.owner-editor img')).toBeVisible();
+  await expect(page.locator('.staff-accounts,.staff-calendar')).toHaveCount(0);await page.reload();await expect(page.getByLabel(label('店主の名前'),{exact:true})).toHaveValue('Owner Morita');await page.locator('.owner-editor .menu-image').scrollIntoViewIfNeeded();await expect(page.locator('.owner-editor img')).toBeVisible();
   await page.screenshot({path:`tmp/owner-booking/staff-${language}-${width}.png`,fullPage:true});
   await page.goto(`${origin}/?shop=${shop.id}&tab=basic&lang=${language}`);
   const hours=page.locator('.live-settings-hours');await expect(hours.getByLabel(label('開店'),{exact:true})).toBeVisible();
@@ -52,8 +52,24 @@ try{
   await expect(page.locator('.salon-details').first()).toContainText(`${label('{0}曜',label('火'))} 09:00 – 21:00`);
   assert.equal(calendarRequests.length,0,'owners have no calendar status panel or extra status request');assert.deepEqual(errors,[]);
   await page.screenshot({path:`tmp/owner-booking/reservation-${language}-${width}.png`,fullPage:true});
-  await page.goto(`${origin}/s/${shop.slug}?pane=about&lang=${language}`);await expect(page.locator('.public-staff-list')).toContainText('Owner Morita');await expect(page.locator('.public-staff-list img')).toBeVisible();await page.screenshot({path:`tmp/owner-booking/profile-${language}-${width}.png`,fullPage:true});
-  await context.close();console.log(`${language} ${width}px: last staff deletion, owner name/photo save and reload, public profile, owner-only booking, hidden owner Calendar panel and weekday hours passed.`);
+  await page.goto(`${origin}/s/${shop.slug}?pane=about&lang=${language}`);await expect(page.locator('.public-staff-list')).toContainText('Owner Morita');await page.locator('.public-staff-list .staff-photo').scrollIntoViewIfNeeded();await expect(page.locator('.public-staff-list img')).toBeVisible();await page.screenshot({path:`tmp/owner-booking/profile-${language}-${width}.png`,fullPage:true});
+  // The owner's shift uses the same controls and booking rules as additional staff.
+  await page.goto(`${origin}/?shop=${shop.id}&tab=staff&lang=${language}`);
+  const workingDate=shopDate((await store.shop(shop.id)).published,Date.now()+4*86400000),workingDay=new Date(workingDate+'T12:00:00Z').getUTCDay();
+  await expect(owner.getByLabel(label('勤務開始'),{exact:true})).toBeVisible();
+  await owner.getByLabel(label('勤務開始'),{exact:true}).fill('11:00');await owner.getByLabel(label('勤務終了'),{exact:true}).fill('14:00');
+  for(const [dayIndex,day] of ['日','月','火','水','木','金','土'].entries())await owner.getByLabel(label(day),{exact:true}).setChecked(dayIndex===workingDay);
+  const secondMenu=(await store.shop(shop.id)).published.menus[1].name;await owner.getByLabel(secondMenu,{exact:true}).uncheck();await staff.getByRole('button',{name:label('保存'),exact:true}).click();
+  await expect.poll(async()=>(await store.shop(shop.id)).published.staff.find(person=>person.id===ownerStaffId)?.customAvailability).toBe(true);
+  const shift=(await store.shop(shop.id)).published.staff.find(person=>person.id===ownerStaffId);assert.deepEqual(shift.weekdays,[workingDay]);assert.deepEqual(shift.menuIds,['simple']);assert.equal(shift.start,'11:00');assert.equal(shift.end,'14:00');
+  await page.reload();await expect(owner.getByLabel(label('勤務開始'),{exact:true})).toHaveValue('11:00');await expect(owner.getByLabel(label('勤務終了'),{exact:true})).toHaveValue('14:00');await expect(owner.getByLabel(secondMenu,{exact:true})).not.toBeChecked();
+  await page.screenshot({path:`tmp/owner-booking/shift-${language}-${width}.png`,fullPage:true});
+  await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);await page.locator('.date-input input[type=text]').fill(workingDate.replaceAll('-','/'));
+  const clock=utcHour=>new Date(`${workingDate}T${String(utcHour).padStart(2,'0')}:00:00Z`).toLocaleTimeString(language==='ja'?'ja-JP':'en-US',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'});
+  await expect(page.locator('.time-grid button').first()).toHaveText(clock(2));await expect(page.locator('.time-grid button').last()).toHaveText(clock(4));
+  const rejectedMenu=page.waitForResponse(response=>response.url().includes('/slots?')&&new URL(response.url()).searchParams.get('menu')==='design');await page.locator('.menu-options button').filter({hasText:secondMenu}).click();assert.deepEqual(await(await rejectedMenu).json(),[]);await expect(page.locator('.time-grid button')).toHaveCount(0);
+  assert.equal(calendarRequests.length,0);assert.deepEqual(errors,[]);
+  await context.close();console.log(`${language} ${width}px: owner name/photo and working days/hours/services save and reload, actual slot restrictions, automatic Calendar, last staff deletion and weekday opening hours passed.`);
  }
 }catch(error){if(active&&!active.isClosed())await active.screenshot({path:'tmp/owner-booking/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

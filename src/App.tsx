@@ -598,6 +598,19 @@ function Field({
     </label>
   );
 }
+type StaffWorkingConditions = Pick<ShopConfig["staff"][number], "start" | "end" | "weekdays" | "menuIds">;
+function StaffAvailability({ staff, menus, onChange }: { staff: StaffWorkingConditions; menus: ShopConfig["menus"]; onChange: (value: Partial<StaffWorkingConditions>) => void }) {
+  return <>
+    <div className="form-grid">
+      <Field label={tr("勤務開始")}><input type="time" value={staff.start} onChange={event => onChange({ start: event.target.value })}/></Field>
+      <Field label={tr("勤務終了")}><input type="time" value={staff.end} onChange={event => onChange({ end: event.target.value })}/></Field>
+    </div>
+    <span className="small">{tr("勤務曜日")}</span>
+    <div className="checkboxes">{weekdays().map((day,index) => <label key={day}><input type="checkbox" checked={staff.weekdays.includes(index)} onChange={event => onChange({ weekdays: event.target.checked ? [...staff.weekdays,index] : staff.weekdays.filter(value => value !== index) })}/>{day}</label>)}</div>
+    <span className="small">{tr("対応メニュー")}</span>
+    <div className="checkboxes">{menus.map(menu => <label key={menu.id}><input type="checkbox" checked={staff.menuIds.includes(menu.id)} onChange={event => onChange({ menuIds: event.target.checked ? [...staff.menuIds,menu.id] : staff.menuIds.filter(id => id !== menu.id) })}/>{menu.name}</label>)}</div>
+  </>;
+}
 export function ConfigEditor({
   config: c,
   onChange: set,
@@ -614,7 +627,7 @@ export function ConfigEditor({
   const put = <K extends keyof ShopConfig>(k: K, v: ShopConfig[K]) =>
     set({ ...c, [k]: v });
   const owner = bookingStaff(c).find(staff => staff.id === ownerStaffId);
-  const putOwner = (value: Pick<ShopConfig["staff"][number], "name" | "imageId">) => {
+  const putOwner = (value: Partial<Omit<ShopConfig["staff"][number], "id">>) => {
     if (owner) set({ ...c, ownerBooking: true, staff: [...c.staff.filter(staff => staff.id !== ownerStaffId), { ...owner, ...value }] });
   };
   return (
@@ -782,7 +795,8 @@ export function ConfigEditor({
         <h3>{tr("店主の情報")}</h3>
         <Field label={tr("店主の名前")}><input value={owner.name} maxLength={100} onChange={event => putOwner({ name: event.target.value, imageId: owner.imageId })}/></Field>
         {shopId && <MenuImageEditor shopId={shopId} imageId={owner.imageId} name={owner.name} label={tr("店主の写真（任意）")} uploading={onImageUploading} change={imageId => putOwner({ name: owner.name, imageId })}/>}
-        <p className="small muted">{tr("店主は営業時間内のすべてのメニューを担当します。カレンダーはGoogleログイン時の認可を使うため、追加設定は不要です。")}</p>
+        <StaffAvailability staff={owner} menus={c.menus} onChange={value => putOwner({ ...value, customAvailability: true })}/>
+        <p className="small muted">{tr("営業日・営業時間の範囲内で、店主の勤務曜日・勤務時間・対応メニューを設定できます。カレンダーの追加設定は不要です。")}</p>
       </section>}
       {c.staff.map((p, i) => p.id === ownerStaffId ? null : (
         <div className="staff-editor" key={p.id}>
@@ -800,90 +814,7 @@ export function ConfigEditor({
               }
             />
           </Field>
-          <div className="form-grid">
-            <Field label={tr("勤務開始")}>
-              <input
-                type="time"
-                value={p.start}
-                onChange={(e) =>
-                  put(
-                    "staff",
-                    c.staff.map((v, j) =>
-                      j === i ? { ...v, start: e.target.value } : v,
-                    ),
-                  )
-                }
-              />
-            </Field>
-            <Field label={tr("勤務終了")}>
-              <input
-                type="time"
-                value={p.end}
-                onChange={(e) =>
-                  put(
-                    "staff",
-                    c.staff.map((v, j) =>
-                      j === i ? { ...v, end: e.target.value } : v,
-                    ),
-                  )
-                }
-              />
-            </Field>
-          </div>
-          <span className="small">{tr("勤務曜日")}</span>
-          <div className="checkboxes">
-            {weekdays().map((d, n) => (
-              <label key={d}>
-                <input
-                  type="checkbox"
-                  checked={p.weekdays.includes(n)}
-                  onChange={(e) =>
-                    put(
-                      "staff",
-                      c.staff.map((v, j) =>
-                        j === i
-                          ? {
-                              ...v,
-                              weekdays: e.target.checked
-                                ? [...v.weekdays, n]
-                                : v.weekdays.filter((x) => x !== n),
-                            }
-                          : v,
-                      ),
-                    )
-                  }
-                />
-                {d}
-              </label>
-            ))}
-          </div>
-          <span className="small">{tr("対応メニュー")}</span>
-          <div className="checkboxes">
-            {c.menus.map((m) => (
-              <label key={m.id}>
-                <input
-                  type="checkbox"
-                  checked={p.menuIds.includes(m.id)}
-                  onChange={(e) =>
-                    put(
-                      "staff",
-                      c.staff.map((v, j) =>
-                        j === i
-                          ? {
-                              ...v,
-                              menuIds: e.target.checked
-                                ? [...v.menuIds, m.id]
-                                : v.menuIds.filter((x) => x !== m.id),
-                            }
-                          : v,
-                      ),
-                    )
-                  }
-                />
-                {m.name}
-              </label>
-            ))}
-          </div>
+          <StaffAvailability staff={p} menus={c.menus} onChange={value => put("staff", c.staff.map((person,index) => index === i ? { ...person, ...value } : person))}/>
           <button
             onClick={() =>
               put(

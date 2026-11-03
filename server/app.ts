@@ -1349,7 +1349,7 @@ export function createApp(
             const id = digest(`${fresh.id}:${user!.email}:settings:${section}:${input.requestId}`);
             let plan = await store.get<Plan>("plan", id);
             if (plan) {
-              if (!same(liveValue(plan.config, section), input.value)) fail(409, tr("保存する内容を確認し直してください"));
+              if (!same(liveValue(plan.config, section), liveValue(updateLiveValue(plan.source || plan.config, section, input.value), section))) fail(409, tr("保存する内容を確認し直してください"));
             } else {
               if (!fresh.published) fail(409, tr("先にお店の共通設定を反映してください"));
               const current = await effective(fresh);

@@ -10,7 +10,7 @@ export const exportColumns = {
   posts: ["id", "version", "address", "draft", "published", "publishedAt"],
   customerNotes: ["id", "email", "text", "attachments", "createdAt", "createdBy", "status", "updatedAt", "updatedBy"],
   menus: ["id", "name", "duration", "price", "active", "imageId", "optionFor", "optionGroup"],
-  staff: ["id", "name", "menuIds", "weekdays", "start", "end", "imageId"],
+  staff: ["id", "name", "menuIds", "weekdays", "start", "end", "imageId", "customAvailability"],
 } as const;
 export type ExportTable = keyof typeof exportColumns;
 

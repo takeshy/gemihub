@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { ConfigEditor, type Workspace } from "./App";
 import { useApi } from "./api";
-import { shopSchema, type ShopConfig } from "../server/domain";
+import { shopSchema, ownerStaffId, type ShopConfig } from "../server/domain";
 import { liveValue, updateLiveValue, type LiveSection } from "../server/live-settings";
 import type { SettingsProposal } from "../server/settings-ai";
 import { createRequestId } from "./request-id";
@@ -58,7 +58,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
   return <div className={`panel live-settings live-settings-${section}`}>
     <div className="section-top"><h2>{heading}</h2><button type="button" aria-expanded={aiOpen} disabled={busy || imageUploading || !!pending || !config || !source} onClick={() => { setAiOpen(!aiOpen); setProposal(undefined); }}>{tr("AIで設定")}</button></div>
     <p>{shop.publication === "provisional" ? tr("仮公開中のお店の設定です。「保存」で仮公開の内容に反映します。") : tr("本番のお店のデータです。「保存」で反映します。")}</p>
-    {section === "menus" && <p className="small muted">{config && (config.ownerBooking || !config.staff.length) ? tr("店主がすべてのメニューを担当します。新しいメニューは内容を確認してから有効にしてください。") : tr("新しいメニューは無効の状態で追加します。スタッフの対応メニューに追加してから有効にしてください。")}</p>}
+    {section === "menus" && <p className="small muted">{config && (config.ownerBooking || !config.staff.length) && !config.staff.find(staff => staff.id === ownerStaffId)?.customAvailability ? tr("店主がすべてのメニューを担当します。新しいメニューは内容を確認してから有効にしてください。") : tr("新しいメニューは無効の状態で追加します。スタッフの対応メニューに追加してから有効にしてください。")}</p>}
     {error && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}</p>}
     {aiOpen && <section className="settings-ai" aria-label={tr("AIで{0}を設定", heading)}>
