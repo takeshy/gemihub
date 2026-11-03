@@ -54,7 +54,7 @@ try{
     const publish=page.getByRole('button',{name:language==='ja'?'仮公開する':'Publish private preview',exact:true});await expect(publish).toBeDisabled();
     const rect=await page.locator('.annotation-canvas').boundingBox();await page.mouse.move(rect.x+40,rect.y+45);await page.mouse.down();await page.mouse.move(rect.x+180,rect.y+55);await page.mouse.up();
     await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please increase the heading letter spacing. Keep the logo and the booking rules unchanged.');
-    await page.getByRole('form',{name:language==='ja'?'ペンで囲んだ箇所への依頼':'Request for the circled area'}).getByRole('button',{name:language==='ja'?'送信':'Send',exact:true}).click();
+    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
     await page.getByRole('button',{name:language==='ja'?'テーマを修正して確認':'Revise and review theme',exact:true}).click();
     await expect(page.locator('.annotation-canvas')).toHaveCount(0);await expect(publish).toBeEnabled();
     const workspace=await context.request.get(origin+'/api/workspace').then(r=>r.json());const next=workspace.shops[0].plans.at(-1);
@@ -76,16 +76,27 @@ try{
     const user={email:shop.owner,name:'Owner',role:'owner',shopId:shop.id};await store.put('user',user.email,user);
     const session=randomUUID();await store.put('session',digest(session),{user,expires:Date.now()+3600000});
     const context=await browser.newContext({viewport:{width:1280,height:950},locale:language==='en'?'en-US':'ja-JP'});
+    await context.addInitScript(()=>{window.__shortcutSpeech=[];window.SpeechRecognition=class {start(){this.active=true;window.__shortcutSpeech.push(this);this.onstart?.();}stop(){this.active=false;}abort(){this.active=false;}};});
     await context.addCookies([{name:'gemihub_session',value:session,url:origin}]);const page=await context.newPage();active=page;
+    let sent=0;page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/system/question'))sent++;});
     await page.goto(`${origin}/?lang=${language}`);
     await page.getByRole('button',{name:label('はじめる'),exact:true}).click();
     const log=page.getByRole('log',{name:label('AIとのチャット'),exact:true});
     const composer=page.getByRole('textbox',{name:label('AIに伝えたいこと'),exact:true});
     const send=page.getByRole('button',{name:label('送信'),exact:true});
     await expect(log.getByText(label('お店の名前を教えてください。'),{exact:true})).toBeVisible();
-    await composer.fill('Moon Atelier');await send.click();
+    await composer.press('Control+Enter');assert.equal(sent,0,'empty shortcut is a no-op');
+    await composer.fill('Moon Atelier');await composer.press('Enter');await expect(composer).toHaveValue('Moon Atelier\n');assert.equal(sent,0,'Enter inserts a newline');
+    await composer.fill('Moon Atelier');
+    for(const init of [{isComposing:true},{keyCode:229},{repeat:true}])await composer.dispatchEvent('keydown',{key:'Enter',code:'Enter',ctrlKey:true,...init});
+    assert.equal(sent,0,'IME confirmation and key repeat never send');await expect(composer).toHaveValue('Moon Atelier');
+    await composer.press('Control+Enter');
     await expect(log.getByText(label('使いたいロゴはありますか？あれば画像を添付してください。なければ「なし」、後で決める場合は「後で」と教えてください。'),{exact:true})).toBeVisible();
-    await composer.fill(language==='ja'?'ロゴはありません':'No logo');await send.click();
+    await page.getByRole('button',{name:label('音声入力'),exact:true}).click();
+    const dictation=page.getByRole('dialog',{name:label('音声入力'),exact:true});
+    const transcript=dictation.getByRole('textbox',{name:label('書き起こした内容'),exact:true});
+    await transcript.fill(language==='ja'?'ロゴはありません':'No logo');await transcript.press('Control+Enter');
+    await expect(dictation).toHaveCount(0);assert.ok(await page.evaluate(()=>window.__shortcutSpeech.every(rec=>!rec.active)),'shortcut stops dictation before sending');
     await expect(log.getByText(label('どういう業種のお店ですか？'),{exact:true})).toBeVisible();
     await composer.fill(language==='ja'?'ネイルサロンです':'A nail salon');await send.click();
     await expect(log.getByText(/6\.[\s\S]*7\./)).toBeVisible();
@@ -100,7 +111,7 @@ try{
     assert.equal(plan.config.name,'Moon Atelier');assert.deepEqual(plan.config.appearance.articles,{blogs:false,announcements:true});
     assert.deepEqual(plan.config.pages.map(p=>p.slug),['staff','products']);
     for(const name of [label('スタッフ紹介'),label('商品・サービス紹介')])await expect(page.locator('.screen-name-list').getByText(name,{exact:true})).toBeVisible();
-    await context.close();console.log(`${language}: shop name/logo interview and separate staff/product/news choices persist through initial plan creation.`);
+    await context.close();console.log(`${language}: Ctrl+Enter sends chat and dictation; Enter, IME and repeat guards work; interview choices persist.`);
   }
 }catch(error){if(active&&!active.isClosed())await active.screenshot({path:'tmp/initial-theme/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

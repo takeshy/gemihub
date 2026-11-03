@@ -56,3 +56,29 @@ test("relaxed generation cannot bypass array limits or shop validation", async t
     await assert.rejects(propose("変更してください", sample, "owner@example.com"), error => error instanceof Error && error.name === "ZodError");
   }
 });
+
+test("initial GPT proposals accept interview facts without requesting full booking settings or a theme", async t => {
+  process.env.OPENAI_API_KEY = "test"; process.env.OPENAI_MODEL = "test-model";
+  setProviderResolver(async () => "openai");
+  t.after(() => { setOpenAiClient(undefined); setProviderResolver(async () => "vertex"); });
+  const theme = { headerHtml: '<header><slot name="title"></slot><slot name="navigation"></slot></header>', bodyHtml: '<main><slot name="content"></slot></main>', footerHtml: '<footer><slot name="content"></slot></footer>', css: 'header{background:#234;color:white;padding:24px}' };
+  let calls = 0;
+  setOpenAiClient({ responses: { create: async (body: { text: { format: { schema: object } } }) => {
+    calls++;
+    if (calls === 1) {
+      assert.doesNotMatch(JSON.stringify(body.text.format.schema), /"(?:menus|staff|hours|rules|appearance|headerHtml)":/);
+      // Reproduce the production response: partial config, with layout/image and
+      // theme fields intended for another stage. No backend setting is supplied.
+      return { output_text: JSON.stringify({ config: { name: "Wrong name", industry: "hair", appearance: { theme: { html: "unreviewed" } }, pages: [{ id: "faq", slug: "faq", title: "FAQ", navigationLabel: "FAQ", body: "## FAQ", layout: "grid" }] } }), output: [] };
+    }
+    return { output_text: JSON.stringify(calls === 2 ? theme : { approved: true, issues: [], imageUsage: [] }), output: [] };
+  } } } as unknown as OpenAI);
+  const result = await propose("A hair salon named Moon Atelier, with a FAQ", null, "owner@example.com", false, [], { country: "US", timeZone: "America/New_York" }, { shopName: "Moon Atelier" });
+  assert.equal(calls, 3);assert.equal(result.config.name, "Moon Atelier");
+  assert.equal(result.config.description, "");assert.equal(result.config.address, "");
+  assert.equal(result.config.pages[0].layout, "standard");assert.equal(result.config.pages[0].imageUrl, "");
+  assert.deepEqual(result.config.appearance!.theme, theme);assert.equal(result.themeReview!.approved, true);
+  assert.equal(result.config.menus[0].price, Math.round(sample.menus[0].price / 100));
+  assert.deepEqual(result.config.staff, sample.staff);assert.deepEqual(result.config.rules, sample.rules);
+  assert.ok(shopSchema.safeParse(result.config).success);
+});

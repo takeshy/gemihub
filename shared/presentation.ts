@@ -11,7 +11,7 @@ export const presentationTags = new Set("a abbr article aside b blockquote br ca
 const atRules = new Set(["media", "supports", "container", "layer", "keyframes", "-webkit-keyframes"]);
 type Compiled = { nodes: Html.ChildNode[]; css: string; id: string; slots: string[]; imageIds: string[]; animations: Map<string, string> };
 const cache = new Map<string, Compiled>();
-function invalid(): never { throw new Error(tr("表示用HTML・CSSを確認してください。スクリプト・独自のフォーム・外部CSSの読み込みは使えません。")); }
+function invalid(reason = ""): never { throw new Error(tr("表示用HTML・CSSを確認してください。スクリプト・独自のフォーム・外部CSSの読み込みは使えません。") + (reason ? ` ${reason}` : "")); }
 export function presentationUrl(value: string, image = false) {
   if (/[\u0000-\u0020\u007f\\]/.test(value)) return undefined;
   if (image && /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/.test(value)) return value;
@@ -22,7 +22,7 @@ export function presentationUrl(value: string, image = false) {
 function checkDeclaration(decl: Declaration, animations: Map<string, string>) {
   if (/[\\<]/.test(decl.prop + decl.value) || /(?:expression|image-set|cross-fade|paint)\s*\(/i.test(decl.value) || /^(?:behavior|-moz-binding)$/i.test(decl.prop)) invalid();
   const withoutFragments = decl.value.replace(/url\(\s*["']?#[a-zA-Z0-9_-]+["']?\s*\)/gi, "");
-  if (/url\s*\(/i.test(withoutFragments)) invalid();
+  if (/url\s*\(/i.test(withoutFragments)) invalid("CSS url() only supports local #fragment references; use an img for permitted image assets.");
   if (/^(?:-webkit-)?animation(?:-name)?$/.test(decl.prop)) {
     for (const [name, scoped] of animations) decl.value = decl.value.replace(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"), scoped);
   }
@@ -51,9 +51,10 @@ export function compilePresentation(design: Presentation): Compiled {
   const inspect = (node: Html.ChildNode, depth: number) => {
     if (++count > 4000 || depth > 40) invalid();
     if (!("tagName" in node)) return;
-    if (!presentationTags.has(node.tagName.toLowerCase())) invalid();
+    if (!presentationTags.has(node.tagName.toLowerCase())) invalid(`Unsupported HTML element: ${node.tagName}.`);
     for (const attr of node.attrs) {
-      if (attr.namespace || /^on/i.test(attr.name) || ["srcdoc", "form", "formaction", "action", "srcset"].includes(attr.name)) invalid();
+      const svgNamespace = node.tagName === "svg" && attr.name === "xmlns" && attr.value === "http://www.w3.org/2000/svg";
+      if (attr.namespace && !svgNamespace || /^on/i.test(attr.name) || ["srcdoc", "form", "formaction", "action", "srcset"].includes(attr.name)) invalid(`Unsupported attribute: ${node.tagName}.${attr.name}.`);
       if (attr.name === "href" && !presentationUrl(attr.value)) invalid();
       if (attr.name === "src" && (node.tagName !== "img" || !presentationUrl(attr.value, true))) invalid();
       if (attr.name === "data-image-id") {
@@ -65,7 +66,7 @@ export function compilePresentation(design: Presentation): Compiled {
     }
     const slot = node.tagName === "slot" ? node.attrs.find(a => a.name === "name")?.value : node.attrs.find(a => a.name === "data-slot")?.value;
     if (node.tagName === "slot" || slot !== undefined) {
-      if (!slot || !/^[a-z][a-z0-9-]*$/.test(slot) || node.childNodes.some(n => n.nodeName !== "#text" || ("value" in n && n.value.trim()))) invalid();
+      if (!slot || !/^[a-z][a-z0-9-]*$/.test(slot) || node.childNodes.some(n => n.nodeName !== "#text" || ("value" in n && n.value.trim()))) invalid(`Slot ${slot || "(unnamed)"} must be empty and have an explicit closing tag, for example <slot name="content"></slot>.`);
       slots.push(slot);
     }
     node.childNodes.forEach(child => inspect(child, depth + 1));
@@ -108,8 +109,15 @@ export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHt
     [theme.bodyHtml, ["content"], ["content"]],
     [theme.footerHtml, ["content"], ["content"]],
   ] as const;
-  if (!parts.every(([html, allowed, required]) => presentationSlots({ html, css: theme.css }, [...allowed], [...required])))
-    ctx.addIssue({ code: "custom", message: tr("テーマには既存のナビゲーション・画面内容・フッターを1回ずつ配置してください。HTML・CSSの内容も確認してください。") });
+  for (const [index, [html, allowed, required]] of parts.entries()) {
+    try {
+      const compiled = compilePresentation({ html, css: theme.css });
+      if (!compiled.slots.every(slot => (allowed as readonly string[]).includes(slot)) || !required.every(slot => compiled.slots.includes(slot)))
+        throw new Error(`Allowed slots: ${allowed.join(", ")}; required slots: ${required.join(", ")}; received: ${compiled.slots.join(", ")}.`);
+    } catch (error) {
+      ctx.addIssue({ code: "custom", path: [(["headerHtml", "bodyHtml", "footerHtml"] as const)[index]], message: error instanceof Error ? error.message : String(error) });
+    }
+  }
 });
 export type Theme = z.infer<typeof themeSchema>;
 export const themePart = (theme: Theme | undefined, part: "header" | "body" | "footer"): Presentation | undefined => theme ? { html: theme[`${part}Html`], css: theme.css } : undefined;

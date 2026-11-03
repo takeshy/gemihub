@@ -16,6 +16,10 @@ const photo = (id: string) => ({ id: id.repeat(64), name: `${id}.png`, mimeType:
 
 test("theme HTML is free to change structure while CSS, slots and unsafe content remain contained", () => {
   assert.ok(themeSchema.safeParse(theme).success);
+  assert.ok(themeSchema.safeParse({ ...theme, headerHtml: theme.headerHtml.replace('<header class="brand">', '<header class="brand"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="3"></circle></svg>') }).success);
+  const malformed = themeSchema.safeParse({ ...theme, bodyHtml: '<main><slot name="content"/><p>Following sibling</p></main>' });
+  assert.equal(malformed.success, false);
+  if (!malformed.success) assert.match(malformed.error.issues[0].message, /closing tag/);
   const html = renderToStaticMarkup(React.createElement(Presentation, { design: { html: theme.bodyHtml, css: theme.css }, slots: { content: React.createElement("button", { type: "submit" }, "Trusted booking action") }, fallback: null }));
   assert.match(html, /Trusted booking action/); assert.match(html, /class="canvas"/); assert.match(html, /design-[a-f0-9]+ :is\(/);
   for (const headerHtml of ['<script>alert(1)</script>', '<div onclick="alert(1)"></div>', '<form action="/api/pay"><input></form>', '<iframe src="/admin"></iframe>', '<a href="javascript:alert(1)">bad</a>', '<svg><a xlink:href="javascript:alert(1)">bad</a></svg>', '<slot name="navigation"></slot><slot name="navigation"></slot>'])
@@ -39,6 +43,7 @@ test("reviewer distinguishes a page reference from a logo asset and repairs an i
   assert.equal(state.attempts, 2); assert.equal(calls, 4); assert.deepEqual(purposes, [undefined, "review", undefined, "review"]);
   assert.deepEqual(themeImageIds(state.candidate), [logo.id]); assert.deepEqual(original, sample, "backend settings were not rewritten by the theme loop");
   assert.ok(persisted.some(s => s.feedback.length));
+  assert.ok(persisted.some(s => s.feedback.length && s.previousCandidate), "repair receives the rejected HTML/CSS as well as the review");
   assert.equal((await createInitialTheme({config:original,request:state.request,images:[reference,logo]},{state},async()=>{throw new Error("must reuse passed review");})).review?.approved,true);
   const config=shopSchema.parse({...original,appearance:{accent:"sage",layout:"standard",imageUrl:"",theme:state.candidate}});
   assert.ok(managedImageIds(config).includes(logo.id));
@@ -79,6 +84,9 @@ test("staff and product introductions are independent choices and never fabricat
   assert.deepEqual(config.staff,original.staff);assert.deepEqual(config.menus,original.menus);
   assert.equal(initialIntroductionPages(config,facts.introductions).pages.length,2,"retries preserve unique pages");
   assert.deepEqual(initialIntroductionPages(config,{staff:false,products:true}).pages.map(p=>p.slug),["products"]);
+  const empty = { ...original, pages: [{ ...config.pages[0], body: "" }] };
+  const prepared = initialIntroductionPages(empty, { staff: true, products: false });
+  assert.match(prepared.pages[0].body, /準備中/);assert.equal(empty.pages[0].body, "", "placeholder does not mutate the proposed facts");
   assert.deepEqual(initialInterviewFacts([{role:"user",text:"スタッフ紹介だけでいい"}]).articles,{blogs:false,announcements:false});
   assert.deepEqual(initialInterviewFacts([{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"お知らせと商品紹介"}]).introductions,{staff:false,products:true});
 });

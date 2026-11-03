@@ -36,6 +36,8 @@ New shops use the browser's preferred language: Japanese means JP, other languag
 
 Before the first preview, gemihub asks for the shop name and whether a logo is available. Blog, announcements, staff introduction and products/services are separate choices. Staff and product introductions add pages; they do not create factual staff or price records.
 
+The initial interview model extracts shop facts and custom page copy only. Provisional booking settings come from the application template; the model is not required to invent staff, prices, hours or booking rules. Theme generation uses its own output format, so a partial interview answer is never parsed as a complete operational configuration.
+
 Attached reference pages guide the theme's layout, typography and composition. The screenshot itself is not pasted into the page. Images requested as logos or photos are used as assets. An independent model context reviews every attachment's purpose, duplicate navigation and the requested design; failed themes are repaired and reviewed, up to three generation attempts. A failed review never silently passes. Candidates are saved so a temporary review failure can resume without generating again.
 
 After the theme sample appears, the owner can circle an area in red and request a theme revision. The reviewed replacement stays unpublished and preserves booking, price, staff and rule settings. Return to questions restores the same private interview for factual corrections.

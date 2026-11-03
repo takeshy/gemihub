@@ -1,6 +1,7 @@
 import { tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
+import { submitOnShortcut } from "./submit-shortcut";
 import { ConfigSummary, type Plan, type Workspace } from "./App";
 
 type Source = { path: string; title: string };
@@ -83,7 +84,7 @@ export function Assistant({ shop, voice, acceptPlan }: { shop: Workspace; voice:
       </div>
     </section>}
     <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
-      <textarea aria-label={tr("アシスタントへの質問")} rows={3} required maxLength={4000} disabled={busy} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => { if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) { event.preventDefault(); ask(); } }} />
+      <textarea aria-label={tr("アシスタントへの質問")} aria-keyshortcuts="Control+Enter Meta+Enter" rows={3} required maxLength={4000} disabled={busy} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => submitOnShortcut(event)} />
       <div className="chat-composer-toolbar">
         {voice && <LiveVoice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])])} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} />}
         <button type="submit" className="primary chat-send" disabled={busy || !text.trim()}>{tr("送信")}</button>

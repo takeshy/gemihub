@@ -6,6 +6,7 @@ import {DictationButton} from "./DictationButton";
 import { RequestImagePicker } from "./RequestImagePicker";
 import type {ShopConfig} from "../server/domain";
 import type { Plan } from "./App";
+import { submitOnShortcut } from "./submit-shortcut";
 
 // Capture the rendered page with its computed styles, without granting screen sharing.
 // Cross-origin images without CORS are represented by their labelled image frame.
@@ -132,7 +133,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       />
       <button type="button" className="text-button" disabled={busy || !marked} onClick={() => reset()}>{tr("印を消して描き直す")}</button>
       <form className="chat-composer" aria-label={tr("ペンで囲んだ箇所への依頼")} onSubmit={event => { event.preventDefault(); stopDictation.current?.(); if (instruction.trim()) void identify(); }}>
-        <textarea aria-label={tr("ここをどう変えたいですか")} rows={3} maxLength={4000} disabled={busy} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder={tr("ここを『季節を楽しむネイル』に変えて")}/>
+        <textarea aria-label={tr("ここをどう変えたいですか")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event=>submitOnShortcut(event)} rows={3} maxLength={4000} disabled={busy} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder={tr("ここを『季節を楽しむネイル』に変えて")}/>
         <div className="chat-composer-toolbar">
           <RequestImagePicker shopId={shopId} value={imageIds} disabled={busy || listening} label={tr("画像を添付")} onChange={ids => { setImageIds(ids); setResult(undefined); }} />
           <DictationButton onListening={setListening} value={instruction} onChange={text=>{setInstruction(text);setResult(undefined);}} stopRef={stopDictation} disabled={busy}/>
