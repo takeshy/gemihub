@@ -1891,6 +1891,7 @@ pre {
 .initial-steps { grid-template-columns: repeat(3, 1fr); }
 .screen-gallery { margin: 24px 0; }
 .screen-gallery-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.screen-gallery-parts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .screen-gallery figure { margin: 0; border: 1px solid #dfe6dc; border-radius: 12px; overflow: hidden; background: #fff; }
 .screen-thumbnail { height: 170px; overflow: hidden; background: #f5f7f1; border-bottom: 1px solid #e4e9df; pointer-events: none; }
 .screen-thumbnail-content { width: 1000px; min-height: 760px; transform: scale(.24); transform-origin: top left; }

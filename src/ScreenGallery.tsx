@@ -5,6 +5,7 @@ import { ApiProvider, useApi } from "./api";
 import { createPreviewClient, sampleFixtures, type Fixtures } from "./local-preview";
 import type { ShopConfig } from "../server/domain";
 import { postKey } from "../server/post-domain";
+import { ChromePreview } from "./SiteChrome";
 
 export type PreviewScreen = { id: string; name: string; description: string; pane?: string; category?: "blogs" | "announcements"; article?: boolean; pageSlug?: string };
 export function previewScreens(config: ShopConfig): PreviewScreen[] {
@@ -22,7 +23,7 @@ export function previewScreens(config: ShopConfig): PreviewScreen[] {
 }
 
 export type PreviewLocation = { id: string; name: string; articleKey?: string };
-export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtures, onScreenChange }: { config: ShopConfig; shopId: string; screen: PreviewScreen; fixtures?: Fixtures; onScreenChange?: (screen:PreviewLocation)=>void }) {
+export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtures, onScreenChange, hideHeader = false, hideFooter = false }: { config: ShopConfig; shopId: string; screen: PreviewScreen; fixtures?: Fixtures; onScreenChange?: (screen:PreviewLocation)=>void; hideHeader?: boolean; hideFooter?: boolean }) {
   const api = useApi();
   const fixtures = useMemo(() => suppliedFixtures || sampleFixtures(config), [config, suppliedFixtures]);
   const client = useMemo(() => createPreviewClient(config, fixtures, shopId, id => api(`/api/shops/${shopId}/menu-images/${id}`)), [config, fixtures, shopId, api]);
@@ -39,7 +40,7 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
   return <div className="preview-surface">
     {error && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice" role="status">{notice}{tr("（練習用です。実際の予約やメールには反映しません。）")}</p>}
-    <ApiProvider value={client}><PublicShop key={JSON.stringify(route || screen)} session={session} slug="local-preview" initialPane={route?.pane || screen.pane || "mine"} category={route ? route.category : screen.category} articleKey={route ? route.articleKey : screen.article && article ? postKey(article) : undefined} pageSlug={route ? route.pageSlug : screen.pageSlug} busy={false} run={async fn => { setError(""); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } }} notify={setNotice} navigate={href => {
+    <ApiProvider value={client}><PublicShop key={JSON.stringify(route || screen)} hideHeader={hideHeader} hideFooter={hideFooter} session={session} slug="local-preview" initialPane={route?.pane || screen.pane || "mine"} category={route ? route.category : screen.category} articleKey={route ? route.articleKey : screen.article && article ? postKey(article) : undefined} pageSlug={route ? route.pageSlug : screen.pageSlug} busy={false} run={async fn => { setError(""); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } }} notify={setNotice} navigate={href => {
       const url = new URL(href, location.origin);
       const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements|pages)(?:\/([^/]+))?$/);
       if (match?.[1] === "pages") setRoute({ pageSlug: match[2] });
@@ -51,9 +52,15 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
 
 export function ScreenGallery({ config, shopId }: { config: ShopConfig; shopId: string }) {
   return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}><h4>{tr("用意する画面")}</h4><p className="small muted">{tr("サムネイルは仮の内容で表示しています。スタッフや料金などは、仮公開後に各メニューで設定できます。")}</p>
-    <div className="screen-gallery-grid">{previewScreens(config).map(screen => <figure key={screen.id}>
-      <div className="screen-thumbnail" inert aria-hidden="true"><div className="screen-thumbnail-content"><PreviewSurface config={config} shopId={shopId} screen={screen} /></div></div>
+    <p className="small muted">{tr("各画面はヘッダー・フッターを除いた内容を表示します。共通部分は下に分けて表示しています。")}</p>
+    <div className="screen-gallery-grid screen-gallery-pages">{previewScreens(config).map(screen => <figure key={screen.id}>
+      <div className="screen-thumbnail" inert aria-hidden="true"><div className="screen-thumbnail-content"><PreviewSurface config={config} shopId={shopId} screen={screen} hideHeader hideFooter /></div></div>
       <figcaption><strong>{screen.name}</strong><span>{screen.description}</span></figcaption>
+    </figure>)}</div>
+    <h4>{tr("共通パーツ")}</h4>
+    <div className="screen-gallery-grid screen-gallery-parts">{(["header", "footer"] as const).map(part => <figure key={part} data-part={part}>
+      <div className="screen-thumbnail" inert aria-hidden="true"><div className="screen-thumbnail-content"><ChromePreview config={config} part={part} imageBase={`/api/shops/${shopId}/images`} /></div></div>
+      <figcaption><strong>{part === "header" ? tr("ヘッダー") : tr("フッター")}</strong></figcaption>
     </figure>)}</div>
   </section>;
 }

@@ -14,10 +14,12 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 ## Initial setup, private preview, and public publication
 
+- Describe what to change returns to the private conversation that produced the proposal, including after reopening the review. Preserve conversation history and in-session drafts, focus the composer, and stay on the review for retry if restoration fails. Do not restart setup or create a replacement conversation when a saved reference exists.
+
 - Before the first private publication, show only Build your shop with AI. Hide the management sidebar, shop name, sample storefront, and screen editor, and do not fetch editor data. Return to creation on subsequent logins and direct management links until a private preview has been published. Then reveal management and editing.
 
 - Interview by text or dictation about business type and desired features/pages; do not require staff, prices, or hours at the start. Adapt questions to known information rather than following a fixed checklist. Before preparing screens, always ask whether there is anything else to add, wait for the answer, and include any additions.
-- Show a plain-language feature diagram and thumbnails for booking, about, My page, contact, blog/archive/article, announcements/archive/article, and additional pages. Mark content provisional. Explain that designs and detailed settings can be adjusted after the private preview.
+- Show a plain-language feature diagram and thumbnails for booking, about, My page, contact, blog/archive/article, announcements/archive/article, and additional pages. Page captures exclude the header and footer; show each shared part in its own preview below the pages. Mark content provisional. Explain that designs and detailed settings can be adjusted after the private preview.
 - Publish a private preview directly from the review. No intermediate approved-only or initial bulk-details screen. Only the creator signed in with the same Google account can view it; other customers and staff cannot. Apply this to HTML, APIs, articles, additional pages, images, availability, and custom domains. Use private caching and noindex headers.
 - Enter staff, menus/prices, hours, and rules in their dedicated menus after the private preview. Save updates that private preview without making it public.
 - Review screens and publish shows only saved/applied configuration and published articles, never uncommitted browser drafts or unapplied proposals. Practice actions use sample customers/data and do not affect real bookings or email. Start on About the shop and navigate using the actual shop menu, without a separate screen chooser.

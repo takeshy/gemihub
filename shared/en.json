@@ -2315,5 +2315,8 @@
   "画像選択モーダルの「AIで生成」から、その場で画像を作り、確認して選択できます。": "Use Generate with AI in the image-selection dialog to create, review, and select an image in place.",
   "画像選択モーダルで、アップロード・AI生成・既存画像からの選択ができます。": "Upload, generate with AI, or choose an existing image in the image-selection dialog.",
   "変更案の作成失敗・チャットから再試行": "Proposal creation failure: retry from chat",
-  "メッセージ送信失敗・下書きを復元": "Message send failure: restore the draft"
+  "メッセージ送信失敗・下書きを復元": "Message send failure: restore the draft",
+  "AIの質問に答えながら、直したいことや追加したいことを伝えられます。": "Answer the AI’s questions and continue describing changes or additions.",
+  "作成した案の、直したいところを伝えてください。": "Tell us what you would like to change in the proposal.",
+  "各画面はヘッダー・フッターを除いた内容を表示します。共通部分は下に分けて表示しています。": "Each screen shows its content without the header and footer. Shared parts are shown separately below."
 }

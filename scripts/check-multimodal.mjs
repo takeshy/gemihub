@@ -77,8 +77,8 @@ try {
   await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("ありません。この内容でお願いします。");
   await page.getByRole("button",{name:"送信",exact:true}).click();
   await review.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).waitFor();
-  assert.equal(await review.locator(".screen-gallery figure").count(),8);
-  await page.waitForFunction(()=>document.querySelectorAll(".screen-thumbnail .public-shop").length===8);
+  assert.equal(await review.locator(".screen-gallery-pages figure").count(),8);
+  await page.waitForFunction(()=>document.querySelectorAll(".screen-gallery-pages .screen-thumbnail .public-shop").length===8);
   await capture("04-plan.jpg", ".request-review");
   await review.getByRole("button",{name:"直したいことを伝える",exact:true}).click();
   await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("ブログと問い合わせも使えるようにしたい");

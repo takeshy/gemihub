@@ -32,5 +32,5 @@ export function ChromeEditor({ config, part, onChange, shopId }: { config: ShopC
 }
 
 export function ChromePreview({ config, part, imageBase }: { config: ShopConfig; part: "header" | "footer"; imageBase?: string }) {
-  return <div className={`public-shop accent-${config.appearance?.accent || "sage"}`}>{part === "header" ? <SiteHeader config={config} imageBase={imageBase}><nav className="public-nav"><span>{tr("マイページ")}</span><span>{tr("ご予約")}</span><span>{tr("お店のこと")}</span><span>{tr("お問い合わせ")}</span>{config.pages.map(page => <span key={page.id}>{page.navigationLabel}</span>)}</nav></SiteHeader> : <SiteFooter config={config} />}</div>;
+  return <div className={`public-shop accent-${config.appearance?.accent || "sage"}`}>{part === "header" ? <SiteHeader config={config} imageBase={imageBase}><nav className="public-nav"><span>{tr("マイページ")}</span><span>{tr("ご予約")}</span><span>{tr("お店のこと")}</span><span>{tr("お問い合わせ")}</span><span>{tr("ブログ")}</span><span>{tr("お知らせ")}</span>{config.pages.map(page => <span key={page.id}>{page.navigationLabel}</span>)}</nav></SiteHeader> : <SiteFooter config={config} />}</div>;
 }
