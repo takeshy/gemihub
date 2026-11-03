@@ -2311,3 +2311,9 @@ pre {
 .shop-reset-dialog .actions { flex-wrap: wrap; }
 .shop-reset-dialog .danger { background: #963f32; color: white; border-color: #963f32; }
 @media (max-width: 600px) { .judge-actions, .admin-actions { flex-direction: column; } .judge-actions > *, .admin-actions > * { width: 100%; } }
+/* Images sent with a chat message: thumbnails that keep their shape and open no wider than the bubble. */
+.chat-message-images { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.chat-message-image { display: block; width: 160px; max-width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; background: var(--cream); border: 1px solid var(--line); }
+.chat-message-image img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.chat-message-image > span { display: flex; height: 100%; align-items: center; justify-content: center; padding: 8px; font-size: 11px; color: var(--muted); text-align: center; }
+@media (max-width: 600px) { .chat-message-image { width: calc(50% - 4px); } }
