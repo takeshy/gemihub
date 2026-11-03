@@ -2566,5 +2566,9 @@
   "保存待ちを取り消して本番の設定に戻す": "Discard pending changes and load saved settings",
   "店主は営業時間内のすべてのメニューを担当します。カレンダーはGoogleログイン時の認可を使うため、追加設定は不要です。": "The owner handles all services during opening hours. Calendar access uses the permission granted at Google sign-in, so no additional setup is needed.",
   "「スタッフ・勤務」の「店主の情報」で、店主の名前と写真を登録できます。「保存」でお客様向け画面にも反映します。店主のカレンダーはGoogleログイン時の認可を使うため、追加設定は不要です。": "In Staff and shifts, use Owner information to enter the owner's name and photo. Save also updates the customer-facing screens. Calendar access uses the permission granted at Google sign-in, so no additional setup is needed.",
-  "設定": "Settings"
+  "設定": "Settings",
+  "ご予約にはログインが必要です。": "Please log in to make a booking.",
+  "会員登録またはログイン後に、メニューと日時を選んでご予約ください。": "Register or log in, then choose a service, date and time to book.",
+  "会員登録・ログインへ": "Register or log in",
+  "未ログイン・予約前にログインを案内": "Signed out: sign in before booking"
 }

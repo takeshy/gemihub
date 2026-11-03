@@ -1278,7 +1278,7 @@ export function PublicShop({
     });
   }, [base]);
   useEffect(() => {
-    if (!data || category || pageSlug || pane !== "reserve") return;
+    if (!data || !isCustomer || data.registrationRequired || category || pageSlug || pane !== "reserve") return;
     const selection = menuSelection(data.config, menu, optionIds);
     if (optionIds.length && !selection) { setOptionIds([]); return; }
     if (
@@ -1310,7 +1310,7 @@ export function PublicShop({
     return () => {
       cancelled = true;
     };
-  }, [date, menu, optionIds, staff, data, category, pageSlug, pane]);
+  }, [date, menu, optionIds, staff, data, category, pageSlug, pane, isCustomer, session.user?.email]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);
@@ -1334,6 +1334,11 @@ export function PublicShop({
               navigate={navigate}
             />
   );
+  const loginRequired = () => <section className="panel booking-login-required" aria-label={tr("ご予約にはログインが必要です。") }>
+    <h2>{tr("ご予約にはログインが必要です。")}</h2>
+    <p>{tr("会員登録またはログイン後に、メニューと日時を選んでご予約ください。")}</p>
+    {!hideHeader && <a className="button primary" href="#customer-signin">{tr("会員登録・ログインへ")}</a>}
+  </section>;
   const mineMember = () => isCustomer ? <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div> : null;
   const minePanel = () => (
             <div className="panel">
@@ -1645,7 +1650,7 @@ export function PublicShop({
       </nav>
       </SiteHeader>}
       <ThemeBody config={c} imageBase={`${base}/images`}>
-      {!hideHeader&&!isCustomer&&<section className="public-auth" aria-label={tr("会員登録・ログイン")}>
+      {!hideHeader&&!isCustomer&&<section id="customer-signin" tabIndex={-1} className="public-auth" aria-label={tr("会員登録・ログイン")}>
         <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{tr("Googleアカウントでご利用いただけます。")}</p></div>
         <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><a className="button primary" href={data.authUrl}>{tr("会員登録")}</a></div><div><span>{tr("登録済みの方")}</span><a className="button" href={data.authUrl}>{tr("ログイン")}</a></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
       </section>}
@@ -1662,7 +1667,7 @@ export function PublicShop({
       ) : (
         <>
           {pane === "mine" && screen("mine", { news: mineNews(), mypage: <>{mineMember()}{minePanel()}</> }, <>{mineNews()}{mineMember()}{minePanel()}</>)}
-          {pane === "reserve" && (() => { const booking = bookingSection(); return screen("reserve", { booking }, booking); })()}
+          {pane === "reserve" && (isCustomer ? (() => { const booking = bookingSection(); return screen("reserve", { booking }, booking); })() : loginRequired())}
           {pane === "about" && screen("about", { menus: aboutMenus(), staff: aboutStaff(), access: aboutAccess(), hours: aboutHours() }, (
             <div className="panel about">
               <h2>{c.name}</h2>

@@ -2,6 +2,7 @@ import React from "react";
 import { within, userEvent } from "storybook/test";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
+import { tr } from "../../shared/i18n";
 
 const meta = {
   title: "お客様の予約",
@@ -11,6 +12,16 @@ const meta = {
 } satisfies Meta<typeof Screen>;
 export default meta;
 type Story = StoryObj<typeof meta>;
+
+export const GuestBooking: Story = {
+  name: "未ログイン・予約前にログインを案内",
+  args: { scenario: "anonymous" },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(await canvas.findByRole("button", { name: tr("ご予約") }));
+    await canvas.findByRole("region", { name: tr("ご予約にはログインが必要です。") });
+  },
+};
 
 export const Customer: Story = {
   name: "顧客・スタッフ指名の予約",

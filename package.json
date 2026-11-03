@@ -35,6 +35,7 @@
     "check:inquiries": "node scripts/check-inquiries.mjs",
     "check:images": "node scripts/check-image-library.mjs",
     "check:image-delivery": "node --import tsx scripts/check-image-delivery.mjs",
+    "check:booking-login": "node --import tsx scripts/check-booking-login.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
     "check:publication-routing": "node scripts/check-publication-routing.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
