@@ -2434,5 +2434,21 @@
   "紹介文": "Description",
   "（必須）": " (required)",
   "ご希望のメニューと日時をお選びください。": "Please choose a menu and a date and time.",
-  "お気軽にご相談ください。": "Feel free to ask us anything."
+  "お気軽にご相談ください。": "Feel free to ask us anything.",
+  "画面の修正チャット": "Screen editing chat",
+  "画面の修正": "Edit the screen",
+  "赤ペンで囲むか、変えたいことをそのまま書いてください。": "Circle an area in red or describe what you want to change.",
+  "画面を操作する": "Use the screen",
+  "赤ペンで囲む": "Circle an area",
+  "画面の修正の会話": "Screen editing conversation",
+  "画面イメージを更新しました。確認してください。": "The screen preview is updated. Please review it.",
+  "画面を更新しました。まだ本番には反映していません。": "The screen is updated. These changes are not published yet.",
+  "修正を確認しています…": "Working on your changes…",
+  "この箇所を修正する": "Change this area",
+  "「修正する」を押すと、左に赤ペン用の画面、右に修正チャットが開きます。元画面は隠れるので、同じ画面が二重に並ぶことはありません。": "Choose Make changes to open the red-pen screen on the left and the editing chat on the right. The original screen is hidden so the same picture is not shown twice.",
+  "右のチャットに希望を書いて「送信」します。Ctrl+Enterでも送れます。音声入力や画像の添付も使えます。返答を見て続けて依頼でき、確認も同じチャットに表示されます。スマートフォンではチャットは下側に出ます。": "Describe your changes in the chat and choose Send or press Ctrl+Enter. Voice input and attachments are also available. Continue the conversation after each reply; confirmations appear in the same chat. On phones the chat appears at the bottom.",
+  "修正する箇所を確認し、「この箇所を修正する」を押すと左の画面が更新されます。チャットは開いたままで、続けて修正を頼めます。初回テーマは「送信」だけで更新します。この段階では本番には反映されません。": "Confirm the target and choose Change this area to update the screen on the left. The chat stays open for follow-up requests. During initial theme setup, Send updates the preview directly. These edits are not published yet.",
+  "画面の見た目や文章は修正チャットで依頼できます。料金・勤務・営業時間・予約ルールはそれぞれの管理メニューで保存してください。": "Use the editing chat for design and text changes. Save prices, shifts, opening hours and booking rules in their respective settings menus.",
+  "初回テーマ・右側の修正チャット": "Initial theme with editing chat on the right",
+  "画面を見ながら赤ペンとチャットで修正": "Edit the screen with the red pen and chat"
 }

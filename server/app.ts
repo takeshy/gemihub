@@ -318,6 +318,18 @@ export function createApp(
         )
       : shop.published!;
   };
+  async function initialPlanFacts(plan: Plan, shop: Shop): Promise<Plan> {
+    if (shop.published || !plan.requiresSetup || !plan.chat) return plan;
+    const chat = await readConversation(store, shop, shop.owner, plan.chat.id).catch(error => { if (error?.status === 404) return undefined; throw error; });
+    if (!chat) return plan;
+    const reply = chat.messages.find(message => message.role === "assistant" && message.requestId === plan.chat!.requestId);
+    if (!reply) return plan;
+    const facts = initialInterviewFacts(chat.messages.filter(message => message.sequence <= reply.sequence));
+    let config = plan.config;
+    if (facts.articles) config = { ...config, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...config.appearance, articles: facts.articles } };
+    config = initialIntroductionPages(config, facts.introductions);
+    return JSON.stringify(config) === JSON.stringify(plan.config) ? plan : { ...plan, config, summary: planSummary(null, config) };
+  }
   async function enqueue(
     shop: Shop,
     type: Job["type"],
@@ -392,7 +404,7 @@ export function createApp(
     if (plan.base !== fresh.revision) fail(409, tr("本番の内容が変わりました。最新の内容を読み直してください"));
     if (!plan.approved) fail(409, tr("先にプランを承認してください"));
     if (
-      fresh.google &&
+      fresh.published && fresh.google &&
       !fresh.publishingPlanId &&
       JSON.stringify(plan.source) !==
         JSON.stringify(await effective(fresh))
@@ -1019,9 +1031,10 @@ export function createApp(
               bookings: await store.bookings(shop.id),
               paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
               inquiries: await inquiries(shop),
-              plans: (await store.list<Plan>("plan"))
+              plans: await Promise.all((await store.list<Plan>("plan"))
                 .filter((p) => p.shopId === shop.id)
-                .sort((a, b) => a.createdAt - b.createdAt),
+                .sort((a, b) => a.createdAt - b.createdAt)
+                .map(plan => shop.owner === user!.email ? initialPlanFacts(plan, shop) : plan)),
               members: await store.records<{
                 shopId: string;
                 email: string;
@@ -1178,13 +1191,14 @@ export function createApp(
           const initialThemeRoute = action.match(/^plans\/([^/]+)\/theme$/);
           if (initialThemeRoute && method === "POST") {
             assertOwner(user, fresh);
-            const original = await store.get<Plan>("plan", initialThemeRoute[1]);
-            if (!original || original.shopId !== fresh.id || !original.requiresSetup || original.approved || fresh.published || original.base !== fresh.revision) fail(409, tr("初回テーマの確認画面を開き直してください。"));
+            const storedOriginal = await store.get<Plan>("plan", initialThemeRoute[1]);
+            if (!storedOriginal || storedOriginal.shopId !== fresh.id || !storedOriginal.requiresSetup || fresh.published || fresh.publishingPlanId || storedOriginal.base !== fresh.revision) fail(409, tr("初回テーマの確認画面を開き直してください。"));
+            const original = await initialPlanFacts(storedOriginal, fresh);
             const input = z.object({ instruction: z.string().trim().min(1).max(4000), imageIds: requestImageIdsSchema.default([]), media: mediaSchema }).parse(await body(req, 12000000));
             if (input.media.data.length > 5600000) fail(400, tr("4MB以下の PNG を指定してください"));
             const id = digest(`${fresh.id}:theme-correction:${original.id}:${input.instruction}:${input.imageIds.join(",")}:${digest(input.media.data)}`);
             const completed = await store.get<Plan>("plan", id);
-            if (completed) return json(res, { plan: completed });
+            if (completed) return json(res, { plan: await initialPlanFacts(completed, fresh) });
             const previous = original.themeRunId ? await store.get<ThemeRun>("initialThemeRun", original.themeRunId) : undefined;
             const chat = original.chat ? await readConversation(store, fresh, user!.email, original.chat.id) : undefined;
             const ids = [...new Set([...(previous?.imageIds || (chat ? await conversationImageIds(store, fresh, chat, []) : themeImageIds(original.config.appearance?.theme))), ...input.imageIds])];
@@ -1449,7 +1463,7 @@ export function createApp(
             const chat = await readConversation(store,fresh,user!.email,conversationRoute[1]);
             const linked = [...new Set(chat.messages.flatMap(message => message.detail.planId ? [message.detail.planId] : []))];
             const plans = (await Promise.all(linked.map(id => store.get<Plan>("plan",id)))).filter(plan => plan?.shopId === fresh.id);
-            return json(res,{...chat,plans});
+            return json(res,{...chat,plans:await Promise.all(plans.map(plan=>initialPlanFacts(plan!,fresh)))});
           }
           if (action === "system/question" && method === "POST") {
             const input = z
@@ -1701,13 +1715,13 @@ export function createApp(
             if (savedChat && savedChat.intent !== input.intent) fail(409,tr("チャットの種類が変わっています"));
             const chatPlanId = input.chat ? digest(`${fresh.id}:chat-plan:${input.chat.id}:${input.chat.requestId}`) : undefined;
             const existingChatPlan = chatPlanId ? await store.get<Plan>("plan",chatPlanId) : undefined;
-            if (existingChatPlan?.shopId === fresh.id && input.chat) { await attachChatPlan(store,fresh,user!.email,input.chat,existingChatPlan.id); return json(res,existingChatPlan); }
+            if (existingChatPlan?.shopId === fresh.id && input.chat) { await attachChatPlan(store,fresh,user!.email,input.chat,existingChatPlan.id); return json(res,await initialPlanFacts(existingChatPlan,fresh)); }
             const previousReply = savedChat?.messages.find(message => message.role === "assistant" && message.requestId === input.chat!.requestId);
             if (input.chat && !previousReply) fail(409,tr("変更案の元になった会話が見つかりません"));
             if(input.intent==="create-shop"&&savedChat&&(!previousReply?.detail.ready||!answeredFinalDetails(savedChat.messages.filter(message=>message.sequence<=previousReply.sequence))))fail(409,tr("確認画面へ進む前に、ほかに伝えたいことがあるかお答えください"));
             if (previousReply?.detail.planId) {
               const previous = await store.get<Plan>("plan",previousReply.detail.planId);
-              if (previous?.shopId === fresh.id) return json(res,previous);
+              if (previous?.shopId === fresh.id) return json(res,await initialPlanFacts(previous,fresh));
             }
             const current = fresh.published ? await effective(fresh) : null;
             if(input.intent==="create-shop"&&current)fail(409,tr("お店は作成済みです。修正を選んでください"));
@@ -1825,6 +1839,12 @@ export function createApp(
               return json(res, { ok: true, url: `/s/${fresh.slug}` });
             if (plan.base !== fresh.revision)
               fail(409, tr("公開内容が変わりました。プランを作り直してください"));
+            const corrected = await initialPlanFacts(plan, fresh);
+            if (corrected !== plan) {
+              Object.assign(plan, corrected);
+              await store.put("plan", plan.id, plan);
+              if (plan.approved) fresh.draft = plan.config;
+            }
             if (p[2] === "approve") {
               plan.approved = true;
               await store.put("plan", plan.id, plan);

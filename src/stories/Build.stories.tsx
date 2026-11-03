@@ -11,6 +11,14 @@ const meta = {
 } satisfies Meta<typeof Screen>;
 export default meta;
 type Story = StoryObj<typeof meta>;
+async function openEditingChat({ canvasElement }: { canvasElement: HTMLElement }) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const button = canvasElement.querySelector<HTMLButtonElement>(".editor-pen-button, .visual-request > button");
+    if (button && !button.disabled) { if (button.getAttribute("aria-pressed") !== "true") button.click(); return; }
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error("The editing chat trigger did not appear");
+}
 
 export const Onboarding: Story = {
   name: "初回ログイン・お店づくりだけを表示",
@@ -25,6 +33,18 @@ export const PlanReview: Story = {
 export const InitialTheme: Story = {
   name: "初回テーマ・赤ペン修正・お知らせと紹介ページ",
   args: { scenario: "initial-theme" },
+};
+
+export const InitialThemeChat: Story = {
+  name: "初回テーマ・右側の修正チャット",
+  args: { scenario: "initial-theme" },
+  play: openEditingChat,
+};
+
+export const ScreenEditingChat: Story = {
+  name: "画面を見ながら赤ペンとチャットで修正",
+  args: { scenario: "local-editor" },
+  play: openEditingChat,
 };
 
 export const ProductionPreview: Story = {

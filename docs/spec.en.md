@@ -200,3 +200,9 @@ Ask for the real shop name and whether the owner has a logo before proposing scr
 For first creation only, generate structural HTML/CSS around trusted navigation, page content, and footer slots. Reference-page images guide design; display an image itself when explicitly requested as a photo or logo. A separate reviewer context checks the request, every attachment's purpose, duplicate menus, and layout. Repair and review up to three attempts; reject incomplete reviews and persist candidates for retries. Scripts, independent forms, external CSS and unsafe URLs are rejected, CSS is scoped, and booking/payment/authentication remain application components. Optional VERTEX_REVIEW_MODEL / OPENAI_REVIEW_MODEL override the normal model for review.
 
 After the first theme sample, use Make changes and red-pen instructions. A reviewed replacement is saved without changing business settings or publishing. Return to questions is available for correcting interview facts and restores the original private conversation.
+
+## Editing chat and initial selections
+
+The first-theme and regular red-pen editors keep the picture on the left and the editing conversation on the right (below on phones). The original preview is hidden while the annotation capture is shown. Replies and target confirmations stay in the chat; applying a revision retains the conversation. Initial themes update on Send; regular changes require target confirmation and remain unpublished until the existing publication action.
+
+Read feature numbers from the actual question, including prefixed or reordered choices. Do not enable unselected blog/news features. Recover selections for existing initial plans using their own interview turn, without changing legacy published shops. A spreadsheet allocated for an image upload is empty storage, not an existing shop configuration: initialize it during first publication, while preserving external-edit checks for published shops.

@@ -51,16 +51,27 @@ try{
     if(process.env.UPDATE_MANUAL==='1'&&width===1280)await writeFile(`public/manual/${language==='en'?'en/':''}04-plan.jpg`,await page.locator('.screen-gallery').screenshot({type:'jpeg',quality:86}));
     await page.getByRole('button',{name:language==='ja'?'修正する':'Make changes',exact:true}).click();
     await expect(page.locator('.annotation-canvas')).toBeVisible();
+    const chat=page.locator('.visual-chat-panel');await expect(chat).toBeVisible();await expect(preview).toBeHidden();
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+    if(width>=1000){const left=await page.locator('.annotation-canvas').boundingBox(),right=await chat.boundingBox();assert.ok(left.x+left.width<=right.x+1,'annotation and chat are side by side');}
     const publish=page.getByRole('button',{name:language==='ja'?'仮公開する':'Publish private preview',exact:true});await expect(publish).toBeDisabled();
     const rect=await page.locator('.annotation-canvas').boundingBox();await page.mouse.move(rect.x+40,rect.y+45);await page.mouse.down();await page.mouse.move(rect.x+180,rect.y+55);await page.mouse.up();
     await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please increase the heading letter spacing. Keep the logo and the booking rules unchanged.');
-    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
-    await page.getByRole('button',{name:language==='ja'?'テーマを修正して確認':'Revise and review theme',exact:true}).click();
+    await page.screenshot({path:`tmp/initial-theme/side-chat-marked-${language}-${width}.png`,fullPage:true});
+    if(language==='ja')await page.getByRole('form',{name:'ペンで囲んだ箇所への依頼'}).getByRole('button',{name:'送信',exact:true}).click();
+    else await page.getByRole('textbox',{name:'How would you like to change this?'}).press('Control+Enter');
     await expect(page.locator('.annotation-canvas')).toHaveCount(0);await expect(publish).toBeEnabled();
     const workspace=await context.request.get(origin+'/api/workspace').then(r=>r.json());const next=workspace.shops[0].plans.at(-1);
     assert.equal(next.themeReview.approved,true);assert.equal(next.themeReview.attempts,2);assert.notEqual(next.id,plan.id);
     for(const key of ['menus','staff','rules','hours','region'])assert.deepEqual(next.config[key],config[key]);
     assert.equal(workspace.shops[0].published,null);
+    await expect(chat).toBeVisible();await expect(preview).toBeVisible();
+    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please also make the footer more spacious.');
+    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
+    await expect(chat.locator('.chat-message-user')).toHaveCount(2);await expect(chat.locator('.chat-message-assistant')).toHaveCount(2);
+    const latest=await context.request.get(origin+'/api/workspace').then(r=>r.json());assert.notEqual(latest.shops[0].plans.at(-1).id,next.id,'the same chat revises the replacement plan');
+
+    await page.screenshot({path:`tmp/initial-theme/side-chat-updated-${language}-${width}.png`,fullPage:true});
     await page.reload();await expect(preview.locator('.theme-heading h1')).toBeVisible();await expect(preview.locator('.theme-image img')).toBeVisible();
     assert.match(await preview.locator('.theme-heading h1').getAttribute('style')||'',/^$/);
     const spacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);assert.notEqual(spacing,'normal');
@@ -68,7 +79,7 @@ try{
     assert.deepEqual(errors,[]);await context.close();
     console.log(`${language} ${width}px: custom HTML/CSS, scoped styles, news-only navigation, red-pen capture, review/repair loop and saved revision passed.`);
   }
-  assert.equal(reviews,8);
+  assert.equal(reviews,16);
   const english=JSON.parse(await readFile('shared/en.json','utf8'));
   for(const language of ['ja','en']){
     const label=text=>language==='en'?(english[text]||text):text;

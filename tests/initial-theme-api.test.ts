@@ -29,6 +29,8 @@ test("first-review red pen saves a reviewed replacement, preserves backend confi
   assert.match(next.config.appearance.theme.css,/padding:48px/);assert.equal((await store.shop(shop.id))!.published,null);
   assert.equal((await request(path,body,owner)).status,200);assert.equal(calls,1,"a lost response does not repeat generation/review");
   assert.equal((await store.get<ThemeRun>("initialThemeRun",next.themeRunId))!.review!.approved,true);
-  await store.put("plan",plan.id,{...plan,approved:true});assert.equal((await request(path,body,owner)).status,409);
+  await store.put("plan",plan.id,{...plan,approved:true});
+  const revised=await request(path,{...body,instruction:"Adjust heading spacing after the failed first publication"},owner);assert.equal(revised.status,200);assert.equal((await revised.json()).plan.approved,false);
+  await store.saveShop({...shop,publishingPlanId:plan.id});assert.equal((await request(path,body,owner)).status,409);
   await store.put("plan",plan.id,plan);await store.saveShop({...shop,published:config});assert.equal((await request(path,body,owner)).status,409);
 });

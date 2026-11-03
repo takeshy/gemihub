@@ -137,7 +137,7 @@ try {
     const canvas = page.getByLabel("変更したい箇所を囲む画面");
     await canvas.waitFor();
     await page.waitForFunction(() => document.querySelector("canvas")?.width > 300);
-    assert.equal(await page.locator(".visual-request").getByRole("button", {name: "送信", exact: true}).isEnabled(), false);
+    assert.equal(await page.locator(".visual-chat-panel").getByRole("button", {name: "送信", exact: true}).isEnabled(), false);
     await canvas.evaluate(el => el.scrollIntoView({block: "start"}));
     const box = await canvas.boundingBox(); assert.ok(box);
     const x = box.x + box.width * .20, y = box.y + 150;
@@ -151,11 +151,11 @@ try {
     }), "pointer events draw visible red strokes into captured pixels");
     await page.getByLabel("ここをどう変えたいですか").fill("ここを『季節のアトリエ』に変えて");
     await capture("22-pen.jpg", ".annotation-canvas");
-    await page.locator(".visual-request").getByRole("button", {name: "送信", exact: true}).click();
+    await page.locator(".visual-chat-panel").getByRole("button", {name: "送信", exact: true}).click();
     await page.getByLabel("変更する対象を確認").waitFor();
-    assert.equal(await page.getByRole("button", {name: "この対象をローカルに変更"}).isEnabled(), false);
+    assert.equal(await page.getByRole("button", {name: "この箇所を修正する"}).isEnabled(), false);
     await page.getByLabel("変更する対象を確認").selectOption("name");
-    await page.getByRole("button", {name: "この対象をローカルに変更"}).click();
+    await page.getByRole("button", {name: "この箇所を修正する"}).click();
     await page.getByText("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。", {exact: false}).waitFor();
     await page.locator(".local-preview-screen").getByText("季節のアトリエ", {exact: true}).waitFor();
     assert.equal(await page.getByRole("heading", {name: "差分プランを作成しました"}).count(), 0);

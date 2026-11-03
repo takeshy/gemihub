@@ -2354,3 +2354,28 @@ pre {
 .design-slots code { background: var(--cream); border-radius: 6px; padding: 2px 6px; }
 .design-slots b { color: #94503d; font-weight: 600; margin-left: 4px; }
 .page-editor-insert { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 8px; }
+
+/* Keep the picture and the conversation visible together while editing. */
+body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-chat-width); }
+.visual-chat-panel { position: fixed; z-index: 70; inset: 0 0 0 auto; width: var(--visual-chat-width, 380px); height: 100dvh; display: flex; flex-direction: column; gap: 10px; padding: 20px; background: #fffdf8; border-left: 1px solid var(--line); box-shadow: -8px 0 28px #283c3510; overflow: hidden; }
+.visual-chat-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.visual-chat-heading h3, .visual-chat-heading p, .visual-chat-panel > p { margin: 0; }
+.visual-chat-heading > button { font-size: 22px; padding: 4px 10px; }
+.visual-chat-view { display: flex; justify-content: flex-start; }
+.visual-chat-log { flex: 1; min-height: 0; height: auto; max-height: none; overflow-y: auto; overscroll-behavior: contain; padding: 8px 0; margin: 0; }
+.visual-chat-log .chat-message, .visual-chat-log .alert, .visual-chat-confirmation { overflow-wrap: anywhere; }
+.visual-chat-confirmation { display: grid; gap: 12px; }
+.visual-chat-panel .chat-composer { flex: 0 0 auto; margin: 0; max-height: 42dvh; overflow-y: auto; }
+.visual-chat-panel .chat-composer textarea { margin: 0; min-height: 84px; }
+@media (max-width: 999px) {
+  body.visual-chat-open { --visual-chat-height: min(72dvh, max(320px, 46dvh)); padding-right: 0; padding-bottom: var(--visual-chat-height); }
+  .visual-chat-panel { inset: auto 0 0; width: 100%; height: var(--visual-chat-height); padding: 12px 16px; gap: 6px; border-left: 0; border-top: 1px solid var(--line); box-shadow: 0 -6px 24px #283c3515; }
+  .visual-chat-heading h3 { font-size: 16px; }
+  .visual-chat-panel .chat-composer textarea { min-height: 60px; }
+}
+.visual-chat-log .chat-message { flex: 0 0 auto; max-width: 94%; padding: 12px 14px; margin: 0; font-size: 13px; line-height: 1.7; }
+.visual-chat-log .chat-message-user { align-self: flex-end; background: #e7eee2; }
+.visual-chat-log .chat-message-assistant { align-self: flex-start; }
+.visual-chat-log .chat-message > b { display: block; margin-bottom: 4px; font-size: 11px; color: #51674d; }
+.visual-chat-open .local-preview-screen .public-nav { flex-wrap: wrap; }
+.visual-chat-open .local-preview-screen .public-nav > * { flex-shrink: 0; white-space: nowrap; }

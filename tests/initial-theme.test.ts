@@ -115,3 +115,16 @@ test("staff and product introductions are independent choices and never fabricat
   assert.deepEqual(initialInterviewFacts([{role:"user",text:"スタッフ紹介だけでいい"}]).articles,{blogs:false,announcements:false});
   assert.deepEqual(initialInterviewFacts([{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"お知らせと商品紹介"}]).introductions,{staff:false,products:true});
 });
+
+test("feature choices follow the actual question despite a preface, changed labels or numbering", () => {
+  const question="店名と業種を確認しました。必要な機能を選んでください。\n1. お店の紹介\n2. 予約\n3. ブログ\n4. お知らせ\n5. お問い合わせ\n6. スタッフ紹介\n7. メニュー・サービス紹介";
+  const facts=initialInterviewFacts([{role:"assistant",text:question},{role:"user",text:"1、2、4、5、7"}]);
+  assert.deepEqual(facts.articles,{blogs:false,announcements:true});assert.deepEqual(facts.introductions,{staff:false,products:true});
+  const english="Choose features for your shop:\n1. Booking\n2. Announcements\n3. Staff introduction\n4. Blog";
+  assert.deepEqual(initialInterviewFacts([{role:"assistant",text:english},{role:"user",text:"1, 2, 3"}]).articles,{blogs:false,announcements:true});
+  assert.deepEqual(initialInterviewFacts([{role:"assistant",text:english},{role:"user",text:"All, no blog"}]).articles,{blogs:false,announcements:true});
+  assert.deepEqual(initialInterviewFacts([{role:"assistant",text:"Choose features:\n1. Booking (choose staff)\n2. Staff introduction\n3. Blog"},{role:"user",text:"1"}]).introductions,{staff:false,products:false});
+  assert.deepEqual(initialInterviewFacts([{role:"assistant",text:question},{role:"user",text:"全部。ただしブログは不要"}]).articles,{blogs:false,announcements:true});
+  const config={...structuredClone(sample),pages:[{id:"menu",slug:"menu",title:"メニュー・サービス紹介",navigationLabel:"メニュー・サービス紹介",body:"",layout:"standard" as const,imageUrl:""}]};
+  assert.equal(initialIntroductionPages(config,facts.introductions).pages.length,1);
+});

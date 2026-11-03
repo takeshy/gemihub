@@ -7,6 +7,7 @@ import { RequestImagePicker } from "./RequestImagePicker";
 import type {ShopConfig} from "../server/domain";
 import type { Plan } from "./App";
 import { submitOnShortcut } from "./submit-shortcut";
+import { MenuImage } from "./MenuImage";
 
 // Capture the rendered page with its computed styles, without granting screen sharing.
 // Cross-origin images without CORS are represented by their labelled image frame.
@@ -65,90 +66,142 @@ export async function capturePage(root: HTMLElement) {
 export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, initialPlanId, onPlan}: {
   shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
   local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
-  /** The screen being edited (tree ID, display name and exported file), sent with the request. */
   screen?: { id: string; label: string; file: string };
   onLocalChange: (config: ShopConfig) => void;
   onBusyChange?: (busy: boolean) => void;
-  /** True while the captured screen is shown, so the live preview below can be hidden. */
+  /** The capture replaces the live preview while it is being annotated. */
   onActiveChange?: (active: boolean) => void;
   triggerHost?: HTMLElement | null;
   initialPlanId?: string;
   onPlan?: (plan: Plan) => void;
 }) {
   const api = useApi();
+  const [open, setOpen] = useState(false);
   const [image, setImage] = useState("");
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
-  const [listening,setListening]=useState(false);
+  const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
   const [marked, setMarked] = useState(false);
-  const [result, setResult] = useState<{id: string; explanation: string; candidates: {id: string; label: string}[]}>();
+  const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string; imageIds?: string[] }[]>([]);
+  const [result, setResult] = useState<{ id: string; explanation: string; candidates: { id: string; label: string }[] }>();
   const [target, setTarget] = useState("");
   const canvas = useRef<HTMLCanvasElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const log = useRef<HTMLDivElement>(null);
   const drawing = useRef(false);
-  async function reset(source = image) {
-    const img = new Image(); img.src = source; await img.decode();
+  const alive = useRef(true);
+  const pendingContext = useRef("");
+  const submitted = useRef("");
+  const failed = useRef<string | undefined>(undefined);
+  const stopDictation = useRef<(() => void) | null>(null);
+  const append = (message: { role: "user" | "assistant"; text: string; imageIds?: string[] }) => setMessages(items => [...items, message].slice(-24));
+  const clearCapture = () => { setImage(""); setResult(undefined); setTarget(""); setMarked(false); };
+  const close = () => { stopDictation.current?.(); setOpen(false); clearCapture(); setError(""); };
+  const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  async function reset() {
+    const img = new Image(); img.src = image; await img.decode();
     if (!canvas.current) return;
     canvas.current.width = img.width; canvas.current.height = img.height;
     canvas.current.getContext("2d")!.drawImage(img, 0, 0);
     setMarked(false); setResult(undefined); setTarget("");
   }
-  const stopDictation = useRef<(() => void) | null>(null);
-  useEffect(() => { if (image) void reset(); }, [image]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; onActiveChange?.(false); onBusyChange?.(false); }; }, []);
+  useEffect(() => { if (image) { void reset(); canvas.current?.scrollIntoView({ block: "nearest" }); } }, [image]);
   useEffect(() => { onActiveChange?.(!!image); }, [image]);
-  useEffect(() => () => onActiveChange?.(false), []);
-  const close = () => { stopDictation.current?.(); setImage(""); setResult(undefined); setError(""); };
-  const identify = () => run(async () => {
-    if (initialPlanId) { setResult({ id: initialPlanId, explanation: tr("赤ペンと依頼をもとに、初回テーマを修正して再確認します。"), candidates: [{ id: "appearance", label: tr("ページの雰囲気") }] }); setTarget("appearance"); return; }
-    const media = {mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1]};
-    setResult(undefined); setTarget("");
-    const r = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, {media, instruction, displayed: config, local, ...(screen ? { screen } : {})});
-    setResult(r); if (r.candidates.length === 1) setTarget(r.candidates[0].id);
+  useEffect(() => {
+    if (!open) return;
+    document.body.classList.add("visual-chat-open");
+    composer.current?.focus({ preventScroll: true });
+    return () => document.body.classList.remove("visual-chat-open");
+  }, [open]);
+  useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, result, error, busy]);
+  async function run(fn: () => Promise<void>) {
+    if (busy) return;
+    setBusy(true); onBusyChange?.(true); setError("");
+    try { await fn(); }
+    catch (e) { if (alive.current) setError(e instanceof Error ? e.message : String(e)); }
+    finally { if (alive.current) { setBusy(false); onBusyChange?.(false); } }
+  }
+  const capture = () => run(async () => {
+    setOpen(true); await frame(); await frame();
+    if (root.current && alive.current) { setImage(await capturePage(root.current)); setResult(undefined); pendingContext.current = ""; }
   });
-  async function run(fn: () => Promise<void>) {setBusy(true); onBusyChange?.(true); setError(""); try {await fn();} catch(e) {setError(e instanceof Error ? e.message : String(e));} finally {setBusy(false); onBusyChange?.(false);}}
-  // The same button opens the pen and, pressed again, returns to the live preview.
-  const trigger = <button className={`${triggerHost ? "editor-pen-button" : ""}${image ? " selected" : ""}`} aria-pressed={!!image} title={image ? tr("ペンをやめてプレビューに戻る") : tr("この画面を修正する")} disabled={busy} onClick={() => image ? close() : run(async () => { if (root.current) setImage(await capturePage(root.current)); })}>{image ? tr("修正をやめる") : tr("修正する")}</button>;
+  async function submitRequest(input = instruction) {
+    const text = input.trim(); if (busy || !text) return;
+    stopDictation.current?.();
+    if (failed.current !== text) append({ role: "user", text, imageIds: [...imageIds] });
+    setInstruction(""); setResult(undefined); setTarget("");
+    await run(async () => {
+      try {
+        const source = image ? canvas.current!.toDataURL("image/png") : root.current ? await capturePage(root.current) : "";
+        if (!source) throw new Error(tr("画面を表示してからお試しください"));
+        const media = { mimeType: "image/png", data: source.split(",")[1] };
+        if (initialPlanId) {
+          const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlanId}/theme`, { instruction: text, imageIds, media });
+          if (!alive.current) return;
+          onPlan?.(response.plan); clearCapture(); setImageIds([]); pendingContext.current = "";
+          append({ role: "assistant", text: tr("画面イメージを更新しました。確認してください。") });
+        } else {
+          const combined = [pendingContext.current, text].filter(Boolean).join("\n\n").slice(-4000);
+          const response = await api<NonNullable<typeof result>>(`/api/shops/${shopId}/visual/identify`, { media, instruction: combined, displayed: config, local, ...(screen ? { screen } : {}) });
+          if (!alive.current) return;
+          pendingContext.current = combined; submitted.current = combined;
+          setResult(response); if (response.candidates.length === 1) setTarget(response.candidates[0].id);
+          append({ role: "assistant", text: response.explanation });
+        }
+        failed.current = undefined;
+      } catch (e) { failed.current = text; if (alive.current) setInstruction(current => current || text); throw e; }
+    });
+  }
+  const trigger = <button className={`${triggerHost ? "editor-pen-button" : ""}${image ? " selected" : ""}`} aria-pressed={!!image} title={image ? tr("ペンをやめてプレビューに戻る") : tr("この画面を修正する")} disabled={busy} onClick={() => image ? close() : void capture()}>{image ? tr("修正をやめる") : tr("修正する")}</button>;
   return <>
     {triggerHost && createPortal(trigger, triggerHost)}
-    {(!triggerHost || image || error) && <div className="visual-request panel" data-capture-ignore>
-    {!triggerHost && trigger}
-    {error && <p className="alert" role="alert">{error}</p>}
-    {image && <>
-      <p>{tr("変更したい文言や画像、配置を赤いペンで囲んで、希望を教えてください。外部画像は枠で表示される場合があります。ペンでは店名・紹介文・アクセス・ページ本文・画像・配置を変更できます。料金・スタッフ・営業時間・予約ルールはそれぞれの管理メニューで保存してください。")}</p>
-      <canvas ref={canvas} aria-label={tr("変更したい箇所を囲む画面")} className="annotation-canvas"
-        onPointerDown={e => {
-          if (busy) return;
-          e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drawing.current = true;
-          const rect = e.currentTarget.getBoundingClientRect();
-          const ctx = e.currentTarget.getContext("2d")!; ctx.beginPath(); ctx.strokeStyle = "#e32236"; ctx.lineWidth = 5; ctx.lineCap = "round";
-          ctx.moveTo((e.clientX - rect.left) * e.currentTarget.width / rect.width, (e.clientY - rect.top) * e.currentTarget.height / rect.height);
-          setMarked(true); setResult(undefined);
-        }}
-        onPointerMove={e => {
-          if (!drawing.current) return;
-          const rect = e.currentTarget.getBoundingClientRect(); const ctx = e.currentTarget.getContext("2d")!;
-          ctx.lineTo((e.clientX - rect.left) * e.currentTarget.width / rect.width, (e.clientY - rect.top) * e.currentTarget.height / rect.height); ctx.stroke();
-        }} onPointerUp={() => {drawing.current = false;}} onPointerCancel={() => {drawing.current = false;}}
-      />
-      <button type="button" className="text-button" disabled={busy || !marked} onClick={() => reset()}>{tr("印を消して描き直す")}</button>
-      <form className="chat-composer" aria-label={tr("ペンで囲んだ箇所への依頼")} onSubmit={event => { event.preventDefault(); stopDictation.current?.(); if (instruction.trim()) void identify(); }}>
-        <textarea aria-label={tr("ここをどう変えたいですか")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event=>submitOnShortcut(event)} rows={3} maxLength={4000} disabled={busy} value={instruction} onChange={e => {setInstruction(e.target.value); setResult(undefined);}} placeholder={tr("ここを『季節を楽しむネイル』に変えて")}/>
+    {(!triggerHost || image) && <div className="visual-request panel" data-capture-ignore>
+      {!triggerHost && trigger}
+      {image && <>
+        <canvas ref={canvas} aria-label={tr("変更したい箇所を囲む画面")} className="annotation-canvas"
+          onPointerDown={event => {
+            if (busy) return;
+            event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); drawing.current = true;
+            const rect = event.currentTarget.getBoundingClientRect(), ctx = event.currentTarget.getContext("2d")!;
+            ctx.beginPath(); ctx.strokeStyle = "#e32236"; ctx.lineWidth = 5; ctx.lineCap = "round";
+            ctx.moveTo((event.clientX - rect.left) * event.currentTarget.width / rect.width, (event.clientY - rect.top) * event.currentTarget.height / rect.height);
+            setMarked(true); setResult(undefined);
+          }}
+          onPointerMove={event => {
+            if (!drawing.current || busy) return;
+            const rect = event.currentTarget.getBoundingClientRect(), ctx = event.currentTarget.getContext("2d")!;
+            ctx.lineTo((event.clientX - rect.left) * event.currentTarget.width / rect.width, (event.clientY - rect.top) * event.currentTarget.height / rect.height); ctx.stroke();
+          }} onPointerUp={() => { drawing.current = false; }} onPointerCancel={() => { drawing.current = false; }}
+        />
+        <button type="button" className="text-button" disabled={busy || !marked} onClick={() => void reset()}>{tr("印を消して描き直す")}</button>
+      </>}
+    </div>}
+    {open && createPortal(<aside className="visual-chat-panel" aria-label={tr("画面の修正チャット")} data-capture-ignore>
+      <div className="visual-chat-heading"><div><h3>{tr("画面の修正")}</h3><p className="small muted">{screen?.label}</p></div><button type="button" disabled={busy} aria-label={tr("閉じる")} onClick={close}>×</button></div>
+      <p className="small">{tr("赤ペンで囲むか、変えたいことをそのまま書いてください。")}</p>
+      <div className="visual-chat-view"><button type="button" className="text-button" disabled={busy} onClick={() => image ? clearCapture() : void capture()}>{image ? tr("画面を操作する") : tr("赤ペンで囲む")}</button></div>
+      <div ref={log} className="chat-log visual-chat-log" role="log" aria-label={tr("画面の修正の会話")} aria-live="polite">
+        {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}><b>{message.role === "user" ? tr("あなた") : "AI"}</b><div className="pre-wrap">{message.text}</div>{!!message.imageIds?.length && <div className="chat-message-images">{message.imageIds.map((id, i) => <MenuImage key={id} imageId={id} imageBase={`/api/shops/${shopId}/menu-images`} name={tr("添付画像{0}", i + 1)} className="chat-message-image" />)}</div>}</article>)}
+        {result && <div className="notice visual-chat-confirmation"><label>{tr("変更する対象を確認")}<select disabled={busy} value={target} onChange={event => setTarget(event.target.value)}><option value="">{tr("対象を選んでください")}</option>{result.candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => void run(async () => {
+          const proposed = await api<{ config: ShopConfig }>(`/api/shops/${shopId}/visual/propose`, { id: result.id, target, instruction: submitted.current, imageIds });
+          if (!alive.current) return;
+          onLocalChange(proposed.config); clearCapture(); setImageIds([]); pendingContext.current = "";
+          append({ role: "assistant", text: tr("画面を更新しました。まだ本番には反映していません。") });
+        })}>{tr("この箇所を修正する")}</button></div>}
+        {error && <p className="alert" role="alert">{error}</p>}
+        {busy && <p role="status">{tr("修正を確認しています…")}</p>}
+      </div>
+      <form className="chat-composer" aria-label={tr("ペンで囲んだ箇所への依頼")} onSubmit={event => { event.preventDefault(); void submitRequest(); }}>
+        <textarea ref={composer} aria-label={tr("ここをどう変えたいですか")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event => submitOnShortcut(event)} rows={3} maxLength={4000} disabled={busy} value={instruction} onChange={event => setInstruction(event.target.value)} placeholder={tr("ここを『季節を楽しむネイル』に変えて")} />
         <div className="chat-composer-toolbar">
           <RequestImagePicker shopId={shopId} value={imageIds} disabled={busy || listening} label={tr("画像を添付")} onChange={ids => { setImageIds(ids); setResult(undefined); }} />
-          <DictationButton onListening={setListening} value={instruction} onChange={text=>{setInstruction(text);setResult(undefined);}} stopRef={stopDictation} disabled={busy}/>
+          <DictationButton onListening={setListening} value={instruction} onChange={setInstruction} onSend={value => void submitRequest(value)} stopRef={stopDictation} disabled={busy} />
           <button type="submit" className="primary chat-send" disabled={busy || listening || !instruction.trim()}>{busy ? tr("確認しています…") : tr("送信")}</button>
         </div>
       </form>
-      {result && <div className="notice"><p>{result.explanation}</p><label>{tr("変更する対象を確認")}<select value={target} onChange={e => setTarget(e.target.value)}><option value="">{tr("対象を選んでください")}</option>{result.candidates.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}</select></label><button disabled={busy || !target} onClick={() => run(async () => {
-          if (initialPlanId) {
-            const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlanId}/theme`, { instruction, imageIds, media: { mimeType: "image/png", data: canvas.current!.toDataURL("image/png").split(",")[1] } });
-            onPlan?.(response.plan); close(); return;
-          }
-          const proposed = await api<{config: ShopConfig}>(`/api/shops/${shopId}/visual/propose`, {id: result.id, target, instruction, imageIds});
-          onLocalChange(proposed.config);
-        })}>{initialPlanId ? tr("テーマを修正して確認") : tr("この対象をローカルに変更")}</button></div>}
-    </>}
-  </div>}
+    </aside>, document.body)}
   </>;
 }

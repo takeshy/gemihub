@@ -8,15 +8,33 @@ export const finalDetailsQuestion = "ほかに伝えたいことはあります�
 export const shopNameQuestion = "お店の名前を教えてください。";
 export const logoQuestion = "使いたいロゴはありますか？あれば画像を添付してください。なければ「なし」、後で決める場合は「後で」と教えてください。";
 export const logoUploadQuestion = "使いたいロゴの画像を添付してください。まだ用意できない場合は「後で」と教えてください。";
+type InitialFeature = "blogs" | "announcements" | "staff" | "products";
+const featurePatterns: Record<InitialFeature, RegExp> = { blogs: /ブログ|blogs?/i, announcements: /お知らせ|announcements?|news/i, staff: /スタッフ紹介|スタッフ|staff|team/i, products: /商品|メニュー|サービス紹介|products?|services?|menu/i };
+function numberedFeatures(text: string) {
+  const options = [...text.normalize("NFKC").replace(/\*\*/g, "").matchAll(/(?:^|\n)\s*(?:[-*]\s*)?(\d{1,2})[.)、:：]\s*([^\n]+)/g)];
+  return new Map(options.map(match => [Number(match[1]), (Object.keys(featurePatterns) as InitialFeature[]).filter(kind => featurePatterns[kind].test(match[2].split(/[（(]/, 1)[0]))]));
+}
+function featureDenied(text: string, kind: InitialFeature) {
+  const match = text.match(featurePatterns[kind]);
+  if (!match) return false;
+  const start = match.index || 0;
+  return /^.{0,10}(?:不要|なし|いらな|要らな|使わな|作らな|付けな|なくして|削除|以外)/.test(text.slice(start + match[0].length)) || /(?:no|without|except|do not want|don't want)\s+(?:a\s+)?$/i.test(text.slice(0, start));
+}
 export function initialInterviewFacts(messages: { role: string; text: string; detail?: { imageIds?: string[] } }[]) {
   let name: string | undefined; let logoKnown = false; let awaiting: "name" | "logo" | "features" | undefined;
   let articles: { blogs: boolean; announcements: boolean } | undefined;
   let introductions: { staff: boolean; products: boolean } | undefined;
+  let choices = numberedFeatures(initialFeatureQuestion);
   for (const message of messages) {
     if (message.role === "assistant") {
       if ([shopNameQuestion, tr(shopNameQuestion)].includes(message.text)) awaiting = "name";
       else if ([logoQuestion, tr(logoQuestion), logoUploadQuestion, tr(logoUploadQuestion)].includes(message.text)) awaiting = "logo";
-      else if ([initialFeatureQuestion, tr(initialFeatureQuestion)].includes(message.text)) awaiting = "features";
+      else {
+        const options = numberedFeatures(message.text);
+        if ([initialFeatureQuestion, tr(initialFeatureQuestion)].includes(message.text) || options.size >= 2 && ([...options.values()].some(kinds => kinds.includes("blogs") || kinds.includes("announcements")) || /機能|features/i.test(message.text))) {
+          awaiting = "features"; choices = options.size ? options : numberedFeatures(initialFeatureQuestion);
+        }
+      }
       continue;
     }
     if (message.role !== "user") continue;
@@ -26,10 +44,14 @@ export function initialInterviewFacts(messages: { role: string; text: string; de
     if ((awaiting === "logo" || /ロゴ|logo/i.test(message.text)) && (/なし|無い|ない|ありません|不要|後で|あとで|未定|(?:^|\b)(?:no|none|later|not yet)(?:\b|$)/i.test(message.text) || !!message.detail?.imageIds?.length || /https:\/\//.test(message.text))) logoKnown = true;
     if (awaiting === "features" || /だけ|only/i.test(message.text) && /紹介|予約|ブログ|お知らせ|問い合わせ|introduction|about|booking|blog|announcement|inquir|staff|product/i.test(message.text)) {
       const normalized = message.text.normalize("NFKC");
-      const numbers = [...normalized.matchAll(/\b[1-7]\b/g)].map(m => Number(m[0]));
+      const numbers = [...normalized.matchAll(/\b\d{1,2}\b/g)].map(m => Number(m[0]));
       const all = /全部|すべて|\ball\b/i.test(normalized);
-      articles = { blogs: all || (numbers.length ? numbers.includes(3) : /ブログ|blog/i.test(normalized) && !/ブログ.{0,5}(?:不要|なし|いらな)|no blog/i.test(normalized)), announcements: all || (numbers.length ? numbers.includes(4) : /お知らせ|announcement/i.test(normalized) && !/お知らせ.{0,5}(?:不要|なし|いらな)|no announcement/i.test(normalized)) };
-      introductions = { staff: all || (numbers.length ? numbers.includes(6) : /スタッフ紹介|staff|team/i.test(normalized)), products: all || (numbers.length ? numbers.includes(7) : /商品|サービス紹介|product|service introduction/i.test(normalized)) };
+      const selected = (kind: InitialFeature) => !featureDenied(normalized, kind) && (all || (numbers.length ? numbers.some(number => choices.get(number)?.includes(kind)) : featurePatterns[kind].test(normalized)));
+      articles = { blogs: selected("blogs"), announcements: selected("announcements") };
+      introductions = { staff: selected("staff"), products: selected("products") };
+    }
+    for (const kind of ["blogs", "announcements"] as const) {
+      if (featureDenied(message.text, kind)) articles = { blogs: articles?.blogs || false, announcements: articles?.announcements || false, [kind]: false };
     }
     if (/スタッフ.{0,12}(?:紹介|ページ)|staff.{0,12}(?:page|introduction)|team page/i.test(message.text) && !/スタッフ.{0,8}(?:不要|なし|いらな)|no staff/i.test(message.text)) introductions = { staff: true, products: introductions?.products || false };
     if (/商品.{0,12}(?:紹介|ページ)|サービス紹介|product.{0,12}(?:page|introduction)/i.test(message.text) && !/商品.{0,8}(?:不要|なし|いらな)|no product/i.test(message.text)) introductions = { staff: introductions?.staff || false, products: true };
