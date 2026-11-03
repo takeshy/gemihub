@@ -6,8 +6,6 @@
 
 A booking and shop management system for small independent businesses and salons. No technical configuration jargon required—talk through what kind of shop you want, circle an area on the screen with a pen to say "change this part," review the preview, and publish when you're ready.
 
-Initial setup asks for your shop name and logo, with separate choices for blog, announcements, staff introduction, and products/services. Themes use structural HTML/CSS and an independent AI review with up to three repair attempts. Reference-page images guide the design; explicitly requested logos and photos are displayed. Use the red pen to revise the first theme preview.
-
 ## Screenshots
 
 **Point and ask:** Circle the part of the screen you want to change, tell AI what you want, and preview the result before applying.
@@ -37,16 +35,9 @@ Initial setup asks for your shop name and logo, with separate choices for blog, 
 - **Booking & inquiry management:** Track daily reservations by staff or date, reply to customer inquiries via email, and track resolution status.
 - **Customer records (CRM):** Automatically aggregate visit counts and spending by customer, and attach private operator notes and photos.
 - **Bilingual interface:** Switch between Japanese and English across management screens, customer pages, and the illustrated manual.
+- **JP/US support:** Choose your shop's currency and time zone independently of the interface language. See the [language and region guide](docs/i18n.md).
 
 ---
-
-## Japan and United States shops
-
-In **Shop information**, choose **Country (currency)** and, for US shops, a time zone. JP uses whole yen (JPY) and Asia/Tokyo. US uses dollars (USD, up to two decimal places) and one of seven US time zones. Booking slots, dates, notifications, customer/inquiry filters and Drive exports follow the shop's zone, including summer time. Interface language can be changed independently.
-
-For a first visit, Japanese-preferring browsers open in Japanese; other browser languages open in English. A new shop defaults to JP or US from the browser language and uses a supported US browser time zone, otherwise America/New_York. Existing shops without region settings remain JP. Changing country does not convert menu prices; review them before taking bookings. Existing payments and refunds retain their booked currency and policy. AI proposals cannot change country or time zone.
-
-Verification: `npm test` and, after building, `npm run check:region`. See [the language and region guide](docs/i18n.md) and [the system explanation](docs/system/shop-settings.md).
 
 ## How It Works
 
@@ -64,6 +55,8 @@ Verification: `npm test` and, after building, `npm run check:region`. See [the l
 
 - **Multimodal proposals for pages, articles, and settings—with server-enforced booking & payment logic:**
   Gemini on Vertex AI understands natural conversation, live voice, and pen-marked screenshots to draft page structures, Markdown copy, layouts, images, and shop settings. Meanwhile, authentication, access control, availability calculation, and payment amounts are strictly enforced by the server.
+- **Theme creation and review:**
+  Initial setup asks for your shop name and logo, with separate choices for blog, announcements, staff introduction, and products/services. AI builds an HTML/CSS theme from reference images, then an independent AI review checks it with up to three repair attempts. Reference-page images guide the design; explicitly requested logos and photos are displayed. Use the red pen to revise the first theme preview.
 - **Source-backed answers and a Propose → Preview → Approve workflow:**
   In **Consult & ask**, a dedicated research LLM checks the system docs, the shop's `spec.md`, `history.md`, and live ledger records to answer with sources—explicitly stating when something is not defined instead of guessing. Change requests only go live after the owner previews the diff and approves on screen, recording the request in `history.md`.
 - **Owner-controlled data storage:**
@@ -77,7 +70,7 @@ Requires Node.js 24 or later.
 
 ### 1. Try Locally (Demo Mode)
 
-You can run the full salon demo in memory without any Google Cloud or OAuth credentials:
+You can try the salon demo with in-memory data and form-based editing without Google Cloud or OAuth credentials. Free-form questions, pen editing, and natural-language changes require a Vertex AI connection.
 
 ```sh
 npm ci
@@ -106,14 +99,12 @@ Update `.env` (see `.env.example` for all options):
 | `SESSION_SECRET` | Random secret (32+ characters) used for sessions and token encryption |
 | `GOOGLE_CLOUD_PROJECT` | Google Cloud project ID |
 | `GOOGLE_CLOUD_LOCATION` | Vertex AI location (e.g., `us-central1`) |
-| `VERTEX_REVIEW_MODEL` / `OPENAI_REVIEW_MODEL` | Optional first-theme review model; defaults to the normal model in a fresh context |
 | `VERTEX_MODEL` | Gemini model ID on Vertex AI |
+| `VERTEX_REVIEW_MODEL` | Optional first-theme review model; defaults to `VERTEX_MODEL` in a fresh context |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Web application OAuth credentials (redirect URI: `${APP_ORIGIN}/auth/google/callback`) |
 | `APP_ORIGIN` | Management origin (e.g., `http://localhost:3000` locally) |
 
 For PayPal Sandbox testing, also set `PAYPAL_ENVIRONMENT=sandbox`, `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET_FILE`.
-
-For another recording take, a Google-signed-in owner can press **Ctrl+Shift+L**, select **Reset my shop** in the header, and confirm. Admin and Reset my shop start hidden, return to hidden on reload, and toggle with the same shortcut. This also works in production. Google stays connected while setup starts over, with a new folder for the next shop. The previous storefront closes and its dedicated Drive folder moves to the trash. Other shops are unaffected. PayPal payment/refund history is retained, and resetting does not issue refunds.
 
 ---
 
