@@ -130,7 +130,7 @@ Persist user messages before generation and deduplicate by request ID. Retry fai
 
 ## Images and generation
 
-The owner-only library combines uploads, service images, and Gemini images. Search, filter, rename, and remove unused records while keeping Drive files. No destination is required at upload. Show usage. Only published references are served; reject CRM/cross-shop image IDs, unselected new proposed IDs, and removal while in use.
+Image management lives in the image-selection modal, without a separate navigation menu. Owners can upload PNG/JPEG/GIF/WebP images up to 5 MB each or generate images with AI in place. Uploads are selected automatically; AI results are reviewed and selected with OK before confirming the selection. The owner-only library combines uploads, service images, and Gemini images. Search, filter, rename, and remove unused records while keeping Drive files. No destination is required at upload. Show usage. Only published references are served; reject CRM/cross-shop image IDs, unselected new proposed IDs, and removal while in use.
 
 AI text/voice/pen/page requests select up to 15 managed images, 75 MB total, passing bytes and IDs. Keep original 5 MB images in Drive. Above 12 MB total, create model-only JPEG copies up to 2048 px and 768 KB each, retaining IDs and public originals.
 

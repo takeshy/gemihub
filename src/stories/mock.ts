@@ -56,6 +56,7 @@ export type Scenario =
   | "image-library"
   | "image-library-empty"
   | "image-library-generation"
+  | "image-library-retry"
   | "image-page"
   | "crm-list"
   | "crm-detail"
@@ -155,7 +156,7 @@ export function scenarioProps(scenario: Scenario) {
     initialTab: ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
-          "image-library": "images", "image-library-empty": "images", "image-library-generation": "images",
+          "image-library": "build", "image-library-empty": "build", "image-library-generation": "build",
           manual: "manual",
           system: "build",
           "us-settings": "basic", "us-menus": "menus",
@@ -203,6 +204,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const menuImages = new Map<string, { mimeType: string; data: string }>();
   const imageMetadata = new Map<string, LibraryImage>();
   const generatedImages = new Map<string, string>();
+  const uploadedImages = new Map<string, string>();
+  let failImageUpload = scenario === "image-library-retry";
   const ownPhotoImages = new Set<string>();
   if (["menu-images", "menu-images-public", "blog-editor", "manage-staff", "calendar-member", "calendar-connected", "image-library", "image-library-generation", "image-page"].includes(scenario)) {
     const canvas = document.createElement("canvas"); canvas.width = 640; canvas.height = 480;
@@ -479,9 +482,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { ok: true };
     }
     else if ([`/api/shops/${shop.id}/menu-images`, `/api/shops/${shop.id}/images`].includes(action) && data !== undefined) {
-      const imageId = String(menuImages.size + 1).padStart(64, "0");
+      const imageId = uploadedImages.get(String(input.requestId)) || String(menuImages.size + 1).padStart(64, "0");
+      uploadedImages.set(String(input.requestId), imageId);
       menuImages.set(imageId, { mimeType: String(input.mimeType), data: String(input.data) }); result = { imageId };
       imageMetadata.set(imageId, { id: imageId, name: String(input.name), mimeType: String(input.mimeType), size: atob(String(input.data)).length, source: "upload", createdAt: new Date().toISOString(), usedBy: [] });
+      if (failImageUpload) { failImageUpload = false; throw new Error(tr("操作できませんでした")); }
     }
     else if (/\/(menu-images|images)\/[a-f0-9]{64}$/.test(action)) {
       const image = menuImages.get(action.split("/").at(-1)!); if (!image) throw new Error(tr("メニュー画像がありません")); result = image;

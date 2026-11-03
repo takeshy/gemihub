@@ -2019,6 +2019,7 @@ pre {
 .request-image-selection span { overflow-wrap:anywhere; min-width:0; }
 .request-image-dialog { width:min(900px, calc(100vw - 2rem)); max-height:90dvh; overflow:auto; box-sizing:border-box; border:1px solid #c4d0c5; border-radius:14px; padding:1.2rem; color:#223b30; background:#fffdf8; }
 .request-image-dialog::backdrop { background:#152c2588; }
+.request-image-dialog input[type="file"] { width:100%; min-width:0; }
 .request-image-option { display:flex; flex-direction:column; gap:.5rem; text-align:left; padding:.7rem; min-width:0; overflow-wrap:anywhere; }
 .request-image-option .library-image { width:100%; }
 .request-image-option.image-selected { border:2px solid #386d50; background:#edf6ee; }

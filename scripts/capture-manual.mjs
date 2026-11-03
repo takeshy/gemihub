@@ -288,7 +288,7 @@ try {
   await capture("29-data-edit.jpg", ".data-management");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "データを保存しました" }).waitFor();
-  await open("library", "画像管理", "運営/画像管理");
+  await open("library", "依頼の画像を選ぶ", "運営/画像管理");
   await page.locator(".image-library-grid figure").nth(1).waitFor();
   await page.locator(".image-library-grid img").first().waitFor();
   await capture("30-image-library.jpg", ".image-library");
@@ -300,8 +300,9 @@ try {
   await page.getByLabel("画像の名前", { exact: true }).fill("季節の花の紹介画像.png");
   await page.getByLabel("生成したい画像", { exact: true }).fill("明るい窓辺に季節の花を飾った、お店の紹介ページ向けの写真。やわらかな自然光で落ち着いた雰囲気にしてください。");
   await page.getByRole("button", { name: "参考画像を選ぶ", exact: true }).click();
-  await page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true }).getByRole("button", { name: "お店の紹介.pngを選択", exact: true }).click();
-  await page.getByRole("button", { name: "選択した画像を使う", exact: true }).click();
+  const referencePicker = page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true }).last();
+  await referencePicker.getByRole("button", { name: "お店の紹介.pngを選択", exact: true }).click();
+  await referencePicker.getByRole("button", { name: "選択した画像を使う", exact: true }).click();
   await page.getByLabel("画像の比率").selectOption("16:9");
   await capture("31-image-generation.jpg", ".image-generation");
   await page.getByRole("button", { name: "生成して結果を確認", exact: true }).click();
@@ -310,9 +311,7 @@ try {
   await page.locator(".image-generation-result img").waitFor();
   await capture("35-image-generation-result.jpg", ".image-generation-result");
   await page.getByRole("region", { name: "生成した画像を確認", exact: true }).getByRole("button", { name: "これでOK", exact: true }).click();
-  await page.locator("aside nav").getByRole("button", { name: /AIとお店をつくる$/ }).click();
-  await page.getByRole("button",{name:"修正",exact:true}).click();
-  await page.getByRole("button", {name:"はじめる",exact:true}).click();
+  await page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true }).getByRole("button", { name: "選択した画像を使う", exact: true }).click();
   await page.getByLabel("AIに伝えたいこと").fill("選んだ画像をよくある質問のページに使ってください。");
   await page.getByRole("button", { name: "画像を添付", exact: true }).click();
   const requestPicker = page.getByRole("dialog", { name: "依頼の画像を選ぶ", exact: true });

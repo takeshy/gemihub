@@ -15,7 +15,6 @@ import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
 import { DataManagement } from "./DataManagement";
 import { ShopOverview } from "./ShopOverview";
-import { ImageLibrary } from "./ImageLibrary";
 import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
 import { SiteHeader, SiteFooter } from "./SiteChrome";
@@ -390,7 +389,7 @@ function Dashboard({
           {[
             ["build", "✧", tr("AIとお店をつくる")],
             ["assistant", "✳", tr("相談・質問")],
-            ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")], ["images", "▧", tr("画像管理")]] : []),
+            ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
             ["bookings", "▦", tr("予約を管理")],
             ...(shop ? [["customers", "♧", tr("お客様")]] : []),
             ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")]] : []),
@@ -479,7 +478,6 @@ function Dashboard({
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop}/></>}<StaffCalendar key={shop.id} shop={shop}/>{!shop.isOwner && <StaffPhoto shop={shop} reload={load}/>}</>}
-                {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {view === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
