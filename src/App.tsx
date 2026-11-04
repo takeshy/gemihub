@@ -351,12 +351,15 @@ function Dashboard({
   const { tab, shop: chosen, screen: initialScreen, article: initialArticleKey, customer: initialCustomer, customerImages: initialCustomerImages, inquiry: initialInquiryId, focusRequest, intent: requestIntent } = navigation.route;
   const editorSelection = useRef({ screen: initialScreen || "reserve", article: initialArticleKey });
   const [shops, setShops] = useState<Workspace[]>([]);
+  // Until the first workspace response, an empty list means "loading", not "no shops".
+  const [loaded, setLoaded] = useState(false);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
   const buildReview = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<Plan>();
   async function load() {
     const w = await api<{ shops: Workspace[] }>("/api/workspace");
     setShops(w.shops);
+    setLoaded(true);
     return w.shops;
   }
   useEffect(() => {
@@ -462,8 +465,9 @@ function Dashboard({
       </aside>}
       <section className="workspace">
         {!shop ? (
-          <p>
+          loaded ? <p>
             {tr("運営できるお店はありません。スタッフの方は、店主から案内されたスタッフ用ログインURLからログインしてください。")}</p>
+            : <p className="loading" role="status">{tr("お店の準備をしています…")}</p>
         ) : (
           <>
             {view === "manual" ? (
