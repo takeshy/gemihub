@@ -47,12 +47,15 @@ try {
   const tab = async value => { await expect.poll(() => query().get('tab')).toBe(value); assert.equal(query().get('lang'), language); };
   await page.goto(`${origin}/?lang=${language}&shop=${shops[0].id}&tab=basic`);
   await expect(page.locator('.live-settings-basic')).toBeVisible();
+  await expect(nav.getByRole('tree')).toBeVisible();
+  await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(0);
   const originalHistoryLength = await page.evaluate(() => history.length);
   await item('お店の基本情報').click();
   assert.equal(await page.evaluate(() => history.length), originalHistoryLength, 'query parameter order does not create duplicate history');
   const loaded = documents.length;
   for (const [name, id, selector] of [['メニュー・料金', 'menus', '.live-settings-menus'], ['スタッフ・勤務', 'staff', '.live-settings-staff'], ['画像管理', 'images', '.image-library'], ['公開の設定', 'settings', '.shop-export'], ['お店の基本情報', 'basic', '.live-settings-basic']]) {
    await item(name).click(); await tab(id); await expect(page.locator(selector).first()).toBeVisible(); assert.equal(query().get('shop'), shops[0].id);
+   await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(0);
   }
   assert.equal(documents.length, loaded, 'menu navigation must not reload the document');
   await page.goBack(); await tab('settings'); await expect(page.locator('.shop-export')).toBeVisible();
@@ -77,9 +80,12 @@ try {
   const screen = name => nav.getByRole('treeitem', { name: new RegExp('^' + label(name)) });
   await screen('お店のこと').click(); await tab('try'); await expect.poll(() => query().get('screen')).toBe('about'); await expect(screen('お店のこと')).toHaveAttribute('aria-selected', 'true');
   await screen('お問い合わせ').click(); await expect.poll(() => query().get('screen')).toBe('contact'); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
+  await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(1);
   await page.goBack(); await expect.poll(() => query().get('screen')).toBe('about'); await expect(screen('お店のこと')).toHaveAttribute('aria-selected', 'true');
   await page.goForward(); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
-  await item('メニュー・料金').click(); await tab('menus'); await page.goBack(); await tab('try'); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
+  await item('メニュー・料金').click(); await tab('menus');
+  await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(0);
+  await page.goBack(); await tab('try'); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
   assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).config.description, localKey), draft.config.description);
   await page.reload(); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
   await screen('ヘッダー').click(); await expect.poll(() => query().get('screen')).toBe('part:header'); await page.reload(); await expect(screen('ヘッダー')).toHaveAttribute('aria-selected', 'true');

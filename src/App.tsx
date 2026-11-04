@@ -542,7 +542,7 @@ function Dashboard({
             )}
           </>
         )}
-        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
+        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} active={view === "try"} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
       </section>
     </div>
     </ShopRegionContext.Provider>
@@ -999,7 +999,7 @@ function Reservations({
   const [date, setDate] = useState("");
   const [staff, setStaff] = useState("");
   return (
-    <div className="panel">
+    <div className="panel reservations-panel">
       <div className="section-top">
         <h2>
           {tr("予約一覧")}{" "}
@@ -1016,7 +1016,7 @@ function Reservations({
         >
           {tr("更新")}</button>
       </div>
-      <div className="filters">
+      <div className="filters reservation-filters">
         <Field label={tr("日付（{0}）", timeZoneLabel)}>
           <DateInput aria-label={tr("日付（{0}）", timeZoneLabel)}
             value={date}

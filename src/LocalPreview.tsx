@@ -21,7 +21,7 @@ import { articleKinds } from "../shared/article-features";
 import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, syncPreviewArticleFeatures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
 
 type Snapshot = Pick<LocalDraft, "base" | "source" | "config"> & { lastPublishedPlanId?: string };
-export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenChange, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; activate?: () => void; onScreenChange?: (screen: string, article?: string) => void; initialScreen?: string; initialArticleKey?: string }) {
+export function LocalPreview({ shop, email, reload, sidebar, active = true, activate, onScreenChange, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; active?: boolean; activate?: () => void; onScreenChange?: (screen: string, article?: string) => void; initialScreen?: string; initialArticleKey?: string }) {
   const api = useApi();
   const key = draftKey(email, shop.id);
   const [draft, setDraft] = useState<LocalDraft>();
@@ -321,7 +321,7 @@ export function LocalPreview({ shop, email, reload, sidebar, activate, onScreenC
   const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
   // The exported file that renders this screen, so the pen request names the screen even without marks.
   const screenFile = scope.kind === "page" ? `web/pages/${screenPage?.slug || scope.pageId}.html` : scope.kind === "part" ? `web/parts/${scope.part}.html` : `web/index.html#${screen}`;
-  const tree = <ScreenTree draft={draft} index={index} statuses={statuses} selected={screen} disabled={busy || !!draft?.pending || !!conflict} onChoose={value => void run(async () => choose(value))} />;
+  const tree = <ScreenTree draft={draft} index={index} statuses={statuses} selected={active ? screen : ""} disabled={busy || !!draft?.pending || !!conflict} onChoose={value => void run(async () => choose(value))} />;
   return <div className="local-preview preview-first">
     {sidebar ? createPortal(tree, sidebar) : tree}
     <div className="editor-toolbar">

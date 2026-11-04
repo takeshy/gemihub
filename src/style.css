@@ -692,6 +692,23 @@ pre {
 .booking-card button {
   font-size: 11px;
 }
+.reservations-panel { container: reservations / inline-size; }
+.reservation-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; margin-bottom: 24px; }
+.reservation-filters .field { margin: 0; min-width: 0; }
+.reservation-filters .field > span:first-child { font-size: 12px; min-height: 21px; }
+.reservation-filters .date-input-controls, .reservation-filters select { height: 46px; }
+.reservation-filters input[type="text"], .reservation-filters select { width: 100%; min-width: 0; font-size: 14px; font-weight: 400; }
+.reservation-filters > button { grid-column: 1 / -1; justify-self: start; height: 46px; font-size: 14px; }
+.reservations-panel .booking-card { flex-direction: column; align-items: stretch; gap: 16px; }
+.reservations-panel .booking-card > div { min-width: 0; overflow-wrap: anywhere; }
+.reservations-panel .booking-card .actions { flex-wrap: wrap; justify-content: flex-start; }
+@container reservations (min-width: 640px) {
+  .reservation-filters { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+  .reservation-filters > button { grid-column: auto; margin-top: 28px; }
+}
+@container reservations (max-width: 379px) {
+  .reservation-filters { grid-template-columns: minmax(0, 1fr); }
+}
 .status {
   font-size: 10px;
   background: #eef0eb;
