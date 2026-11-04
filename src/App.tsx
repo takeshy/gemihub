@@ -95,7 +95,18 @@ export function App({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  const [showOperatorControls, setShowOperatorControls] = useState(false);
+  // Ctrl+Shift+L toggles operator controls. Judges see theirs by default, and a hidden choice
+  // survives reloads in the same tab so a recording can hide them once; others start hidden on every load.
+  const judgeControlsKey = "gemihub:judgeControlsHidden";
+  const [operatorControlsShown, setOperatorControlsShown] = useState(false);
+  const [judgeControlsHidden, setJudgeControlsHidden] = useState(() => {
+    try { return sessionStorage.getItem(judgeControlsKey) === "1"; } catch { return false; }
+  });
+  const judgeSession = !!(session?.user?.judge || session?.judgeCustomer || session?.judgeOwnerAvailable);
+  useEffect(() => {
+    if (!judgeSession) return;
+    try { sessionStorage.setItem(judgeControlsKey, judgeControlsHidden ? "1" : "0"); } catch { /* storage unavailable */ }
+  }, [judgeSession, judgeControlsHidden]);
   const refresh = () => api<Session>("/api/session").then(setSession);
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
@@ -105,7 +116,7 @@ export function App({
       if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && !event.isComposing && (event.code === "KeyL" || event.key.toLowerCase() === "l")) {
         event.preventDefault();
         event.stopPropagation();
-        if (!event.repeat) setShowOperatorControls(value => !value);
+        if (!event.repeat) { setOperatorControlsShown(value => !value); setJudgeControlsHidden(value => !value); }
       }
     };
     window.addEventListener("keydown", toggleOperatorControls, true);
@@ -130,6 +141,7 @@ export function App({
     });
   if (!session)
     return <div className="loading">{error || tr("お店の準備をしています…")}</div>;
+  const showOperatorControls = judgeSession ? !judgeControlsHidden : operatorControlsShown;
   const displaySession = !showOperatorControls && session.user && (session.user.judge || session.judgeCustomer)
     ? { ...session, user: { ...session.user, name: "John" } }
     : session;
