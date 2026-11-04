@@ -10,6 +10,10 @@ I've been on the other side, too. I once forgot an appointment, offered to pay f
 
 **gemihub** lets independent shop and salon owners build and run a custom booking and payment system simply by talking to AI—no configuration jargon, no developer needed.
 
+- Build and update a shop's booking site through conversation and red-pen edits.
+- Turn plain-language cancellation rules into owner-approved policies for PayPal prepayments and refunds.
+- Manage bookings and customer records, with previews and approval before changes go live.
+
 ### For the owner
 - **Set up by conversation**: Describe your business by text or voice, or paste existing notes and URLs. The AI asks follow-up questions, fills in services, staff, hours, and rules, and generates a custom HTML/CSS theme from your logo and reference photos.
 - **Point and ask (Red-Pen editing)**: Circle any part of a preview screen with a red pen and say *"make this bigger"* or *"change this wording."* The AI updates only that section and shows a diff preview before anything goes live.
@@ -17,6 +21,8 @@ I've been on the other side, too. I once forgot an appointment, offered to pay f
 - **Consult & ask**: Ask questions like *"What is our current refund policy?"* via chat or live voice (**Gemini Live**). A research AI answers with citations from the shop's spec, change history, and live bookings—and admits when something isn't defined instead of guessing.
 
 ### PayPal at the core of every booking
+AI turns the owner's plain-language cancellation rules into a structured policy for approval. The server saves the approved policy with each booking and uses it to calculate and execute PayPal refunds.
+
 - **Prepayment at booking**: Powered by **PayPal Orders v2** (`create → buyer approval → capture`). Time slots are held during checkout, and the server verifies order ID, currency, and amount before confirming.
 - **Automatic, policy-based refunds**: Uses the **PayPal Refunds API**. The refund policy is snapshotted at booking time so later rule changes never affect paid bookings. Shop-initiated cancellations always refund 100%.
 - **Built for real money**: Every state transition is persisted before calling PayPal, using `PayPal-Request-Id` idempotency keys and a background reconciler to recover interrupted captures or pending refunds without double-charging.
