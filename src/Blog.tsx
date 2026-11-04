@@ -3,6 +3,7 @@ import { useShopDisplay } from "./money";
 import { articleKinds } from "../shared/article-features";
 import { createRequestId } from "./request-id";
 import { ArticleImageChooser } from "./ArticleImages";
+import { ArticleTextEditor } from "./ArticleTextEditor";
 import type { ArticleFile } from "../server/article-files";
 import { DateInput } from "./DateInput";
 import React, { useEffect, useState, useRef, lazy, Suspense } from "react";
@@ -51,7 +52,8 @@ export function BlogEditor({
   const [posts, setPosts] = useState<Post[]>([]),
     [current, setCurrent] = useState<Post>();
   const [content, setContent] = useState<Content>(fresh),
-    [method, setMethod] = useState<"ai" | "write">();
+    [method, setMethod] = useState<"ai" | "write">("write");
+  const [editorMode, setEditorMode] = useState<"text" | "visual">("text");
   const [instruction, setInstruction] = useState(""),
     [conversationId, setConversationId] = useState<string>();
   const [messages, setMessages] = useState<
@@ -96,7 +98,8 @@ export function BlogEditor({
   function choose(post?: Post) {
     setCurrent(post);
     setContent(post ? structuredClone(post.draft) : fresh());
-    setMethod(post ? "write" : undefined);
+    setMethod("write");
+    setEditorMode("text");
     setSaveId(createRequestId());
     setTurnId(createRequestId());
     setInstruction("");
@@ -163,269 +166,265 @@ export function BlogEditor({
           {!shop.isOwner && (
             <p className="notice">{tr("記事の作成・変更・公開は店主が行います。")}</p>
           )}
-          <div
-            className="article-methods"
-            role="group"
-            aria-label={tr("記事の作成方法")}
-          >
-            <button
-              type="button"
-              disabled={blocked}
-              aria-pressed={method === "ai"}
-              onClick={() => setMethod("ai")}
-            >
-              <b>{tr("AIに依頼する")}</b>
-              <span>{tr("書きたい内容や使う画像を伝えます")}</span>
-            </button>
-            <button
-              type="button"
-              disabled={blocked}
-              aria-pressed={method === "write"}
-              onClick={() => setMethod("write")}
-            >
-              <b>{tr("自分で作成する")}</b>
-              <span>{tr("見出しや写真を入れて記事を書きます")}</span>
-            </button>
+          <div className="article-writing-help">
+            <p className="small muted">{tr("まずは自分の言葉で書いてみましょう。書いた文章はAIで清書できます。")}</p>
           </div>
-          {method && (
-            <>
-              <fieldset disabled={blocked}>
-                <div className="form-grid">
-                  <label className="field">
-                    <span>{tr("記事の種類")}</span>
-                    <select
-                      value={content.category}
-                      disabled={!!current?.address}
-                      onChange={(event) =>
-                        update("category", event.target.value as PostCategory)
-                      }
+          <fieldset disabled={blocked}>
+            <div className="form-grid">
+              <label className="field">
+                <span>{tr("記事の種類")}</span>
+                <select
+                  value={content.category}
+                  disabled={!!current?.address}
+                  onChange={(event) =>
+                    update("category", event.target.value as PostCategory)
+                  }
+                >
+                  {(["blogs", "announcements"] as const).filter(kind=>articleKinds(shop.published).includes(kind)||current?.draft.category===kind).map(kind=><option key={kind} value={kind}>{postLabel(kind)}</option>)}
+                </select>
+              </label>
+              <label className="field">
+                <span>{tr("記事の日付（表示用）")}</span>
+                <DateInput
+                  aria-label={tr("記事の日付（表示用）")}
+                  value={content.date}
+                  disabled={!!current?.address}
+                  onValueChange={(value) => update("date", value)}
+                />
+              </label>
+            </div>
+          </fieldset>
+          {method === "ai" ? (
+            <section
+              className="article-ai-chat"
+              aria-label={tr("AIと記事を作る")}
+            >
+              <div role="log" aria-label={tr("記事の依頼")}>
+                {messages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`article-chat-message ${message.role}`}
+                  >
+                    <b>{message.role === "user" ? tr("あなた") : "AI"}</b>
+                    <p>{message.text}</p>
+                  </div>
+                ))}
+              </div>
+              {fileError && (
+                <p className="alert" role="alert">
+                  {fileError}
+                </p>
+              )}
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (!instruction.trim() || blocked) return;
+                  void run(async () => {
+                    const result = await api<{
+                      title: string;
+                      excerpt: string;
+                      body: string;
+                      conversationId?: string;
+                    }>(`${base}/propose`, {
+                      instruction,
+                      source: content.body,
+                      title: content.title,
+                      requestId: turnId,
+                      conversationId,
+                    });
+                    setContent((value) => ({
+                      ...value,
+                      title: result.title,
+                      body: result.body,
+                      excerpt: result.excerpt,
+                    }));
+                    setSaveId(createRequestId());
+                    setConversationId(result.conversationId);
+                    setMessages((value) => [
+                      ...value,
+                      { role: "user", text: instruction },
+                      {
+                        role: "assistant",
+                        text: tr("記事の案を作成しました。下のプレビューを確認してください。追加の依頼もできます。"),
+                      },
+                    ]);
+                    setInstruction("");
+                    setTurnId(createRequestId());
+                    notify(
+                      tr("記事の案ができました。下のプレビューで確認できます。"),
+                    );
+                  });
+                }}
+              >
+                <label>
+                  {tr("AIに伝える内容")}<textarea
+                    ref={requestInput}
+                    aria-label={tr("AIに伝える内容")}
+                    rows={4}
+                    maxLength={10000}
+                    value={instruction}
+                    disabled={blocked}
+                    onChange={(event) => {
+                      setInstruction(event.target.value);
+                      setTurnId(createRequestId());
+                    }}
+                  placeholder={tr("例：書いた文章を読みやすく清書してください。写真や[[spec.md]]も参考にしてください。")}
+                  />
+                </label>
+                <div className="article-composer-actions">
+                  <button
+                    type="button"
+                    disabled={blocked}
+                    onClick={() => setImageOpen(true)}
+                  >
+                    {tr("📎 画像を添付")}</button>
+                  <label>
+                    {tr("資料を選ぶ")}<select
+                      aria-label={tr("記事の参照ファイル")}
+                      value=""
+                      disabled={blocked}
+                      onChange={(event) => {
+                        if (event.target.value)
+                          insertReference(event.target.value);
+                      }}
                     >
-                      {(["blogs", "announcements"] as const).filter(kind=>articleKinds(shop.published).includes(kind)||current?.draft.category===kind).map(kind=><option key={kind} value={kind}>{postLabel(kind)}</option>)}
+                      <option value="">{tr("お店のファイルから選ぶ")}</option>
+                      {files.map((file) => (
+                        <option key={file.path} value={file.path}>
+                          {file.name}
+                        </option>
+                      ))}
                     </select>
                   </label>
-                  <label className="field">
-                    <span>{tr("記事の日付（表示用）")}</span>
-                    <DateInput
-                      aria-label={tr("記事の日付（表示用）")}
-                      value={content.date}
-                      disabled={!!current?.address}
-                      onValueChange={(value) => update("date", value)}
-                    />
-                  </label>
-                </div>
-              </fieldset>
-              {method === "ai" ? (
-                <section
-                  className="article-ai-chat"
-                  aria-label={tr("AIと記事を作る")}
-                >
-                  <div role="log" aria-label={tr("記事の依頼")}>
-                    {messages.map((message, index) => (
-                      <div
-                        key={index}
-                        className={`article-chat-message ${message.role}`}
-                      >
-                        <b>{message.role === "user" ? tr("あなた") : "AI"}</b>
-                        <p>{message.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                  {fileError && (
-                    <p className="alert" role="alert">
-                      {fileError}
-                    </p>
-                  )}
-                  <form
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      if (!instruction.trim() || blocked) return;
-                      void run(async () => {
-                        const result = await api<{
-                          title: string;
-                          excerpt: string;
-                          body: string;
-                          conversationId?: string;
-                        }>(`${base}/propose`, {
-                          instruction,
-                          source: content.body,
-                          title: content.title,
-                          requestId: turnId,
-                          conversationId,
-                        });
-                        setContent((value) => ({
-                          ...value,
-                          title: result.title,
-                          body: result.body,
-                          excerpt: result.excerpt,
-                        }));
-                        setSaveId(createRequestId());
-                        setConversationId(result.conversationId);
-                        setMessages((value) => [
-                          ...value,
-                          { role: "user", text: instruction },
-                          {
-                            role: "assistant",
-                            text: tr("記事の案を作成しました。下のプレビューを確認してください。追加の依頼もできます。"),
-                          },
-                        ]);
-                        setInstruction("");
-                        setTurnId(createRequestId());
-                        notify(
-                          tr("記事の案ができました。下のプレビューで確認できます。"),
-                        );
-                      });
-                    }}
+                  <button
+                    className="primary"
+                    disabled={blocked || !instruction.trim()}
                   >
-                    <label>
-                      {tr("AIに伝える内容")}<textarea
-                        ref={requestInput}
-                        aria-label={tr("AIに伝える内容")}
-                        rows={4}
-                        maxLength={10000}
-                        value={instruction}
-                        disabled={blocked}
-                        onChange={(event) => {
-                          setInstruction(event.target.value);
-                          setTurnId(createRequestId());
-                        }}
-                        placeholder={tr("例：この写真を使って、秋のおすすめネイルを紹介してください。[[spec.md]]の情報も参考にしてください。")}
-                      />
-                    </label>
-                    <div className="article-composer-actions">
-                      <button
-                        type="button"
-                        disabled={blocked}
-                        onClick={() => setImageOpen(true)}
-                      >
-                        {tr("📎 画像を添付")}</button>
-                      <label>
-                        {tr("資料を選ぶ")}<select
-                          aria-label={tr("記事の参照ファイル")}
-                          value=""
-                          disabled={blocked}
-                          onChange={(event) => {
-                            if (event.target.value)
-                              insertReference(event.target.value);
-                          }}
-                        >
-                          <option value="">{tr("お店のファイルから選ぶ")}</option>
-                          {files.map((file) => (
-                            <option key={file.path} value={file.path}>
-                              {file.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        className="primary"
-                        disabled={blocked || !instruction.trim()}
-                      >
-                        {busy ? tr("AIが記事を作成しています…") : tr("送信する")}
-                      </button>
-                    </div>
-                    <p className="small muted">
-                      {tr("[[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。")}</p>
-                  </form>
-                  <ArticleImageChooser
+                    {busy ? tr("AIが記事を作成しています…") : tr("送信する")}
+                  </button>
+                </div>
+                <p className="small muted">
+                  {tr("[[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。")}</p>
+              </form>
+              <ArticleImageChooser
+                shopId={shop.id}
+                open={imageOpen}
+                close={() => setImageOpen(false)}
+                select={(image) => insertReference(image.path)}
+                onBusy={setMediaBusy}
+              />
+            </section>
+          ) : (
+            <>
+              <label className="field">
+                <span>{tr("タイトル")}</span>
+                <input
+                  maxLength={160}
+                  value={content.title}
+                  disabled={blocked}
+                  onChange={(event) => update("title", event.target.value)}
+                  placeholder={tr("秋の新しいデザインができました")}
+                />
+              </label>
+              <div className="article-editor-modes" role="group" aria-label={tr("本文の入力方法")}>
+                <button type="button" disabled={blocked} aria-pressed={editorMode === "text"} onClick={() => setEditorMode("text")}>
+                  {tr("テキスト")}
+                </button>
+                <button type="button" disabled={blocked} aria-pressed={editorMode === "visual"} onClick={() => setEditorMode("visual")}>
+                  {tr("リッチテキスト")}
+                </button>
+              </div>
+              {editorMode === "text" ? (
+                <ArticleTextEditor
+                  shopId={shop.id}
+                  value={content.body}
+                  onChange={(value) => update("body", value)}
+                  disabled={blocked}
+                  onBusy={setMediaBusy}
+                />
+              ) : (
+                <Suspense
+                  fallback={
+                    <p role="status">{tr("記事の編集画面を読み込んでいます…")}</p>
+                  }
+                >
+                  <ArticleEditor
+                    key={current?.id || "new"}
                     shopId={shop.id}
-                    open={imageOpen}
-                    close={() => setImageOpen(false)}
-                    select={(image) => insertReference(image.path)}
+                    value={content.body}
+                    onChange={(value) => update("body", value)}
+                    disabled={blocked}
                     onBusy={setMediaBusy}
                   />
-                  {content.body && (
-                    <button
-                      type="button"
-                      disabled={blocked}
-                      onClick={() => setMethod("write")}
-                    >
-                      {tr("自分で編集する")}</button>
-                  )}
-                </section>
-              ) : (
-                <>
-                  <label className="field">
-                    <span>{tr("タイトル")}</span>
-                    <input
-                      maxLength={160}
-                      value={content.title}
-                      disabled={blocked}
-                      onChange={(event) => update("title", event.target.value)}
-                      placeholder={tr("秋の新しいデザインができました")}
-                    />
-                  </label>
-                  <Suspense
-                    fallback={
-                      <p role="status">{tr("記事の編集画面を読み込んでいます…")}</p>
-                    }
-                  >
-                    <ArticleEditor
-                      key={current?.id || "new"}
-                      shopId={shop.id}
-                      value={content.body}
-                      onChange={(value) => update("body", value)}
-                      disabled={blocked}
-                      onBusy={setMediaBusy}
-                    />
-                  </Suspense>
-                </>
+                </Suspense>
               )}
-              <button
-                className="primary"
-                disabled={
-                  blocked ||
-                  !shop.published ||
-                  !content.title.trim() ||
-                  !content.body.trim() ||
-                  !content.date
-                }
-                onClick={() =>
-                  void run(async () => {
-                    try {
-                      const fields = postContentSchema
-                        .omit({ slug: true, excerpt: true })
-                        .parse(content);
-                      const metadata = await api<{
-                        slug: string;
-                        excerpt: string;
-                      }>(`${base}/metadata`, {
-                        content: fields,
-                        requestId: saveId,
-                        ...(current
-                          ? { postId: current.id, version: current.version }
-                          : {}),
-                      });
-                      const parsed = postContentSchema.parse({
-                        ...fields,
-                        ...metadata,
-                      });
-                      const saved = await api<Post>(
-                        current ? `${base}/${current.id}/save` : base,
-                        current
-                          ? {
-                              version: current.version,
-                              content: parsed,
-                              publish: true,
-                            }
-                          : {
-                              content: parsed,
-                              publish: true,
-                              requestId: saveId,
-                              autoMetadata: true,
-                            },
-                      );
-                      await accept(saved);
-                      notify(tr("保存して本番に反映しました。"));
-                    } catch (error) {
-                      await load().catch(() => {});
-                      throw error;
-                    }
-                  })
-                }
-              >
-                {tr("保存")}</button>
             </>
           )}
+          <div className="actions">
+            {method === "write" ? (
+              <button type="button" disabled={blocked} onClick={() => setMethod("ai")}>
+                {tr("AIで清書する")}
+              </button>
+            ) : (
+              <button type="button" disabled={blocked} onClick={() => setMethod("write")}>
+                {tr("自分で編集する")}
+              </button>
+            )}
+            <button
+              className="primary"
+              disabled={
+                blocked ||
+                !shop.published ||
+                !content.title.trim() ||
+                !content.body.trim() ||
+                !content.date
+              }
+              onClick={() =>
+                void run(async () => {
+                  try {
+                    const fields = postContentSchema
+                      .omit({ slug: true, excerpt: true })
+                      .parse(content);
+                    const metadata = await api<{
+                      slug: string;
+                      excerpt: string;
+                    }>(`${base}/metadata`, {
+                      content: fields,
+                      requestId: saveId,
+                      ...(current
+                        ? { postId: current.id, version: current.version }
+                        : {}),
+                    });
+                    const parsed = postContentSchema.parse({
+                      ...fields,
+                      ...metadata,
+                    });
+                    const saved = await api<Post>(
+                      current ? `${base}/${current.id}/save` : base,
+                      current
+                        ? {
+                            version: current.version,
+                            content: parsed,
+                            publish: true,
+                          }
+                        : {
+                            content: parsed,
+                            publish: true,
+                            requestId: saveId,
+                            autoMetadata: true,
+                          },
+                    );
+                    await accept(saved);
+                    notify(tr("保存して本番に反映しました。"));
+                  } catch (error) {
+                    await load().catch(() => {});
+                    throw error;
+                  }
+                })
+              }
+            >
+              {tr("保存")}</button>
+          </div>
           {!clean && current && (
             <p className="small muted">
               {tr("未保存の変更があります。保存すると本番に反映されます。")}</p>
@@ -460,21 +459,19 @@ export function BlogEditor({
             </div>
           )}
         </section>
-        {method && (
-          <section className="panel post-preview" aria-label={tr("記事のプレビュー")}>
-            <h2>{tr("記事のプレビュー")}</h2>
-            <p className="small muted">
-              {tr("入力中の記事を確認できます。保存すると本番に反映されます。")}</p>
-            {content.title || content.body ? (
-              <PostContent
-                post={{ ...content, excerpt: clean ? content.excerpt : "" }}
-                imageBase={`/api/shops/${shop.id}/images`}
-              />
-            ) : (
-              <p className="empty">{tr("入力した記事がここに表示されます。")}</p>
-            )}
-          </section>
-        )}
+        <section className="panel post-preview" aria-label={tr("記事のプレビュー")}>
+          <h2>{tr("記事のプレビュー")}</h2>
+          <p className="small muted">
+            {tr("入力中の記事を確認できます。保存すると本番に反映されます。")}</p>
+          {content.title || content.body ? (
+            <PostContent
+              post={{ ...content, excerpt: clean ? content.excerpt : "" }}
+              imageBase={`/api/shops/${shop.id}/images`}
+            />
+          ) : (
+            <p className="empty">{tr("入力した記事がここに表示されます。")}</p>
+          )}
+        </section>
       </div>
     </div>
   );

@@ -85,7 +85,43 @@ try {
         .count(),
       0,
     );
-    await page.getByRole("button", { name: /^自分で作成する/ }).click();
+    const textMode = page.getByRole('button', { name: 'テキスト', exact: true });
+    const visualMode = page.getByRole('button', { name: 'リッチテキスト', exact: true });
+    assert.equal(await textMode.getAttribute('aria-pressed'), 'true');
+    assert.equal(await page.getByRole('textbox', { name: 'AIに伝える内容', exact: true }).count(), 0);
+    await page.getByText('まずは自分の言葉で書いてみましょう。書いた文章はAIで清書できます。', { exact: true }).waitFor();
+    const textEditor = page.getByRole('textbox', { name: '記事の本文', exact: true });
+    await page.getByLabel('タイトル', { exact: true }).fill(`自分で書いた記事${width}`);
+    await textEditor.fill('自分の言葉で書いたお便りです。');
+    const preview = page.getByRole('region', { name: '記事のプレビュー', exact: true });
+    await preview.getByText('自分の言葉で書いたお便りです。', { exact: true }).waitFor();
+    // Add two images in separate uploads, then select an existing one in Wysimark.
+    // Previously added images and text must survive every upload and mode switch.
+    for (const name of ['テキスト画像1.png', 'テキスト画像2.png']) {
+      await page.getByRole('button', { name: '画像を追加', exact: true }).click();
+      const dialog = page.getByRole('dialog', { name: '記事に使う画像', exact: true });
+      await dialog.getByRole('button', { name: '画像をアップロード', exact: true }).click();
+      await dialog.locator('input[type="file"]').setInputFiles({
+        name,
+        mimeType: 'image/png',
+        buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64'),
+      });
+      await dialog.waitFor({ state: 'detached' });
+      await preview.locator('.article-managed-image').last().scrollIntoViewIfNeeded();
+      await preview.getByRole('img', { name: `${name}の画像`, exact: true }).waitFor();
+    }
+    assert.equal(await preview.locator('.article-managed-image').count(), 2);
+    const uploadedBody = await textEditor.inputValue();
+    assert.ok(uploadedBody.includes('自分の言葉で書いたお便りです。'));
+    await visualMode.click();
+    await page.locator('.article-wysimark [contenteditable="true"]').waitFor();
+    await textMode.click();
+    assert.equal(await textEditor.inputValue(), uploadedBody);
+    await page.screenshot({ path: `tmp/article-text-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: '保存', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: '保存して本番に反映しました' }).waitFor();
+    await page.getByRole('heading', { name: '記事を編集する', exact: true }).waitFor();
+    await visualMode.click();
     assert.equal(await page.getByRole('button', { name: '画像を挿入', exact: true }).count(), 0);
     assert.equal(await page.getByText('記事の紹介文とアドレスは、保存時にAIが自動で作成します。既存記事のアドレスは維持します。', { exact: true }).count(), 0);
     let editor = page.locator('.article-wysimark [contenteditable="true"]');
@@ -94,11 +130,10 @@ try {
       .getByLabel("タイトル", { exact: true })
       .fill(`自分で書いた記事${width}`);
     await editor.click();
+    await editor.press('Control+End');
+    await editor.press('Enter');
+    await editor.press('Enter');
     await editor.pressSequentially("今月もご来店をお待ちしています。");
-    const preview = page.getByRole("region", {
-      name: "記事のプレビュー",
-      exact: true,
-    });
     await preview
       .getByText("今月もご来店をお待ちしています。", { exact: true })
       .waitFor();
@@ -133,8 +168,9 @@ try {
       .click();
     await chooser.waitFor({ state: "detached" });
     await page.getByRole('button', { name: '登録', exact: true }).click();
-    await preview.locator(".article-managed-image").first().scrollIntoViewIfNeeded();
-    await preview.locator(".article-managed-image").first().locator("img").waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('.post-preview .article-managed-image').length === 3);
+    await preview.locator(".article-managed-image").last().scrollIntoViewIfNeeded();
+    await preview.locator(".article-managed-image").last().locator("img").waitFor();
     await openEditorImage();
     await page.getByRole('radio', { name: 'アップロード', exact: true }).check();
     await page.locator('input[type="file"][accept="image/*"]')
@@ -147,8 +183,9 @@ try {
         ),
       });
     await page.getByRole('button', { name: '登録', exact: true }).click();
-    await preview.locator(".article-managed-image").nth(1).scrollIntoViewIfNeeded();
-    await preview.locator(".article-managed-image").nth(1).locator("img").waitFor();
+    await page.waitForFunction(() => document.querySelectorAll('.post-preview .article-managed-image').length === 4);
+    await preview.locator(".article-managed-image").last().scrollIntoViewIfNeeded();
+    await preview.locator(".article-managed-image").last().locator("img").waitFor();
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -165,7 +202,9 @@ try {
       .waitFor();
     await page.locator('.post-editor').getByRole('button', { name: '新しいお便りを書く', exact: true }).click();
     await page.getByRole('heading', { name: '新しいお便りを書く', exact: true }).waitFor();
-    assert.equal(await page.getByLabel('タイトル', { exact: true }).count(), 0, 'new authoring starts with its own empty form');
+    assert.equal(await page.getByLabel('タイトル', { exact: true }).inputValue(), '', 'new authoring starts with an empty title');
+    assert.equal(await textEditor.inputValue(), '', 'new authoring starts with an empty body');
+    assert.equal(await textMode.getAttribute('aria-pressed'), 'true');
     await page.locator('.post-management-item').filter({ hasText: `自分で書いた記事${width}` }).click();
     await page.getByLabel('タイトル', { exact: true }).waitFor();
     await page.locator(".post-published-note").getByRole("link").click();
@@ -175,11 +214,19 @@ try {
       .waitFor();
     await page.locator(".article-page .article-managed-image").nth(1).scrollIntoViewIfNeeded();
     await page.locator(".article-page .article-managed-image").nth(1).locator("img").waitFor();
+    for (const name of ['テキスト画像1.png', 'テキスト画像2.png']) {
+      await page.locator('.article-page').getByRole('img', { name: `${name}の画像`, exact: true }).waitFor();
+    }
     console.log(
-      `${width}px: wysimark editing, live preview, existing/uploaded images and save/published article verified.`,
+      `${width}px: text default, repeated uploads, mode switches, Wysimark, preview and text/visual saves with published images verified.`,
     );
     await open();
-    await page.getByRole("button", { name: /^AIに依頼する/ }).click();
+    await textEditor.fill('清書したい文章です。');
+    const originalDraft = await textEditor.inputValue();
+    await page.getByRole('button', { name: 'AIで清書する', exact: true }).click();
+    await page.getByRole('button', { name: '自分で編集する', exact: true }).click();
+    assert.equal(await textEditor.inputValue(), originalDraft, 'opening AI and returning preserves the draft');
+    await page.getByRole('button', { name: 'AIで清書する', exact: true }).click();
     const composer = page.getByRole("textbox", {
       name: "AIに伝える内容",
       exact: true,
@@ -216,9 +263,12 @@ try {
     await page
       .getByRole("button", { name: "自分で編集する", exact: true })
       .click();
+    await textEditor.waitFor();
+    assert.ok((await textEditor.inputValue()).includes(originalDraft), 'AI receives the manually written source');
+    await visualMode.click();
     editor = page.locator('.article-wysimark [contenteditable="true"]');
     await editor.waitFor();
-    assert.ok((await editor.textContent()).includes("写真を使って"));
+    assert.ok((await editor.textContent()).includes(originalDraft));
     assert.ok(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,

@@ -196,8 +196,8 @@ try {
   await page.getByRole("button", { name: "再送する", exact: true }).waitFor();
   await capture("15-retry.jpg");
   await open("blog-editor", "お店のお便り");
-  await capture("16-article-methods.jpg", ".article-methods");
-  await page.getByRole("button",{name:/^AIに依頼する/}).click();
+  await capture("16-article-methods.jpg", ".article-writing-help");
+  await page.getByRole("button",{name:"AIで清書する",exact:true}).click();
   await page.getByRole("textbox",{name:"AIに伝える内容",exact:true}).fill("[[spec.md]]を参考に、この写真を使って秋のおすすめネイルを紹介してください。");
   await page.getByRole("button",{name:/画像を添付$/}).click();
   let articleImages=page.getByRole("dialog",{name:"記事に使う画像",exact:true});
@@ -209,6 +209,7 @@ try {
   await articleImages.waitFor({state:"detached"});
   await capture("16-blog-ai.jpg", ".article-ai-chat");
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
+  await page.getByRole("button", { name: "リッチテキスト", exact: true }).click();
   await page.locator('.article-wysimark [contenteditable="true"]').waitFor();
   assert.equal(await page.getByText("メモから下書きを作る",{exact:true}).count(),0);
   const editorImage=page.locator('.article-wysimark').getByRole('button',{name:'画像',exact:true});
