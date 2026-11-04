@@ -14,8 +14,7 @@ Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for
 Gemini Live API: real-time voice conversations with the shop assistant.
 
 How they work together
-The AI only proposes payment rules, and the owner approves them. All charges and refunds are calculated and run by the server through PayPal.
-The AI (Gemini by default, OpenAI in the judge demo) turns the owner's words into a structured refund policy, and that policy directly determines every PayPal refund amount.
+The AI turns the owner’s words into a structured refund policy for the owner to approve. The server applies the approved policy to calculate refund amounts and processes charges and refunds through PayPal.
 
 ## Is your project new, or did it exist before Oct 1, 2026 (9:15 am PT)?
 
@@ -25,7 +24,7 @@ Existing
 
 gemihub was inspired by hubwork, a website-building feature in a personal AI workspace I developed earlier. That workspace was previously called gemihub and continues separately as kiokuflow. I had registered the gemihub trademark, so I decided to use the name for this new product.
 
-The earlier hubwork shared the idea of creating web pages through conversation. However, building a site required reviewing a Mermaid workflow along the way, and the original workspace had no users.
+The earlier hubwork shared the idea of creating web pages through conversation. However, building a site required reviewing a Mermaid workflow along the way.
 
 For the current gemihub, I used that idea as a starting point and developed a new product for small shops. It has no workflow to review: owners can create and update their sites through conversation and by marking up the screen.
 
