@@ -51,7 +51,8 @@
          ▼
    [ gemihub サーバー ] ── (意図の理解・変更案作成・画像生成) ──► [ Vertex AI (Gemini) ]
      │            │
-     │            └── (業務データ・セッション・排他ロック) ───────► [ Cloud Firestore ]
+     │            ├── (業務データ・セッション・排他ロック) ───────► [ Cloud Firestore ]
+     │            └── (生成した公開ページ) ─────────────────────► [ Cloud Storage（非公開）]
      │
      └── (画像・添付・仕様書・書き出しファイル) ────────────► [ 店主の Google Drive ]
 ```
@@ -64,6 +65,8 @@
   「相談・質問」では、調査用のLLMがシステムの仕様書・お店の `spec.md`・変更履歴 `history.md`・台帳の実データを調べて出典付きで回答し、書かれていないことは推測せず「書かれていません」と答えます。変更依頼も、店主が画面でプレビューや差分を確認して承認したときだけ本番に反映され、依頼文も `history.md` に記録されます。
 - **データの保存と書き出し：**
   設定・予約・顧客情報・お問い合わせ・記事・AIチャットは **Firestore** に保存します。店主は **「公開の設定」** から全体をJSON、記録の種類ごとにCSVで保存できます。画像・添付・仕様書・変更履歴・オフラインHTMLは店主の **Google ドライブ** に残り、書き出しにはファイル本体ではなく参照が含まれます。
+- **公開ページは生成済みのHTMLで配信：**
+  公開や設定・デザイン・記事の保存のたびに、お店のトップ・固定ページ・記事一覧・記事を日英の完成したHTMLとして生成し、非公開の Cloud Storage バケットに保存します。サーバーが閲覧権限を確認して保存済みのページを返すので、本文の表示に JavaScript やAPIは不要で、検索向けの情報とサイトマップも含みます。CSSと画像は店舗ごとに1回だけ保存し、ブラウザにキャッシュされます。予約・マイページ・お問い合わせは、操作用の画面としてアプリを起動します。
 
 ---
 
@@ -106,6 +109,7 @@ http://localhost:3000 を開き、**「サロンのデモを試す」** を選�
 | `VERTEX_REVIEW_MODEL` | 初回テーマ確認用モデル（省略時は `VERTEX_MODEL` を独立した文脈で使用） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントの認証情報（リダイレクトURI: `${APP_ORIGIN}/auth/google/callback`） |
 | `APP_ORIGIN` | 管理画面のオリジン（ローカルでは `http://localhost:3000`） |
+| `STOREFRONT_BUCKET` | 生成した公開ページを置く非公開の Cloud Storage バケット（Firestore 利用時は必須。インメモリのデモではメモリに保存）。作成手順は [infra/README_ja.md](infra/README_ja.md#公開htmlのバケット配信) を参照 |
 
 ※ PayPal 決済を試す場合は、あわせて `PAYPAL_ENVIRONMENT=sandbox`、`PAYPAL_CLIENT_ID`、`PAYPAL_CLIENT_SECRET_FILE` を設定します。
 

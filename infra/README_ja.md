@@ -9,6 +9,10 @@
 
 この構成は設定と手順の実装です。ドメイン、OAuth クライアント、利用可能なモデルを入力して plan を確認するまで、本番への適用・公開は完了していません。
 
+Firestoreロックは、5分間更新されなければ期限切れになります。実行中の処理は1分ごとに期限を延長し、期限切れのロックは次の操作がトランザクションで置き換えます。起動時の一括削除やFirestore TTLポリシーは不要で、複数インスタンスでも同じDBを使えます。Storeへの書き込みは同じトランザクション内でロック所有権を確認し、ロックを失った旧プロセスが後から新しいデータを上書きすることを防ぎます。通常の終了時は、引き続き処理完了とロック解放を待ちます。
+
+予約・決済確認、設定・ファイル同期、メール配送は別のロックで独立に進めます。Driveの応答待ちで決済確定・返金を止めず、PayPalの応答待ちでもファイル同期を進めます。公開設定が変わる場合だけ、最後のDB保存で予約ロックを短く取得します。店舗初期化は関係するロックを取得してから店舗をアーカイブします。
+
 | 管理対象 | Terraform の管理元 |
 | --- | --- |
 | gemihub-web 用 API / SA / Firestore / Secret Manager / Artifact Registry / DNS / 証明書 / ビルド | このリポジトリの `infra/` |
@@ -147,3 +151,21 @@ Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と 
 公開時には、日英と店舗ドメイン用・`/s/{slug}`用のHTMLを生成します。ビルド済みの共通CSSと管理画像（表示用サイズ）は、中身のハッシュ名で店舗ごとに1回だけ保存し（`shops/{id}/assets/`）、長期キャッシュ付きで配信します。HTMLには埋め込まず参照します。全オブジェクトの保存後にFirestoreの `storefrontRelease` を切り替えます。アップロードに失敗したら以前の公開版を維持します。HTMLにセッション・会員情報・通知先メールは保存しません。運用中の公開・設定保存・記事更新では再生成し、読めない画像は保存を止めずに省きます。公開版がない店舗や、古い生成処理（`storefrontRenderer`）の公開版は、裏の定期処理が間隔を空けながら作り直します。公開版が一つもない店舗は、最初の閲覧でも一度だけ変換します。
 
 現行版が古い場合でも消さないよう、日数だけによるライフサイクル削除は設定しません。アプリは現行版と直前の2版（`storefrontPrevious`）を残し、それより古い版のHTMLと、残した版が使っていないCSS・画像を削除します。`terraform test` はリソースを実際に作らず、非公開バケットとIAM・環境変数の構成を確認します。
+
+### 既存の共有VMへ追加するとき
+
+既にgemihub-webが動いている共有VMでは、次の順で進めます。
+
+1. `terraform -chdir=infra plan` でバケット・IAM・登録設定の差分を確認してapplyします。`shared_vm_registration` の `env` に `STOREFRONT_BUCKET` が増えます。前回の登録以降に追加された他の環境変数も同時に反映されます。
+2. 手順4のコマンドで登録設定を出力し、バンドルを作り直します。`fetch-vars` は手元に `infra/shared-vm/terraform.tfvars` があると上書きを拒否します。その場合は `gcloud storage cat gs://takeshy-work-kakeratta-terraform/vars/shared-vm/terraform.tfvars | diff - infra/shared-vm/terraform.tfvars` で保存版と比べ、同じならそのまま進め、違うなら手元の変更を確認してから `--force` を付けます。
+3. `prepare-bundle.py` が出力したオブジェクト名で、バンドルを `gs://geminihub-486523-shared-apps/` へ先にアップロードします。VMのメタデータはこのファイルを指すため、applyより前に置いてください。
+4. 共有VMのplanは、`google_compute_instance.apps` のメタデータ `shared-additional-bundle` の変更1件（`0 to add, 1 to change, 0 to destroy`）が正常です。VMの再作成や他アプリの変更が含まれる場合は適用しないでください。適用後に `upload-vars` で tfvars を保存します。
+5. バンドルをVMへ転送して `install-additional.sh` を実行します。`gemihub-web ready` とNginxの設定検査の成功が表示されれば完了です。実行中のイメージは変わらず、新しい環境変数はこの時点では使われません。
+6. アプリをデプロイします。
+
+デプロイ後は次を確認します。
+
+- 既存店舗は、最初の閲覧か60秒ごとの定期処理で公開版が作られます。店舗ページが表示され、`gcloud storage ls gs://geminihub-486523-gemihub-web-storefront/shops/` に店舗ごとのファイルがあること。
+- ページのHTMLが `/_assets/` のCSS・画像を参照し、それらが200を返すこと。
+- `?pane=reserve`・`?pane=mine`・`?pane=contact` の操作画面で、ログイン・予約・お問い合わせが従来どおり動くこと。
+- 保存に失敗した店舗はアプリのログに `Storefront <店舗ID>: background release failed` と出ます。再試行は30秒から最大1時間まで間隔を空けて行います。
