@@ -1,4 +1,4 @@
-import { tr } from "../shared/i18n";
+import { tr, listSeparator } from "../shared/i18n";
 import { useShopDisplay } from "./money";
 import type { ChatReference } from "../server/shop-chat";
 import type { RequestIntent } from "../server/request-intent";
@@ -26,9 +26,23 @@ export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPla
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   }
+  async function retryPublication() {
+    if (!plan?.approved) return;
+    setLoading(true); setError("");
+    try { await onAccept(plan); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setLoading(false); }
+  }
   useEffect(() => { void refresh(); }, [shopId]);
   const config = data?.config;
   return <div className="shop-build-layout">
+    {/* Recovery must not depend on build-context, which is unavailable during an interrupted publish. */}
+    {!data && isOwner && plan?.approved && <section className="panel request-review" data-publication-recovery aria-label={tr("中断した公開")}>
+      <h3>{tr("中断した公開")}</h3>
+      <p>{tr("承認済みの変更を使って、保存・反映を再試行します。")}</p>
+      <ul>{plan.summary.map((summary, index) => <li key={index}>{summary}</li>)}</ul>
+      <button className="primary" disabled={loading || planning} onClick={() => void retryPublication()}>{tr("反映を再試行")}</button>
+    </section>}
     <section className="panel shop-history" aria-label={tr("お店の変更履歴")}>
       {error && <div className="alert" role="alert"><p>{error}</p><button disabled={loading || planning} onClick={() => void refresh()}>{tr("もう一度読み込む")}</button></div>}
       <details>
@@ -52,9 +66,9 @@ export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPla
           <div className="spec-stats"><div><strong>{config.menus.filter(m => m.active).length}</strong><span>{tr("メニュー")}</span></div><div><strong>{config.staff.length}</strong><span>{tr("スタッフ")}</span></div><div><strong>{8 + config.pages.length}</strong><span>{tr("お客様向け画面")}</span></div></div>
           <ol className="spec-booking-flow" aria-label={tr("予約の流れ")}>{[tr("Googleでログイン"), tr("メニュー・指名・日時"), tr("空き時間を確認"), tr("予約・メール通知")].map((label, i) => <li key={label}><b>{String(i + 1).padStart(2, "0")}</b><span>{label}</span></li>)}</ol>
           <div className="spec-card-grid">
-            <section className="spec-card"><h3><span aria-hidden="true">◷</span> {tr(" 営業時間と受付")}</h3><p className="spec-highlight">{hoursText(config)}</p><p>{tr("定休日：")}{config.hours.closedWeekdays.map(d => tr("{0}曜", days()[d])).join("・") || tr("なし")}</p><p>{tr("臨時休業：")}{config.hours.holidays.join("・") || tr("なし")}</p><p>{config.rules.advanceDays}{tr("日前から・開始")}{config.rules.leadMinutes}{tr("分前まで受付")}</p><p>{tr("当日予約")}{config.rules.sameDay ? tr("可") : tr("不可")}／{config.rules.interval}{tr("分刻み")}</p><p>{tr("キャンセルは開始")}{config.rules.cancelHours}{tr("時間前まで")}</p></section>
+            <section className="spec-card"><h3><span aria-hidden="true">◷</span> {tr(" 営業時間と受付")}</h3><p className="spec-highlight">{hoursText(config)}</p><p>{tr("定休日：")}{config.hours.closedWeekdays.map(d => tr("{0}曜", days()[d])).join(listSeparator()) || tr("なし")}</p><p>{tr("臨時休業：")}{config.hours.holidays.join(listSeparator()) || tr("なし")}</p><p>{config.rules.advanceDays}{tr("日前から・開始")}{config.rules.leadMinutes}{tr("分前まで受付")}</p><p>{tr("当日予約")}{config.rules.sameDay ? tr("可") : tr("不可")}／{config.rules.interval}{tr("分刻み")}</p><p>{tr("キャンセルは開始")}{config.rules.cancelHours}{tr("時間前まで")}</p></section>
             <section className="spec-card"><h3><span aria-hidden="true">◇</span> {tr(" メニューと料金")}</h3>{config.menus.map(menu => <div className="spec-menu" key={menu.id}><span>{menu.name}{menu.imageId && <small>{tr("画像あり")}</small>}{!menu.active && <small>{tr("（受付停止）")}</small>}</span><b>{money(menu.price)}<small>{menu.duration}{tr("分")}</small></b></div>)}</section>
-            <section className="spec-card spec-wide"><h3><span aria-hidden="true">♧</span> {tr(" スタッフと予約の割り当て")}</h3><p>{tr("お客様が指名・指名なしを選択。指名なしは、対応するスタッフのうち空いている1人に割り当てます。")}</p><div className="spec-staff-list">{bookingStaff(config).map(staff => <div key={staff.id}><b>{staff.name}</b><p>{staff.weekdays.map(d => days()[d]).join("・")} {staff.start} – {staff.end}</p><p>{staff.menuIds.map(id => config.menus.find(m => m.id === id)?.name).join("・")}</p></div>)}</div><p className="spec-note">{tr("営業時間・勤務・施術時間・予約済みの時間・連携済みのGoogle Calendarを確認して、予約可能な時間を表示します。")}</p></section>
+            <section className="spec-card spec-wide"><h3><span aria-hidden="true">♧</span> {tr(" スタッフと予約の割り当て")}</h3><p>{tr("お客様が指名・指名なしを選択。指名なしは、対応するスタッフのうち空いている1人に割り当てます。")}</p><div className="spec-staff-list">{bookingStaff(config).map(staff => <div key={staff.id}><b>{staff.name}</b><p>{staff.weekdays.map(d => days()[d]).join(listSeparator())} {staff.start} – {staff.end}</p><p>{staff.menuIds.map(id => config.menus.find(m => m.id === id)?.name).join(listSeparator())}</p></div>)}</div><p className="spec-note">{tr("営業時間・勤務・施術時間・予約済みの時間・連携済みのGoogle Calendarを確認して、予約可能な時間を表示します。")}</p></section>
             <section className="spec-card spec-wide"><h3>{tr("お客様管理")}</h3><p>{tr("予約・問い合わせをメールアドレスでまとめ、来店回数・最終来店日・合計金額を自動集計します。")}</p><p>{tr("期間指定、メモ・予約・問い合わせの絞り込み、非公開のメモと添付、画像一覧に対応。来店実績は終了した有効な予約だけで、キャンセル・無断キャンセルを除きます。")}</p><p>{tr("予約時のメッセージは予約情報に記録します。")}</p></section>
             <section className="spec-card spec-wide"><h3><span aria-hidden="true">▣</span> {tr(" お店のページ")}</h3><div className="spec-page-tags">{[tr("予約"), tr("お店のこと"), tr("マイページ"), tr("お問い合わせ"), tr("ブログ一覧・記事"), tr("お知らせ一覧・記事"), ...config.pages.map(p => p.title)].map((title, i) => <span key={i}>{title}</span>)}</div><p className="spec-note">{tr("ヘッダー・フッターは共通パーツとして個別に編集できます。")}</p><p>{tr("アクセス：")}{config.address}</p><p>{tr("お店への通知：")}{config.notificationEmail}</p></section>
           </div>

@@ -21,7 +21,7 @@ try{
    ['fall','2026-11-02T06:30:00Z','America/New_York',[[25,100],[24,50],[0,0]]],
    ['always','2027-01-02T01:00:00Z','Asia/Tokyo',[[0,100]]],
   ]){
-   await open('お客様の予約/返金期限',suffix);const list=page.locator('.refund-deadlines li');await expect(list).toHaveCount(policy.length);
+   await open('お客様の画面/返金期限',suffix);const list=page.locator('.refund-deadlines li');await expect(list).toHaveCount(policy.length);
    const texts=await list.allTextContents();
    for(let i=0;i<policy.length;i++){
     const [hours,percent]=policy[i];assert.ok(texts[i].includes(`${percent}%`));
@@ -32,7 +32,7 @@ try{
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    if(suffix==='japan'||suffix==='fall')await page.screenshot({path:`tmp/refund-dates/${suffix}-${language}-${width}.png`,fullPage:true});
   }
-  await open('お客様の予約/お支払い・返金','paid');const card=page.locator('.booking-card').first();await card.locator('.payment-details summary').click();await expect(card.locator('.refund-deadlines li')).toHaveCount(3);assert.ok((await card.locator('.refund-deadlines').innerText()).includes('100%'));assert.ok((await card.locator('.refund-deadlines').innerText()).includes('50%'));assert.ok(!/開始まで\d+時間/.test(await card.locator('.refund-deadlines').innerText()));
+  await open('お客様の画面/お支払い・返金','paid');const card=page.locator('.booking-card').first();await card.locator('.payment-details summary').click();await expect(card.locator('.refund-deadlines li')).toHaveCount(3);assert.ok((await card.locator('.refund-deadlines').innerText()).includes('100%'));assert.ok((await card.locator('.refund-deadlines').innerText()).includes('50%'));assert.ok(!/開始まで\d+時間/.test(await card.locator('.refund-deadlines').innerText()));
   await expect(card.locator('.payment-details')).toContainText(label('店都合のキャンセルは全額返金。予約後の条件変更はこの予約に適用されません。'));
   assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);await context.close();console.log(`${language} ${width}px: dated saved-policy ranges, year boundary, DST, repeated hour, no-deadline policy and actual My page passed.`);
  }

@@ -43,6 +43,7 @@
     "check:booking-login": "node --import tsx scripts/check-booking-login.mjs",
     "check:drive-artifacts": "node --import tsx scripts/check-drive-artifacts.mjs",
     "check:publication-routing": "node scripts/check-publication-routing.mjs",
+    "check:design-versions": "node --import tsx scripts/check-design-versions.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:region": "node --import tsx scripts/check-region.mjs",
     "check:i18n:browser": "node --import tsx scripts/check-i18n-browser.mjs",

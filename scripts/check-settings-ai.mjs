@@ -65,7 +65,7 @@ try {
           const menu = section === 'menus' ? 'メニュー・料金' : section === 'staff' ? 'スタッフ・勤務' : 'お店の基本情報';
           await page.locator('aside nav').getByRole('button', { name: new RegExp(label(menu) + '$') }).click();
         } else {
-          const entry = entries.find(entry => entry.title === '運営/AIで設定' && entry.id.endsWith(`--${section}`)); assert.ok(entry, section);
+          const entry = entries.find(entry => entry.title === '運営/設定/AIで設定' && entry.id.endsWith(`--${section}`)); assert.ok(entry, section);
           await page.goto(`${storyOrigin}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&globals=locale:${language}`);
         }
         const panel = page.locator(`.live-settings-${section}`), toggle = panel.getByRole('button', { name: label('AIで設定'), exact: true });

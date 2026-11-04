@@ -5,7 +5,7 @@ import { Screen } from "./Screen";
 import { tr } from "../../shared/i18n";
 
 const meta = {
-  title: "お客様の予約",
+  title: "お客様の画面/予約・お問い合わせ",
   component: Screen,
   parameters: { layout: "fullscreen" },
   render: (args) => <Screen key={args.scenario} {...args} />,
@@ -24,7 +24,7 @@ export const GuestBooking: Story = {
 };
 
 export const Customer: Story = {
-  name: "顧客・スタッフ指名の予約",
+  name: "スタッフ指名の予約",
   args: { scenario: "reservation" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -33,17 +33,17 @@ export const Customer: Story = {
 };
 
 export const AnyStaff: Story = {
-  name: "顧客・指名なしの予約",
+  name: "指名なしの予約",
   args: { scenario: "any-reservation" },
 };
 
 export const CustomerChoice: Story = {
-  name: "顧客・指名と指名なしを選択",
+  name: "指名と指名なしを選択",
   args: { scenario: "customer-choice" },
 };
 
 
 export const Contact: Story = {
-  name: "顧客・お問い合わせ",
+  name: "お問い合わせ",
   args: { scenario: "contact" },
 };

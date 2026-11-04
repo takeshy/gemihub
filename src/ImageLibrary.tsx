@@ -1,4 +1,4 @@
-import { tr, intlLocale } from "../shared/i18n";
+import { tr, intlLocale, listSeparator } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { MenuImage } from "./MenuImage";
@@ -118,7 +118,7 @@ export function ImageLibrary({ shopId, mode = "manage", onSelect, onCreated, onR
     {images && !visible?.length && <p className="empty">{images.length ? tr("条件に合う画像はありません。") : tr("まだ画像はありません。アップロードするか、AIで生成してください。")}</p>}
     <div className="image-library-grid">{visible?.map(image => <figure key={image.id} className={selectedIds.includes(image.id) ? "image-selected" : ""}>
       <button type="button" className="image-preview-button" aria-label={tr("{0}を拡大", image.name)} onClick={() => setZoomId(image.id)}><MenuImage imageId={image.id} imageBase={base} name={image.name} className="library-image" view="thumbnail" /></button>
-      <figcaption><strong>{image.name}</strong><span className="pill">{image.source === "ai" ? tr("AI生成") : tr("アップロード")}</span><small>{Math.ceil(image.size / 1024)} KB{image.createdAt && ` · ${new Date(image.createdAt).toLocaleDateString(intlLocale())}`}</small>{image.usedBy.length > 0 && <p className="small muted">{tr("使用中：")}{image.usedBy.join("、")}</p>}</figcaption>
+      <figcaption><strong>{image.name}</strong><span className="pill">{image.source === "ai" ? tr("AI生成") : tr("アップロード")}</span><small>{Math.ceil(image.size / 1024)} KB{image.createdAt && ` · ${new Date(image.createdAt).toLocaleDateString(intlLocale())}`}</small>{image.usedBy.length > 0 && <p className="small muted">{tr("使用中：")}{image.usedBy.join(listSeparator("、"))}</p>}</figcaption>
       {image.prompt && <details><summary>{tr("生成したときの指示")}</summary><p className="pre-wrap">{image.prompt}</p></details>}
       <div className="actions">{onSelect && <button type="button" className="primary" aria-pressed={selectedIds.includes(image.id)} aria-label={tr("{0}を選択", image.name)} disabled={busy || listening} onClick={() => onSelect(image)}>{selectedIds.includes(image.id) ? tr("✓ 選択中") : tr("選択する")}</button>}{managing && allowGeneration && <button type="button" disabled={busy || listening || !!pending} onClick={() => startGeneration(image.id)}>{tr("この画像をもとに生成")}</button>}</div>
       {managing && <>

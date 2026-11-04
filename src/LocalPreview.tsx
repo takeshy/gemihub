@@ -14,6 +14,8 @@ import { screenIds, type ScreenId } from "../shared/screens";
 import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, type ReleaseScope, type ShopPage } from "../server/pages";
 import { FixtureEditor } from "./FixtureEditor";
 import { VisualRequest } from "./VisualRequest";
+import { DesignVersionHistory } from "./DesignVersionHistory";
+import { regionOf } from "../shared/region";
 import { shopSchema, planSummary, bookingStaff, type ShopConfig } from "../server/domain";
 import { postKey, type PostCategory, type PublicPost } from "../server/post-domain";
 import { createRequestId } from "./request-id";
@@ -257,6 +259,15 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     }
     await adopt(target, value, value);
   }
+  // Keep the local and remote previews at the same position, so the same part of the screen is compared.
+  const syncingScroll = useRef(false);
+  function syncComparisonScroll(event: React.UIEvent<HTMLElement>) {
+    const source = event.target as HTMLElement;
+    if (syncingScroll.current || !source.classList.contains("comparison-preview")) return;
+    syncingScroll.current = true;
+    for (const other of event.currentTarget.querySelectorAll<HTMLElement>(".comparison-preview")) if (other !== source) other.scrollTop = source.scrollTop;
+    requestAnimationFrame(() => { syncingScroll.current = false; });
+  }
   async function compareConflict(target: ReleaseScope = scope) {
     if (!draft) return;
     const [value, remoteSnapshot] = await Promise.all([remoteValue(target), api<Snapshot>(`/api/shops/${shop.id}/local-editor/shared`)]);
@@ -315,11 +326,18 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     const token = scope.kind === "page" ? `${scope.pageId}:${index.pages.find(p => p.id === scope.pageId)?.hash || "deleted"}` : scope.kind === "part" ? `part:${scope.part}:${index.parts[scope.part]}` : `shared:${index.sharedHash}`;
     if (automaticFetch.current === token) return;
     automaticFetch.current = token;
-    void run(async () => fetchScope(scope));
+    const updated = status === "remote";
+    void run(async () => {
+      await fetchScope(scope);
+      // Only production changed, so it is adopted without asking; say so instead of changing silently.
+      if (updated) setNotice(tr("本番で更新された内容を取り込みました。このブラウザに未反映の変更はなかったので、そのまま最新にしました。"));
+    });
   }, [status, screen, index, busy, !!draft?.pending, !!conflict]);
   const screenPage = scope.kind === "page" ? allPages.find(p => p.id === scope.pageId) : undefined;
   const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
   // The exported file that renders this screen, so the pen request names the screen even without marks.
+  // Each screen restores only its own design; article screens have none of their own (use the whole-design history).
+  const historyTarget = scope.kind === "page" ? `page:${scope.pageId}` : scope.kind === "part" ? `part:${scope.part}` : (screenIds as readonly string[]).includes(screen) ? `screen:${screen}` : undefined;
   const screenFile = scope.kind === "page" ? `web/pages/${screenPage?.slug || scope.pageId}.html` : scope.kind === "part" ? `web/parts/${scope.part}.html` : `web/index.html#${screen}`;
   const tree = <ScreenTree draft={draft} index={index} statuses={statuses} selected={active ? screen : ""} disabled={busy || !!draft?.pending || !!conflict} onChoose={value => void run(async () => choose(value))} />;
   return <div className="local-preview preview-first">
@@ -339,6 +357,16 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       </div>}
       {status === "conflict" && !conflict && <button disabled={busy || !!draft?.pending} onClick={() => void run(async () => compareConflict())}>{tr("競合を比較して解決")}</button>}
     </div>
+    {historyTarget && <DesignVersionHistory key={historyTarget} target={historyTarget} targetLabel={screenLabel} shopId={shop.id} revision={shop.revision} timeZone={regionOf(shop.published).timeZone} disabled={busy || penOpen || !!draft?.pending} onRestored={async () => {
+      await reload();
+      const remote = await refreshIndex();
+      // A fresh browser could not initialize while the interrupted restore paused the editor APIs.
+      if (!latestDraft.current) {
+        const current = await api<Snapshot>(`/api/shops/${shop.id}/local-editor/shared`);
+        restore({ ...current, downloaded: [], index: remote, fixtures: sampleFixtures(current.config) });
+      }
+      setError("");
+    }} />}
     {error && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice small" role="status">{notice}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
     {invalid && <p className="alert" role="alert">{invalid}{tr("（編集欄で確認してください）")}</p>}
@@ -353,7 +381,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         </div>}
     {conflict && draft && <section className="panel conflict-dialog" role="dialog" aria-modal="true" aria-label={tr("ローカルとリモートの競合")}>
       <h2>{tr("競合を比較して解決")}</h2><p>{tr("採用しても本番には反映されません。解決前の内容はこのブラウザに控えを残します。")}</p>
-      <div className="conflict-columns"><div><h3>{tr("ローカル")}</h3><SyncPreview config={draft.config} value={conflict.localValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /></div><div><h3>{tr("リモート")}</h3><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.remoteValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /></div></div>
+      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル")}</h3><SyncPreview config={draft.config} value={conflict.localValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /></div><div><h3>{tr("リモート")}</h3><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.remoteValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /></div></div>
       <div className="actions">
         <button disabled={busy} onClick={() => void run(async () => resolveConflict("local"))}>{tr("ローカルを採用")}</button>
         <button disabled={busy} onClick={() => void run(async () => resolveConflict("remote"))}>{tr("リモートを採用")}</button>

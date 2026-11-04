@@ -46,12 +46,18 @@ try {
         assert.equal(await page.evaluate(() => isSecureContext), host === "127.0.0.1");
         await page.waitForFunction(() => {
           const editor = document.querySelector(".local-preview");
-          return !editor || editor.querySelector(".local-preview-screen") || /画面を読み込めませんでした|Unable to load this screen/.test(editor.textContent);
+          // A conflict comparison replaces the screen preview until it is resolved.
+          return !editor || editor.querySelector(".local-preview-screen, .conflict-dialog") || /画面を読み込めませんでした|Unable to load this screen/.test(editor.textContent);
         });
         // Let the asynchronous effects and their error handlers finish rendering.
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         assert.equal(await page.getByText("画面を読み込めませんでした。ページを再読み込みしてください。", { exact: true }).count(), 0);
-        assert.deepEqual(await page.locator('#storybook-root [role="alert"]').allTextContents(), []);
+        // Stories that demonstrate a failure are tagged "expected-alert" and must actually show one
+        // (their play function drives the UI there, so wait for it rather than racing it).
+        if (entry.tags?.includes("expected-alert")) await page.locator('#storybook-root [role="alert"]').first().waitFor();
+        const alerts = await page.locator('#storybook-root [role="alert"]').allTextContents();
+        if (entry.tags?.includes("expected-alert")) assert.ok(alerts.length > 0, "expected an error state");
+        else assert.deepEqual(alerts, []);
         assert.deepEqual(errors, []);
       } catch (error) {
         failures.push({ host, story: entry.id, error: error.message, alerts: await page.locator('[role="alert"]').allTextContents() });
@@ -63,9 +69,14 @@ try {
   assert.deepEqual(failures, []);
   const manager = await browser.newPage();
   await manager.goto(`http://127.0.0.1:${port}/index.html?path=/story/${encodeURIComponent(entries[0].id)}`);
-  await manager.getByText("Management / 運営", { exact: true }).first().waitFor();
+  // The explorer follows the toolbar language: Japanese by default, English labels for locale:en.
+  await manager.getByText("運営", { exact: true }).first().waitFor();
+  assert.equal(await manager.getByText("Management", { exact: true }).count(), 0);
+  await manager.goto(`http://127.0.0.1:${port}/index.html?path=/story/${encodeURIComponent(entries[0].id)}&globals=locale:en`);
+  await manager.getByText("Management", { exact: true }).first().waitFor();
+  assert.equal(await manager.getByText("運営", { exact: true }).count(), 0);
   await manager.close();
-  console.log("All stories loaded in secure and insecure contexts, without loading errors or live API requests. Bilingual explorer verified.");
+  console.log("All stories loaded in secure and insecure contexts, without loading errors or live API requests. Explorer labels follow the selected language.");
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

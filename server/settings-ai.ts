@@ -4,7 +4,7 @@ import { generateJson, requireText } from "./llm.ts";
 import { shopSchema, bookingStaff, ownerStaffId, type ShopConfig } from "./domain.ts";
 import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
 import { readWebSource, referenceUrls, type WebSource } from "./web-source.ts";
-import { tr, intlLocale } from "../shared/i18n.ts";
+import { tr, intlLocale, listSeparator } from "../shared/i18n.ts";
 import { currencyOf, formatMoney, regionOf } from "../shared/region.ts";
 
 const identity = z.string().regex(/^[a-z0-9_-]+$/).max(100);
@@ -25,7 +25,7 @@ function valueLabel(key: string, value: unknown): string {
   if (value === undefined || value === "") return tr("未設定");
   if (key === "industry") return ({ nail: tr("ネイルサロン"), hair: tr("美容室"), other: tr("その他") })[String(value) as "nail"] || String(value);
   if (typeof value === "boolean") return value ? tr("はい") : tr("いいえ");
-  if (key === "closedWeekdays") return (value as number[]).map(day => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")][day]).join("・") || tr("なし");
+  if (key === "closedWeekdays") return (value as number[]).map(day => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")][day]).join(listSeparator()) || tr("なし");
   if (key === "weekdayHours") return (value as {day:number;start:string;end:string}[]).map(hours => `${valueLabel("closedWeekdays", [hours.day])} ${hours.start}–${hours.end}`).join(" / ") || tr("なし");
   if (Array.isArray(value)) return value.join(", ") || tr("なし");
   return String(value);

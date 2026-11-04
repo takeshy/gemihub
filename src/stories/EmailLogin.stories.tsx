@@ -5,12 +5,12 @@ import { CustomerEmailLogin } from "../CustomerEmailLogin";
 import { ApiProvider, type ApiClient } from "../api";
 import { tr } from "../../shared/i18n";
 
-const mock: ApiClient = async <T,>(path: string) => (path.endsWith("/info") ? { email: "customer@example.com", shopName: "Sample shop" } : { ok: true, redirectTo: "/" }) as T;
+const mock: ApiClient = async <T,>(path: string) => (path.endsWith("/info") ? { email: "customer@example.com", shopName: tr("nail atelier 凪") } : { ok: true, redirectTo: "/" }) as T;
 function EmailLoginStory() {
   const [open, setOpen] = useState(true);
-  return <ApiProvider value={mock}><button onClick={() => setOpen(true)}>{tr("会員登録")}</button><CustomerEmailLogin base="/api/public/sample" shopName="Sample shop" googleAuthUrl="/auth/google?shop=sample" open={open} onClose={() => setOpen(false)}/></ApiProvider>;
+  return <ApiProvider value={mock}><button onClick={() => setOpen(true)}>{tr("会員登録")}</button><CustomerEmailLogin base="/api/public/sample" shopName={tr("nail atelier 凪")} googleAuthUrl="/auth/google?shop=sample" open={open} onClose={() => setOpen(false)}/></ApiProvider>;
 }
-const meta = { title: "お客様の会員登録/メール認証", component: EmailLoginStory, parameters: { layout: "fullscreen" } } satisfies Meta<typeof EmailLoginStory>;
+const meta = { title: "お客様の画面/メール認証", component: EmailLoginStory, parameters: { layout: "fullscreen" } } satisfies Meta<typeof EmailLoginStory>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Email: Story = { name: "メールアドレスの入力" };

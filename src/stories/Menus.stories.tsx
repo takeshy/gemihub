@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
 
 const meta = {
-  title: "運営/メニュー・料金",
+  title: "運営/設定/メニュー・料金",
   component: Screen,
   parameters: { layout: "fullscreen" },
   render: (args) => <Screen key={args.scenario} {...args} />,

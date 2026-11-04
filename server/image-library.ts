@@ -26,6 +26,7 @@ export async function updateImage(store: Store, shop: Shop, id: string, raw: unk
 export async function archiveImage(store: Store, shop: Shop, id: string, config: ShopConfig | null) {
   const image = await store.get<ImageUpload>("menuImageUpload", id);
   if (!image || image.shopId !== shop.id || !image.complete) throw Object.assign(new Error(tr("画像がありません")), { status: 404 });
+  if (shop.designVersions?.some(version => version.imageIds?.includes(id))) throw Object.assign(new Error(tr("版履歴で使用中の画像です。復元できるよう、版が保持されている間は削除できません。")), { status: 409 });
   const posts=await store.records<Post>("post",shop);
   if (posts.some(post=>post.published&&postImageIds(post.published.body).includes(id)) || imageUses(config, id).length || config && managedImageIds(config).includes(id)) throw Object.assign(new Error(tr("使用中の画像です。ページやメニューの画像を外して反映してから削除してください。")), { status: 409 });
   await store.put("menuImageUpload", id, { ...image, archived: true });

@@ -1,5 +1,5 @@
 import { formatMoney, currencyOf, regionOf } from "../shared/region.ts";
-import { tr, intlLocale } from "../shared/i18n.ts";
+import { tr, intlLocale, listSeparator } from "../shared/i18n.ts";
 import { policyText } from "./payment-domain.ts";
 import { shopSchema, bookingStaff, hoursText, type ShopConfig } from "./domain.ts";
 
@@ -19,8 +19,8 @@ export function shopSystem(input: ShopConfig) {
       { title: tr("② 空きを判断する仕組み"), lines: [
         tr("お客様が指名・指名なしを選べます。指名時は選んだスタッフのみ、指名なしは対応するスタッフのうち空いている1人に割り当てます。"),
         tr("営業時間 {0}／{1}分刻み（{2}）", hoursText(c), c.rules.interval, regionOf(c).timeZone),
-        tr("定休日：{0}。臨時休業：{1}。", c.hours.closedWeekdays.map(d => days[d] + tr("曜")).join("・") || tr("なし"), c.hours.holidays.join("・") || tr("なし")),
-        ...bookingStaff(c).map(p => `${p.name}：${p.weekdays.map(d => days[d]).join("・")} ${p.start}〜${p.end}／${p.menuIds.map(id => c.menus.find(m => m.id === id)!.name).join("・")}`),
+        tr("定休日：{0}。臨時休業：{1}。", c.hours.closedWeekdays.map(d => days[d] + tr("曜")).join(listSeparator()) || tr("なし"), c.hours.holidays.join(listSeparator()) || tr("なし")),
+        ...bookingStaff(c).map(p => `${p.name}：${p.weekdays.map(d => days[d]).join(listSeparator())} ${p.start}〜${p.end}／${p.menuIds.map(id => c.menus.find(m => m.id === id)!.name).join(listSeparator())}`),
         tr("メニューの所要時間全体について、勤務・営業時間と既存の有効な予約、連携済み Calendar の予定あり時間を照合。重複する予約を防ぎます。"),
       ] },
       { title: tr("③ データの行き先"), lines: [

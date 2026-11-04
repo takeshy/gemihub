@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
 
 const meta = {
-  title: "お客様のマイページ",
+  title: "お客様の画面/マイページ",
   component: Screen,
   parameters: { layout: "fullscreen" },
   render: (args) => <Screen key={args.scenario} {...args} />,
@@ -12,6 +12,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const MyPage: Story = {
-  name: "顧客・マイページ",
+  name: "マイページ",
   args: { scenario: "mypage" },
 };

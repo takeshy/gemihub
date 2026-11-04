@@ -7,4 +7,4 @@ const meta = { title: "運営/はじめる/旧環境からの引き継ぎ", comp
 } satisfies Meta<typeof LegacyNotes>;
 export default meta;
 type Story = StoryObj<typeof meta>;
-export const Notice: Story = { name: "引き継ぎの案内" };
+export const Notice: Story = { name: "旧環境からの引き継ぎ" };

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
 import type { LiveSection } from "../../server/live-settings";
 
-const meta = { title: "運営/AIで設定", component: Screen, parameters: { layout: "fullscreen" }, render: args => <Screen key={args.scenario} {...args} /> } satisfies Meta<typeof Screen>;
+const meta = { title: "運営/設定/AIで設定", component: Screen, parameters: { layout: "fullscreen" }, render: args => <Screen key={args.scenario} {...args} /> } satisfies Meta<typeof Screen>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 const open = (section: LiveSection) => async ({ canvasElement }: { canvasElement: HTMLElement }) => {

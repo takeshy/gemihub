@@ -25,6 +25,14 @@ export type Shop = {
   lastPublishedPlanId?: string;
   publishingPlanId?: string;
   publishingError?: string;
+  designVersions?: import("./design-versions.ts").DesignVersion[];
+  /** Durable cleanup queue; Drive trash failures are retried on the next history read/write. */
+  designVersionTrash?: import("./design-versions.ts").DesignVersion[];
+  designPublication?: import("./design-versions.ts").DesignPublication;
+  /** Last backed-up operation, retained across retries of a partially written publication. */
+  designBackupOperationId?: string;
+  designRestore?: { requestId: string; version: import("./design-versions.ts").DesignVersion; at: string; target?: import("./design-versions.ts").DesignTarget };
+  lastDesignRestoreId?: string;
   domain?: string;
   domainToken?: string;
   domainVerified?: boolean;

@@ -50,7 +50,7 @@ try {
     const button = (scope, text) => scope.getByRole("button", { name: t(text), exact: true });
     const dialog = page.getByRole("dialog", { name: t("依頼の画像を選ぶ"), exact: true });
     async function open(exportName) {
-      const story = entries.find(entry => entry.title === "運営/画像管理" && entry.exportName === exportName);
+      const story = entries.find(entry => entry.title === "運営/設定/画像管理" && entry.exportName === exportName);
       assert.ok(story, exportName);
       await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story&lang=${locale}`);
       const scope = ["Library", "Uploading"].includes(exportName) ? page.getByRole("region", { name: t("画像管理"), exact: true }) : dialog;

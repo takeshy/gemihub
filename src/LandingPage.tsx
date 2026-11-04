@@ -19,7 +19,7 @@ function HeroPreview() {
     <div className="lp-orbit" aria-hidden="true" />
     <div className="lp-preview-label"><span className="lp-dot" />{tr("あなたのお店に、合わせてつくる。")}</div>
     <div className="lp-sample-site">
-      <div className="lp-window-bar"><span>● ● ●</span><span>nail atelier Nagi</span><Arrow diagonal /></div>
+      <div className="lp-window-bar"><span>● ● ●</span><span>{tr("nail atelier 凪")}</span><Arrow diagonal /></div>
       <div className="lp-sample-nav"><b>Nagi.</b><span>NAIL & CARE</span></div>
       <div className="lp-salon-hero"><div><span>NAIL ATELIER</span><p>{tr("指先に、")}<br />{tr("小さなときめき。")}</p><span className="lp-sample-book">{tr("ご予約はこちら")}<Arrow /></span></div><div className="lp-botanical"><Flower /><span className="lp-vase" /></div></div>
       <div className="lp-sample-service"><div><span>01 / HAND CARE</span><strong>{tr("わたしに似合う、ネイルを。")}</strong></div><span>¥5,500 <Arrow diagonal /></span></div>

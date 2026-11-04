@@ -100,6 +100,15 @@ export async function provision(shop: Shop, config: ShopConfig, token: string, p
     historyId: await make("history.md"),
   };
 }
+export async function syncShopDocuments(shop: Shop, config: ShopConfig, token: string) {
+  if (!shop.google) throw new Error(tr("Google の保存先が未作成です"));
+  const { drive } = clients(token);
+  const doc = documents(config, shop.history);
+  await Promise.all([
+    drive.files.update({ fileId: shop.google.specId, media: { mimeType: "text/markdown", body: Readable.from([doc.spec]) } }),
+    drive.files.update({ fileId: shop.google.historyId, media: { mimeType: "text/markdown", body: Readable.from([doc.history]) } }),
+  ]);
+}
 export async function syncConfig(
   shop: Shop,
   config: ShopConfig,
@@ -110,19 +119,9 @@ export async function syncConfig(
 ) {
   if (!shop.google) throw new Error(tr("Google の保存先が未作成です"));
   const { drive } = clients(token);
-  const doc = documents(config, shop.history);
   // Prepare the runnable export before writing any remote data.
   const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"), undefined, menuImages);
-  await Promise.all([
-    drive.files.update({
-      fileId: shop.google.specId,
-      media: { mimeType: "text/markdown", body: Readable.from([doc.spec]) },
-    }),
-    drive.files.update({
-      fileId: shop.google.historyId,
-      media: { mimeType: "text/markdown", body: Readable.from([doc.history]) },
-    }),
-  ]);
+  await syncShopDocuments(shop, config, token);
   const selectedPage = scope?.kind === "page" ? config.pages.find(p => p.id === scope.pageId) : undefined;
   const previousPage = scope?.kind === "page" ? shop.published?.pages.find(p => p.id === scope.pageId) : undefined;
   // These are one published snapshot, including after a page/part-only release.

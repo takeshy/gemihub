@@ -5,7 +5,7 @@ import { renderLanding } from "./landing.ts";
 import { renderLegal } from "./legal.ts";
 import { hasLegacyNotes } from "./legacy-notes.ts";
 import { localizeShell } from "../shared/html.ts";
-import { tr, intlLocale, getLocale } from "../shared/i18n.ts";
+import { tr, intlLocale, getLocale, listSeparator } from "../shared/i18n.ts";
 import { localeForRequest, requestLocale, regionForRequest } from "./i18n.ts";
 import { paypalGateway, type PaymentGateway } from "./paypal.ts";
 import { paymentService, checkoutView, type Checkout } from "./payments.ts";
@@ -31,6 +31,7 @@ import { resolve, extname } from "node:path";
 import { z } from "zod";
 import { Store, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
+import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
@@ -380,7 +381,8 @@ export function createApp(
     const token = await ownerToken(shop);
     if (!token) return;
     for (const job of (await store.list<Job>("job")).filter(
-      (j) => j.shopId === shop.id,
+      // Post pages wait for an in-flight publish/restore; mail is never held back by it.
+      (j) => j.shopId === shop.id && !(shop.publishingPlanId && j.type === "posts"),
     )) {
       await requestLocale.run(job.locale || "ja", async () => {
         try {
@@ -449,19 +451,22 @@ export function createApp(
       ...fresh.history,
       {
         at: new Date().toISOString(),
-        summary: plan.summary.join("、"),
+        summary: plan.summary.join(listSeparator("、")),
         ...(plan.request ? { request: plan.request } : {}),
       },
     ];
-    if (!demoEnabled() || (await ownerToken(fresh))) {
-      const token =
-        (await ownerToken(fresh)) ||
-        fail(503, tr("店主の Google 再接続が必要です"));
+    // Operational saves (menus, hours, staff…) leave the design untouched and must not consume version slots.
+    const designChanged = !fresh.published || !sameDesign(fresh.published, plan.config);
+    const token = await ownerToken(fresh);
+    const versions = token ? driveDesignVersions(token) : demoDesignVersions(store);
+    if (!demoEnabled() || token) {
+      if (!token) fail(503, tr("店主の Google 再接続が必要です"));
       fresh.publishingPlanId = plan.id;
       await store.saveShop(fresh);
       try {
         fresh.google = await provisionShop(fresh, plan.config, token);
         await store.saveShop(fresh);
+        if (designChanged) await preserveDesignVersion(fresh, plan.id, versions, async () => store.saveShop(fresh));
         await syncConfig(
           { ...fresh, history },
           plan.config,
@@ -482,14 +487,20 @@ export function createApp(
       }
       delete fresh.publishingPlanId;
       delete fresh.publishingError;
+    } else if (designChanged) {
+      await preserveDesignVersion(fresh, plan.id, versions, async () => store.saveShop(fresh));
     }
+    const entry = history.at(-1)!;
+    if (designChanged) nextDesignPublication(fresh, entry.at, entry.summary);
     fresh.published = plan.config;
     fresh.publication = publication;
     fresh.draft = null;
     fresh.history = history;
     fresh.revision++;
     fresh.lastPublishedPlanId = plan.id;
+    retireDesignVersions(fresh);
     await store.saveShop(fresh);
+    await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
     if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
     await flush(fresh);
     return { ok: true, url: `/s/${fresh.slug}` };
@@ -1289,6 +1300,97 @@ export function createApp(
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
+          if (action === "design-versions" && method === "GET") {
+            assertOwner(user, fresh);
+            const requested = url.searchParams.get("target");
+            const target = requested ? parseTargetKey(requested) : undefined;
+            const pendingRestore = fresh.designRestore;
+            // Read-only: retired versions are trashed by the next publish/restore, not while holding the lock here.
+            // A screen's history lists only versions whose state of that screen differs from now.
+            let retained = (fresh.designVersions || []).slice(0, 10);
+            if (fresh.published && target && retained.some(version => !version.fingerprints)) {
+              // Without a connection the older versions just stay unlisted for this screen; the history itself still loads.
+              const token = await ownerToken(fresh);
+              if (token || demoEnabled()) retained = await indexedDesignVersions(retained, token ? driveDesignVersions(token) : demoDesignVersions(store));
+            }
+            const visible = fresh.published ? versionsFor(retained, fresh.published, target) : [];
+            // A failed restore (even of the oldest retained version) still needs a visible retry action.
+            if (pendingRestore && targetKey(pendingRestore.target) === targetKey(target) && !visible.some(version => version.number === pendingRestore.version.number))
+              visible.splice(9, 1, pendingRestore.version);
+            return json(res, {
+              versions: visible.map(({ number, at, summary }) => ({ number, at, summary })),
+              revision: fresh.revision,
+              current: fresh.published ? currentDesignPublication(fresh) : null,
+              pendingRestore: pendingRestore ? { requestId: pendingRestore.requestId, number: pendingRestore.version.number, target: targetKey(pendingRestore.target) } : null,
+              publishing: !!fresh.publishingPlanId,
+            });
+          }
+          const designRestore = action.match(/^design-versions\/(\d+)\/restore$/);
+          if (designRestore && method === "POST") {
+            assertOwner(user, fresh);
+            const input = z.object({ requestId: z.uuid(), revision: z.number().int().nonnegative(), target: z.string().max(240).optional() }).parse(await body(req));
+            if (fresh.lastDesignRestoreId === input.requestId) return json(res, { ok: true });
+            const number = Number(designRestore[1]);
+            const target = input.target ? parseTargetKey(input.target) : undefined;
+            const pending = fresh.designRestore;
+            if (pending && (pending.requestId !== input.requestId || pending.version.number !== number || targetKey(pending.target) !== targetKey(target)) || fresh.publishingPlanId && fresh.publishingPlanId !== `restore:${input.requestId}`)
+              fail(409, tr("公開処理が完了してからお試しください"));
+            if (!fresh.published || input.revision !== fresh.revision) fail(409, tr("本番の内容が変わりました。最新の内容を読み直してください"));
+            const version = pending?.version || fresh.designVersions?.find(version => version.number === number) || fail(404, tr("版が見つかりません"));
+            const token = await ownerToken(fresh);
+            if (!token && !demoEnabled()) fail(503, tr("店主の Google 再接続が必要です"));
+            const versions = token ? driveDesignVersions(token) : demoDesignVersions(store);
+            const snapshot = await versions.read(version);
+            let config: ShopConfig;
+            try { config = restoreDesign(fresh.published, snapshot.design, target); }
+            catch (error) { fail(409, error instanceof Error ? error.message : tr("操作できませんでした")); }
+            await validateMenuImages(store, fresh, config);
+            // A restore must always be undoable: refuse before pausing bookings when the current state cannot be archived.
+            if (fresh.designBackupOperationId !== `restore:${input.requestId}` && !versions.ready(fresh))
+              fail(409, tr("現在の公開状態を版履歴に保存できないため復元できません。一度デザインを公開してからお試しください"));
+            const at = pending?.at || new Date().toISOString();
+            const previous = currentDesignPublication(fresh);
+            const when = new Date(version.at).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" });
+            const summary = target
+              ? tr("「{0}」を版 {1}（{2} の公開状態）に復元。実行前の状態は版 {3} として保存しました。", targetLabel(target, snapshot.design), version.number, when, previous.number)
+              : tr("版 {0}（{1} の公開状態）に復元。実行前の状態は版 {2} として保存しました。", version.number, when, previous.number);
+            const history = [...fresh.history, { at, summary }];
+            fresh.designRestore = { requestId: input.requestId, version, at, ...(target ? { target } : {}) };
+            fresh.publishingPlanId = `restore:${input.requestId}`;
+            await store.saveShop(fresh);
+            try {
+              await preserveDesignVersion(fresh, fresh.publishingPlanId, versions, async () => store.saveShop(fresh), true);
+              if (token) {
+                // Regenerate every export from the restored design plus today's operational settings,
+                // instead of copying archived files that also carry old menus/prices/hours.
+                fresh.google = await provisionShop(fresh, config, token);
+                await store.saveShop(fresh);
+                await syncConfig({ ...fresh, history }, config, token, async () => await store.saveShop(fresh), undefined, await menuImageSnapshot(store, fresh, config, crmFiles, token));
+              }
+            } catch (error) {
+              fresh.publishingError = error instanceof Error ? error.message : tr("Google 連携エラー");
+              await store.saveShop(fresh);
+              console.error(error);
+              fail(503, tr("復元を完了できませんでした。版履歴から同じ版の復元を再試行してください。処理中は予約受付を停止しています。"));
+            }
+            // Only a whole-design restore makes that version "current"; a single screen leaves the rest as it is.
+            nextDesignPublication(fresh, at, summary, target ? undefined : version.number);
+            fresh.published = config;
+            fresh.history = history;
+            fresh.revision++;
+            fresh.lastDesignRestoreId = input.requestId;
+            delete fresh.designRestore;
+            delete fresh.publishingPlanId;
+            delete fresh.publishingError;
+            // Drafts, article records, bookings, customer/inquiry records and payments are untouched.
+            retireDesignVersions(fresh);
+            await store.saveShop(fresh);
+            await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
+            // Post pages embed the header/footer, so they follow the restored design.
+            await enqueue(fresh, "posts");
+            await flush(fresh);
+            return json(res, { ok: true });
+          }
           if (action === "export" && method === "GET") {
             assertOwner(user, fresh);
             const format = z.enum(["json", "csv"]).parse(url.searchParams.get("format") || "json");

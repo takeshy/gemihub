@@ -1,6 +1,6 @@
 import { serviceName } from "../shared/brand";
 import { Brand } from "./Brand";
-import { tr, intlLocale } from "../shared/i18n";
+import { tr, intlLocale, listSeparator } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
 import { BookingComplete } from "./BookingComplete";
@@ -382,9 +382,9 @@ function Dashboard({
   }, [tab, initialScreen, initialArticleKey]);
   useEffect(() => { setPlan(undefined); }, [shop?.id]);
   const activePlan =
-    plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
+    shop?.plans.find(p => p.id === shop.publishingPlanId) || (plan && plan.base === shop?.revision && shop.plans.some((p) => p.id === plan.id)
       ? plan
-      : shop?.plans.find(p => p.base === shop.revision && p.id === navigation.route.plan) || shop?.plans.filter((p) => p.base === shop.revision).at(-1);
+      : shop?.plans.find(p => p.base === shop.revision && p.id === navigation.route.plan) || shop?.plans.filter((p) => p.base === shop.revision).at(-1));
   const request = (action: string, data: unknown = {}) =>
     api(`/api/shops/${shop.id}/${action}`, data);
   const acceptPlan = async (p: Plan) => {
@@ -564,7 +564,7 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
         <div>
           <span>{tr("定休日")}</span>
           <b>
-            {c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・") ||
+            {c.hours.closedWeekdays.map((d) => weekdays()[d]).join(listSeparator()) ||
               tr("なし")}
           </b>
         </div>
@@ -592,14 +592,14 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
       <details>
         <summary>{tr("スタッフと予約の決まりを見る")}</summary>
         <h4>{tr("スタッフが働く日と時間")}</h4>
-        <ul>{bookingStaff(c).map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays()[day]).join("・") || tr("勤務日なし")} {staff.start}〜{staff.end}{tr("（担当：")}{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join("、") || tr("なし")}）</li>)}</ul>
+        <ul>{bookingStaff(c).map(staff => <li key={staff.id}><b>{staff.name}</b>：{staff.weekdays.map(day => weekdays()[day]).join(listSeparator()) || tr("勤務日なし")} {staff.start}〜{staff.end}{tr("（担当：")}{staff.menuIds.map(id => c.menus.find(menu => menu.id === id)?.name).filter(Boolean).join(listSeparator("、")) || tr("なし")}）</li>)}</ul>
         <h4>{tr("予約の決まり")}</h4>
         <ul>
           <li>{tr("予約できるのは")}{c.rules.advanceDays}{tr("日先まで、開始の")}{c.rules.leadMinutes}{tr("分前までです。")}</li>
           <li>{tr("当日の予約は")}{c.rules.sameDay ? tr("受け付けます") : tr("受け付けません")}。</li>
           <li>{tr("予約の時刻は")}{c.rules.interval}{tr("分ごとに選べます。")}</li>
           <li>{c.rules.payment?.enabled ? tr("予約時にPayPalでお支払い。{0}", policyText(c.rules.payment.refundTiers)) : tr("キャンセルは開始の{0}時間前までです。", c.rules.cancelHours)}</li>
-          <li>{tr("臨時のお休み：")}{c.hours.holidays.join("、") || tr("なし")}</li>
+          <li>{tr("臨時のお休み：")}{c.hours.holidays.join(listSeparator("、")) || tr("なし")}</li>
         </ul>
       </details>
     </div>
@@ -1618,10 +1618,10 @@ export function PublicShop({
   const aboutStaff = () => <div className="public-staff-list">{bookingStaff(c).map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>;
   const aboutAccess = () => <><p>{c.address}</p><GoogleMap config={c} /></>;
   const aboutHours = () => <><p>
-                {hoursText(c)} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join("・")}
+                {hoursText(c)} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join(listSeparator())}
               </p>
               {c.hours.holidays.length > 0 && (
-                <p>{tr("臨時休業：")}{c.hours.holidays.join("、")}</p>
+                <p>{tr("臨時休業：")}{c.hours.holidays.join(listSeparator("、"))}</p>
               )}</>;
   const contactForm = () => (
             <form

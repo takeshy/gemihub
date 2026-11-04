@@ -1,7 +1,7 @@
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
-const meta = { title: "運営/お店の基本情報/国・タイムゾーン", component: Screen, parameters: {layout:"fullscreen"}, render: args => <Screen key={args.scenario} {...args} /> } satisfies Meta<typeof Screen>;
+const meta = { title: "運営/設定/国・タイムゾーン", component: Screen, parameters: {layout:"fullscreen"}, render: args => <Screen key={args.scenario} {...args} /> } satisfies Meta<typeof Screen>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const UnitedStates: Story = {name:"米国のお店・国とタイムゾーン",args:{scenario:"us-settings"}};

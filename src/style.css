@@ -1783,6 +1783,11 @@ pre {
 .comparison-preview .salon-hero { padding: 24px 16px; }
 .comparison-preview .reservation-layout { display: block; }
 .comparison-preview .booking-summary { display: none; }
+/* Narrow side-by-side columns: keep navigation labels on one line instead of one character per line. */
+.comparison-preview .public-nav { flex-wrap: wrap; }
+.comparison-preview .public-nav > * { flex-shrink: 0; white-space: nowrap; }
+/* A page comparison is about the page itself; the shared hero would push the differing content out of view. */
+.comparison-preview-page .salon-hero { display: none; }
 @media (max-width: 760px) {
   .conflict-columns { grid-template-columns: 1fr; }
   .dashboard aside nav { flex-wrap: wrap; }
@@ -2472,6 +2477,18 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .visual-chat-log .chat-message > b { display: block; margin-bottom: 4px; font-size: 11px; color: #51674d; }
 .visual-chat-open .local-preview-screen .public-nav { flex-wrap: wrap; }
 .visual-chat-open .local-preview-screen .public-nav > * { flex-shrink: 0; white-space: nowrap; }
+.design-version-history { margin: 16px 0; }
+.design-version-history > summary { cursor: pointer; font-weight: 700; }
+.design-version-empty { padding: 16px; background: var(--cream); border-radius: 8px; }
+.design-version-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.design-version-list > li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+.design-version-list > li > div { min-width: 0; overflow-wrap: anywhere; }
+.design-version-list time { display: block; font-size: 13px; color: var(--muted); }
+.design-version-list p { margin: 6px 0 0; }
+.design-version-list button, .design-version-list .pill { flex-shrink: 0; }
+@media (max-width: 600px) {
+  .design-version-list > li { align-items: flex-start; flex-direction: column; gap: 10px; }
+}
 .visual-edit-history { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
 .visual-edit-history button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 7px 9px; white-space: nowrap; }
 .visual-edit-history > span { min-width: 30px; text-align: center; white-space: nowrap; }

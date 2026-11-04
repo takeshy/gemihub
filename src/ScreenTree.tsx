@@ -6,6 +6,12 @@ import type { SyncStatus } from "./editor-sync";
 import { articleKinds } from "../shared/article-features";
 export function ScreenTree({ draft, index, statuses, selected, disabled, onChoose }: { draft?: LocalDraft; index?: EditorIndex; statuses: Record<string, SyncStatus>; selected: string; disabled: boolean; onChoose: (screen: string) => void }) {
   const articles = draft ? articleKinds(draft.config) : [];
+  // Which side changed: this browser only, production only, or both.
+  const badges = {
+    local: { label: tr("未反映"), title: tr("このブラウザに、本番へ未反映の変更があります。") },
+    remote: { label: tr("本番が更新"), title: tr("本番の内容が更新されています。開くと最新の内容を取り込みます。") },
+    conflict: { label: tr("競合"), title: tr("ローカルとリモートに変更があります。開いて比較してください。") },
+  };
   const pages = [...(draft?.config.pages || []), ...(index?.pages || []).filter(p => !draft?.config.pages.some(l => l.id === p.id)), ...(draft?.source?.pages || []).filter(p => !draft?.config.pages.some(l => l.id === p.id) && !index?.pages.some(l => l.id === p.id))];
   const groups = [
     { label: tr("共通パーツ"), items: [["part:header", tr("ヘッダー")], ["part:footer", tr("フッター")]] },
@@ -15,6 +21,6 @@ export function ScreenTree({ draft, index, statuses, selected, disabled, onChoos
   ];
   return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => {
     const status = statuses[id.startsWith("page:") ? id.slice(5) : id.startsWith("part:") ? id : "shared"];
-    return <button key={id} role="treeitem" aria-selected={selected === id} disabled={disabled} onClick={() => onChoose(id)}><span className="tree-name">{label}</span>{status && ["local", "remote", "conflict"].includes(status) && <span className={`sync-badge sync-${status}`} title={status === "conflict" ? tr("ローカルとリモートに変更があります。開いて比較してください。") : tr("変更あり")} aria-label={status === "conflict" ? tr("変更あり（競合）") : tr("変更あり")}>{tr("変更あり")}</span>}</button>;
+    return <button key={id} role="treeitem" aria-selected={selected === id} disabled={disabled} onClick={() => onChoose(id)}><span className="tree-name">{label}</span>{status && ["local", "remote", "conflict"].includes(status) && <span className={`sync-badge sync-${status}`} title={badges[status as "local" | "remote" | "conflict"].title}>{badges[status as "local" | "remote" | "conflict"].label}</span>}</button>;
   })}</div></details>)}</div>;
 }

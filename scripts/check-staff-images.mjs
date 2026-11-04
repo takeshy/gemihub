@@ -70,7 +70,7 @@ try {
         `http://127.0.0.1:${server.address().port}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story`,
       );
     };
-    await open("運営/スタッフ・勤務", "staff");
+    await open("運営/設定/スタッフ・勤務", "staff");
     const accounts = page.getByRole("region", {
       name: "スタッフのGoogleログイン",
       exact: true,
@@ -109,7 +109,7 @@ try {
         .getAttribute("href"),
       /staffShop=story-shop/,
     );
-    await open("運営/スタッフ・勤務", "my-photo");
+    await open("運営/設定/スタッフ・勤務", "my-photo");
     const self = page.getByRole("region", {
       name: "自分のスタッフ写真",
       exact: true,
@@ -160,7 +160,7 @@ try {
     console.log(
       `${width}px: staff registration, removal, login link and own photo verified.`,
     );
-    await open("運営/メニュー画像", "editor");
+    await open("運営/設定/メニュー画像", "editor");
     let editor = page.locator(".menu-image-editor").first();
     await editor
       .getByRole("button", { name: "画像をアップロード", exact: true })
@@ -234,7 +234,7 @@ try {
     console.log(
       `${width}px: menu upload/existing choices, picker open refresh and automatic list refresh verified.`,
     );
-    await open("運営/画像管理", "library");
+    await open("運営/設定/画像管理", "library");
     const library = page.getByRole("region", { name: "画像管理", exact: true });
     await library.waitFor();
     for (let index = 1; index <= 16; index++) {

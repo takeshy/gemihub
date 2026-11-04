@@ -1,7 +1,7 @@
 import { regionOf, zonedDate } from "../../shared/region";
 import { shopExport, exportColumns, exportCsv, type ExportTable } from "../../server/data-export";
 import type { Store } from "../../server/store";
-import { tr } from "../../shared/i18n";
+import { tr, listSeparator } from "../../shared/i18n";
 import { simulatePayment, simulateCancellation } from "../payment-mock";
 import { defaultRefundTiers, refundQuote } from "../../server/payment-domain";
 import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
@@ -74,6 +74,7 @@ export type Scenario =
   | "crm-empty"
   | "editor-unfetched"
   | "editor-remote"
+  | "editor-remote-tree"
   | "editor-conflict"
   | "page-builder"
   | "proposal-failure"
@@ -167,7 +168,8 @@ export function scenarioProps(scenario: Scenario) {
               : publicScenarios.has(scenario)
                 ? "/s/salon-nagi"
                 : "/",
-    search: scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
+    // Remote/conflict fixtures change the FAQ page, so open that page rather than the default booking screen.
+    search: ["editor-remote", "editor-conflict"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
     initialTab: ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
@@ -178,7 +180,7 @@ export function scenarioProps(scenario: Scenario) {
           "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
           "local-editor-pages": "try",
-          "editor-unfetched": "try", "editor-remote": "try", "editor-conflict": "try", "page-builder": "build",
+          "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "page-builder": "build",
           "manage-basic": "basic", "manage-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
@@ -228,11 +230,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
   config.hours.closedWeekdays = [];
   if (["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
-  if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
-    { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("## 初めてでも予約できますか？\n\n初めてのお客様も歓迎しています。\n\n## 当日の持ち物は？\n\n特にありません。お気軽にお越しください。"), layout: "standard", imageUrl: "" },
-    { id: "about-us", slug: "about-us", title: tr("私たちのお店"), navigationLabel: tr("店舗紹介"), body: tr("## 大切にしていること\n\n一人ひとりに合った時間をご用意します。"), layout: "compact", imageUrl: "" },
+  if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-remote-tree", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
+    { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてでも予約できますか？</h2><p>初めてのお客様も歓迎しています。</p><h2>当日の持ち物は？</h2><p>特にありません。お気軽にお越しください。</p>"), layout: "standard", imageUrl: "" },
+    { id: "about-us", slug: "about-us", title: tr("私たちのお店"), navigationLabel: tr("店舗紹介"), body: tr("<h2>大切にしていること</h2><p>一人ひとりに合った時間をご用意します。</p>"), layout: "compact", imageUrl: "" },
   ];
-  if (["editor-remote", "editor-conflict"].includes(scenario)) config.pages[0].body = tr("## リモートの変更\n\nリモートで追加された案内です。");
+  if (["editor-remote", "editor-remote-tree", "editor-conflict"].includes(scenario)) config.pages[0].body = tr("<h2>リモートの変更</h2><p>リモートで追加された案内です。</p>");
   const menuImages = new Map<string, { mimeType: string; data: string }>();
   const imageMetadata = new Map<string, LibraryImage>();
   const generatedImages = new Map<string, string>();
@@ -604,7 +606,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/pages/create-with-ai`) {
       const messages = input.messages as { role: string; text: string }[];
       const ready = input.mode === "write" || messages.filter(m => m.role === "user").length >= 2;
-      result = { reply: ready ? tr("FAQ のページ案ができました。内容を確認してツリーに追加してください。") : tr("どんな質問や案内を載せたいですか？"), page: ready ? { slug: "new-faq", title: tr("新しいFAQ"), navigationLabel: tr("よくある質問"), body: tr("## 初めてのお客様へ\n\nご予約方法をご案内します。"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] } : null };
+      result = { reply: ready ? tr("FAQ のページ案ができました。内容を確認してツリーに追加してください。") : tr("どんな質問や案内を載せたいですか？"), page: ready ? { slug: "new-faq", title: tr("新しいFAQ"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてのお客様へ</h2><p>ご予約方法をご案内します。</p>"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] } : null };
     }
     else if (action === `/api/shops/${shop.id}/local-editor/index`) result = {
       base: shop.revision, published: !!shop.published, lastPublishedPlanId: shop.lastPublishedPlanId,
@@ -618,7 +620,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const scope = input.scope as ReleaseScope;
       const remote = input.expectedRemote as Record<string, unknown> | null;
       const local = input.localValue as Record<string, unknown> | null;
-      result = { value: scope.kind === "page" ? { ...(remote || local), body: tr("## AIの結合案\n\n{0}\n\n{1}", String(local?.body || ""), String(remote?.body || "")) } : { ...remote, ...local }, explanation: tr("ローカルとリモートの案内を両方残した結合案です。") };
+      result = { value: scope.kind === "page" ? { ...(remote || local), body: tr("<h2>AIの結合案</h2>{0}{1}", String(local?.body || ""), String(remote?.body || "")) } : { ...remote, ...local }, explanation: tr("ローカルとリモートの案内を両方残した結合案です。") };
     }
     else if (action === `/api/shops/${shop.id}/local-editor`) result = { base: shop.revision, source: shop.published, config: shop.published || config, lastPublishedPlanId: shop.lastPublishedPlanId };
     else if (action === `/api/shops/${shop.id}/visual/propose`) {
@@ -626,7 +628,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (String(input.target).startsWith("page:")) {
         const [, id, field] = String(input.target).split(":");
         const page = next.pages.find(p => p.id === id)!;
-        if (field === "body") page.body = tr("## ペンで変更した内容\n\nローカルのページ本文を更新しました。");
+        if (field === "body") page.body = tr("<h2>ペンで変更した内容</h2><p>ローカルのページ本文を更新しました。</p>");
         else page.title = tr("ペンで変更したページ");
       } else if (input.target === "part:header") next.header.title = tr("季節を楽しむアトリエ");
       else if (input.target === "part:footer") next.footer.text = tr("お会いできる日を楽しみにしています。");
@@ -698,7 +700,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const newPage = input.intent === "new-page";
       const creation=input.intent==="create-shop";
       const changeRequest = input.intent !== "consult" && (newPage || /変更|したい|変え|追加|使って|change|add|use|want/i.test(String(input.question)));
-      result = {answer: newPage && changeRequest ? tr("新しいページと、お客様向けのメニューに表示する名前を確認してください。") : hasImages && changeRequest ? tr("選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。") : changeRequest ? tr("水曜日も定休日にする変更ですね。変更プランを作り、内容を確認してから承認・公開してください。") : /履歴|history/i.test(String(input.question)) ? tr("変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。") : tr("お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。"), changeRequest};
+      result = {answer: newPage && changeRequest ? tr("新しいページと、お客様向けのメニューに表示する名前を確認してください。") : hasImages && changeRequest ? tr("選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。") : changeRequest ? tr("「{0}」のご依頼ですね。Storybook のサンプルでは、水曜日を定休日にする変更案を作ります。内容を確認してから承認・公開してください。", String(input.question).slice(0, 80)) : /履歴|history/i.test(String(input.question)) ? tr("変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。") : tr("お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。"), changeRequest};
       const currentMessages=chatReference?chats.find(chat=>chat.id===chatReference.id)?.messages || []:[];
       const related=findRelevantHistory(chats.flatMap(chat=>chat.messages),new Map(chats.map(chat=>[chat.id,chat.intent])),String(input.question),new Set(currentMessages.slice(-24).map(message=>message.id)));
       (window as unknown as {__omaiStoryLastHistory:unknown}).__omaiStoryLastHistory=related;
@@ -730,7 +732,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (local?.scope) next = scopedConfig(shop.published, next, local.scope);
       if (input.intent === "new-page") {
         const id = `faq-${shop.plans.length + 1}`;
-        next = { ...structuredClone(shop.published || config), pages: [...(shop.published || config).pages, { id, slug: id, title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("## 初めてのお客様へ\n\n予約方法・持ち物・キャンセルについてご案内します。"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] }] };
+        next = { ...structuredClone(shop.published || config), pages: [...(shop.published || config).pages, { id, slug: id, title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてのお客様へ</h2><p>予約方法・持ち物・キャンセルについてご案内します。</p>"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] }] };
       } else if (input.visual) {
         const target = (input.visual as {target: string}).target;
         if (target === "name") next.name = tr("季節のアトリエ");
@@ -786,7 +788,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         shop.draft = null;
         shop.history.push({
           at: new Date().toISOString(),
-          summary: current.summary.join("、"),
+          summary: current.summary.join(listSeparator("、")),
         });
         shop.revision++;
         shop.lastPublishedPlanId = current.id;
@@ -794,6 +796,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
         delete shop.publishingPlanId;
       } else throw new Error(tr("未対応のモック操作"));
       result = { ok: true };
+    } else if (action === `/api/shops/${shop.id}/design-versions`) {
+      // Restore flows are covered by DesignVersions.stories.tsx; screens here only show the panel.
+      result = { versions: [], current: shop.published ? { number: 1, at: new Date().toISOString(), summary: tr("公開済みのデザイン") } : null, revision: shop.revision, publishing: !!shop.publishingPlanId, pendingRestore: null };
     } else if (action === `/api/shops/${shop.id}/publication-preview`) {
       const current = shop.published || config;
       const live = publicPosts(posts);

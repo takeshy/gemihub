@@ -5,6 +5,8 @@ import type { PublicPost } from "../server/post-domain";
 import { useApi } from "./api";
 import { PreviewSurface, type PreviewLocation, type PreviewScreen } from "./ScreenGallery";
 import { sampleFixtures } from "./local-preview";
+import { DesignVersionHistory } from "./DesignVersionHistory";
+import { regionOf } from "../shared/region";
 
 type Snapshot = { config: ShopConfig; posts: PublicPost[]; revision: number; hash: string };
 const homeScreen: PreviewScreen = { id: "about", get name() { return tr("お店のこと"); }, get description() { return tr("お店の紹介"); }, pane: "about" };
@@ -37,6 +39,7 @@ export function PublicationPreview({ shopId }: { shopId: string }) {
       <p>{tr("デザインは各画面の編集画面で、スタッフ・料金・営業時間などはそれぞれの設定メニューで変更できます。全体的な表示や機能の修正は「AIとお店をつくる」で相談できます。")}</p>
       <a className="text-button" href="/">{tr("運営画面に戻る")}</a>
     </div>
+    <DesignVersionHistory shopId={shopId} revision={snapshot?.revision} timeZone={regionOf(snapshot?.config).timeZone} disabled={busy} onRestored={load} />
     {snapshot && fixtures && <PreviewSurface key={snapshot.hash} config={snapshot.config} shopId={shopId} screen={homeScreen} fixtures={fixtures} onScreenChange={setCurrentScreen} />}
     {published ? <p className="notice" role="status">{tr("本番公開しました。ログインしていない方もページを表示できます。")}</p> : <section className="publication-actions" aria-label={tr("本番公開の操作")}>
       {error && <div className="alert" role="alert"><p>{error}</p><button disabled={busy} onClick={() => void load()}>{tr("変更後の内容を確認し直す")}</button></div>}

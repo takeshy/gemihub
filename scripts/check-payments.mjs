@@ -5,7 +5,7 @@ import { resolve, extname } from "node:path";
 import { chromium } from "playwright";
 const root = resolve("storybook-static");
 const index = JSON.parse(await readFile(resolve(root, "index.json"), "utf8"));
-const entries = Object.values(index.entries).filter(e => e.type === "story" && e.title === "お客様の予約/お支払い・返金");
+const entries = Object.values(index.entries).filter(e => e.type === "story" && ["お客様の画面/お支払い・返金", "運営/予約・お客様/お支払いと返金"].includes(e.title));
 assert.equal(entries.length, 10);
 const server = createServer(async (req, res) => {
   try {

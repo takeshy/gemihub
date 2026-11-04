@@ -4,7 +4,7 @@ import { Screen } from "./Screen";
 
 const meta = {
   id: "はじめる",
-  title: "運営/はじめる",
+  title: "運営/はじめる/はじめる前",
   component: Screen,
   parameters: { layout: "fullscreen" },
   render: (args) => <Screen key={args.scenario} {...args} />,

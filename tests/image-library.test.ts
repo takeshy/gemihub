@@ -128,6 +128,9 @@ test("Image library is owner-only; header/page images are public only when refer
   await assert.rejects(validateMenuImages(store, shop, forged), /画像がありません/);
   assert.equal((await api(`${base}/${privateId}`)).status, 404);
   delete shop.published!.header.imageId; shop.published!.pages = []; await store.saveShop(shop);
+  assert.equal((await api(`${base}/${id}/archive`, {})).status, 409, "retained designs still need the image for restoration");
+  // Once the referencing versions have aged out, normal image archiving is allowed.
+  shop.designVersions = []; await store.saveShop(shop);
   assert.equal((await api(`${base}/${id}/archive`, {})).status, 200);
   assert.deepEqual((await api(base)).body, []);
   assert.equal((await api(`${base}/${id}`)).status, 404);

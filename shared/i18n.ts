@@ -24,6 +24,8 @@ export function translate(locale: Locale, source: string, ...values: unknown[]):
   return text.replace(/\{(\d+)\}/g, (match, index: string) => Number(index) < values.length ? String(values[Number(index)]) : match);
 }
 export const tr = (source: string, ...values: unknown[]) => translate(getLocale(), source, ...values);
+/** Separator for inline lists: "・" (or "、") in Japanese, ", " in English. */
+export const listSeparator = (japanese: "・" | "、" = "・") => getLocale() === "en" ? ", " : japanese;
 
 export function rememberLocale(locale: Locale) {
   try { localStorage.setItem("gemihub:locale", locale); } catch { /* URL remains available. */ }
