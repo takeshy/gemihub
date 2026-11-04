@@ -19,6 +19,21 @@ OpenAI API (optional): another AI provider an administrator can switch to.
 How they work together
 The AI only proposes payment rules, and the owner approves them. All charges and refunds are calculated and run by the server through PayPal.
 
+## Is your project new, or did it exist before Oct 1, 2026 (9:15 am PT)?
+
+Existing
+
+##  If it existed before, explain what already existed and what you built or changed during the submission period.
+
+GemiHub was inspired by hubwork, a website-building feature in a personal AI workspace I developed earlier. That workspace was previously called GemiHub and continues separately as Kiokuflow. I had registered the GemiHub trademark, so I decided to use the name for this new product.
+
+The earlier hubwork shared the idea of creating web pages through conversation. However, building a site required reviewing a Mermaid workflow along the way, and the original workspace had no users.
+
+For the current GemiHub, I used that idea as a starting point and developed a new product for small shops. It has no workflow to review: owners can create and update their sites through conversation and by marking up the screen.
+
+During the submission period, I implemented PayPal prepayment at booking and automatic refunds based on the cancellation policy, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, a CRM, and design version history with one-click rollback.
+
+
 ## Which additional sponsor tool(s) did you use for this project?
 
 * Reminder: Usage of a Paypal tool and an AI tool is required for all projects. Using the listed sponsors are optional.
