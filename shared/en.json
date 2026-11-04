@@ -1652,6 +1652,7 @@
   "お店の記録は状態変更で保持してください": "Preserve shop records through status changes",
   "業務記録には専用の読み取りを使ってください": "Use dedicated readers for business records",
   "別の操作を処理中です。少し待って再試行してください": "Another operation is in progress. Wait a moment and retry",
+  "操作の有効期限が切れました。最新の状態を確認して再試行してください": "This operation has expired. Check the latest state and retry",
   "店名：{0}": "Shop name: {0}",
   "紹介文：{0}": "Introduction: {0}",
   "アクセス：{0}": "Directions: {0}",

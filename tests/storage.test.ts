@@ -44,7 +44,17 @@ test("Firestore stores scoped business records and operational state durably wit
   }) as any);
   let transactions = Promise.resolve();
   mock.method(Firestore.prototype, "runTransaction", ((fn: any) => {
-    const result = transactions.then(() => fn({ get: (doc: any) => doc.get(), delete: (doc: any) => cloud.delete(doc.path) }));
+    const result = transactions.then(async () => {
+      const changes: (() => void)[] = [];
+      const value = await fn({
+        get: (doc: any) => doc.get(),
+        set: (doc: any, data: Record<string, unknown>) => { changes.push(() => { cloud.set(doc.path, data); }); },
+        update: (doc: any, data: Record<string, unknown>) => { changes.push(() => { cloud.set(doc.path, { ...cloud.get(doc.path), ...data }); }); },
+        delete: (doc: any) => { changes.push(() => { cloud.delete(doc.path); }); },
+      });
+      for (const change of changes) change();
+      return value;
+    });
     transactions = result.then(() => {}, () => {}); return result;
   }) as any);
   let terminations = 0;

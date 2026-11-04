@@ -97,6 +97,10 @@ After verifying email with a single-use link valid for 15 minutes or with Google
 
 Aggregate existing bookings and inquiries by trimmed lowercase email, without extra owner input or AI. Names use the newest timestamp with deterministic ties. Visits count ended active reservations only, excluding cancellations, no-shows, and future bookings; spending sums recorded prices. Search by name/email and sort by visit count/last visit.
 
+Customer lists, details, image galleries and attachment reads require operator authorization but do not acquire the shop write lock. AI generation, publication or reconciliation must not block these reads. Customer-note writes retain the shop lock and stale-edit checks.
+
+Booking/payment operations, configuration/file exports, and email delivery use separate per-shop locks. Run reconciliation and file retries independently; payment handlers never run file-export jobs. Release the booking lock before delivering queued mail. Commit changed public settings briefly under the booking lock after file generation, and wait for all affected operation locks when resetting a shop. Existing payments/refunds may finish during publication while new booking acceptance remains paused.
+
 Periods are all time, one week/month/three months/six months/year, or custom start. Use midnight in the shop's time zone and calendar subtraction with month-end clamping. Apply the same lower bound to metrics and history, keeping future bookings visible. Names and note availability use all dates.
 
 Details show name/email/birth date/gender, current reservations, expandable past bookings/cancellations, inquiry handling, and a newest-first timeline filtered by notes/bookings/inquiries. Missing profile values show Not registered. Operator-only access applies to every detail, write, and file endpoint.

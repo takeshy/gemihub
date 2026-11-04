@@ -29,7 +29,7 @@ import { resolveTxt } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { z } from "zod";
-import { Store, isArchivedShop, type Shop, type User } from "./store.ts";
+import { Store, bookingLockKey, mailLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
 import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
@@ -333,6 +333,11 @@ export function createApp(
     if (isArchivedShop(shop) || user?.authMethod === "email" || user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
   };
   const inquiries = (shop: Shop) => store.records<Inquiry>("inquiry", shop);
+  const customersFor = async (shop: Shop, url: URL) => {
+    const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
+    const now = new Date();
+    return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
+  };
   const postsFor = (shop: Shop) => store.records<Post>("post", shop);
   // A missing or unreadable image is left out of the public page instead of blocking every save.
   async function storefrontImages(shop: Shop, posts: Post[]) {
@@ -361,7 +366,11 @@ export function createApp(
         fail(503, tr("公開ページの保存に失敗しました。以前の公開ページは保持しています。同じ操作を再試行してください。"));
       }
     }
-    await store.saveShop(shop);
+    // Only a changed configuration needs to commit between booking operations.
+    // Refreshing files for the same configuration remains independent.
+    const current = await store.shop(shop.id);
+    if (JSON.stringify(current?.published) === JSON.stringify(shop.published)) await store.saveShop(shop);
+    else await store.locked(bookingLockKey(shop.id), () => store.saveShop(shop));
     // Only releases older than the retained ones are removed; a failed cleanup is retried on the next release.
     if (dropped.length) {
       const kept = [shop.storefrontRelease!, ...shop.storefrontPrevious || []];
@@ -422,13 +431,13 @@ export function createApp(
       ...data,
     });
   }
-  async function flush(shop: Shop) {
+  async function flushJobs(shop: Shop, type: Job["type"]) {
     if (!shop.google) return;
     const token = await ownerToken(shop);
     if (!token) return;
     for (const job of (await store.list<Job>("job")).filter(
       // Post pages wait for an in-flight publish/restore; mail is never held back by it.
-      (j) => j.shopId === shop.id && !(shop.publishingPlanId && j.type === "posts"),
+      (j) => j.shopId === shop.id && j.type === type && !(shop.publishingPlanId && j.type === "posts"),
     )) {
       await requestLocale.run(job.locale || "ja", async () => {
         try {
@@ -445,6 +454,13 @@ export function createApp(
       });
     }
   }
+  // File exports mutate Drive IDs also used by publication, so their callers
+  // retain the configuration lock. Delivery never runs file-export jobs.
+  const flushFiles = (shop: Shop) => flushJobs(shop, "posts");
+  const flushMail = (shop: Shop) => store.locked(mailLockKey(shop.id), async () => {
+    const fresh = await store.shop(shop.id);
+    if (fresh) await flushJobs(fresh, "mail");
+  });
   async function notify(
     shop: Shop,
     config: ShopConfig,
@@ -467,7 +483,7 @@ export function createApp(
     if (await store.get("paymentNotice", key)) return;
     const shop = await store.shop(booking.shopId);
     if (!shop?.published) return;
-    const config = await effective(shop);
+    const config = shop.published;
     const refund = booking.payment?.cancellation;
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
@@ -475,6 +491,16 @@ export function createApp(
         tr("{0} 様\n予約: {1}\nメニュー: {2}{3}\n支払額: {4}\n{5}{6}", booking.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined);
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
     });
+  });
+  const reconcilePayments = (shopId: string) => store.locked(bookingLockKey(shopId), async () => {
+    if (await store.shop(shopId)) await payments.reconcile(shopId);
+  });
+  const syncFiles = (shopId: string) => store.locked(shopId, async () => {
+    const fresh = await store.shop(shopId);
+    if (!fresh) return;
+    await flushFiles(fresh);
+    // Converts old publications and refreshes releases from an older generator.
+    await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
   });
   async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
     if (fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
@@ -548,7 +574,7 @@ export function createApp(
     await savePublicShop(fresh);
     await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
     if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
-    await flush(fresh);
+    await flushFiles(fresh);
     return { ok: true, url: `/s/${fresh.slug}` };
   }
   const rate = new Map<
@@ -1029,7 +1055,7 @@ export function createApp(
               const previous = saved.shopId ? await store.shop(saved.shopId) : undefined;
               await store.put("judgeUsage", user.email, { ...usage, resets: { day, count: resets + 1 } });
               if (previous && !previous.judge?.archivedAt) {
-                await store.locked(previous.id, async () => {
+                await store.locked(previous.id, () => store.locked(bookingLockKey(previous.id), () => store.locked(mailLockKey(previous.id), async () => {
                   const fresh = (await store.shop(previous.id))!;
                   const token = await store.ownerToken(fresh);
                   if (fresh.google && token) await trashFile(token, fresh.google.folderId);
@@ -1038,7 +1064,7 @@ export function createApp(
                     if (entry.value.user?.shopId === fresh.id && isJudgeCustomerEmail(entry.value.user.email)) await store.delete("session", entry.id);
                   // Keep the old records for audit, but detach them from the judge so a new shop is created.
                   await store.saveShop({ ...fresh, owner: `${user.email}#archived-${fresh.id}`, judge: { ...fresh.judge!, archivedAt: new Date().toISOString() } });
-                });
+                })));
               }
               const shop = await store.createShop(user.email, regionForRequest(req));
               if (!shop.judge) { shop.judge = { createdAt: new Date().toISOString() }; await store.saveShop(shop); }
@@ -1236,6 +1262,65 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (action === "operations" && method === "GET") return json(res, {
+          bookings: await store.bookings(shop.id),
+          paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
+          inquiries: await inquiries(shop),
+        });
+        if (action === "retry" && method === "POST") {
+          await Promise.all([reconcilePayments(shop.id).then(() => flushMail(shop)), syncFiles(shop.id), flushMail(shop)]);
+          return json(res, { ok: true });
+        }
+        const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
+        if (cancellation && method === "POST") {
+          const result = await store.locked(bookingLockKey(shop.id), async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            await assertOperator(user, fresh);
+            const input = z.object({ status: z.enum(["cancelled", "no_show"]) }).parse(await body(req));
+            const b = (await store.bookings(fresh.id)).find(b => b.id === cancellation[1]) || fail(404, tr("予約がありません"));
+            const paid = await store.get<Checkout>("checkout", b.id);
+            if (paid?.shopId === fresh.id && paid.phase === "confirmed") {
+              if (input.status === "cancelled") return { ok: true, booking: await payments.cancel(paid, user!.email, "shop") };
+              if (paid.booking.status !== "active") fail(409, tr("この予約は処理済みです"));
+              paid.booking.status = "no_show"; paid.booking.updatedBy = user!.email; paid.booking.updatedAt = new Date().toISOString();
+              await store.put("checkout", paid.id, paid); await payments.sync(paid);
+              return { ok: true, booking: paid.booking };
+            }
+            if (b.payment) fail(409, tr("支払いの記録を確認してください"));
+            if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
+            const config = fresh.published!;
+            b.status = input.status; b.updatedBy = user!.email; b.updatedAt = new Date().toISOString();
+            await store.saveBooking(b);
+            await notify(fresh, config, b.customer, tr("予約の状態が変更されました"), tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status));
+            return { ok: true };
+          });
+          await flushMail(shop);
+          return json(res, result);
+        }
+        const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
+        // CRM reads must not wait for AI, publication or reconciliation writers.
+        if (customerRoute && method === "GET") {
+          const customers = await customersFor(shop, url);
+          if (!customerRoute[1]) return json(res, customerSummaries(customers));
+          const email = normalizeEmail(decodeURIComponent(customerRoute[1]));
+          const customer = customers.find(customer => customer.email === email) || fail(404, tr("お客様が見つかりません"));
+          const tail = customerRoute[2] || "";
+          if (!tail) return json(res, customer);
+          if (tail === "images") return json(res, {
+            name: customer.name,
+            images: customerImages((await store.records<CustomerNote>("customerNote", shop)).filter(note => normalizeEmail(note.email) === email)),
+          });
+          const fileRoute = tail.match(/^notes\/([^/]+)\/files\/([^/]+)$/);
+          if (fileRoute) {
+            const note = (await store.records<CustomerNote>("customerNote", shop)).find(note => note.id === fileRoute[1] && normalizeEmail(note.email) === email && note.status === "active") || fail(404, tr("メモがありません"));
+            const attachment = note.attachments.find(file => file.id === fileRoute[2]) || fail(404, tr("添付ファイルがありません"));
+            const token = store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"));
+            const data = await crmFiles.read(shop, token, attachment.id);
+            if (data.length !== attachment.size) fail(409, tr("添付ファイルが変更されています"));
+            return json(res, { data: data.toString("base64") });
+          }
+          fail(404, tr("見つかりません"));
+        }
         // These reads must stay available while a model call holds the shop write lock.
         if (action === "conversations" && method === "GET") return json(res, { email: user!.email, conversations: await conversations(store, shop, user!.email) });
         const conversationRead = action.match(/^conversations\/([a-f0-9]{64})(\/progress)?$/);
@@ -1467,7 +1552,7 @@ export function createApp(
             await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
             // Post pages embed the header/footer, so they follow the restored design.
             await enqueue(fresh, "posts");
-            await flush(fresh);
+            await flushFiles(fresh);
             return json(res, { ok: true });
           }
           if (action === "export" && method === "GET") {
@@ -1897,7 +1982,7 @@ export function createApp(
               if (publish) await savePublicShop(fresh);
               await enqueue(fresh, "posts");
             });
-            await flush(fresh);
+            await flushFiles(fresh);
             return json(res, post);
           }
           const postAction = action.match(
@@ -1963,7 +2048,7 @@ export function createApp(
               await savePublicShop(fresh);
               await enqueue(fresh, "posts");
             });
-            await flush(fresh);
+            await flushFiles(fresh);
             return json(res, post);
           }
           if (action === "plan" && method === "POST") {
@@ -2169,28 +2254,12 @@ export function createApp(
             }
             return json(res, { ok: true, url: `/s/${fresh.slug}` });
           }
-          if (action === "operations" && method === "GET") {
-            return json(res, {
-              bookings: await store.bookings(fresh.id),
-              paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === fresh.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
-              inquiries: await inquiries(fresh),
-            });
-          }
-          const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
-          if (customerRoute && (method === "GET" || method === "POST")) {
-            const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
-            const now = new Date();
-            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now, regionOf(fresh.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", fresh), regionOf(fresh.published).timeZone);
+          if (customerRoute && method === "POST") {
+            const loadCustomers = () => customersFor(fresh, url);
             const customers = await loadCustomers();
-            if (!customerRoute[1] && method === "GET") return json(res, customerSummaries(customers));
             const email = normalizeEmail(decodeURIComponent(customerRoute[1] || ""));
             const customer = customers.find(customer => customer.email === email) || fail(404, tr("お客様が見つかりません"));
             const tail = customerRoute[2] || "";
-            if (!tail && method === "GET") return json(res, customer);
-            if (tail === "images" && method === "GET") return json(res, {
-              name: customer.name,
-              images: customerImages((await store.records<CustomerNote>("customerNote", fresh)).filter(note => normalizeEmail(note.email) === email)),
-            });
             if (tail === "notes" && method === "POST") {
               const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
               await addCustomerNote(store, fresh, email, user!.email, await body(req, 15 * 1024 * 1024), crmFiles, token);
@@ -2199,13 +2268,6 @@ export function createApp(
             const noteRoute = tail.match(/^notes\/([^/]+)(?:\/(delete|files)(?:\/([^/]+))?)?$/);
             if (noteRoute) {
               const note = (await store.records<CustomerNote>("customerNote", fresh)).find(note => note.id === noteRoute[1] && normalizeEmail(note.email) === email && note.status === "active") || fail(404, tr("メモがありません"));
-              if (noteRoute[2] === "files" && noteRoute[3] && method === "GET") {
-                const attachment = note.attachments.find(file => file.id === noteRoute[3]) || fail(404, tr("添付ファイルがありません"));
-                const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
-                const data = await crmFiles.read(fresh, token, attachment.id);
-                if (data.length !== attachment.size) fail(409, tr("添付ファイルが変更されています"));
-                return json(res, { data: data.toString("base64") });
-              }
               if (method === "POST" && (!noteRoute[2] || noteRoute[2] === "delete")) {
                 const input = z.object({ text: z.string().max(10000).optional(), attachmentNames: z.array(customerAttachmentSchema.pick({ id: true, name: true })).max(5).optional(), previousUpdatedAt: z.string() }).parse(await body(req));
                 if (input.previousUpdatedAt !== note.updatedAt) fail(409, tr("メモが更新されています。詳細を開き直して確認してください。入力内容は画面に残っています"));
@@ -2231,44 +2293,6 @@ export function createApp(
               }
             }
           }
-          const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
-          if (cancellation && method === "POST") {
-            const input = z
-              .object({ status: z.enum(["cancelled", "no_show"]) })
-              .parse(await body(req));
-            const b =
-              (await store.bookings(fresh.id)).find(
-                (b) => b.id === cancellation[1],
-              ) || fail(404, tr("予約がありません"));
-            const paid = await store.get<Checkout>("checkout", b.id);
-            if (paid?.shopId === fresh.id && paid.phase === "confirmed") {
-              if (input.status === "cancelled") {
-                const booking = await payments.cancel(paid, user!.email, "shop");
-                await flush(fresh);
-                return json(res, { ok: true, booking });
-              }
-              if (paid.booking.status !== "active") fail(409, tr("この予約は処理済みです"));
-              paid.booking.status = "no_show"; paid.booking.updatedBy = user!.email; paid.booking.updatedAt = new Date().toISOString();
-              await store.put("checkout", paid.id, paid); await payments.sync(paid); await flush(fresh);
-              return json(res, { ok: true, booking: paid.booking });
-            }
-            if (b.payment) fail(409, tr("支払いの記録を確認してください"));
-            if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
-            const config = await effective(fresh);
-            b.status = input.status;
-            b.updatedBy = user!.email;
-            b.updatedAt = new Date().toISOString();
-            await store.saveBooking(b);
-            await notify(
-              fresh,
-              config,
-              b.customer,
-              tr("予約の状態が変更されました"),
-              tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status),
-            );
-            await flush(fresh);
-            return json(res, { ok: true });
-          }
           const inquiryAction=action.match(/^inquiries\/([^/]+)\/(reply|status)$/);
           if(inquiryAction&&method==="POST"){
             const q=(await inquiries(fresh)).find(q=>q.id===inquiryAction[1]&&q.shopId===fresh.id)||fail(404,tr("お問い合わせがありません"));
@@ -2283,13 +2307,13 @@ export function createApp(
             const hash=digest(JSON.stringify({text:input.text,previousReply:input.previousReply??null,status:input.status??null}));
             const operation=await store.get<{hash:string;done:boolean}>("inquiryReplyRequest",key);
             if(operation&&operation.hash!==hash)fail(409,tr("返信内容が変わっています。入力し直してください"));
-            if(operation?.done){await flush(fresh);return json(res,{ok:true});}
+            if(operation?.done){await flushMail(fresh);return json(res,{ok:true});}
             if(input.previousReply!==undefined&&q.reply!==input.previousReply&&!(operation&&q.reply===input.text))fail(409,tr("他の担当者が返信しています。最新の状態を確認してください"));
             await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:false});
             q.reply=input.text;q.status=input.status||inquiryStatus(q);await store.put("inquiry",q.id,q);
             await enqueue(fresh,"mail",{to:q.email,subject:tr("{0} からの返信", fresh.published!.name),body:input.text},digest(`${key}:mail`));
             await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:true});
-            await flush(fresh);return json(res,{ok:true});
+            await flushMail(fresh);return json(res,{ok:true});
           }
           if (action === "invite" && method === "POST") {
             assertOwner(user, fresh);
@@ -2316,7 +2340,7 @@ export function createApp(
               subject: tr("お店の運営に招待されました"),
               body: tr("{0}の運営に招待されました。{1} にこのメールアドレスの Google アカウントでログインして招待を承諾してください。", fresh.published?.name || tr("お店"), origin()),
             });
-            await flush(fresh);
+            await flushMail(fresh);
             return json(res, { ok: true });
           }
           if (action === "members/revoke" && method === "POST") {
@@ -2378,11 +2402,6 @@ export function createApp(
             await savePublicShop(fresh);
             return json(res, { ok: true });
           }
-          if (action === "retry" && method === "POST") {
-            await payments.reconcile(fresh.id);
-            await flush(fresh);
-            return json(res, { ok: true });
-          }
           if (action === "documents" && method === "GET")
             return json(
               res,
@@ -2426,8 +2445,10 @@ export function createApp(
           if (!ids.includes(imageRead[2]) && !(imageRead[1] === "images" && publishedPostImageIds(await postsFor(shop)).includes(imageRead[2]))) fail(404, tr("画像がありません"));
           return await imageResponse(req, res, shop, imageRead[2], url);
         }
-        return await store.locked(shopRef.id, async () => {
-          const shop = (await store.shop(shopRef.id))!;
+        const bookingAction = /^(?:bookings|checkouts|slots)(?:\/|$)/.test(action);
+        let deliverMail = false;
+        const result = await store.locked(bookingAction ? bookingLockKey(shopRef.id) : shopRef.id, async () => {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
           assertStorefrontAccess(shop);
           const customer = () => {
             if (!user || user.role !== "customer" || user.shopId !== shop.id)
@@ -2443,7 +2464,7 @@ export function createApp(
               if (paid.phase !== "confirmed" || !paid.booking.payment) fail(409, tr("支払いを確認中です。確定後にキャンセルしてください。"));
               if (paidCancellation[2] === "cancel-quote") {
                 const p = paid.booking.payment;
-                return json(res, p.cancellation || refundQuote(p.amount, paid.booking.start, new Date().toISOString(), p.policy, "customer"));
+                return (p.cancellation || refundQuote(p.amount, paid.booking.start, new Date().toISOString(), p.policy, "customer"));
               }
               const input = z.object({ expectedRefund: z.number().int().min(0).optional() }).parse(await body(req));
               const at = new Date().toISOString();
@@ -2453,8 +2474,8 @@ export function createApp(
                 if (input.expectedRefund !== quote.amount) fail(409, tr("返金額を再確認してからキャンセルしてください。時間の経過で返金額が変わる場合があります。"));
               }
               const booking = await payments.cancel(paid, u.email, "customer", at);
-              await flush(shop);
-              return json(res, { ok: true, booking });
+              deliverMail = true;
+              return ({ ok: true, booking });
             }
             if (paidCancellation[2] === "cancel-quote") fail(404, tr("支払い済みの予約がありません"));
           }
@@ -2473,7 +2494,7 @@ export function createApp(
             const all = livePosts.filter(
               (p) => !category || p.category === category,
             );
-            return json(res, {
+            return ({
               items: all
                 .slice((page - 1) * size, page * size)
                 .map(summarizePost),
@@ -2491,13 +2512,14 @@ export function createApp(
                 (p) =>
                   p.category === postRoute[1] && postKey(p) === postRoute[2],
               ) || fail(404, tr("記事がありません"));
-            return json(res, post);
+            return (post);
           }
-          const config = await effective(shop);
+          const existingPayment = action === "checkouts" || action.startsWith("checkouts/") || (action === "bookings" && method === "GET");
+          const config = existingPayment ? shop.published! : await effective(shop);
           const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
           if (action === "profile" && method === "GET") {
             const u = customer();
-            return json(res, { email: u.email, profile: await ownProfile(), suggestedName: u.name });
+            return ({ email: u.email, profile: await ownProfile(), suggestedName: u.name });
           }
           if (action === "profile" && method === "POST") {
             const u = customer();
@@ -2505,12 +2527,12 @@ export function createApp(
             const key = `${shop.id}:${u.email}`;
             const previous = await store.get<Record<string, unknown>>("customer", key);
             await store.put("customer", key, { ...previous, ...profile, shopId: shop.id, email: u.email, updatedBy: u.email, updatedAt: new Date().toISOString() });
-            return json(res, { profile });
+            return ({ profile });
           }
           if (!action && method === "GET") {
             const isCustomer = user?.role === "customer" && user.shopId === shop.id;
             const profile = isCustomer ? await ownProfile() : undefined;
-            return json(res, {
+            return ({
               config:
                 user?.email === shop.owner && user.authMethod !== "email" && !publicHost
                   ? config
@@ -2527,18 +2549,15 @@ export function createApp(
             });
           }
           if (action === "slots/next" && method === "GET")
-            return json(res, await nextAvailableSlots(store, shop, config, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, url.searchParams.getAll("option")));
+            return (await nextAvailableSlots(store, shop, config, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, url.searchParams.getAll("option")));
           if (action === "slots" && method === "GET")
-            return json(
-              res,
-              await availableSlots(store, shop, config,
+            return (await availableSlots(store, shop, config,
                 url.searchParams.get("date") || "",
                 url.searchParams.get("menu") || "",
-                url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")),
-            );
+                url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")));
           if (action === "checkouts" && method === "GET") {
             const u = customer();
-            return json(res, (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && c.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(checkoutView));
+            return ((await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && c.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(checkoutView));
           }
           const checkoutAction = action.match(/^checkouts\/([a-f0-9]{64})\/(capture|abandon|resume)$/);
           if (checkoutAction && method === "POST") {
@@ -2553,17 +2572,14 @@ export function createApp(
               const date = dateIn(b.start, regionOf(config).timeZone);
               return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id, b.optionIds)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
             });
-            await flush(shop);
-            return json(res, { ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? c.booking : undefined, checkout: checkoutView(c) });
+            deliverMail = true;
+            return ({ ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? c.booking : undefined, checkout: checkoutView(c) });
           }
           if (action === "bookings" && method === "GET") {
             const u = customer();
-            return json(
-              res,
-              (await store.bookings(shop.id)).filter(
+            return ((await store.bookings(shop.id)).filter(
                 (b) => b.customer === u.email,
-              ),
-            );
+              ));
           }
           if (action === "bookings" && method === "POST") {
             const u = customer();
@@ -2594,11 +2610,11 @@ export function createApp(
             if (pending) {
               if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || JSON.stringify([...(pending.booking.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort()) || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
               await payments.create(pending);
-              return json(res, { ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? pending.booking : undefined, checkout: checkoutView(pending) });
+              return ({ ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? pending.booking : undefined, checkout: checkoutView(pending) });
             }
             if (previous) {
               if (JSON.stringify([...(previous.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort())) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
-              return json(res, { ok: true, booking: previous });
+              return ({ ok: true, booking: previous });
             }
             const selection = menuSelection(config, input.menuId, input.optionIds);
             if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
@@ -2632,7 +2648,7 @@ export function createApp(
               const returnUrl = back.href;
               back.searchParams.set("paypal", "cancel");
               const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href, currencyOf(regionOf(config)), config.name);
-              return json(res, { ok: false, checkout: checkoutView(checkout) });
+              return ({ ok: false, checkout: checkoutView(checkout) });
             }
             await store.transaction(async () => {
               await store.saveBooking(b);
@@ -2650,8 +2666,8 @@ export function createApp(
                 [shop.owner, config.notificationEmail],
               );
             });
-            await flush(shop);
-            return json(res, { ok: true, booking: b });
+            deliverMail = true;
+            return ({ ok: true, booking: b });
           }
           const cancel = action.match(/^bookings\/([^/]+)\/cancel$/);
           if (cancel && method === "POST") {
@@ -2683,8 +2699,8 @@ export function createApp(
                 tr("{0} 様\n予約: {1}\nメニュー: {2}", b.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, b)),
               );
             });
-            await flush(shop);
-            return json(res, { ok: true });
+            deliverMail = true;
+            return ({ ok: true });
           }
           if (action === "inquiries" && method === "POST") {
             const u = customer();
@@ -2712,11 +2728,13 @@ export function createApp(
               tr("{0} お問い合わせを受け付けました", config.name),
               input.message,
             );
-            await flush(shop);
-            return json(res, { ok: true });
+            deliverMail = true;
+            return ({ ok: true });
           }
           fail(404, tr("見つかりません"));
         });
+        if (deliverMail) await flushMail(shopRef);
+        return json(res, result);
       }
       if (path === "/robots.txt" && (method === "GET" || method === "HEAD")) {
         const indexable = (shop: Shop) => shop.published && shop.publication !== "provisional" && !shop.judge;
@@ -2917,17 +2935,11 @@ export function createApp(
       if (stopped) return;
       for (const shop of shops.filter(
         (s) => s.published && !isArchivedShop(s),
-      ))
-        void store
-          .locked(shop.id, async () => {
-            const fresh = await store.shop(shop.id);
-            if (fresh) {
-              await payments.reconcile(fresh.id); await flush(fresh);
-              // Converts shops published before static releases and refreshes releases from an older generator.
-              await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
-            }
-          })
-          .catch(console.error);
+      )) {
+        void reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)).catch(console.error);
+        void syncFiles(shop.id).catch(console.error);
+        void flushMail(shop).catch(console.error);
+      }
     })().catch(console.error);
   }, 60000);
   timer.unref();

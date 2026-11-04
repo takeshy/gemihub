@@ -3,7 +3,7 @@ type: "Rule"
 title: "Payments, cancellation and refunds"
 description: "PayPal prepayment, how amounts and refunds are decided, and cancellation rules."
 tags: ["payment", "paypal", "cancellation", "refund"]
-updated: "2026-11-03"
+updated: "2026-11-05"
 ---
 
 PayPal prepayment, how amounts and refunds are decided, and cancellation rules.
@@ -11,6 +11,10 @@ PayPal prepayment, how amounts and refunds are decided, and cancellation rules.
 # Prepayment
 
 When `rules.payment.enabled` is true, customers pay the full menu price with PayPal when booking. The amount is decided by the server from the menu price at the time of booking (`menus[].price`, yen for JP or dollars for US); neither the browser nor a request can set it. The slot is held while the customer approves the payment and the booking is confirmed after capture. gemihub uses the server's PayPal account; this deployment uses the PayPal Sandbox.
+
+# Processing and delivery
+
+Booking creation, capture, cancellation, refunds and reconciliation share a per-shop booking/payment lock. Drive exports use the configuration lock, and email delivery uses a separate delivery lock after booking/payment writes complete. Slow exports cannot hold up a payment, and slow PayPal responses cannot hold up independent exports. Only committing a changed public configuration briefly shares the booking lock; file refreshes for unchanged settings do not. Reset waits for configuration, booking/payment and delivery operations before archiving the shop. During an unfinished publication, new bookings remain paused while existing payments and refunds can finish using the saved published settings.
 
 # Currency and stored amounts
 

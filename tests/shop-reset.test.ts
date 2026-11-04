@@ -6,7 +6,34 @@ import { createApp } from "../server/app.ts";
 import { digest } from "../server/auth.ts";
 import { sample } from "../server/domain.ts";
 import { resetShop } from "../server/shop-reset.ts";
-import { Store, type Shop, type User } from "../server/store.ts";
+import { bookingLockKey, mailLockKey, Store, type Shop, type User } from "../server/store.ts";
+
+test("reset waits for both booking/payment operations and in-flight mail delivery", async t => {
+  for (const key of [bookingLockKey, mailLockKey]) await t.test(key.name, async t => {
+    const store = new Store(":memory:"), shop = await store.createShop("owner@example.com");
+    await store.put("user", shop.owner, { email: shop.owner, name: "Owner", role: "owner", shopId: shop.id });
+    let entered!: () => void, release!: () => void, requested!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const waiting = new Promise<void>(resolve => { requested = resolve; });
+    const operation = store.locked(key(shop.id), async () => { entered(); await gate; });
+    await started;
+    const original = store.locked.bind(store);
+    t.mock.method(store, "locked", ((id: string, fn: () => Promise<unknown>) => {
+      if (id === key(shop.id)) requested();
+      return original(id, fn);
+    }) as typeof store.locked);
+    const resetting = resetShop(store, shop.owner, shop.id);
+    await waiting;
+    try { assert.equal((await store.shop(shop.id))?.archivedAt, undefined); }
+    finally { release(); }
+    await operation;
+    const result = await resetting;
+    assert.notEqual(result.shopId, shop.id);
+    assert.ok((await store.get<Shop>("shop", shop.id))!.archivedAt);
+    await store.close();
+  });
+});
 
 test("Google owners can reset in production, retain authorization and isolate other shops", async t => {
   const previousEnv = { NODE_ENV: process.env.NODE_ENV, DEMO_MODE: process.env.DEMO_MODE };
