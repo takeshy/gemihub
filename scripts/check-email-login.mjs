@@ -25,7 +25,7 @@ try {
       const context = await browser.newContext({ viewport: { width, height: 950 }, locale: language === 'ja' ? 'ja-JP' : 'en-US' });
       const page = await context.newPage(); active = page; const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.goto(`${origin}/s/${shop.slug}?lang=${language}`);
-      await page.locator('.public-auth').getByRole('button', { name: label(returning ? 'ログイン' : '会員登録'), exact: true }).click();
+      await page.locator('.public-auth').getByRole('link', { name: label('会員登録・ログイン'), exact: true }).click();
       let dialog = page.getByRole('dialog', { name: label('会員登録・ログイン'), exact: true });
       const googleLink = new URL(await dialog.getByRole('link', { name: label('Googleでログイン'), exact: true }).getAttribute('href'));
       assert.equal(googleLink.pathname, '/auth/google'); assert.equal(googleLink.searchParams.get('shop'), shop.slug);
@@ -40,7 +40,9 @@ try {
       // Email links also work in a different browser from the one that requested them.
       const verificationContext = await browser.newContext({ viewport: { width, height: 950 }, locale: language === 'ja' ? 'ja-JP' : 'en-US' });
       const verification = await verificationContext.newPage(); active = verification; verification.on('pageerror', error => errors.push(error.message));
-      await verification.goto(link);
+      const verificationLink = new URL(link);
+      if (width === 390) verificationLink.searchParams.delete('pane'); // Legacy links open the static home first.
+      await verification.goto(verificationLink.href);
       dialog = verification.getByRole('dialog', { name: label('メールアドレスを確認'), exact: true });
       await expect(dialog.getByText(email, { exact: true })).toBeVisible();
       assert.equal((await (await verificationContext.request.get(origin + '/api/session')).json()).user, null, 'opening the link must not sign in automatically');

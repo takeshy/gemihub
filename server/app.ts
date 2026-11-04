@@ -112,16 +112,12 @@ import {
   summarizePost,
   type Post,
 } from "./post-domain.ts";
-import {
-  renderArticle,
-  renderArchive,
-  renderHomeWithPosts,
-} from "./post-renderer.tsx";
 import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
 import { editorIndex, contentHash } from "./editor-sync.ts";
 import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from "./page-ai.ts";
 import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
-import { renderCustomPage } from "./page-renderer.tsx";
+import { buildStorefront, canonicalBase, storefrontAssetName, storefrontAssetObject, storefrontAssetType, storefrontFile, storefrontGarbage, storefrontObject, storefrontRenderer, storefrontRetainedReleases, storefrontShell, writeStorefront, type StorefrontRelease } from "./storefront-build.tsx";
+import { bucketStorefrontFiles, memoryStorefrontFiles, type StorefrontFiles } from "./storefront-files.ts";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
 import { calendarGateway, calendarScope, connections, connectOwnerCalendar, bookingCalendars, availableSlots, nextAvailableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 /**
@@ -231,8 +227,10 @@ export function createApp(
   paymentGateway: PaymentGateway = paypalGateway(),
   liveConnector?: LiveConnector,
   loginMailer?: LoginMailer,
+  storefrontFiles?: StorefrontFiles,
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
+  const pageFiles = storefrontFiles || (store.memory ? memoryStorefrontFiles(store) : bucketStorefrontFiles());
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
   const customerEmailLogin = emailLogin(store, loginMailer || (async (shop, to, subject, text) => {
     if (shop.judge) { await enqueue(shop, "mail", { to, subject, body: text }); return; }
@@ -336,6 +334,54 @@ export function createApp(
   };
   const inquiries = (shop: Shop) => store.records<Inquiry>("inquiry", shop);
   const postsFor = (shop: Shop) => store.records<Post>("post", shop);
+  // A missing or unreadable image is left out of the public page instead of blocking every save.
+  async function storefrontImages(shop: Shop, posts: Post[]) {
+    const token = store.memory ? "" : await ownerToken(shop) || "";
+    const images: Record<string, import("./menu-image-domain.ts").MenuImageData> = {};
+    for (const id of new Set([...managedImageIds(shop.published!), ...publishedPostImageIds(posts)])) {
+      try { images[id] = await readMenuImage(store, shop, id, crmFiles, token, "display"); }
+      catch (error) { console.warn(`Storefront ${shop.id}: image ${id} left out of the public page`, error); }
+    }
+    return images;
+  }
+  async function savePublicShop(shop: Shop) {
+    let dropped: StorefrontRelease[] = [];
+    if (shop.published) {
+      try {
+        const posts = await postsFor(shop);
+        const build = buildStorefront(shop, publicPosts(posts), origin(), await storefrontShell(), await storefrontImages(shop, posts));
+        const release = await writeStorefront(pageFiles, shop.id, build);
+        const history = [shop.storefrontRelease, ...shop.storefrontPrevious || []].filter((item): item is StorefrontRelease => !!item && item.id !== release.id);
+        shop.storefrontPrevious = history.slice(0, storefrontRetainedReleases);
+        dropped = history.slice(storefrontRetainedReleases);
+        shop.storefrontRelease = release;
+        storefrontRetry.delete(shop.id);
+      } catch (error) {
+        console.error(error);
+        fail(503, tr("公開ページの保存に失敗しました。以前の公開ページは保持しています。同じ操作を再試行してください。"));
+      }
+    }
+    await store.saveShop(shop);
+    // Only releases older than the retained ones are removed; a failed cleanup is retried on the next release.
+    if (dropped.length) {
+      const kept = [shop.storefrontRelease!, ...shop.storefrontPrevious || []];
+      for (const path of storefrontGarbage(shop.id, kept, dropped)) await pageFiles.remove(path).catch(error => console.warn(`Storefront ${shop.id}: could not delete ${path}`, error));
+    }
+  }
+  // Shops without a release from the current generator are rebuilt by the background loop; failures back off.
+  const storefrontRetry = new Map<string, { at: number; delay: number }>();
+  const storefrontCurrent = (shop: Shop) => !!shop.storefrontRelease && shop.storefrontRelease.renderer === storefrontRenderer;
+  async function ensureStorefront(shop: Shop) {
+    if (!shop.published || storefrontCurrent(shop) || shop.publishingPlanId) return;
+    const retry = storefrontRetry.get(shop.id);
+    if (retry && retry.at > Date.now()) return;
+    try { await savePublicShop(shop); }
+    catch (error) {
+      const delay = Math.min((retry?.delay || 30000) * 2, 3600000);
+      storefrontRetry.set(shop.id, { at: Date.now() + delay, delay });
+      throw error;
+    }
+  }
   const effective = async (shop: Shop) => {
     if (shop.publishingPlanId)
       fail(503, tr("予約ページを更新中です。しばらくしてからお試しください。"));
@@ -499,7 +545,7 @@ export function createApp(
     fresh.revision++;
     fresh.lastPublishedPlanId = plan.id;
     retireDesignVersions(fresh);
-    await store.saveShop(fresh);
+    await savePublicShop(fresh);
     await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
     if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
     await flush(fresh);
@@ -581,6 +627,18 @@ export function createApp(
         // Judge AI calls share one quota per judge, charged once per request before the first model call.
         aiUsage.enterWith({ charge: () => chargeJudge(user.email) });
       }
+      // A shop published before static releases is converted once; repeated failures wait for the backoff instead of rebuilding per request.
+      const firstStorefront = async (id: string) => {
+        if ((storefrontRetry.get(id)?.at || 0) > Date.now()) { res.setHeader("Retry-After", "60"); fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。")); }
+        const shop = await store.locked(id, async () => {
+          const current = await store.shop(id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(current);
+          if (!current.storefrontRelease) await ensureStorefront(current);
+          return current;
+        });
+        if (!shop.storefrontRelease) { res.setHeader("Retry-After", "60"); fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。")); }
+        return shop;
+      };
       const assertStorefrontAccess = (shop: Shop) => {
         // A judge's own trial customer may use the judge's provisional shop; nobody else may.
         const trialCustomer = !!shop.judge && !!user && isJudgeCustomerEmail(user.email) && user.shopId === shop.id;
@@ -662,7 +720,7 @@ export function createApp(
         if (!ticket || ticket.host !== host || ticket.expires < Date.now())
           fail(400, tr("ログインの有効期限が切れました"));
         await login(store, res, ticket.user);
-        return redirect(res, publicHost ? "/" : `/s/${ticket.slug}`);
+        return redirect(res, `${publicHost ? "/" : `/s/${ticket.slug}`}?pane=mine`);
       }
       const staffLogin = path.match(/^\/api\/staff-login\/([^/]+)$/);
       if (staffLogin && method === "GET" && !publicHost) {
@@ -873,7 +931,7 @@ export function createApp(
         return redirect(
           res,
           pending.shopId
-            ? `/s/${(await store.shop(pending.shopId))!.slug}`
+            ? `/s/${(await store.shop(pending.shopId))!.slug}?pane=mine`
             : "/",
         );
       }
@@ -1405,7 +1463,7 @@ export function createApp(
             delete fresh.publishingError;
             // Drafts, article records, bookings, customer/inquiry records and payments are untouched.
             retireDesignVersions(fresh);
-            await store.saveShop(fresh);
+            await savePublicShop(fresh);
             await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
             // Post pages embed the header/footer, so they follow the restored design.
             await enqueue(fresh, "posts");
@@ -1836,7 +1894,7 @@ export function createApp(
             await store.transaction(async () => {
               await store.put("post", post.id, post);
               if(requestId)await store.put("postCreation",creationId,{hash:creationHash,postId:post.id});
-              if (publish) await store.saveShop(fresh);
+              if (publish) await savePublicShop(fresh);
               await enqueue(fresh, "posts");
             });
             await flush(fresh);
@@ -1902,7 +1960,7 @@ export function createApp(
             post.updatedBy = user!.email;
             await store.transaction(async () => {
               await store.put("post", post.id, post);
-              await store.saveShop(fresh);
+              await savePublicShop(fresh);
               await enqueue(fresh, "posts");
             });
             await flush(fresh);
@@ -2107,7 +2165,7 @@ export function createApp(
             if (fresh.publication !== "public") {
               fresh.publication = "public";
               fresh.history.push({ at: new Date().toISOString(), summary: tr("本番公開に切り替えました") });
-              await store.saveShop(fresh);
+              await savePublicShop(fresh);
             }
             return json(res, { ok: true, url: `/s/${fresh.slug}` });
           }
@@ -2305,7 +2363,7 @@ export function createApp(
               fresh.domain = domain;
               fresh.domainVerified = false;
               fresh.domainToken = randomBytes(24).toString("hex");
-              await store.saveShop(fresh);
+              await savePublicShop(fresh);
               return json(res, { ok: true });
             });
           }
@@ -2317,7 +2375,7 @@ export function createApp(
             if (!records.some((r) => r.join("") === fresh.domainToken))
               fail(400, tr("確認用 TXT レコードが見つかりません"));
             fresh.domainVerified = true;
-            await store.saveShop(fresh);
+            await savePublicShop(fresh);
             return json(res, { ok: true });
           }
           if (action === "retry" && method === "POST") {
@@ -2464,7 +2522,7 @@ export function createApp(
               preview: false,
               publication: shop.publication || "public",
               recentPosts: livePosts.slice(0, 5).map(summarizePost),
-              authUrl: `${languageUrl(`${publicHost ? `https://${host}` : origin()}${publicHost ? "/" : `/s/${shop.slug}`}`)}#email-login`,
+              authUrl: `${languageUrl(`${publicHost ? `https://${host}` : origin()}${publicHost ? "/" : `/s/${shop.slug}`}?pane=mine`)}#email-login`,
               googleAuthUrl: process.env.GOOGLE_CLIENT_ID ? languageUrl(`${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${hosted ? `&host=${encodeURIComponent(host)}` : ""}`) : undefined,
             });
           }
@@ -2660,6 +2718,46 @@ export function createApp(
           fail(404, tr("見つかりません"));
         });
       }
+      if (path === "/robots.txt" && (method === "GET" || method === "HEAD")) {
+        const indexable = (shop: Shop) => shop.published && shop.publication !== "provisional" && !shop.judge;
+        const shops = publicHost ? [hosted!] : allShops;
+        const sitemaps = shops.filter(shop => indexable(shop) && canonicalBase(shop, origin()) === (publicHost ? `https://${host}` : `${origin()}/s/${shop.slug}`)).map(shop => `${canonicalBase(shop, origin())}/sitemap.xml`);
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(method === "HEAD" ? undefined : `User-agent: *\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /judge\nDisallow: /publication-preview\nDisallow: /settings\n${sitemaps.map(url => `Sitemap: ${url}\n`).join("")}`);
+        return;
+      }
+      const sitemap = publicHost && path === "/sitemap.xml" ? hosted : allShops.find(shop => path === `/s/${shop.slug}/sitemap.xml`);
+      if ((method === "GET" || method === "HEAD") && sitemap) {
+        if (!sitemap.published || sitemap.publication === "provisional" || sitemap.judge || canonicalBase(sitemap, origin()) !== (publicHost ? `https://${host}` : `${origin()}/s/${sitemap.slug}`)) fail(404, tr("ページがありません"));
+        // Reads never wait for a publication in progress; only a shop without any release is converted first.
+        let shop = await store.shop(sitemap.id) || fail(404, tr("お店がありません"));
+        if (!shop.published || shop.publication === "provisional" || shop.judge) fail(404, tr("ページがありません"));
+        if (!shop.storefrontRelease) shop = await firstStorefront(shop.id);
+        const xml = await pageFiles.read(storefrontObject(shop.id, shop.storefrontRelease!, storefrontFile("sitemap.xml", publicHost, getLocale())));
+        if (xml === undefined) fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。"));
+        res.setHeader("Content-Type", "application/xml; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(method === "HEAD" ? undefined : xml);
+        return;
+      }
+      const assetRoute = publicHost ? path.match(/^\/_assets\/([^/]+)$/) : path.match(/^\/s\/([^/]+)\/_assets\/([^/]+)$/);
+      if (assetRoute && (method === "GET" || method === "HEAD")) {
+        const name = assetRoute[publicHost ? 1 : 2];
+        const ref = publicHost ? hosted : allShops.find(item => item.slug === assetRoute[1] && item.published);
+        const shop = ref && await store.shop(ref.id);
+        if (!shop?.published || !storefrontAssetName.test(name)) fail(404, tr("見つかりません"));
+        if (shop.publication === "provisional" && !user) fail(404, tr("見つかりません"));
+        assertStorefrontAccess(shop);
+        // Pages of the retained releases may still be open in a browser, so their assets stay available.
+        if (![shop.storefrontRelease, ...shop.storefrontPrevious || []].some(release => release?.assets?.includes(name))) fail(404, tr("見つかりません"));
+        const body = await pageFiles.read(storefrontAssetObject(shop.id, name)) || fail(404, tr("見つかりません"));
+        res.setHeader("Content-Type", storefrontAssetType(name));
+        // Names are content hashes; restricted shops (provisional, judge) are never stored in shared caches.
+        res.setHeader("Cache-Control", res.hasHeader("X-Robots-Tag") ? "private, max-age=3600" : "public, max-age=31536000, immutable");
+        res.end(method === "HEAD" ? undefined : body);
+        return;
+      }
       if (path.startsWith("/api/") || path.startsWith("/auth/"))
         fail(404, tr("見つかりません"));
       if (
@@ -2685,7 +2783,7 @@ export function createApp(
       }
       const manualAsset = /^\/manual\/(?:en\/)?[a-z0-9-]+\.jpg$/.test(path);
       const asset =
-        path.startsWith("/assets/") || path === "/live-audio.js" || manualAsset;
+        path.startsWith("/assets/") || path === "/live-audio.js" || path === "/storefront-login.js" || manualAsset;
       if (
         !asset &&
         path !== "/" &&
@@ -2697,14 +2795,18 @@ export function createApp(
             ))
       )
         fail(404, tr("見つかりません"));
-      let data: Buffer;
-      try {
-        data = await readFile(asset ? file : resolve(root, "index.html"));
-      } catch {
-        fail(404, tr("画面を表示するには npm run build を実行してください"));
+      const appShell = async () => {
+        let shell: Buffer;
+        try { shell = await readFile(resolve(root, "index.html")); }
+        catch { return fail(404, tr("画面を表示するには npm run build を実行してください")); }
+        return Buffer.from(localizeShell(shell.toString("utf8")));
+      };
+      let data = Buffer.alloc(0);
+      if (asset) {
+        try { data = await readFile(file); }
+        catch { fail(404, tr("見つかりません")); }
       }
       if (!asset) {
-        data = Buffer.from(localizeShell(data.toString("utf8")));
         const local = path.match(
           /^\/s\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
         );
@@ -2716,8 +2818,7 @@ export function createApp(
         const category = local?.[2] || custom?.[1];
         const key = local?.[3] || custom?.[2];
         if (shopRef?.published) {
-          await store.locked(shopRef.id, async () => {
-          const shop = await store.shop(shopRef.id);
+          let shop = await store.shop(shopRef.id);
           if (!shop?.published) fail(404, tr("公開されたお店がありません"));
           if (shop.publication === "provisional" && !user) {
             res.setHeader("Cache-Control", "no-store");
@@ -2726,35 +2827,30 @@ export function createApp(
             return redirect(res, `${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${publicHost ? `&host=${encodeURIComponent(host)}` : ""}`);
           }
           assertStorefrontAccess(shop);
-          const posts = publicPosts(await postsFor(shop));
-          const base = publicHost ? "" : `/s/${shop.slug}`;
-          const shell = data.toString("utf8");
-          if (category === "pages") {
-            const config = await effective(shop);
-            const page = config.pages.find(p => p.slug === key) || fail(404, tr("ページがありません"));
-            data = Buffer.from(renderCustomPage(page, shell, base));
-          } else if (category) {
-            const parsed = postCategorySchema.parse(category);
-            if (key && key !== "index") {
-              const post =
-                posts.find(
-                  (p) => p.category === parsed && postKey(p) === key,
-                ) || fail(404, tr("記事がありません"));
-              data = Buffer.from(renderArticle(post, shell, base));
-            } else
-              data = Buffer.from(renderArchive(parsed, posts, shell, base));
-          } else
-            data = Buffer.from(
-              renderHomeWithPosts(
-                shop.published,
-                shell,
-                posts.slice(0, 5).map(summarizePost),
-                base,
-              ),
-            );
-          });
+          const operation = !category && (["reserve", "mine", "contact"].includes(url.searchParams.get("pane") || "") || url.searchParams.has("checkout"));
+          if (operation) {
+            // An empty app shell is used only for interactive customer operations.
+            // Public HTML is never mounted or replaced by React.
+            res.setHeader("X-Robots-Tag", "noindex, nofollow");
+            data = await appShell();
+          } else {
+            // One-time conversion for shops published before static releases were introduced.
+            // Subsequent reads use only the selected bucket objects, never a request-time render.
+            if (!shop.storefrontRelease) shop = await firstStorefront(shop.id);
+            const route = category ? `${category}${key && key !== "index" ? `/${key}` : ""}` : "";
+            const page = storefrontFile(route, publicHost, getLocale());
+            const release = shop.storefrontRelease!;
+            if (!release.paths.includes(page)) fail(404, tr("ページがありません"));
+            const html = await pageFiles.read(storefrontObject(shop.id, release, page));
+            if (html === undefined) fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。"));
+            data = Buffer.from(html);
+            const etag = `"${digest(`${release.id}:${page}`)}"`;
+            res.setHeader("ETag", etag);
+            if (!res.hasHeader("X-Robots-Tag") && req.headers["if-none-match"] === etag) { res.writeHead(304); res.end(); }
+          }
           if (res.writableEnded) return;
         } else if (category || local) fail(404, tr("公開されたお店がありません"));
+        else data = await appShell();
       }
       res.setHeader(
         "Content-Type",
@@ -2769,7 +2865,7 @@ export function createApp(
       );
       res.setHeader(
         "Cache-Control",
-        manualAsset
+        manualAsset || path === "/storefront-login.js"
           ? "no-cache"
           : asset
             ? "public, max-age=31536000, immutable"
@@ -2821,7 +2917,11 @@ export function createApp(
         void store
           .locked(shop.id, async () => {
             const fresh = await store.shop(shop.id);
-            if (fresh) { await payments.reconcile(fresh.id); await flush(fresh); }
+            if (fresh) {
+              await payments.reconcile(fresh.id); await flush(fresh);
+              // Converts shops published before static releases and refreshes releases from an older generator.
+              await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
+            }
           })
           .catch(console.error);
     })().catch(console.error);

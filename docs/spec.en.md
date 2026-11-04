@@ -247,3 +247,18 @@ Menus may be add-ons restricted to selected standalone services. A nonempty sele
 ## Managed image delivery
 
 Use display copies up to 1600 px and gallery/picker copies up to 480 px, in WebP when smaller. Preserve originals, animation, and offline exports. Image GETs do not take the booking lock; coalesce identical requests and bound Drive reads/conversion to four jobs. Cache by shop, image, and saved content, up to 64 MiB for five minutes. Check ownership, publication, and archive state before serving bytes or ETag 304 responses. Browser caching is private and requires revalidation. Scrolling a loaded image out of view must not clear it or fetch it again.
+
+
+## Static storefront publication
+
+Generate finished home, custom-page, archive and article HTML when publishing. The shared app JavaScript/CSS is built during application deployment; a shop publication generates HTML only. Freeze the CSS and managed images with the release. Store CSS and display-size managed images once per shop under content-hash names and serve them with long-lived caching instead of embedding them in the HTML; leave out an image that cannot be read rather than blocking the save. Public content must remain readable with JavaScript disabled or every API request blocked, with no React mount or replacement of its HTML.
+
+Store releases in a dedicated private Cloud Storage bucket. The existing domain gateway checks the shop and viewing rights before returning the selected object. Generated files contain public information only, without session state, customer profiles, bookings, inquiries or notification addresses. Provisional pages retain owner-only access; judge shops retain their access rules and expiry.
+
+Upload all files before committing the completed release reference in Firestore. Failed generation or upload preserves the previous reference and HTML and supports retry. Public reads do not wait on the publishing lock. Regenerate on settings saves, design publication/restoration, article publication/update/withdrawal, full publication and domain changes. Keep the current release and the two before it; delete older releases' pages and any CSS/images no kept release uses. Never expire objects by age alone.
+
+Normal links open public pages. Booking, My page and inquiries use `?pane=reserve|mine|contact` operation screens and the existing authenticated API, starting from an empty application shell. Language links and navigation preserve Japanese/English. Legacy `#email-login` links move to the operation screen without putting the secret into an HTTP request. Keep offline Drive exports as `web/index.html` plus editable `data.js`.
+
+Generated pages include title, description, Open Graph, canonical and structured data. Choose a verified custom domain, then a shop subdomain, then `/s/{slug}` as the canonical address; the English page's canonical adds `?lang=en`, and hreflang links pair the languages. A managed header image is the Open Graph image. Sitemaps include public articles and custom pages. Provisional, judge and operation screens are noindex. Shops without a static release, or with one from an older generator, are rebuilt by the background loop with backoff after failures. A shop without any release is also converted once on its first visit; subsequent visits read stored HTML.
+
+Verify with `npm test`, `npm run check:storefront-static`, and the shared public markup in Storybook under `公開ページ/静的HTML`. Cover partial upload failure, old-release availability during publishing, withdrawal, private previews, JS-disabled/API-blocked public pages and authenticated booking in both languages at desktop/mobile widths.

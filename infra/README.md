@@ -143,3 +143,14 @@ Secretの値をtfvarsや登録JSONに書かず、`paypal_secret_version`でバ�
 Google OAuth for gemihub.net reuses `projects/495062043717/secrets/google-client-id/versions/1` and `projects/495062043717/secrets/google-client-secret/versions/1`. Both enabled version numbers were checked without reading payloads. Terraform grants the service runtime access to these two secrets and exports versioned references for the shared deployer; credentials are not copied into this repository. To supply the client ID directly, set both `google_client_id_secret_ref` and `google_client_secret_ref` to null and configure the client ID and managed secret version.
 
 For the existing gemihub.net deployment, set `manage_app_domain_dns_certificate = false` in private tfvars. Keep the existing apex DNS and certificate-map entry in kiokuflow state. This module then creates only the additional storefront DNS/TLS resources. Set it to true only when managing a fresh apex domain.
+
+
+## Generated storefront storage
+
+`google_storage_bucket.storefront` stores finished shop HTML and the CSS/images it refers to. Public access is prevented. Grant only bucket-scoped `storage.objectUser` (create, read and delete objects) to the runtime account. Provisional pages use the same private bucket, with the existing domain gateway enforcing authentication before reading an object. No DNS or load-balancer changes are required; this implementation does not expose the bucket directly through a public CDN.
+
+Review/apply the bucket and IAM configuration first, update the shared VM registration with its `STOREFRONT_BUCKET` environment variable, then deploy the app. Code changes alone do not create these resources. In-memory stores use the local test storage implementation without GCS access.
+
+Publication generates Japanese/English HTML for both shop hosts and `/s/{slug}` addresses. Built CSS and managed images (display size) are stored once per shop under content-hash names (`shops/{id}/assets/`) and served with long-lived caching; pages refer to them instead of embedding them. Commit the Firestore `storefrontRelease` reference only after all objects are uploaded. An interrupted upload preserves the previous release. Never embed session state, profiles or notification addresses. Regenerate on publication, operational settings saves and article updates. Unreadable images are left out rather than blocking the save. Shops without a release, or with one from an older generator (`storefrontRenderer`), are rebuilt by the background loop with exponential backoff; a first visit converts a shop without any release once.
+
+Do not expire objects solely by age: an old release can still be active. The app keeps the current release and the two before it (`storefrontPrevious`), and deletes older releases' pages and any assets no kept release uses. `terraform test` verifies the private bucket, scoped IAM and runtime environment without provisioning resources.

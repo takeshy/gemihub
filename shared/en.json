@@ -2722,5 +2722,14 @@
   "確認前の画面案です。自動修正で見た目が変わることがあります。予約などの操作は練習用です。": "This draft is still under review and may change during automatic repairs. Bookings and other actions are for practice.",
   "保存した会話を読み込んでいます…": "Loading your saved conversation…",
   "処理状況を確認しています。しばらく変わらない場合は、画面イメージの作成を再試行できます。": "Checking progress. If it stays unchanged, you can retry creating the preview.",
-  "デザインの自動調整が完了しませんでした。依頼の内容は保持しています。同じ依頼のまま、もう一度お試しください。": "Automatic design repairs could not finish. Your request has been kept. Please retry the same request."
+  "デザインの自動調整が完了しませんでした。依頼の内容は保持しています。同じ依頼のまま、もう一度お試しください。": "Automatic design repairs could not finish. Your request has been kept. Please retry the same request.",
+  "公開ページの保存に失敗しました。以前の公開ページは保持しています。同じ操作を再試行してください。": "Could not save the public pages. The previous published pages are preserved. Please retry the same operation.",
+  "公開ページを読み込めません。しばらくしてからお試しください。": "Could not load the public page. Please try again shortly.",
+  "公開ページ": "Public storefront",
+  "静的HTML": "Static HTML",
+  "公開トップ・API不要": "Public home without API requests",
+  "記事一覧": "Article archive",
+  "記事本文": "Article content",
+  "固定ページ": "Custom page",
+  "本人限定の仮公開": "Owner-only provisional page"
 }

@@ -29,6 +29,15 @@ run "isolated_runtime" {
     error_message = "Automatic deployment needs an explicitly connected repository."
   }
   assert {
+    condition = (
+      google_storage_bucket.storefront.public_access_prevention == "enforced" &&
+      google_storage_bucket.storefront.uniform_bucket_level_access &&
+      output.shared_vm_registration.additional_apps.gemihub-web.env.STOREFRONT_BUCKET == google_storage_bucket.storefront.name &&
+      toset([for binding in google_storage_bucket_iam_member.storefront : binding.role]) == toset(["roles/storage.objectUser"])
+    )
+    error_message = "Published and provisional HTML must stay private and use bucket-scoped creator/viewer access."
+  }
+  assert {
     condition     = output.shared_vm_registration.additional_apps.gemihub-web.env.PORT == "8080" && output.shared_vm_registration.additional_apps.gemihub-web.port == 8105
     error_message = "Container and host port registration must match the shared deployment contract."
   }

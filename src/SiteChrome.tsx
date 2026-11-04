@@ -27,8 +27,8 @@ export function SiteFooter({ config: c, imageBase, resolvedImages }: { config: S
   if (c.appearance?.theme) return <Presentation imageBase={imageBase} resolvedImages={resolvedImages} design={themePart(c.appearance.theme, "footer")} slots={{ content: <Markdown skipHtml disallowedElements={["img", "iframe", "script", "style", "form", "input"]}>{c.footer.text || `© ${c.name}`}</Markdown> }} fallback={null} />;
   return <footer className={`site-footer site-footer-${c.footer.alignment}`}><Markdown skipHtml disallowedElements={["img", "iframe", "script", "style", "form", "input"]}>{c.footer.text || `© ${c.name}`}</Markdown></footer>;
 }
-export function ThemeBody({ config, children, imageBase }: { config: ShopConfig; children: React.ReactNode; imageBase?: string }) {
-  return <Presentation imageBase={imageBase} design={themePart(config.appearance?.theme, "body")} slots={{ content: children }} fallback={children} />;
+export function ThemeBody({ config, children, imageBase, resolvedImages }: { config: ShopConfig; children: React.ReactNode; imageBase?: string; resolvedImages?: Record<string, string> }) {
+  return <Presentation imageBase={imageBase} resolvedImages={resolvedImages} design={themePart(config.appearance?.theme, "body")} slots={{ content: children }} fallback={children} />;
 }
 export function ChromeEditor({ config, part, onChange, shopId }: { config: ShopConfig; part: "header" | "footer"; onChange: (config: ShopConfig) => void; shopId?: string }) {
   return part === "header" ? <div className="chrome-editor">
