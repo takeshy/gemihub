@@ -20,7 +20,7 @@ I've been on the other side, too. I once forgot an appointment, offered to pay f
 - **Prepayment at booking**: Powered by **PayPal Orders v2** (`create → buyer approval → capture`). Time slots are held during checkout, and the server verifies order ID, currency, and amount before confirming.
 - **Automatic, policy-based refunds**: Uses the **PayPal Refunds API**. The refund policy is snapshotted at booking time so later rule changes never affect paid bookings. Shop-initiated cancellations always refund 100%.
 - **Built for real money**: Every state transition is persisted before calling PayPal, using `PayPal-Request-Id` idempotency keys and a background reconciler to recover interrupted captures or pending refunds without double-charging.
-- **No-shows are covered**: Because customers prepay in full, a no-show no longer costs the shop anything—the booking is simply recorded as a no-show, with no awkward follow-up.
+- **Prepayment for no-shows**: When prepayment is enabled, customers pay the full booking amount upfront. Recording a no-show does not trigger a refund or an additional charge.
 
 ### For customers and daily operations
 - **Seamless booking**: Availability is calculated from business hours, staff shifts, service durations, add-ons, and **Google Calendar** busy times. Customers sign in via Google or passwordless email links.
@@ -36,14 +36,15 @@ I've been on the other side, too. I once forgot an appointment, offered to pay f
 - **Deterministic refunds & E2E tests**: Refund amounts are calculated by a pure server function (`refundQuote()`) and retried by a per-minute background job. Playwright E2E tests run real Sandbox buyer approvals, captures, cancellations, and crash-recovery replays.
 
 ### AI layer
-- **Multimodal & Live Voice**: **Gemini on Vertex AI** (`@google/genai`) handles text, voice (**Gemini Live** over WebSockets), image generation, and red-pen annotated screenshots, backed by a provider-neutral LLM layer (`server/llm.ts`) that also supports OpenAI.
+- **Configurable AI providers**: A shared LLM layer (`server/llm.ts`) supports **Vertex AI (Gemini)** and **OpenAI** for text, image input (including red-pen annotated screenshots), tool calling, and image generation. Administrators select the provider.
+- **Live voice**: **Gemini Live** provides real-time voice conversations over WebSockets.
 - **Strict safety boundaries**: The AI never writes data or moves money directly. It returns Zod-validated JSON scoped strictly to the owner's target (e.g., circling the header can only modify the header).
 - **Sanitized HTML/CSS & AI review**: Generated themes are parsed with `parse5` and `PostCSS` against a strict allowlist (no scripts, iframes, or external URLs) and checked by a secondary reviewer AI with up to 3 auto-repair attempts.
 - **Grounded research agent**: Read-only tool calling inspects system docs, `spec.md`, `history.md`, and live records to answer owner questions with cited sources.
 
 ### Google Cloud & Workspace
 - **Cloud Firestore** stores business data and distributed locks to prevent concurrent payment processing.
-- **Google Drive, Gmail & Calendar** (`drive.file` scope) keep images, specs, emails, and schedules in the owner's own Google account.
+- **Google Workspace integration**: **Google Drive** uses the `drive.file` scope for app-created or user-authorized files. **Gmail** sends notification emails, and **Google Calendar** provides busy-time checks through separate permissions.
 - **Terraform & Cloud Build** automate deployment across Firestore, Secret Manager, and Artifact Registry.
 - **Quality & Judge mode**: ~60 unit/integration test suites, dozens of Playwright checks, full **Storybook** coverage, an in-memory demo mode, and an isolated **Judge Access Mode** with dedicated AI quotas and no Google login required.
 
@@ -59,10 +60,11 @@ Building a system that non-technical salon owners can configure purely through c
 ## Accomplishments that we're proud of
 
 - **A rock-solid backend with a freely editable AI storefront**: Payments, idempotency, crash recovery, and scheduling run on deterministic, thoroughly tested server code, while the storefront design remains freely customizable via chat, voice, or red pen.
-- **Zero vendor lock-in**:
+- **Portable data and storefront exports**:
   - All generated HTML/CSS, images, specs, and histories live in the owner's own **Google Drive**.
-  - The exported site (`index.html + data.js`) works offline by double-clicking—no server required.
   - All business records (bookings, customers, inquiries) export cleanly as JSON or CSV.
+  - The exported offline site (`index.html + data.js`) opens by double-clicking—no server required to browse it.
+  - Online booking and payments still require the gemihub backend and its connected services (PayPal, Google).
 - **AI that acts like a reliable partner**: It asks when unsure, cites its sources, previews diffs, and never acts without approval.
 
 ## What we learned
