@@ -2881,5 +2881,14 @@
   "記事一覧": "Article archive",
   "記事本文": "Article content",
   "固定ページ": "Custom page",
-  "本人限定の仮公開": "Owner-only provisional page"
+  "本人限定の仮公開": "Owner-only provisional page",
+  "「前日までは無料にしたい」。そんなルールも言葉で調整。お店都合のキャンセルは、全額返金します。": "“Free cancellation until the day before.” Adjust rules in your own words. Shop cancellations receive a full refund.",
+  "24時間以上前": "24 hours or more before",
+  "12時間以上前〜24時間未満": "12 to under 24 hours before",
+  "1時間以上前〜12時間未満": "1 to under 12 hours before",
+  "1時間未満": "Less than 1 hour before",
+  "予約の18時間前にキャンセルすると": "If cancelled 18 hours before the appointment",
+  "70%返金完了": "70% refund completed",
+  "10%引き・30%引き・半額の空き枠を予約": "Book appointments at 10% off, 30% off or half price",
+  "予約時の全額PayPal決済はrules.payment.enabledで指定する。返金条件はrules.payment.refundTiersのhoursBefore（開始までの時間）とpercent（返金率0〜100）で、時間の大きい順、返金率は同じか減少、最後を0時間とする。既定は24時間前まで100%、12時間前まで70%、1時間前まで40%、以降0%。「前日半額」など暦日と経過時間が曖昧な場合は提案内で開始24時間前と明示する。店都合の全額返金と予約時の条件固定はシステムの固定ルールで、変更できない。実際の課金・返金を実行しない。": "Enable full PayPal payment at booking with rules.payment.enabled. Configure refund terms using rules.payment.refundTiers with hoursBefore (hours until the appointment) and percent (0–100): hours descend, percentages stay the same or decrease, and the last tier is 0 hours. Defaults: 100% refund from 24 hours, 70% from 12 hours, 40% from 1 hour, then 0%. If calendar dates and elapsed hours are ambiguous, such as “half until the previous day”, explicitly state 24 hours before the start in the proposal. Full refunds for shop cancellations and freezing terms at booking are fixed system rules and cannot be changed. Never execute a payment or refund."
 }

@@ -14,6 +14,7 @@ import { availableSlots, calendarGateway } from "../server/calendar.ts";
 import { createPreviewClient, sampleFixtures } from "../src/local-preview.ts";
 
 process.env.DEMO_MODE = "true";
+const legacyRefundTiers = [{ hoursBefore: 48, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }];
 function fakePayPal() {
   const orders = new Map<string, PayPalOrder>();
   const refunds = new Map<string, PayPalRefund>();
@@ -64,7 +65,7 @@ async function setup() {
 test("refund boundaries, rounding, invalid tiers, shop full refund", () => {
   const start = "2026-12-01T10:00:00.000Z";
   const at = (hours: number) => new Date(Date.parse(start) - hours * 3600000).toISOString();
-  for (const [hours, percent, amount] of [[49, 100, 5501], [48, 100, 5501], [47.999, 50, 2750], [24, 50, 2750], [23.999, 0, 0], [0, 0, 0], [-1, 0, 0]]) {
+  for (const [hours, percent, amount] of [[25, 100, 5501], [24, 100, 5501], [23.999, 70, 3850], [12, 70, 3850], [11.999, 40, 2200], [1, 40, 2200], [0.999, 0, 0], [0, 0, 0], [-1, 0, 0]]) {
     assert.deepEqual(refundQuote(5501, start, at(hours), defaultRefundTiers, "customer"), { percent, amount });
     assert.deepEqual(refundQuote(5501, start, at(hours), defaultRefundTiers, "shop"), { percent: 100, amount: 5501 });
   }
@@ -75,12 +76,12 @@ test("lost capture response, restart, Sheets failure and immutable half refund r
   const { store, shop, config, booking } = await setup();
   const f = fakePayPal();
   let service = paymentService(store, f.gateway);
-  let c = await service.begin(booking, defaultRefundTiers, "https://shop.invalid/return", "https://shop.invalid/cancel");
+  let c = await service.begin(booking, legacyRefundTiers, "https://shop.invalid/return", "https://shop.invalid/cancel");
   assert.equal((await store.bookings(shop.id)).length, 0);
   assert.equal((await paymentHolds(store, shop.id)).length, 1);
   const held = await availableSlots(store, shop, config, dateJST(new Date(booking.start)), "simple", "aoi", calendarGateway);
   assert.ok(!held.some(s => s.start === booking.start));
-  assert.equal((await service.begin(booking, defaultRefundTiers, "ignored", "ignored")).id, c.id);
+  assert.equal((await service.begin(booking, legacyRefundTiers, "ignored", "ignored")).id, c.id);
   assert.equal(f.calls.create, 1);
   await assert.rejects(service.capture(c, async () => true), /承認/);
   f.orders.get(c.orderId!)!.status = "APPROVED";
@@ -255,7 +256,7 @@ test("zero refund avoids PayPal; definitive refund errors and expired ambiguous 
     f.orders.get(c.orderId!)!.status = "APPROVED"; await service.capture(c, async () => true); return c;
   }
   const zero = await paid();
-  await service.cancel(zero, booking.customer, "customer", new Date(Date.parse(booking.start) - 3600000).toISOString());
+  await service.cancel(zero, booking.customer, "customer", new Date(Date.parse(booking.start) - 1800000).toISOString());
   assert.equal(zero.booking.payment!.cancellation!.status, "not_required"); assert.equal(f.calls.refund, 0);
   const failed = await paid(); f.state.refundDenied = true;
   await service.cancel(failed, shop.owner, "shop");
@@ -324,7 +325,7 @@ test("USD capture/refund stores cents, validates currency and preserves the book
   config.region={country:"US",timeZone:"America/New_York"};config.menus[0].price=55.01;shop.published=config;await store.saveShop(shop);
   booking.price=55.01;
   const f=fakePayPal();const service=paymentService(store,f.gateway);
-  let c=await service.begin(booking,defaultRefundTiers,"https://s.invalid/r","https://s.invalid/c","USD");
+  let c=await service.begin(booking,legacyRefundTiers,"https://s.invalid/r","https://s.invalid/c","USD");
   const order=f.orders.get(c.orderId!)!;
   assert.deepEqual(order.purchase_units![0].amount,{currency_code:"USD",value:"55.01"});
   order.status="APPROVED";order.purchase_units![0].amount!.currency_code="JPY";

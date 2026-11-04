@@ -49,9 +49,9 @@ try {
     let confirmation = "";
     page.once("dialog", async dialog => { confirmation = dialog.message(); await dialog.accept(); });
     await booking.getByRole("button", { name: "キャンセルする", exact: true }).click();
-    await booking.getByText("返金完了：¥2,750（50%）", { exact: false }).waitFor();
-    assert.ok(confirmation.includes("2,750"));
-    await page.screenshot({ path: `tmp/payment-screenshots/half-refund-${width}.png`, fullPage: true });
+    await booking.getByText("返金完了：¥5,500（100%）", { exact: false }).waitFor();
+    assert.ok(confirmation.includes("5,500"));
+    await page.screenshot({ path: `tmp/payment-screenshots/full-refund-${width}.png`, fullPage: true });
     await open("owner");
     page.once("dialog", dialog => dialog.accept());
     await page.getByRole("button", { name: "店都合でキャンセル・全額返金", exact: true }).click();
@@ -65,7 +65,7 @@ try {
     await page.getByLabel("返金条件2・返金率（%）").fill("60");
     await page.locator(".live-settings-rules").getByRole("button", { name: "保存", exact: true }).click();
     await page.getByText("保存して本番に反映しました。", { exact: true }).waitFor();
-    for (const [suffix, text] of [["partial-refund", "返金完了：¥2,750"], ["zero-refund", "返金なし：¥0"], ["full-refund", "返金完了：¥5,500"], ["pending-refund", "PayPalで返金を確認中"], ["failed-refund", "返金の確認が必要です"]]) {
+    for (const [suffix, text] of [["partial-refund", "返金完了：¥3,850"], ["zero-refund", "返金なし：¥0"], ["full-refund", "返金完了：¥5,500"], ["pending-refund", "PayPalで返金を確認中"], ["failed-refund", "返金の確認が必要です"]]) {
       await open(suffix); await page.getByText(text, { exact: false }).waitFor();
       assert.deepEqual(await page.locator('[role="alert"]').allTextContents(), []);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
@@ -81,7 +81,7 @@ try {
     assert.equal(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test((await page.locator(".payment-details").allInnerTexts()).join("\n")), false);
     assert.deepEqual(errors, []);
     await context.close();
-    console.log(`${width}px: payment consent, simulated booking, half refund, shop full refund, policy save, refund states and English payment/recovery UI passed.`);
+    console.log(`${width}px: payment consent, simulated booking, full refund, 70% partial refund, shop full refund, policy save, refund states and English payment/recovery UI passed.`);
   }
 } finally {
   await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));

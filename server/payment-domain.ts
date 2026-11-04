@@ -2,8 +2,9 @@ import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 
 export const defaultRefundTiers = [
-  { hoursBefore: 48, percent: 100 },
-  { hoursBefore: 24, percent: 50 },
+  { hoursBefore: 24, percent: 100 },
+  { hoursBefore: 12, percent: 70 },
+  { hoursBefore: 1, percent: 40 },
   { hoursBefore: 0, percent: 0 },
 ];
 export const refundTiersSchema = z.array(z.object({

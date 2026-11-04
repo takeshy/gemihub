@@ -28,8 +28,8 @@ try{
  config.hours={start:'00:00',end:'23:30',closedWeekdays:[],holidays:[]};config.staff=config.staff.map(person=>({...person,start:'00:00',end:'23:30'}));config.rules.leadMinutes=0;
  config.rules.payment={enabled:true,refundTiers:structuredClone(defaultRefundTiers)};
  const shop=await store.createShop('owner@example.com');shop.published=config;shop.publication='public';await store.saveShop(shop);
- // Alice's paid booking about 30 hours ahead: the 20%-off zone.
- const target=Date.now()+30*3600000;
+ // Alice's paid booking about 18 hours ahead: the 10%-off zone.
+ const target=Date.now()+18*3600000;
  const slot=[0,1].flatMap(day=>slots(config,[],shopDate(config,target+(day-1)*86400000),'simple')).find(s=>Date.parse(s.start)>=target);
  const booking={id:digest(randomUUID()),shopId:shop.id,customer:'alice@example.com',name:'Alice',menuId:'simple',price:5500,message:'',...slot,status:'active',createdAt:new Date().toISOString()};
  const payments=paymentService(store,gateway);const checkout=await payments.begin(booking,defaultRefundTiers,'https://s.invalid/r','https://s.invalid/c');await payments.capture(checkout,async()=>true);
@@ -38,7 +38,7 @@ try{
  const open=async(id,query)=>{const context=await browser.newContext({locale:'ja-JP',viewport:{width:1100,height:1200}});await context.addCookies([{name:'gemihub_session',value:`check-${id}`,url:origin}]);const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());await page.route('https://www.sandbox.paypal.com/**',async route=>{const token=new URL(route.request().url()).searchParams.get('token');await route.fulfill({status:302,headers:{location:returnUrls.get(token)},body:''});});await page.goto(`${origin}/s/${shop.slug}?${query}`);return {page,errors};};
  const alice=await open('alice','pane=mine&lang=ja');
  await alice.page.getByRole('button',{name:'キャンセルする',exact:true}).click();
- await expect(alice.page.getByText(/返金額が¥4,400に増えます/)).toBeVisible();
+ await expect(alice.page.getByText(/返金額が¥4,950に増えます/)).toBeVisible();
  await expect(alice.page.getByRole('button',{name:'キャンセルを取り消して、予約に戻す'})).toBeVisible();
  await alice.page.screenshot({path:'tmp/booking-transfer/1-holder-listed.png',fullPage:true});
  const bob=await open('bob','pane=reserve&lang=ja');
@@ -51,9 +51,9 @@ try{
  await bob.page.screenshot({path:'tmp/booking-transfer/3-transferee-complete.png',fullPage:true});
  await alice.page.reload();
  await expect(alice.page.getByText('代わりの予約が入りました')).toBeVisible();
- await expect(alice.page.getByText(/返金完了：¥4,400/)).toBeVisible();
+ await expect(alice.page.getByText(/返金完了：¥4,950/)).toBeVisible();
  await alice.page.screenshot({path:'tmp/booking-transfer/4-holder-sold.png',fullPage:true});
- assert.deepEqual(refunds,[{capture:`capture-order-${booking.id}`,amount:4400}]);
+ assert.deepEqual(refunds,[{capture:`capture-order-${booking.id}`,amount:4950}]);
  assert.deepEqual([...alice.errors,...bob.errors],[]);
  console.log('Booking transfer browser check passed; screenshots in tmp/booking-transfer/');
 }finally{await browser?.close();server.close();await store.close();}

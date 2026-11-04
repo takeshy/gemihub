@@ -58,22 +58,22 @@ try {
         }
       } else if (kind === "offers") {
         const offers = page.locator(".transfer-offers");
-        await expect(offers.locator(".booking-card")).toHaveCount(2);
-        await expect(offers).toContainText("4,400"); await expect(offers).toContainText("2,750");
+        await expect(offers.locator(".booking-card")).toHaveCount(3);
+        await expect(offers).toContainText("4,950"); await expect(offers).toContainText("3,850"); await expect(offers).toContainText("2,750");
         await page.screenshot({ path: `tmp/storybook-transfers/${language}-${width}-${story.id}.png`, fullPage: true });
         await button("この枠を予約する").first().click();
         await page.getByLabel(text("支払額と返金条件を確認しました"), { exact: true }).first().check();
         await offers.getByRole("button", { name: text("支払い・予約を練習する"), exact: false }).click();
         await expect(page.locator(".booking-complete")).toBeVisible();
-        await expect(page.locator(".booking-complete .payment-details")).toContainText("4,400");
+        await expect(page.locator(".booking-complete .payment-details")).toContainText("4,950");
         await expect(page.locator("#storybook-root")).not.toContainText("other@example.com");
       } else if (kind === "eligible" || kind === "listed") {
         if (kind === "eligible") {
           await button("キャンセルする").click(); await expect(button("キャンセルを取り消して、予約に戻す")).toBeVisible();
-          assert.ok(dialogs.at(-1).includes("2,750") && dialogs.at(-1).includes("4,400"), "confirmation shows both refund amounts");
+          assert.ok(dialogs.at(-1).includes("3,850") && dialogs.at(-1).includes("4,950"), "confirmation shows both refund amounts");
         }
-        await expect(page.locator(".transfer-status")).toContainText("2,750");
-        await expect(page.locator(".transfer-status")).toContainText("4,400");
+        await expect(page.locator(".transfer-status")).toContainText("3,850");
+        await expect(page.locator(".transfer-status")).toContainText("4,950");
         await expect(button("キャンセルする")).toHaveCount(0);
         await page.screenshot({ path: `tmp/storybook-transfers/${language}-${width}-${story.id}-pending.png`, fullPage: true });
         await expect(button("キャンセルを取り消して、予約に戻す")).toBeVisible();

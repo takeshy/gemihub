@@ -124,8 +124,8 @@ test("replacement booking payment and notices finish during a blocked export; sh
   const id = created.body.checkout.id;
   assert.equal((await f.call(`${base}/checkouts/${id}/capture`, {})).body.ok, true);
   const c = (await f.store.get<Checkout>("checkout", id))!;
-  c.booking.start = new Date(Date.now() + 30 * 3600000).toISOString();
-  c.booking.end = new Date(Date.now() + 31 * 3600000).toISOString();
+  c.booking.start = new Date(Date.now() + 18 * 3600000).toISOString();
+  c.booking.end = new Date(Date.now() + 19 * 3600000).toISOString();
   await f.store.put("checkout", id, c);
   await f.store.put("session", digest("buyer"), { user: { email: "buyer@example.com", name: "Buyer", role: "customer", shopId: f.shop.id }, expires: Date.now() + 600000 });
   await f.store.put("customer", `${f.shop.id}:buyer@example.com`, { shopId: f.shop.id, email: "buyer@example.com", name: "Buyer", birthDate: "1990-01-01", gender: "not_specified" });

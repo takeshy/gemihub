@@ -77,21 +77,23 @@ export function createTransferFixtures(scenario: string, shop: Workspace, sessio
   if (isTransfer) {
     const booking = shop.bookings[0];
     shop.bookings = [booking];
-    booking.start = new Date(now + 30 * 3600000).toISOString();
-    booking.end = new Date(now + 31 * 3600000).toISOString();
+    booking.start = new Date(now + 18 * 3600000).toISOString();
+    booking.end = new Date(now + 19 * 3600000).toISOString();
     if (["transfer-offers", "transfer-received", "owner-transfer-sold", "owner-transfer-refund"].includes(scenario) || scenario.startsWith("transfer-buyer-")) {
       booking.customer = otherEmail; booking.name = otherName;
     }
     if (scenario === "transfer-expired") {
-      booking.start = new Date(now + 23 * 3600000).toISOString();
-      booking.end = new Date(now + 24 * 3600000).toISOString();
+      booking.start = new Date(now + 11 * 3600000).toISOString();
+      booking.end = new Date(now + 12 * 3600000).toISOString();
     }
     if (scenario !== "transfer-eligible") {
-      const offer = list(booking, new Date(Date.parse(booking.start) - 30 * 3600000).toISOString());
+      const offer = list(booking, new Date(Date.parse(booking.start) - 18 * 3600000).toISOString());
       if (scenario === "transfer-offers") {
         const half = structuredClone(booking);
-        half.id = "story-half-price"; half.start = new Date(now + 5 * 3600000).toISOString(); half.end = new Date(now + 6 * 3600000).toISOString();
-        shop.bookings.push(half); list(half);
+        half.id = "story-half-price"; half.start = new Date(now + 0.5 * 3600000).toISOString(); half.end = new Date(now + 1.5 * 3600000).toISOString();
+        const middle = structuredClone(booking);
+        middle.id = "story-middle-price"; middle.start = new Date(now + 6 * 3600000).toISOString(); middle.end = new Date(now + 7 * 3600000).toISOString();
+        shop.bookings.push(middle, half); list(middle); list(half);
       } else if (scenario.startsWith("transfer-buyer-") || scenario === "transfer-seller-buying") {
         offer.buyer = {
           customer: scenario === "transfer-seller-buying" ? otherEmail : ownEmail,

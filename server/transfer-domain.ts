@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { refundQuote, refundTiersSchema, type RefundTiers } from "./payment-domain.ts";
 
-/** Platform-fixed discounts (v1): a partial-refund zone sells at 20% off, the no-refund zone at half price. */
-export const partialZoneDiscount = 20;
-export const noRefundZoneDiscount = 50;
+/** Fixed discounts, choosing the largest that returns at least 20 percentage points more than cancellation. */
+export const transferDiscounts = [50, 30, 10] as const;
+export const minimumRecoveryGain = 20;
 /** The no-refund listing closes this many minutes before the visit. */
 export const finalListingMinutes = 10;
 
@@ -22,8 +22,8 @@ export type TransferTerms = {
 
 /**
  * Deterministic transfer terms for a paid booking, from the policy frozen at booking time.
- * A zone is a run of tiers with the same refund rate. Zones refunding 80% or more never list,
- * because selling at 20% off would return less than cancelling. Returns undefined when not listable.
+ * Equal-rate tiers form one zone. Rates above 70% cannot offer a fixed discount
+ * while improving recovery by 20 points, so they use normal cancellation.
  */
 export function transferTerms(payment: { amount: number; policy: RefundTiers }, start: string, at: string): TransferTerms | undefined {
   const startAt = Date.parse(start), now = Date.parse(at);
@@ -33,7 +33,7 @@ export function transferTerms(payment: { amount: number; policy: RefundTiers }, 
   if (remaining <= finalListingMinutes * 60000) return undefined;
   const index = tiers.findIndex(tier => remaining >= tier.hoursBefore * 3600000);
   const refundPercent = tiers[index].percent;
-  const discountPercent = refundPercent === 0 ? noRefundZoneDiscount : refundPercent < 100 - partialZoneDiscount ? partialZoneDiscount : undefined;
+  const discountPercent = transferDiscounts.find(discount => 100 - discount >= refundPercent + minimumRecoveryGain);
   if (discountPercent === undefined) return undefined;
   let last = index;
   while (last + 1 < tiers.length && tiers[last + 1].percent === refundPercent) last++;

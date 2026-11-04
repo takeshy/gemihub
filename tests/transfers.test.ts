@@ -63,7 +63,7 @@ async function setup(hoursAhead: number) {
   const all = [0, 1, 2].flatMap(day => slots(config, [], dateJST(new Date(target + (day - 1) * 86400000)), "simple"));
   const start = all.find(slot => Date.parse(slot.start) >= target)!;
   const requestKey = `${shop.id}:alice@example.com:${randomUUID()}`;
-  const booking: Booking = { id: digest(requestKey), requestKey, shopId: shop.id, customer: "alice@example.com", name: "Alice", menuId: "simple", price: 5500, message: "Alice private consultation / phone 090-1234-5678", ...start, status: "active", createdAt: new Date().toISOString() };
+  const booking: Booking = { id: digest(requestKey), requestKey, shopId: shop.id, customer: "alice@example.com", name: "Alice", menuId: "simple", price: 5500, message: "Alice private consultation / phone 090-1234-5678", ...start, start: new Date(target).toISOString(), end: new Date(target + hour).toISOString(), status: "active", createdAt: new Date().toISOString() };
   const f = fakePayPal();
   const notices: string[] = [];
   const payments = paymentService(store, f.gateway);
@@ -75,34 +75,40 @@ async function setup(hoursAhead: number) {
 }
 const approve = (f: ReturnType<typeof fakePayPal>, t: Transfer) => { f.orders.get(t.buyer!.orderId!)!.status = "APPROVED"; };
 
-test("transfer terms follow the zone: none at full refund, 20% off until 24h, half price until 10 minutes before", () => {
+test("default policy uses 10%, 30%, 50% discounts with zone deadlines and safe custom-policy recovery", () => {
   const start = "2026-12-01T10:00:00.000Z";
   const at = (hours: number) => new Date(Date.parse(start) - hours * hour).toISOString();
   const payment = { amount: 5501, policy: defaultRefundTiers };
-  assert.equal(transferTerms(payment, start, at(48)), undefined, "48h or more refunds in full");
-  assert.deepEqual(transferTerms(payment, start, at(47.9)), { refundPercent: 50, discountPercent: 20, price: 4400, basis: 5501, deadline: at(24), unsold: { percent: 50, amount: 2750 } });
-  assert.equal(transferTerms(payment, start, at(24)), undefined, "the 24h instant already settles at 50%");
-  const half = transferTerms(payment, start, at(23.9))!;
+  assert.equal(transferTerms(payment, start, at(24)), undefined);
+  assert.deepEqual(transferTerms(payment, start, at(23.9)), { refundPercent: 70, discountPercent: 10, price: 4950, basis: 5501, deadline: at(12), unsold: { percent: 70, amount: 3850 } });
+  assert.equal(transferTerms(payment, start, at(12)), undefined, "settlement at the exact boundary still refunds 70%");
+  assert.deepEqual(transferTerms(payment, start, at(11.9)), { refundPercent: 40, discountPercent: 30, price: 3850, basis: 5501, deadline: at(1), unsold: { percent: 40, amount: 2200 } });
+  assert.equal(transferTerms(payment, start, at(1)), undefined, "settlement at the exact boundary still refunds 40%");
+  const half = transferTerms(payment, start, at(0.9))!;
   assert.equal(half.discountPercent, 50); assert.equal(half.price, 2750);
-  assert.equal(half.deadline, new Date(Date.parse(start) - 10 * 60000).toISOString());
-  assert.deepEqual(half.unsold, { percent: 0, amount: 0 });
-  assert.equal(transferTerms(payment, start, new Date(Date.parse(start) - 10 * 60000).toISOString()), undefined);
-  // Custom policies: a zone refunding 80% or more never lists; equal-rate tiers form one zone.
-  assert.equal(transferTerms({ amount: 1000, policy: [{ hoursBefore: 24, percent: 80 }, { hoursBefore: 0, percent: 0 }] }, start, at(30)), undefined);
-  const merged = transferTerms({ amount: 1000, policy: [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 48, percent: 30 }, { hoursBefore: 12, percent: 30 }, { hoursBefore: 0, percent: 0 }] }, start, at(60))!;
-  assert.equal(merged.deadline, at(12)); assert.equal(merged.price, 800); assert.deepEqual(merged.unsold, { percent: 30, amount: 300 });
-  for (const hours of [47, 30, 24.01, 23, 5, 0.2]) {
-    const terms = transferTerms(payment, start, at(hours))!;
-    assert.ok(terms.price >= refundQuote(5501, start, at(hours), defaultRefundTiers, "customer").amount, "selling never returns less than cancelling now");
-    assert.ok(terms.price <= payment.amount);
+  assert.equal(half.deadline, at(1 / 6)); assert.deepEqual(half.unsold, { percent: 0, amount: 0 });
+  assert.equal(transferTerms(payment, start, at(1 / 6)), undefined);
+  const custom = [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 48, percent: 30 }, { hoursBefore: 12, percent: 30 }, { hoursBefore: 0, percent: 0 }];
+  const merged = transferTerms({ amount: 1000, policy: custom }, start, at(60))!;
+  assert.equal(merged.deadline, at(12)); assert.equal(merged.price, 500); assert.deepEqual(merged.unsold, { percent: 30, amount: 300 });
+  for (let rate = 0; rate <= 100; rate++) {
+    const terms = transferTerms({ amount: 10000, policy: [{ hoursBefore: 0, percent: rate }] }, start, at(6));
+    if (rate > 70) { assert.equal(terms, undefined); continue; }
+    assert.ok(terms); assert.ok(100 - terms.discountPercent >= rate + 20);
+    assert.ok(terms.price <= 10000); assert.ok(terms.price >= terms.unsold.amount);
   }
+  // Saved old policies remain unchanged and select a safe fixed discount.
+  const legacy = [{ hoursBefore: 48, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }];
+  const snapshot = structuredClone(legacy);
+  assert.equal(transferTerms({ amount: 5500, policy: legacy }, start, at(30))!.price, 3850);
+  assert.deepEqual(legacy, snapshot);
 });
 
 test("a sale charges the transferee, refunds the same amount to the holder and hands over the booking; the shop total is unchanged", async () => {
-  const { store, shop, f, transfers, payments, notices, checkout, booking } = await setup(30);
+  const { store, shop, f, transfers, payments, notices, checkout, booking } = await setup(18);
   const before = f.net();
   const quote = (await transfers.quote(await checkout())).terms!;
-  assert.equal(quote.price, 4400);
+  assert.equal(quote.price, 4950);
   await assert.rejects(transfers.list(await checkout(), "alice@example.com", { price: 4000, deadline: quote.deadline }), /条件が変わりました/);
   const t = await transfers.list(await checkout(), "alice@example.com", quote);
   await assert.rejects(transfers.list(await checkout(), "alice@example.com", quote), /すでにキャンセル/, "one active listing per booking");
@@ -116,11 +122,11 @@ test("a sale charges the transferee, refunds the same amount to the holder and h
   assert.equal(t.phase, "sold");
   const c = await checkout();
   assert.equal(c.customer, "bob@example.com"); assert.equal(c.booking.customer, "bob@example.com"); assert.equal(c.booking.name, "Bob");
-  assert.equal(c.booking.payment!.amount, 4400); assert.deepEqual(c.booking.payment!.policy, defaultRefundTiers);
+  assert.equal(c.booking.payment!.amount, 4950); assert.deepEqual(c.booking.payment!.policy, defaultRefundTiers);
   assert.equal(c.booking.transfers!.length, 1); assert.equal(c.booking.transfers![0].refund.status, "completed");
   assert.equal(c.booking.message, "", "the previous holder's message is not inherited");
   assert.equal(c.booking.transfers![0].from.message, booking.message, "operators keep the previous holder's message in transfer history");
-  assert.equal(f.requests[0].capture, `capture-order-${booking.id}`); assert.equal(f.requests[0].amount, 4400);
+  assert.equal(f.requests[0].capture, `capture-order-${booking.id}`); assert.equal(f.requests[0].amount, 4950);
   assert.equal(f.net(), before, "new capture and same-amount refund cancel out");
   assert.equal((await store.bookings(shop.id))[0].customer, "bob@example.com");
   assert.deepEqual(notices, [`${t.id}:listed`, `${t.id}:sold`]);
@@ -128,27 +134,27 @@ test("a sale charges the transferee, refunds the same amount to the holder and h
   await transfers.capture(t); await transfers.reconcile(shop.id); await payments.reconcile(shop.id);
   assert.equal(f.calls.capture, 2); assert.equal(f.calls.refund, 1);
   // The transferee's own cancellation refunds against what they paid, by the inherited policy.
-  const at = new Date(Date.parse(booking.start) - 30 * hour).toISOString();
+  const at = new Date(Date.parse(booking.start) - 18 * hour).toISOString();
   const cancelled = await payments.cancel(await checkout(), "bob@example.com", "customer", at);
-  assert.equal(cancelled.payment!.cancellation!.amount, 2200);
+  assert.equal(cancelled.payment!.cancellation!.amount, 3465);
   assert.equal(f.requests[1].capture, `capture-order-${(await store.get<Transfer>("transfer", t.id))!.buyer!.id}`);
 });
 
 test("a shop cancellation after a transfer refunds exactly what the transferee paid, from the transferee's capture", async () => {
-  const { f, transfers, payments, checkout, booking } = await setup(30);
+  const { f, transfers, payments, checkout, booking } = await setup(18);
   const t = await transfers.list(await checkout(), "alice@example.com", (await transfers.quote(await checkout())).terms!);
   await transfers.begin(t, { customer: "bob@example.com", name: "Bob", requestKey: "b" }, "https://r", "https://c");
   approve(f, t); await transfers.capture(t);
   const cancelled = await payments.cancel(await checkout(), "owner@example.com", "shop");
   assert.equal(cancelled.payment!.cancellation!.percent, 100);
-  assert.equal(cancelled.payment!.cancellation!.amount, 4400, "not the original 5,500");
-  assert.deepEqual(f.requests.map(r => [r.capture, r.amount]), [[`capture-order-${booking.id}`, 4400], [`capture-order-${t.buyer!.id}`, 4400]]);
-  // Bob gets back all 4,400 he paid; the 1,100 Alice gave up by transferring is not returned (open item in the spec).
-  assert.equal(f.net(), 1100);
+  assert.equal(cancelled.payment!.cancellation!.amount, 4950, "not the original 5,500");
+  assert.deepEqual(f.requests.map(r => [r.capture, r.amount]), [[`capture-order-${booking.id}`, 4950], [`capture-order-${t.buyer!.id}`, 4950]]);
+  // Bob gets back all 4,950 he paid; the 550 Alice gave up by transferring is not returned, as specified.
+  assert.equal(f.net(), 550);
 });
 
 test("repeated transfers never pay anyone more than they paid", async () => {
-  const { f, transfers, checkout } = await setup(30);
+  const { f, transfers, checkout } = await setup(18);
   const people = ["alice", "bob", "carol", "dave"];
   for (let i = 1; i < people.length; i++) {
     const c = await checkout();
@@ -160,12 +166,12 @@ test("repeated transfers never pay anyone more than they paid", async () => {
   }
   const final = await checkout();
   assert.equal(final.booking.customer, "dave@example.com");
-  assert.deepEqual(final.booking.transfers!.map(entry => [entry.previous.amount, entry.price]), [[5500, 4400], [4400, 3520], [3520, 2816]]);
+  assert.deepEqual(final.booking.transfers!.map(entry => [entry.previous.amount, entry.price]), [[5500, 4950], [4950, 4455], [4455, 4009]]);
   for (const entry of final.booking.transfers!) assert.ok(entry.refund.amount <= entry.previous.amount);
 });
 
-test("an unsold 20% listing settles at 50% at its deadline; a half-price listing settles at 0%", async () => {
-  for (const [hours, percent, amount] of [[30, 50, 2750], [5, 0, 0]] as const) {
+test("unsold offers settle at the original 70%, 40% or 0% refund at their deadline", async () => {
+  for (const [hours, percent, amount] of [[18, 70, 3850], [6, 40, 2200], [0.5, 0, 0]] as const) {
     const { store, shop, transfers, checkout, notices } = await setup(hours);
     const t = await transfers.list(await checkout(), "alice@example.com", (await transfers.quote(await checkout())).terms!);
     assert.deepEqual(t.unsold, { percent, amount });
@@ -181,11 +187,12 @@ test("an unsold 20% listing settles at 50% at its deadline; a half-price listing
     assert.equal(c.booking.payment!.cancellation!.at, t.deadline);
     assert.equal((await store.get<Transfer>("transfer", t.id))!.phase, "expired");
     assert.ok(notices.includes(`${t.id}:expired`));
+    await assert.rejects(transfers.list(await checkout(), "alice@example.com", { price: t.price, deadline: t.deadline }), /処理済み/, "a settled request cannot be relisted in the next zone");
   }
 });
 
 test("a checkout started before the deadline is not cut off; an expired hold then settles", async () => {
-  const { store, shop, f, transfers, checkout } = await setup(30);
+  const { store, shop, f, transfers, checkout } = await setup(18);
   let t = await transfers.list(await checkout(), "alice@example.com", (await transfers.quote(await checkout())).terms!);
   await transfers.begin(t, { customer: "bob@example.com", name: "Bob", requestKey: "b" }, "https://r", "https://c");
   t.deadline = new Date(Date.now() - 1000).toISOString(); await store.put("transfer", t.id, t);
@@ -195,19 +202,19 @@ test("a checkout started before the deadline is not cut off; an expired hold the
   approve(f, t); await transfers.capture(t);
   assert.equal(t.phase, "sold"); assert.equal((await checkout()).booking.customer, "bob@example.com");
 
-  const second = await setup(30);
+  const second = await setup(18);
   let u = await second.transfers.list(await second.checkout(), "alice@example.com", (await second.transfers.quote(await second.checkout())).terms!);
   await second.transfers.begin(u, { customer: "bob@example.com", name: "Bob", requestKey: "b" }, "https://r", "https://c");
   u.deadline = new Date(Date.now() - 1000).toISOString(); u.buyer!.expires = Date.now() - 1; await second.store.put("transfer", u.id, u);
   await second.transfers.reconcile(second.shop.id);
   u = (await second.store.get<Transfer>("transfer", u.id))!;
   assert.equal(u.phase, "expired"); assert.equal(u.buyer!.phase, "expired");
-  assert.equal((await second.checkout()).booking.payment!.cancellation!.percent, 50);
+  assert.equal((await second.checkout()).booking.payment!.cancellation!.percent, 70);
   assert.equal(second.f.calls.capture, 1, "the abandoned buyer was never charged");
 });
 
 test("withdrawing returns the booking to normal and a new listing can follow", async () => {
-  const { transfers, checkout, f } = await setup(30);
+  const { transfers, checkout, f } = await setup(18);
   const t = await transfers.list(await checkout(), "alice@example.com", (await transfers.quote(await checkout())).terms!);
   await transfers.begin(t, { customer: "bob@example.com", name: "Bob", requestKey: "b" }, "https://r", "https://c");
   t.buyer!.expires = Date.now() - 1; // An abandoned checkout no longer blocks withdrawal.
@@ -221,7 +228,7 @@ test("withdrawing returns the booking to normal and a new listing can follow", a
 });
 
 test("lost capture and lost refund responses recover through the reconciler without double charge or refund", async () => {
-  const { store, shop, f, transfers, payments, checkout, booking } = await setup(30);
+  const { store, shop, f, transfers, payments, checkout, booking } = await setup(18);
   let t = await transfers.list(await checkout(), "alice@example.com", (await transfers.quote(await checkout())).terms!);
   await transfers.begin(t, { customer: "bob@example.com", name: "Bob", requestKey: "b" }, "https://r", "https://c");
   approve(f, t);
@@ -242,11 +249,11 @@ test("lost capture and lost refund responses recover through the reconciler with
   assert.equal(f.refunds.size, 1, "one refund despite retries");
   assert.deepEqual(f.requests[0], f.requests[1], "the retry reuses the refund request ID");
   assert.equal(f.calls.capture, 2, "the reconciler finds the lost capture on the order instead of capturing again");
-  assert.equal((await store.bookings(shop.id)).find(b => b.id === booking.id)!.payment!.amount, 4400);
+  assert.equal((await store.bookings(shop.id)).find(b => b.id === booking.id)!.payment!.amount, 4950);
 });
 
 test("HTTP: listing, browsing, buying and privacy; non-transferable menus and cancellation", async t => {
-  const { store, shop, config, f, booking } = await setup(30);
+  const { store, shop, config, f, booking } = await setup(18);
   const server = createApp(store, undefined, undefined, undefined, f.gateway);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
@@ -269,9 +276,9 @@ test("HTTP: listing, browsing, buying and privacy; non-transferable menus and ca
   assert.equal((await request(`${base}/bookings/${booking.id}/transfer-quote`)).status, 409);
   delete config.menus[0].transferable; shop.published = config; await store.saveShop(shop);
   const quote = (await request(`${base}/bookings/${booking.id}/transfer-quote`)).body;
-  assert.equal(quote.eligible, true); assert.equal(quote.price, 4400); assert.equal(quote.discountPercent, 20);
+  assert.equal(quote.eligible, true); assert.equal(quote.price, 4950); assert.equal(quote.discountPercent, 10);
   const cancelQuote = (await request(`${base}/bookings/${booking.id}/cancel-quote`)).body;
-  assert.equal(cancelQuote.amount, 2750); assert.equal(cancelQuote.transfer.price, 4400);
+  assert.equal(cancelQuote.amount, 3850); assert.equal(cancelQuote.transfer.price, 4950);
   assert.equal((await request(`${base}/bookings/${booking.id}/cancel`, "alice", { expectedRefund: cancelQuote.amount })).status, 409, "the increased refund and deadline must be confirmed");
   const listed = await request(`${base}/bookings/${booking.id}/cancel`, "alice", { expectedRefund: cancelQuote.amount, expectedTransfer: cancelQuote.transfer });
   assert.equal(listed.status, 200);
@@ -281,10 +288,10 @@ test("HTTP: listing, browsing, buying and privacy; non-transferable menus and ca
   assert.equal((await request(`${base}/bookings/${booking.id}/cancel`, "alice", { expectedRefund: cancelQuote.amount, expectedTransfer: cancelQuote.transfer })).body.cancellationPending, true);
   assert.equal((await request(`${base}/transfers/mine`)).body.selling.length, 1, "retries create only one cancellation request");
   const offers = (await request(`${base}/transfers`, "bob")).body;
-  assert.equal(offers.length, 1); assert.equal(offers[0].amount, 4400); assert.equal(offers[0].mine, false);
+  assert.equal(offers.length, 1); assert.equal(offers[0].amount, 4950); assert.equal(offers[0].mine, false);
   assert.ok(!JSON.stringify(offers).includes("alice"), "listings never reveal the holder");
   assert.equal((await request(`${base}/transfers/mine`)).body.selling[0].phase, "listed");
-  const consent = { amount: 4400, policy: defaultRefundTiers };
+  const consent = { amount: 4950, policy: defaultRefundTiers };
   assert.equal((await request(`${base}/transfers/${id}/checkout`, "bob", { name: "Bob", requestId: randomUUID(), consent: { ...consent, amount: 4000 } })).status, 409);
   const requestId = randomUUID();
   const started = await request(`${base}/transfers/${id}/checkout`, "bob", { name: "Bob", requestId, consent });
@@ -293,7 +300,7 @@ test("HTTP: listing, browsing, buying and privacy; non-transferable menus and ca
   assert.equal(f.calls.create, 2, "the same request resumes the same order");
   assert.equal((await request(`${base}/transfers/${id}/checkout`, "carol", { name: "Carol", requestId: randomUUID(), consent })).status, 409);
   assert.equal((await request(`${base}/transfers/${id}/withdraw`, "alice", {})).status, 409);
-  assert.equal((await request(`${base}/bookings/${booking.id}/cancel`, "alice", { expectedRefund: 2750 })).body.cancellationPending, true, "repeating the request never cancels or refunds while someone pays");
+  assert.equal((await request(`${base}/bookings/${booking.id}/cancel`, "alice", { expectedRefund: 3850 })).body.cancellationPending, true, "repeating the request never cancels or refunds while someone pays");
   assert.equal((await request(`${base}/transfers/${id}/capture`, "carol", {})).status, 404);
   f.orders.get((await store.get<Transfer>("transfer", id))!.buyer!.orderId!)!.status = "APPROVED";
   const done = await request(`${base}/transfers/${id}/capture`, "bob", {});
@@ -309,10 +316,10 @@ test("HTTP: listing, browsing, buying and privacy; non-transferable menus and ca
   assert.equal((await request(`${base}/transfers`, "carol")).body.length, 0);
   // Bob's cancellation automatically waits for another reservation, and can be undone.
   const again = (await request(`${base}/bookings/${booking.id}/transfer-quote`, "bob")).body;
-  assert.equal(again.price, 3520);
+  assert.equal(again.price, 4455);
   const refund = (await request(`${base}/bookings/${booking.id}/cancel-quote`, "bob")).body;
-  assert.equal(refund.amount, 2200);
-  assert.equal((await request(`${base}/bookings/${booking.id}/cancel`, "bob", { expectedRefund: 2200, expectedTransfer: refund.transfer })).body.cancellationPending, true);
+  assert.equal(refund.amount, 3465);
+  assert.equal((await request(`${base}/bookings/${booking.id}/cancel`, "bob", { expectedRefund: 3465, expectedTransfer: refund.transfer })).body.cancellationPending, true);
   const pending = (await request(`${base}/transfers/mine`, "bob")).body.selling[0];
   assert.equal((await request(`${base}/transfers/${pending.id}/withdraw`, "bob", {})).status, 200);
   assert.equal((await request(`${base}/bookings`, "bob")).body[0].status, "active");
@@ -324,7 +331,7 @@ test("HTTP: listing, browsing, buying and privacy; non-transferable menus and ca
 });
 
 test("reconciliation retries a failed sold event and commits its acknowledgement with side effects", async () => {
-  const { store, shop, f, payments, checkout } = await setup(30);
+  const { store, shop, f, payments, checkout } = await setup(18);
   const notices: string[] = [];
   const transfers = transferService(store, f.gateway, payments, async (_t, _b, event) => {
     notices.push(event);
@@ -364,7 +371,7 @@ test("reconciliation retries a failed sold event and commits its acknowledgement
 
 test("HTTP: cancellation uses normal refunds when ineligible and settles a zero-refund request without charging twice", async t => {
   for (const mode of ["full-refund", "disabled-menu", "too-late", "zero-refund"] as const) await t.test(mode, async t => {
-    const { store, shop, config, f, booking, checkout } = await setup(mode === "full-refund" ? 60 : mode === "zero-refund" ? 5 : 30);
+    const { store, shop, config, f, booking, checkout } = await setup(mode === "full-refund" ? 60 : mode === "zero-refund" ? 0.5 : 18);
     if (mode === "disabled-menu") { config.menus[0].transferable = false; shop.published = config; await store.saveShop(shop); }
     if (mode === "too-late") {
       const c = await checkout(); c.booking.start = new Date(Date.now() + 5 * 60000).toISOString();
@@ -385,7 +392,7 @@ test("HTTP: cancellation uses normal refunds when ineligible and settles a zero-
     const data = { expectedRefund: quote.amount, expectedTransfer: quote.transfer };
     if (mode !== "zero-refund") {
       assert.equal(quote.transfer, undefined);
-      assert.equal((await request(`${path}/cancel`, { ...data, expectedTransfer: { price: 4400, deadline: new Date(Date.now() + 10000).toISOString() } })).status, 409, "stale waiting terms never silently become an immediate cancellation");
+      assert.equal((await request(`${path}/cancel`, { ...data, expectedTransfer: { price: 4950, deadline: new Date(Date.now() + 10000).toISOString() } })).status, 409, "stale waiting terms never silently become an immediate cancellation");
       const cancelled = await request(`${path}/cancel`, data);
       assert.equal(cancelled.status, 200); assert.equal(cancelled.body.cancellationPending, undefined);
       assert.equal(cancelled.body.booking.status, "cancelled");
@@ -410,7 +417,7 @@ test("HTTP: cancellation uses normal refunds when ineligible and settles a zero-
 });
 
 test("HTTP: a failed sale notice and shop history recover once, addressed to that sale's buyer after retransfer", async t => {
-  const { store, shop, f, transfers, checkout } = await setup(30);
+  const { store, shop, f, transfers, checkout } = await setup(18);
   // Queue actual mail/export jobs, with no OAuth token so the test cannot send them.
   shop.google = { folderId: "test-folder", specId: "test-spec", historyId: "test-history" };
   await store.saveShop(shop);

@@ -10,7 +10,8 @@ import { createApp } from "../server/app.ts";
 import { Store } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
 import { sample, dateJST, slots } from "../server/domain.ts";
-import { defaultRefundTiers } from "../server/payment-domain.ts";
+// Use a controlled legacy policy so this live-money recovery check stays repeatable.
+const e2eRefundTiers = [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }];
 import { paypalGateway } from "../server/paypal.ts";
 assert.equal(process.env.PAYPAL_ENVIRONMENT, "sandbox", "Sandbox must be explicitly selected");
 process.env.DEMO_MODE = "true";
@@ -33,7 +34,8 @@ class DurableSandboxStore extends Store {
 const store = new DurableSandboxStore(":memory:");
 const shop = journal.shop || await store.createShop("owner@example.com");
 const config = structuredClone(sample); config.hours.closedWeekdays = [];
-config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
+config.rules.payment = { enabled: true, refundTiers: structuredClone(e2eRefundTiers) };
+config.menus = config.menus.map(menu => ({ ...menu, transferable: false }));
 shop.published = config; journal.shop = shop; await store.saveShop(shop); await persist();
 for (const [id, c] of Object.entries(journal.checkouts)) { await store.put("checkout", id, c); if (c.phase === "confirmed") await store.saveBooking(c.booking); }
 for (const id of ["owner", "alice"]) {
@@ -144,7 +146,7 @@ try {
       const requestId = journal.requests[reason] ||= randomUUID(); await persist();
       const day = dateJST(new Date(Date.now() + 2 * 86400000));
       const slot = slots(config, await store.bookings(shop.id), day, "simple")[reason === "shop" ? 1 : 0]; assert.ok(slot);
-      const start = await api(`${base}/bookings`, { name: "Sandbox Test Buyer", message: `Sandbox E2E ${reason}`, requestId, menuId: "simple", staffId: slot.staffId, start: slot.start, paymentConsent: { amount: 5500, policy: defaultRefundTiers } });
+      const start = await api(`${base}/bookings`, { name: "Sandbox Test Buyer", message: `Sandbox E2E ${reason}`, requestId, menuId: "simple", staffId: slot.staffId, start: slot.start, paymentConsent: { amount: 5500, policy: e2eRefundTiers } });
       c = journal.checkouts[start.checkout.id];
     }
     if (c.phase !== "confirmed") {

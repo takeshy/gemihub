@@ -32,7 +32,7 @@ try{
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    if(suffix==='japan'||suffix==='fall')await page.screenshot({path:`tmp/refund-dates/${suffix}-${language}-${width}.png`,fullPage:true});
   }
-  await open('お客様の画面/お支払い・返金','paid');const card=page.locator('.booking-card').first();await card.locator('.payment-details summary').click();await expect(card.locator('.refund-deadlines li')).toHaveCount(3);assert.ok((await card.locator('.refund-deadlines').innerText()).includes('100%'));assert.ok((await card.locator('.refund-deadlines').innerText()).includes('50%'));assert.ok(!/開始まで\d+時間/.test(await card.locator('.refund-deadlines').innerText()));
+  await open('お客様の画面/お支払い・返金','paid');const card=page.locator('.booking-card').first();await card.locator('.payment-details summary').click();await expect(card.locator('.refund-deadlines li')).toHaveCount(4);assert.ok((await card.locator('.refund-deadlines').innerText()).includes('100%'));assert.ok((await card.locator('.refund-deadlines').innerText()).includes('70%'));assert.ok(!/開始まで\d+時間/.test(await card.locator('.refund-deadlines').innerText()));
   await expect(card.locator('.payment-details')).toContainText(label('店都合のキャンセルは全額返金。予約後の条件変更はこの予約に適用されません。'));
   assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);await context.close();console.log(`${language} ${width}px: dated saved-policy ranges, year boundary, DST, repeated hour, no-deadline policy and actual My page passed.`);
  }

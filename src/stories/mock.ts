@@ -293,13 +293,13 @@ export function createMockClient(scenario: Scenario): ApiClient {
   if (config.rules.payment?.enabled) {
     bookings.forEach(booking => { simulatePayment(booking, config); if (booking.status === "cancelled") simulateCancellation(booking, "customer"); });
     if (["partial-refund", "pending-refund", "failed-refund"].includes(scenario)) {
-      bookings[0].start = new Date(Date.now() + 48 * 3600000).toISOString();
-      bookings[0].end = new Date(Date.now() + 49 * 3600000).toISOString();
+      bookings[0].start = new Date(Date.now() + 18 * 3600000).toISOString();
+      bookings[0].end = new Date(Date.now() + 19 * 3600000).toISOString();
       simulateCancellation(bookings[0], "customer", scenario === "pending-refund" ? "pending" : scenario === "failed-refund" ? "manual_review" : "completed");
     } else if (scenario === "insufficient-refund") {
       simulateCancellation(bookings[0], "shop"); bookings[0].payment!.cancellation!.status = "awaiting_funds";
     } else if (scenario === "zero-refund") {
-      bookings[0].start = new Date(Date.now() + 2 * 3600000).toISOString();
+      bookings[0].start = new Date(Date.now() + 0.5 * 3600000).toISOString();
       simulateCancellation(bookings[0], "customer");
     } else if (scenario === "full-refund") simulateCancellation(bookings[0], "shop");
   }

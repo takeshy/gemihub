@@ -11,7 +11,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const Offers: Story = { name: "20%引き・半額の空き枠を予約", args: { scenario: "transfer-offers" } };
+export const Offers: Story = { name: "10%引き・30%引き・半額の空き枠を予約", args: { scenario: "transfer-offers" } };
 export const Eligible: Story = { name: "キャンセルする・元の予約に戻す", args: { scenario: "transfer-eligible" } };
 export const Listed: Story = { name: "キャンセル受付済み・取り消し可能", args: { scenario: "transfer-listed" } };
 export const SellerBuying: Story = { name: "代わりの方の決済中・取り消し不可", args: { scenario: "transfer-seller-buying" } };

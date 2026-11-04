@@ -3,11 +3,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { PaymentDetails } from "../PaymentDetails";
 import { ShopRegionContext } from "../money";
 import type { Booking } from "../../server/domain";
-import { defaultRefundTiers, type RefundTiers } from "../../server/payment-domain";
+import { type RefundTiers } from "../../server/payment-domain";
 import type { Region } from "../../shared/region";
 import { tr } from "../../shared/i18n";
 
-function example(start: string, policy: RefundTiers = structuredClone(defaultRefundTiers)): Booking {
+// Historical snapshots keep their original dates and rates after default changes.
+const legacyRefundTiers: RefundTiers = [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }];
+function example(start: string, policy: RefundTiers = structuredClone(legacyRefundTiers)): Booking {
   return { id: "refund-date-example", shopId: "example", customer: "guest@example.com", name: "Guest", menuId: "simple", staffId: "aoi", price: 5500, message: "", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: "2026-01-01T00:00:00Z", payment: { provider: "paypal", environment: "live", orderId: "example", captureId: "example", amount: 5500, currency: "JPY", policy } };
 }
 const jp: Region = { country: "JP", timeZone: "Asia/Tokyo" }, us: Region = { country: "US", timeZone: "America/New_York" };
