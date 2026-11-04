@@ -47,7 +47,8 @@ test("Firestore stores scoped business records and operational state durably wit
     const result = transactions.then(() => fn({ get: (doc: any) => doc.get(), delete: (doc: any) => cloud.delete(doc.path) }));
     transactions = result.then(() => {}, () => {}); return result;
   }) as any);
-  mock.method(Firestore.prototype, "terminate", async () => {});
+  let terminations = 0;
+  mock.method(Firestore.prototype, "terminate", async () => { terminations++; });
   mock.method(google, "sheets", (() => { throw new Error("Sheets must never be called"); }) as any);
   const first = new Store(), second = new Store();
   const shop = await first.createShop("owner@example.com");
@@ -101,6 +102,26 @@ test("Firestore stores scoped business records and operational state durably wit
   assert.deepEqual(await restarted.records("booking", shop), []);
   assert.deepEqual((await restarted.list<Booking>("booking")).map(row => row.id), ["other-booking"]);
   await assert.rejects(() => first.saveBooking(booking), /お店がありません/);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const running = first.locked("shutdown", async () => {
+    await gate;
+    await first.put("job", "shutdown", { completed: true });
+  });
+  const queued = assert.rejects(first.locked("shutdown", async () => {
+    await first.locked("shutdown-nested", async () => {});
+    throw new Error("queued operation failed");
+  }), /queued operation failed/);
+  let closed = false;
+  const closing = first.close().then(() => { closed = true; });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(closed, false, "shutdown waits for running and queued operations");
+  assert.equal(terminations, 0, "Firestore stays connected until locks are released");
+  release();
+  await Promise.all([running, queued, closing]);
+  assert.equal(terminations, 1);
+  assert.deepEqual(await second.get("job", "shutdown"), { completed: true });
   assert.ok([...cloud.keys()].every(key => !key.startsWith("gemihub_locks/")));
   await Promise.all([first.close(), second.close(), restarted.close()]);
+  assert.equal(terminations, 3, "repeated close calls terminate each connection once");
 });

@@ -2812,10 +2812,14 @@ export function createApp(
     if (user.judge) await chargeJudge(user.email);
     return { data: await shopData(shop) };
   }, liveConnector);
+  let stopped = false;
   const timer = setInterval(() => {
     void (async () => {
       await store.cleanup();
-      for (const shop of (await store.list<Shop>("shop")).filter(
+      if (stopped) return;
+      const shops = await store.list<Shop>("shop");
+      if (stopped) return;
+      for (const shop of shops.filter(
         (s) => s.published && !isArchivedShop(s),
       ))
         void store
@@ -2827,6 +2831,6 @@ export function createApp(
     })().catch(console.error);
   }, 60000);
   timer.unref();
-  server.on("close", () => clearInterval(timer));
+  server.on("close", () => { stopped = true; clearInterval(timer); });
   return server;
 }

@@ -71,6 +71,7 @@ export class Store {
   private values = new Map<string, Entry>();
   private batch = new AsyncLocalStorage<Entry[]>();
   private localLocks = new Map<string, Promise<unknown>>();
+  private closing?: Promise<void>;
   constructor(mode?: string) {
     this.memory =
       mode === ":memory:" ||
@@ -310,6 +311,12 @@ export class Store {
     }
   }
   async close() {
-    await this.firestore?.terminate();
+    // HTTP responses can finish before finally releases their lock, and the
+    // reconciliation timer also owns locks without an HTTP connection.
+    return this.closing ??= (async () => {
+      while (this.localLocks.size)
+        await Promise.allSettled([...this.localLocks.values()]);
+      await this.firestore?.terminate();
+    })();
   }
 }
