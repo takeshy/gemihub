@@ -837,6 +837,7 @@ pre {
   color: #8a9581;
 }
 .public-shop {
+  container: storefront / inline-size;
   max-width: 1080px;
   margin: 0 auto;
   padding: 35px 30px 80px;
@@ -896,13 +897,17 @@ pre {
 }
 .reservation-layout {
   display: grid;
-  grid-template-columns: 1fr 290px;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  min-width: 0;
   gap: 25px;
   margin-top: 25px;
 }
 .reservation-layout .panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
   padding: 30px;
 }
+.reservation-layout > .panel:first-child { container: booking-form / inline-size; }
 .booking-mobile-summary { display: none; }
 .booking-summary {
   align-self: start;
@@ -929,10 +934,14 @@ pre {
   gap: 12px;
 }
 .menu-options button {
+  min-width: 0;
+  flex-wrap: wrap;
   justify-content: space-between;
   text-align: left;
   padding: 17px 20px;
 }
+.menu-options button > span:not(.menu-image) { min-width: 0; flex: 1 1 100px; overflow-wrap: anywhere; }
+.menu-options button > strong { flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 .menu-options b {
   font-size: 13px;
   font-weight: 500;
@@ -957,13 +966,24 @@ pre {
 }
 .time-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   margin: 20px 0 30px;
 }
 .time-grid button {
+  min-width: 0;
   font-size: 12px;
   padding: 9px;
+}
+@container booking-form (max-width: 360px) {
+  .time-grid { grid-template-columns: repeat(auto-fit, minmax(min(88px, 100%), 1fr)); }
+}
+@container storefront (max-width: 760px) {
+  .reservation-layout { grid-template-columns: minmax(0, 1fr); }
+  .reservation-layout .panel { padding: 25px 20px; }
+  .booking-summary { display: none; }
+  .booking-mobile-summary { display: block; padding: 12px 16px; margin: 0 0 20px; background: var(--cream); border: 1px solid var(--line); border-radius: 12px; }
+  .booking-mobile-summary p { margin: 8px 0; }
 }
 .wide {
   width: 100%;
@@ -1164,7 +1184,7 @@ pre {
     padding: 12px 8px;
   }
   .reservation-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .booking-summary {
     display: none;
@@ -2090,7 +2110,7 @@ pre {
 .menu-image-editor > .menu-image { width: 160px; height: 120px; flex-basis: 160px; }
 .menu-image-editor label { display: grid; gap: 8px; font-size: 12px; }
 .menu-image-editor input[type="file"] { max-width: 100%; }
-.menu-options button .menu-image + span { flex: 1; }
+.menu-options button .menu-image + span { flex: 1 1 100px; }
 .menu-row .menu-image { width: 88px; height: 66px; flex-basis: 88px; }
 @media (max-width: 500px) { .menu-options button { padding: 14px 10px; gap: 9px; } .menu-options .menu-image { width: 72px; height: 64px; flex-basis: 72px; } }
 @media (max-width: 500px) { .customer-image-dialog { padding: 12px; } .customer-image-dialog-header h2 { font-size: 15px; } .customer-image-navigation button { padding: 10px 8px; font-size: 11px; } }
