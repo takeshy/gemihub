@@ -28,7 +28,7 @@ import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
 import React, { useEffect, useState, useRef } from "react";
 import { useApi } from "./api";
-import { bookingStaff, bookingStaffName, bookingMenuName, menuSelection, hoursText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
+import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import "./ManagementTypography.css";
@@ -510,12 +510,12 @@ function Dashboard({
                     {!shop.published && <div className="steps initial-steps">{[tr("内容を確認"), tr("仮公開"), tr("本番公開")].map((label, i) => <div key={label} className={i === 0 ? "current" : ""} aria-current={i === 0 ? "step" : undefined}><span>0{i + 1}</span>{label}</div>)}</div>}
                     <div ref={buildReview} className="build-plan-area">
                       <div>
-                        {!shop.published && <div className="panel interview">{!activePlan && <h2>{tr("AIとお店をつくる")}</h2>}<ShopRequest shopId={shop.id} published={false} isOwner={shop.isOwner} context={{revision:shop.revision,hash:""}} plan={activePlan} onPlan={async (text, imageIds, intent, chat) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds, intent, chat }); setPlan(p); await load(); return p; }} onAccept={acceptPlan} /></div>}
+                        {!shop.published && <div className="panel interview">{!activePlan && <h2>{tr("AIとお店をつくる")}</h2>}<ShopRequest key={`${shop.id}:${session.user?.email}`} shopId={shop.id} published={false} isOwner={shop.isOwner} context={{revision:shop.revision,hash:""}} plan={activePlan} onPlan={async (text, imageIds, intent, chat) => { const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, imageIds, intent, chat }); setPlan(p); await load(); return p; }} onAccept={acceptPlan} /></div>}
                       </div>
                     </div>
                   </>
                 )}
-                {view === "assistant" && shop.published && <Assistant key={shop.id} shop={shop} voice={!!session.assistantVoice} acceptPlan={acceptPlan} />}
+                {view === "assistant" && shop.published && <Assistant key={`${shop.id}:${session.user?.email}`} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop} onSaved={load}/></>}{!shop.isOwner && <><StaffCalendar key={shop.id} shop={shop} onSaved={load}/><StaffPhoto shop={shop} reload={load}/></>}</>}
@@ -1236,7 +1236,7 @@ export function PublicShop({
     registrationRequired?: boolean;
     paymentSimulation?: boolean;
   }>();
-  const { money: yen, when, shopToday: localDate, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
+  const { money: yen, when, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
   const [emailLoginOpen, setEmailLoginOpen] = useState(false);
   const [optionIds, setOptionIds] = useState<string[]>([]);
@@ -1246,6 +1246,8 @@ export function PublicShop({
     { start: string; end: string; staffId: string }[]
   >([]);
   const [timesLoading, setTimesLoading] = useState(false);
+  const [automaticDate, setAutomaticDate] = useState(true);
+  const requestedDate = automaticDate ? "" : date;
   const [timesError, setTimesError] = useState("");
   const [timesRetry, setTimesRetry] = useState(0);
   const [selected, setSelected] = useState("");
@@ -1318,7 +1320,7 @@ export function PublicShop({
         registrationRequired?: boolean;
       }>(base);
       setData(d);
-      setDate(dateIn(Date.now(), regionOf(d.config).timeZone));
+      setDate(""); setAutomaticDate(true);
       if (d.customerProfile) setName(d.customerProfile.name);
       setMenu(d.config.menus.find((m) => m.active && !m.optionFor)?.id || "");
       setOptionIds([]);
@@ -1340,19 +1342,23 @@ export function PublicShop({
     setRequestId(createRequestId());
     setTimes([]);
     setTimesError("");
-    if (!date || !selection) { setTimesLoading(false); return; }
+    if ((!automaticDate && !requestedDate) || !selection) { setTimesLoading(false); return; }
     setTimesLoading(true);
+    if (automaticDate) setDate("");
     let cancelled = false;
     const query = new URLSearchParams({
-      date,
+      date: requestedDate,
       menu,
       staff,
 
     });
     for (const id of optionIds) query.append("option", id);
-    api<typeof times>(`${base}/slots?${query}`)
+    const request = automaticDate
+      ? api<{date:string;slots:typeof times}>(`${base}/slots/next?${query}`)
+      : api<typeof times>(`${base}/slots?${query}`).then(slots => ({date:requestedDate,slots}));
+    request
       .then((t) => {
-        if (!cancelled) setTimes(t);
+        if (!cancelled) { setTimes(t.slots); if (automaticDate) setDate(t.date); }
       })
       .catch((error) => {
         if (!cancelled) setTimesError(error instanceof Error ? error.message : tr("空き時間を取得できませんでした。再試行してください。"));
@@ -1361,7 +1367,7 @@ export function PublicShop({
     return () => {
       cancelled = true;
     };
-  }, [date, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, session.user?.email, timesRetry]);
+  }, [requestedDate, automaticDate, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, session.user?.email, timesRetry]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);
@@ -1502,11 +1508,14 @@ export function PublicShop({
                 {staff && <MenuImage imageId={c.staff.find(person=>person.id===staff)?.imageId} imageBase={`${base}/images`} name={c.staff.find(person=>person.id===staff)?.name || tr("スタッフ")} className="staff-photo"/>}
                 <Field label={tr("ご希望の日付（{0}）", timeZoneLabel)}>
                   <DateInput aria-label={tr("ご希望の日付（{0}）", timeZoneLabel)}
-                    min={localDate()}
+                    min={bookingDates(c)[0]}
+                    max={bookingDates(c).at(-1)}
                     value={date}
-                    onValueChange={value => setDate(value)} />
+                    onValueChange={value => { setAutomaticDate(false); setDate(value); }} />
                 </Field>
-                {timesLoading && <p role="status">{tr("空き時間を確認しています…")}</p>}
+                {timesLoading && <p role="status">{automaticDate ? tr("予約できる最初の日を探しています…") : tr("空き時間を確認しています…")}</p>}
+                {!timesLoading && !timesError && automaticDate && date && <p className="small muted">{tr("予約できる最初の日を表示しています。別の日付も選べます。")}</p>}
+                {!timesLoading && !timesError && automaticDate && !date && !!selection && <p className="empty-slots">{tr("予約受付期間内にご案内できる時間がありません。お店にお問い合わせください。")}</p>}
                 {timesError && <div className="alert" role="alert"><p>{timesError}</p><button type="button" onClick={() => setTimesRetry(value => value + 1)}>{tr("再試行")}</button></div>}
                 <div className="time-grid" aria-busy={timesLoading}>
                   {times.map((t) => (
@@ -1528,7 +1537,7 @@ export function PublicShop({
                 </div>
                 {!timesLoading && !timesError && !!date && !!selection && !times.length && (
                   <p className="empty-slots">
-                    {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}</p>
+                    {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}{" "}<button type="button" onClick={()=>setAutomaticDate(true)}>{tr("予約できる最初の日を探す")}</button></p>
                 )}
                 <h3>{tr("03 予約内容を確認")}</h3>
                 {selection && <div className="booking-mobile-summary"><p>{selection.base.name}</p>{!!selection.options.length && <ul>{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)}</li>)}</ul>}<p><b className="price">{yen(totalPrice)}</b> · {tr("合計 {0}分", selection.duration)}</p><p>{selected ? when(selected) : tr("日時をお選びください")}</p></div>}

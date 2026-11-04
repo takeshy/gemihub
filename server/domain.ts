@@ -211,6 +211,12 @@ export const sample: ShopConfig = {
 export const dateJST = (now = new Date()) => dateIn(now, "Asia/Tokyo");
 /** Today's date (or the date of an instant) in the shop's time zone. */
 export const shopDate = (config: Pick<ShopConfig, "region"> | null | undefined, now: Date | number | string = new Date()) => dateIn(now, regionOf(config).timeZone);
+/** Calendar dates in the booking window, independent of UTC offset and DST. */
+export function bookingDates(config: ShopConfig, now = new Date()) {
+  const today = shopDate(config, now);
+  const start = Date.parse(`${today}T00:00:00Z`);
+  return Array.from({ length: config.rules.advanceDays + 1 }, (_, day) => new Date(start + day * 86400000).toISOString().slice(0, 10)).filter(date => config.rules.sameDay || date !== today);
+}
 const minutes = (s: string) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3));
 export const hoursForDate = (config: Pick<ShopConfig, "hours">, date: string) => config.hours.weekdayHours?.find(hours => hours.day === weekdayOf(date)) || config.hours;
 export function hoursText(config: Pick<ShopConfig, "hours">) {
@@ -279,6 +285,13 @@ export function slots(
       });
   }
   return result;
+}
+export function firstAvailableSlots(config: ShopConfig, bookings: Booking[], menu: string, staff?: string, optionIds: string[] = [], now = new Date()) {
+  for (const date of bookingDates(config, now)) {
+    const times = slots(config, bookings, date, menu, staff, now, optionIds);
+    if (times.length) return { date, slots: times };
+  }
+  return { date: "", slots: [] };
 }
 export function documents(
   config: ShopConfig,

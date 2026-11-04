@@ -2522,3 +2522,9 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
   .booking-complete-details > div { grid-template-columns: 1fr; gap: 4px; }
   .booking-complete .actions > button { width: 100%; }
 }
+.plan-progress { margin:1.2rem 0; padding:1.2rem; border:1px solid var(--line, #dce3de); border-radius:16px; background:#f7faf7; min-width:0; }
+.plan-progress-steps { display:flex; flex-wrap:wrap; gap:.5rem 1.2rem; padding:0; list-style:none; color:#68726c; font-size:.9rem; }
+.plan-progress-steps [aria-current="step"] { color:#254c3a; font-weight:700; }
+.plan-progress details { min-width:0; }
+.generation-preview { max-height:36rem; overflow:auto; border:1px solid #dce3de; border-radius:12px; background:white; }
+.generation-preview .preview-surface { min-width:0; }

@@ -1,16 +1,17 @@
 import { z } from "zod";
-import { parseFragment, type DefaultTreeAdapterTypes as Html } from "parse5";
+import { parseFragment, serialize, type DefaultTreeAdapterTypes as Html } from "parse5";
 import { themeSchema, themeImageIds, type Theme } from "../shared/presentation.ts";
 import { tr, getLocale } from "../shared/i18n.ts";
 import { generateJson } from "./llm.ts";
 import { requestImageParts, type RequestImage } from "./request-images.ts";
 import { renderChrome } from "./chrome-renderer.tsx";
 import type { ShopConfig } from "./domain.ts";
+import { navigationItems } from "../shared/navigation.ts";
 
 const reviewSchema = z.object({ approved: z.boolean(), issues: z.array(z.string().min(1).max(1000)).max(12), imageUsage: z.array(z.object({ id: z.string(), purpose: z.enum(["reference", "asset"]) })).max(15) });
 export type ThemeReview = z.infer<typeof reviewSchema>;
 export type ThemeRun = { config: ShopConfig; request: string; imageIds: string[]; attempts: number; candidate?: Theme; previousCandidate?: Theme; feedback: string[]; review?: ThemeReview; reviewVersion?: number };
-const reviewVersion = 3;
+const reviewVersion = 4;
 export type ThemeContext = { state?: ThemeRun; save?: (state: ThemeRun) => Promise<void>; shopName?: string; articles?: { blogs: boolean; announcements: boolean }; introductions?: { staff: boolean; products: boolean } };
 export { initialIntroductionPages } from "../shared/initial-pages.ts";
 const generationSystem = `Create only the visual theme for the FIRST shop setup. Return headerHtml, bodyHtml, footerHtml, css. Be bold about layout, typography, whitespace, colors, decorative SVG and composition; do not limit designs to preset colors or layouts. Recreate the visual language of reference page images in real HTML/CSS, never by pasting a screenshot into the page. Use an attached image itself only when the owner's words or logo answers request it. Such images use <img data-image-id="EXACT PROVIDED ID" alt="...">, not a URL or base64. HTML must be a fragment, with no scripts, event handlers, forms, inputs, buttons, embedded documents, external styles, @import or CSS URL requests. Use simple classes, CSS gradients, system fonts and optional SVG. Do not recreate functional widgets. Place <slot name="navigation"></slot> EXACTLY ONCE in the header, <slot name="content"></slot> EXACTLY ONCE in the body, and <slot name="content"></slot> EXACTLY ONCE in the footer. Slots render as ordinary div elements with data-design-slot attributes, not Web Components. Style the actual inserted elements such as .public-nav or [data-design-slot="navigation"]; never use ::slotted or selectors for slot tags. The header can also use slots title, subtitle, details, image; these supply the real shop's settings and registered image. No slot is repeated. Navigation is provided by the application: NEVER add a second hard-coded menu or links duplicating it. The body wraps existing booking, payment, login, customer and article components unchanged; CSS may restyle them. Keep backend data, fields, prices, URLs and rules unchanged. Reference page names, logos and texts are NOT this shop's name or logo unless explicitly requested. CSS applies inside each region; html/body/:root refer to its inner root. Use real HTML/CSS to make a design, not text describing one. Repair all supplied review issues. Preserve the accepted design where a correction was not requested.`;
@@ -36,6 +37,40 @@ function literalImageUrls(theme: Theme) {
   for (const html of [theme.headerHtml, theme.bodyHtml, theme.footerHtml]) parseFragment(html).childNodes.forEach(visit);
   return urls;
 }
+
+/** Remove only redundant menu links; unsafe markup still goes through themeSchema. */
+export function normalizeInitialNavigation(value: unknown, config: ShopConfig): unknown {
+  if (!themeSchema.safeParse(value).success) return value;
+  const result = { ...(value as Record<string, unknown>) };
+  const labels = new Set(navigationItems(config).map(item => item.label.normalize("NFKC").replace(/\s/g, "")));
+  const text = (node: Html.ChildNode): string => "value" in node ? node.value : "childNodes" in node ? node.childNodes.map(text).join("") : "";
+  for (const part of ["headerHtml", "bodyHtml", "footerHtml"]) {
+    if (typeof result[part] !== "string") continue;
+    const root = parseFragment(result[part] as string);
+    const clean = (parent: Html.ParentNode, inNav = false) => {
+      parent.childNodes = parent.childNodes.filter(node => {
+        if (!("tagName" in node)) return true;
+        const duplicate = labels.has(text(node).normalize("NFKC").replace(/\s/g, ""));
+        // Never discard elements with attributes that must be validated as unsafe.
+        const plain = node.attrs.every(attr => ["class", "href", "title", "aria-label"].includes(attr.name));
+        if (duplicate && plain && (node.tagName === "a" || inNav && node.tagName === "span")) return false;
+        clean(node, inNav || node.tagName === "nav");
+        return node.tagName !== "nav" || node.childNodes.some(child => "tagName" in child || text(child).trim());
+      });
+    };
+    clean(root);
+    result[part] = serialize(root);
+  }
+  return result;
+}
+
+/** A schema-checked work in progress, never an approved or publishable plan. */
+export function initialThemePreview(state: ThemeRun): ShopConfig {
+  const theme = state.candidate || state.previousCandidate;
+  const permittedUrls = new Set([state.config.header.imageUrl, state.config.appearance?.imageUrl, ...state.config.pages.map(page => page.imageUrl)].filter(Boolean));
+  if (!theme || !themeSchema.safeParse(theme).success || themeImageIds(theme).some(id => !state.imageIds.includes(id)) || literalImageUrls(theme).some(url => !permittedUrls.has(url))) return state.config;
+  return { ...state.config, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...state.config.appearance, theme } };
+}
 function reviewMarkup(config: ShopConfig, images: RequestImage[]) {
   const resolvedImages = Object.fromEntries(images.map(image => [image.id, `data:${image.mimeType};base64,${image.data}`]));
   // Render real img elements instead of the browser loader's SSR placeholder.
@@ -52,7 +87,7 @@ function themeLayoutContext(config: ShopConfig, images: RequestImage[]) {
   };
   const example = { ...config, appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", ...config.appearance, theme } };
   const { renderedHeader, renderedFooter } = reviewMarkup(example, images);
-  return { headerSlotExample: renderedHeader, footerSlotExample: renderedFooter, navigationItemTags: ["span", "button", "a"], targetWidths: [320, 390, 768, 1280], note: "These examples show the actual slot wrappers, shop text, enabled navigation labels and structural base CSS. Choose your own layout. Preview/container width can be smaller than the viewport." };
+  return { headerSlotExample: renderedHeader, footerSlotExample: renderedFooter, navigation: { items: navigationItems(config), count: navigationItems(config).length, instruction: "The application supplies exactly these items inside ONE navigation slot. Do not add hard-coded copies. The owner never needs to specify a link count. Do not impose the reference image's link count on the application's menu. Review only additional navigation authored by the theme, not the required slot items." }, navigationItemTags: ["span", "button", "a"], targetWidths: [320, 390, 768, 1280], note: "These examples show the actual slot wrappers, shop text, enabled navigation labels and structural base CSS. Choose your own layout. Preview/container width can be smaller than the viewport." };
 }
 export async function createInitialTheme(input: { config: ShopConfig; request: string; images: RequestImage[]; screen?: { mimeType: "image/png"; data: string } }, context: ThemeContext = {}, model = generateJson) {
   let state: ThemeRun = context.state || { config: input.config, request: input.request, imageIds: input.images.map(image => image.id), attempts: 0, feedback: [] };
@@ -65,12 +100,14 @@ export async function createInitialTheme(input: { config: ShopConfig; request: s
   // The owner's existing retry must not remain stuck on an obsolete rejection.
   if (!state.candidate && state.previousCandidate && state.reviewVersion !== reviewVersion)
     state = { ...state, candidate: state.previousCandidate, review: undefined };
+  // A deliberate retry starts another bounded repair pass with the saved feedback.
+  if (!state.candidate && state.attempts >= 3) state = { ...state, attempts: 0 };
   const layoutContext = themeLayoutContext(state.config, input.images);
   while (state.attempts < 3 || state.candidate) {
     if (!state.candidate) {
       state = { ...state, attempts: state.attempts + 1, review: undefined }; await persist();
       const raw = await model({ system: generationSystem + "\n" + layoutInstruction, schema: themeSchema.toJSONSchema(), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
-      const parsed = themeSchema.safeParse((() => { try { return JSON.parse(raw); } catch { return null; } })());
+      const parsed = themeSchema.safeParse(normalizeInitialNavigation((() => { try { return JSON.parse(raw); } catch { return null; } })(), state.config));
       if (!parsed.success) { state = { ...state, feedback: parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`), candidate: undefined }; await persist(); continue; }
       state = { ...state, candidate: parsed.data }; await persist();
     }
@@ -92,5 +129,5 @@ export async function createInitialTheme(input: { config: ShopConfig; request: s
     if (!state.feedback.length) state.feedback = [tr("依頼と参考画像に合うテーマへ修正してください。")];
     await persist();
   }
-  throw Object.assign(new Error(tr("テーマの確認が完了しませんでした。依頼を補足して、もう一度お試しください。") + "\n" + state.feedback.join("\n")), { status: 422 });
+  throw Object.assign(new Error(tr("デザインの自動調整が完了しませんでした。依頼の内容は保持しています。同じ依頼のまま、もう一度お試しください。")), { status: 422 });
 }

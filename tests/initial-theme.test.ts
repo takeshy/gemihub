@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { themeSchema, compilePresentation, themeImageIds } from "../shared/presentation.ts";
 import { Presentation } from "../src/Presentation.tsx";
 import { sample, shopSchema } from "../server/domain.ts";
-import { initialThemeConfig, createInitialTheme, type ThemeRun } from "../server/initial-theme.ts";
+import { initialThemeConfig, createInitialTheme, normalizeInitialNavigation, initialThemePreview, type ThemeRun } from "../server/initial-theme.ts";
 import { initialIntroductionPages } from "../shared/initial-pages.ts";
 import { managedImageIds, withInlineImages } from "../server/image-references.ts";
 import { validateProposedImages } from "../server/request-images.ts";
@@ -24,6 +24,8 @@ test("generation and review see the actual shop text and enabled navigation slot
     calls.push(call.purpose);
     const input = JSON.parse(call.contents[0].parts![0].text!);
     const example = input.layoutContext.headerSlotExample;
+    assert.equal(input.layoutContext.navigation.count, 6);
+    assert.deepEqual(input.layoutContext.navigation.items.map((item: {label:string}) => item.label), ["マイページ", "ご予約", "お店のこと", "お問い合わせ", "お知らせ", "Staff and services"]);
     assert.match(example, /A long shop name with room for all navigation/);
     assert.match(example, /data-design-slot="navigation"/);
     assert.match(example, /class="public-nav"/);
@@ -39,6 +41,44 @@ test("generation and review see the actual shop text and enabled navigation slot
     return JSON.stringify(theme);
   });
   assert.deepEqual(calls, [undefined, "review"]);
+});
+
+test("duplicate theme menus are repaired before review without hiding unsafe markup or changing the requested pages", async () => {
+  const config = structuredClone(sample);
+  const candidate = { ...theme, headerHtml: '<header><nav><a href="/?pane=reserve">ご予約</a><span>お問い合わせ</span></nav><slot name="title"></slot><slot name="navigation"></slot></header>', footerHtml: '<footer><a href="/?pane=reserve">ご予約</a><a href="https://example.com/social">Social</a><slot name="content"></slot></footer>' };
+  const result = await createInitialTheme({config,request:"Make the shop",images:[]},{},async call=>{
+    if(!call.purpose)return JSON.stringify(candidate);
+    const input=JSON.parse(call.contents[0].parts![0].text!);
+    assert.doesNotMatch(input.theme.headerHtml, /<nav>|ご予約|お問い合わせ/);
+    assert.doesNotMatch(input.theme.footerHtml, /ご予約/);
+    assert.match(input.theme.footerHtml, /Social/);
+    return JSON.stringify({approved:true,issues:[],imageUsage:[]});
+  });
+  assert.equal(result.attempts,1);
+  assert.deepEqual(result.config,config);
+  const unsafe={...candidate,headerHtml:candidate.headerHtml.replace('ご予約</a>', 'ご予約<script>alert(1)</script></a>')};
+  assert.deepEqual(normalizeInitialNavigation(unsafe,config),unsafe,"normalization must not hide a validation error");
+  assert.equal(themeSchema.safeParse(normalizeInitialNavigation(unsafe,config)).success,false);
+});
+
+test("preview rejects unmanaged images, and a deliberate retry repairs an exhausted run using its saved feedback", async () => {
+  const input={config:structuredClone(sample),request:"A calm shop",images:[]};
+  let saved:ThemeRun|undefined;
+  await assert.rejects(createInitialTheme(input,{save:async state=>{saved=state;}},async call=>JSON.stringify(call.purpose?{approved:false,issues:["Increase contrast"],imageUsage:[]}:theme)),{status:422});
+  let generations=0;
+  const result=await createInitialTheme(input,{state:saved},async call=>{
+    if(call.purpose)return JSON.stringify({approved:true,issues:[],imageUsage:[]});
+    generations++;
+    const data=JSON.parse(call.contents[0].parts![0].text!);
+    assert.deepEqual(data.feedback,["Increase contrast"]);
+    assert.ok(data.previousTheme);
+    return JSON.stringify({...theme,css:theme.css+" p{color:white}"});
+  });
+  assert.equal(generations,1);assert.equal(result.review?.approved,true);
+  const unsafe={...theme,headerHtml:`<header><img data-image-id="${"f".repeat(64)}" alt="Unknown"><slot name="navigation"></slot></header>`};
+  assert.equal(initialThemePreview({...result,candidate:unsafe}),result.config);
+  assert.equal(initialThemePreview({...result,candidate:{...theme,headerHtml:'<header><img src="https://unknown.example/photo.png" alt="Unknown"><slot name="navigation"></slot></header>'}}),result.config);
+  assert.deepEqual(initialThemePreview(result).appearance?.theme,result.candidate);
 });
 
 test("theme HTML is free to change structure while CSS, slots and unsafe content remain contained", () => {

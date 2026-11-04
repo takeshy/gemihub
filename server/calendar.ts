@@ -7,7 +7,7 @@ import { oauth, encrypt, decrypt } from "./google.ts";
 import type { Store, Shop, User } from "./store.ts";
 import { staffAccounts } from "./staff-accounts.ts";
 import { demoGoogleUnavailable } from "./judge.ts";
-import { slots, bookingStaff, menuSelection, ownerStaffId, type ShopConfig } from "./domain.ts";
+import { slots, bookingDates, bookingStaff, menuSelection, ownerStaffId, type ShopConfig, type Booking } from "./domain.ts";
 
 export const calendarScope = "https://www.googleapis.com/auth/calendar.freebusy";
 export type CalendarConnection = {
@@ -106,6 +106,14 @@ export async function availableSlots(
   const timeZone = regionOf(config).timeZone;
   const start = zonedDate(date, "00:00", timeZone);
   const end = zonedDate(new Date(Date.parse(`${date}T00:00:00Z`) + 86400000).toISOString().slice(0, 10), "00:00", timeZone);
+  bookings.push(...await calendarConflicts(store, shop, config, menu, staff, optionIds, gateway, start.toISOString(), end.toISOString()));
+  return slots(config, bookings, date, menu, staff, undefined, optionIds);
+}
+
+async function calendarConflicts(store: Store, shop: Shop, config: ShopConfig, menu: string, staff: string | undefined, optionIds: string[], gateway: CalendarGateway, start: string, end: string): Promise<Booking[]> {
+  const selection = menuSelection(config, menu, optionIds);
+  if (!selection) return [];
+  const bookings: Booking[] = [];
   const linked = await bookingCalendars(store, shop, config);
   const relevant = linked.filter(c =>
     bookingStaff(config).some(s => s.id === c.staffId && s.menuIds.includes(menu) && selection.options.every(option => s.menuIds.includes(option.id))) &&
@@ -114,7 +122,7 @@ export async function availableSlots(
   try {
     const results = await Promise.all(relevant.map(async c => ({
       staffId: c.staffId,
-      busy: busySchema.parse(await gateway.busy(c, start.toISOString(), end.toISOString())),
+      busy: busySchema.parse(await gateway.busy(c, start, end)),
     })));
     for (const result of results)
       for (const b of result.busy)
@@ -128,5 +136,22 @@ export async function availableSlots(
       { status: 503 },
     );
   }
-  return slots(config, bookings, date, menu, staff, undefined, optionIds);
+  return bookings;
+}
+
+/** Search the booking window with one Calendar lookup per relevant member. */
+export async function nextAvailableSlots(store: Store, shop: Shop, config: ShopConfig, menu: string, staff: string | undefined, gateway: CalendarGateway, optionIds: string[] = [], now = new Date()) {
+  const bookings = [...await store.bookings(shop.id), ...await paymentHolds(store, shop.id)];
+  const dates = bookingDates(config, now).filter(date => slots(config, bookings, date, menu, staff, now, optionIds).length);
+  if (!dates.length) return { date: "", slots: [] };
+  const timeZone = regionOf(config).timeZone;
+  const start = zonedDate(dates[0], "00:00", timeZone).toISOString();
+  const dayAfter = new Date(Date.parse(`${dates.at(-1)}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+  const end = zonedDate(dayAfter, "00:00", timeZone).toISOString();
+  bookings.push(...await calendarConflicts(store, shop, config, menu, staff, optionIds, gateway, start, end));
+  for (const date of dates) {
+    const times = slots(config, bookings, date, menu, staff, now, optionIds);
+    if (times.length) return { date, slots: times };
+  }
+  return { date: "", slots: [] };
 }

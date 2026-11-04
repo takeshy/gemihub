@@ -7,7 +7,7 @@ import { MenuImage } from "./MenuImage";
 import { ImagePicker } from "./ImageLibrary";
 import { Presentation } from "./Presentation";
 import { themePart } from "../shared/presentation";
-import { articleKinds } from "../shared/article-features";
+import { navigationItems } from "../shared/navigation";
 const days = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
 export function SiteHeader({ config: c, children, actions, imageBase, imageSuffix, resolvedImages }: { config: ShopConfig; children?: React.ReactNode; actions?: React.ReactNode; imageBase?: string; imageSuffix?: string; resolvedImages?: Record<string, string> }) {
   const image = c.header.imageUrl || c.appearance?.imageUrl;
@@ -45,5 +45,5 @@ export function ChromeEditor({ config, part, onChange, shopId }: { config: ShopC
 }
 
 export function ChromePreview({ config, part, imageBase }: { config: ShopConfig; part: "header" | "footer"; imageBase?: string }) {
-  return <div className={`public-shop accent-${config.appearance?.accent || "sage"}${config.appearance?.theme?" custom-theme":""}`}>{part === "header" ? <SiteHeader config={config} imageBase={imageBase}><nav className="public-nav"><span>{tr("マイページ")}</span><span>{tr("ご予約")}</span><span>{tr("お店のこと")}</span><span>{tr("お問い合わせ")}</span>{articleKinds(config).map(kind=><span key={kind}>{kind==="blogs"?tr("ブログ"):tr("お知らせ")}</span>)}{config.pages.map(page => <span key={page.id}>{page.navigationLabel}</span>)}</nav></SiteHeader> : <SiteFooter config={config} imageBase={imageBase} />}</div>;
+  return <div className={`public-shop accent-${config.appearance?.accent || "sage"}${config.appearance?.theme?" custom-theme":""}`}>{part === "header" ? <SiteHeader config={config} imageBase={imageBase}><nav className="public-nav">{navigationItems(config).map(item => <span key={item.href}>{item.label}</span>)}</nav></SiteHeader> : <SiteFooter config={config} imageBase={imageBase} />}</div>;
 }

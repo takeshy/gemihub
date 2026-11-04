@@ -7,7 +7,7 @@ import type { Booking } from "../server/domain";
 import {postImageIds} from "../server/post-images";
 import { customerProfileSchema, type MemberProfile } from "../server/customer-profile";
 import { z } from "zod";
-import { shopSchema, slots, bookingStaff, menuSelection, type ShopConfig } from "../server/domain";
+import { shopSchema, slots, firstAvailableSlots, bookingStaff, menuSelection, type ShopConfig } from "../server/domain";
 import { editorIndexSchema } from "../server/editor-index-schema";
 import { releaseScopeSchema } from "../server/pages";
 import { managedImageIds } from "../server/image-references";
@@ -82,6 +82,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
       result = await readImage(image[2], view === "display" || view === "thumbnail" ? view : undefined);
     }
     else if (action === base) result = { config, shopId, recentPosts: posts.slice(0, 5), paymentSimulation: true, customerProfile: profile, registrationRequired: false };
+    else if (action === `${base}/slots/next`) result = firstAvailableSlots(config, bookings, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, url.searchParams.getAll("option"));
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined,undefined,url.searchParams.getAll("option"));
     else if (action === `${base}/checkouts`) result = [];
     else if (action === `${base}/bookings` && data === undefined) result = bookings;

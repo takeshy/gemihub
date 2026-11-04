@@ -4,10 +4,17 @@ import { z } from "zod";
 import type { Shop, Store } from "./store.ts";
 import { chatLabels, openingQuestions, requestIntentSchema, type RequestIntent } from "./request-intent.ts";
 import { findRelevantHistory } from "./chat-context.ts";
+import type { ShopConfig } from "./domain.ts";
 
 export type ShopConversation = { id: string; shopId: string; email: string; intent: RequestIntent; title: string; createdAt: string; updatedAt: string };
 export type ShopChatMessage = { id: string; shopId: string; conversationId: string; email: string; role: "user" | "assistant"; text: string; requestId: string; sequence: number; createdAt: string; updatedAt: string; detail: { article?:{title:string;excerpt:string;body:string}; imageIds?: string[]; changeRequest?: boolean; ready?: boolean; planId?: string; partial?: boolean } };
 export type ShopChat = ShopConversation & { messages: ShopChatMessage[] };
+export type ChatGeneration = {
+  shopId: string; email: string; chat: ChatReference; base: number;
+  stage: "preparing" | "generating" | "reviewing" | "repairing" | "complete" | "failed";
+  attempts: number; startedAt: number; updatedAt: number;
+  preview?: ShopConfig; planId?: string;
+};
 export const conversationInputSchema = z.object({ intent: requestIntentSchema, requestId: z.uuid(), begin:z.boolean().optional() });
 export const chatReferenceSchema = z.object({ id: z.string().regex(/^[a-f0-9]{64}$/), requestId: z.uuid() });
 export type ChatReference = z.infer<typeof chatReferenceSchema>;
@@ -15,6 +22,7 @@ export function conversationContext(chat: ShopChat, limit=24) {
   return chat.messages.slice(-limit).map(message=>({role:message.role,text:(message.detail.partial?tr("（途中で終了した発言）{0}", message.text):message.text)+(message.detail.imageIds?.length?`\nAttached image IDs: ${message.detail.imageIds.join(", ")}`:"")}));
 }
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
+export const chatMessageId = (conversationId: string, requestId: string, role: "user" | "assistant") => digest(`${conversationId}:${requestId}:${role}`);
 export async function conversations(store: Store, shop: Shop, email: string) {
   return (await store.records<ShopConversation>("shopChat", shop)).filter(chat => chat.email === email).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
 }
@@ -44,7 +52,7 @@ export async function createConversation(store: Store, shop: Shop, email: string
 }
 export async function appendChatMessage(store: Store, shop: Shop, chat: ShopConversation, input: Pick<ShopChatMessage,"role"|"text"|"requestId"> & { detail?: ShopChatMessage["detail"] }): Promise<ShopChatMessage> {
   if (!input.text.trim() || input.text.length > 12000) throw Object.assign(new Error(tr("チャットの文章は12000文字以内にしてください")),{status:400});
-  const id = digest(`${chat.id}:${input.requestId}:${input.role}`);
+  const id = chatMessageId(chat.id, input.requestId, input.role);
   const records = await store.records<ShopChatMessage>("shopChatMessage",shop);
   const previous = records.find(message => message.id === id);
   if (previous) {

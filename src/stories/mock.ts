@@ -36,6 +36,7 @@ import type { Plan, Session, Workspace } from "../App";
 import {
   sample,
   slots,
+  firstAvailableSlots,
   bookingStaff,
   ownerStaffId,
   menuSelection,
@@ -488,6 +489,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         result=chatData(id);
       }
     }
+    else if(action.startsWith(`/api/shops/${shop.id}/conversations/`)&&action.endsWith("/progress"))result=null;
     else if(action.startsWith(`/api/shops/${shop.id}/conversations/`))result=chatData(action.split("/").at(-1)!);
     else if (action === `/api/shops/${shop.id}/data/sheets`) result = scenario === "data" ? [{ id: extraData.id, title: extraData.title }] : [];
     else if (action === `/api/shops/${shop.id}/data/sheets/100`) result = extraData;
@@ -900,7 +902,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
           (p) => p.category === parts.at(-2) && postKey(p) === parts.at(-1),
         );
         if (!result) throw new Error(tr("記事がありません"));
-      } else if (action.endsWith("/slots"))
+      } else if (action.endsWith("/slots/next")) result = firstAvailableSlots(current, preview ? [] : shop.bookings, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, url.searchParams.getAll("option"));
+      else if (action.endsWith("/slots"))
         result = slots(
           current,
           preview ? [] : shop.bookings,

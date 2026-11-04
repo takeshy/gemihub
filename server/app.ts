@@ -15,7 +15,7 @@ import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts
 import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } from "./post-metadata.ts";
 import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } from "./staff-accounts.ts";
 import { inquiryStatus, inquiryStatusSchema } from "./inquiries.ts";
-import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, type ChatReference } from "./shop-chat.ts";
+import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
 import { emailLogin, type LoginMailer } from "./email-login.ts";
@@ -32,7 +32,7 @@ import { z } from "zod";
 import { Store, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
 import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
-import { createInitialTheme, initialThemeConfig, initialIntroductionPages, type ThemeRun } from "./initial-theme.ts";
+import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { uploadMenuImage, readMenuImage, menuImageResource, validateMenuImages, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
@@ -123,7 +123,7 @@ import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from 
 import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
 import { renderCustomPage } from "./page-renderer.tsx";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
-import { calendarGateway, calendarScope, connections, connectOwnerCalendar, bookingCalendars, availableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
+import { calendarGateway, calendarScope, connections, connectOwnerCalendar, bookingCalendars, availableSlots, nextAvailableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 /**
  * Images attached anywhere in a conversation plus the current ones, newest first within the request limits.
  * Earlier images that were since removed (or would exceed the size limit) are skipped; current ones stay strict.
@@ -1178,6 +1178,27 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        // These reads must stay available while a model call holds the shop write lock.
+        if (action === "conversations" && method === "GET") return json(res, { email: user!.email, conversations: await conversations(store, shop, user!.email) });
+        const conversationRead = action.match(/^conversations\/([a-f0-9]{64})(\/progress)?$/);
+        if (conversationRead && method === "GET") {
+          const conversation = await store.get<ShopConversation>("shopChat", conversationRead[1]);
+          if (!conversation || conversation.shopId !== shop.id || conversation.email !== user!.email) fail(404, tr("チャットが見つかりません"));
+          const progress = await store.get<ChatGeneration>("shopChatGeneration", conversation.id);
+          let generation = progress?.shopId === shop.id && progress.email === user!.email ? progress : null;
+          // The plan/message are authoritative if the last progress write was interrupted.
+          if (generation && generation.stage !== "complete") {
+            const message = await store.get<ShopChatMessage>("shopChatMessage", chatMessageId(conversation.id, generation.chat.requestId, "assistant"));
+            const planId = message?.detail.planId;
+            const plan = planId ? await store.get<Plan>("plan", planId) : undefined;
+            if (plan?.shopId === shop.id) generation = { ...generation, stage: "complete", base: plan.base, planId: plan.id, preview: undefined };
+          }
+          if (conversationRead[2]) return json(res, generation);
+          const chat = await readConversation(store, shop, user!.email, conversation.id);
+          const linked = [...new Set(chat.messages.flatMap(message => message.detail.planId ? [message.detail.planId] : []))];
+          const plans = (await Promise.all(linked.map(id => store.get<Plan>("plan", id)))).filter(plan => plan?.shopId === shop.id);
+          return json(res, { ...chat, generation, plans: await Promise.all(plans.map(plan => initialPlanFacts(plan!, shop))) });
+        }
         const imageRead = action.match(/^(?:images|menu-images)\/([a-f0-9]{64})$/);
         if (imageRead && method === "GET") {
           assertOwner(user, shop);
@@ -1657,18 +1678,10 @@ export function createApp(
             const config = fresh.published ? await effective(fresh) : fresh.draft;
             return json(res, { config, revision: fresh.revision, hash: contentHash(config), history: fresh.history, published: !!fresh.published });
           }
-          if (action === "conversations" && method === "GET") return json(res,{email:user!.email,conversations:await conversations(store,fresh,user!.email)});
           if (action === "conversations" && method === "POST") {
             const input = conversationInputSchema.parse(await body(req));
             if (input.intent !== "consult") assertOwner(user,fresh);
             return json(res,await createConversation(store,fresh,user!.email,input.intent,input.requestId,!!input.begin));
-          }
-          const conversationRoute = action.match(/^conversations\/([a-f0-9]{64})$/);
-          if (conversationRoute && method === "GET") {
-            const chat = await readConversation(store,fresh,user!.email,conversationRoute[1]);
-            const linked = [...new Set(chat.messages.flatMap(message => message.detail.planId ? [message.detail.planId] : []))];
-            const plans = (await Promise.all(linked.map(id => store.get<Plan>("plan",id)))).filter(plan => plan?.shopId === fresh.id);
-            return json(res,{...chat,plans:await Promise.all(plans.map(plan=>initialPlanFacts(plan!,fresh)))});
           }
           if (action === "system/question" && method === "POST") {
             const input = z
@@ -1974,65 +1987,81 @@ export function createApp(
             const historicalContext = relatedHistory.length ? tr("参照用の過去の会話です。今回の変更依頼でも、反映済みという意味でもありません。現在の設定を優先してください。\n{0}\n今回の会話と依頼:\n", JSON.stringify(relatedHistory)) : "";
             const themeRunId = !current && !input.config ? digest(`${fresh.id}:initial-theme:${chatPlanId || input.text}:${planImageIds.join(",")}`) : undefined;
             const themeState = themeRunId ? await store.get<ThemeRun>("initialThemeRun", themeRunId) : undefined;
-            const proposed = input.config
-              ? {
-                  config: releaseConfig!,
-                  summary: planSummary(current, releaseConfig!),
-                }
-              : await intelligence.propose(
-                  visual
-                    ? tr("ペンで選んだ対象 {0} のみ変更する。予約ルール・料金・所要時間など他の箇所は一切変えない。依頼：{1}", input.visual!.target, input.text)
-                    : input.intent ? `${requestIntentInstruction[input.intent]}\n${historicalContext}${savedChat ? conversationContext(savedChat).map(message => `${message.role === "user" ? tr("店主") : "AI"}: ${message.text}`).join("\n") : input.text}` : input.text,
-                  visual?.config || current,
-                  user!.email,
-                  demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
-                  images,
-                  // A new shop takes the region from the owner's first visit; later ones keep their own.
-                  (visual?.config || current) ? (visual?.config || current)!.region : fresh.regionDefault,
-                  themeRunId ? { state: themeState, ...(savedChat ? { shopName: initialInterviewFacts(savedChat.messages).name, articles: initialInterviewFacts(savedChat.messages).articles, introductions: initialInterviewFacts(savedChat.messages).introductions } : {}), save: state => store.put("initialThemeRun", themeRunId, state) } : undefined,
-                );
-            if (!current && savedChat) {
-              const facts = initialInterviewFacts(savedChat.messages);
-              if (facts.name) proposed.config.name = facts.name;
-              if (facts.articles) proposed.config.appearance = { accent: "sage", layout: "standard", imageUrl: "", ...proposed.config.appearance, articles: facts.articles };
-              proposed.config = initialIntroductionPages(proposed.config, facts.introductions);
-            }
-            if (input.intent === "new-page") {
-              const added = proposed.config.pages.filter(page => !current!.pages.some(existing => existing.id === page.id));
-              if (!added.length) fail(400, tr("新しいページが見つかりませんでした。追加したいページをもう一度教えてください"));
-              proposed.config = shopSchema.parse({ ...current!, pages: [...current!.pages, ...added] });
-              proposed.summary = planSummary(current, proposed.config);
-            }
-            if (!input.config) validateProposedImages(proposed.config, visual?.config || current, images);
-            if (visual) {
-              proposed.config = validateVisualChange(
-                visual.config,
-                proposed.config,
-                input.visual!.target,
-              );
-              proposed.summary = planSummary(current, proposed.config);
-            }
-            const plan: Plan = {
-              id: localPlanId || chatPlanId || randomUUID(),
-              local: !!input.local,
-              scope: input.local?.scope,
-              shopId: fresh.id,
-              base: fresh.revision,
-              ...proposed,
-              ...(themeRunId ? { themeRunId } : {}),
-              approved: false,
-              requiresSetup: !current && !input.config,
-              createdAt: Date.now(),
-              checklist:checklist(),
-              source: current,
-              ...(input.chat ? {chat:input.chat} : {}),
-              ...(!input.config && !input.visual ? { request: input.text.slice(0, 2000) } : {}),
+            let generation: ChatGeneration | undefined = input.chat ? { shopId: fresh.id, email: user!.email, chat: input.chat, base: fresh.revision, stage: "preparing", attempts: 0, startedAt: Date.now(), updatedAt: Date.now() } : undefined;
+            const saveGeneration = async (update: Partial<ChatGeneration>) => {
+              if (!generation) return;
+              generation = { ...generation, ...update, updatedAt: Date.now() };
+              await store.put("shopChatGeneration", generation.chat.id, generation);
             };
-            if (!plan.summary.length) fail(400, tr("変更点がありません"));
-            artifacts(plan.config, '<title></title><div id="root"></div>');
-            await store.put("plan", plan.id, plan);
-            if (input.chat) await attachChatPlan(store,fresh,user!.email,input.chat,plan.id);
-            return json(res, plan);
+            await saveGeneration({});
+            try {
+              const proposed = input.config
+                ? {
+                    config: releaseConfig!,
+                    summary: planSummary(current, releaseConfig!),
+                  }
+                : await intelligence.propose(
+                    visual
+                      ? tr("ペンで選んだ対象 {0} のみ変更する。予約ルール・料金・所要時間など他の箇所は一切変えない。依頼：{1}", input.visual!.target, input.text)
+                      : input.intent ? `${requestIntentInstruction[input.intent]}\n${historicalContext}${savedChat ? conversationContext(savedChat).map(message => `${message.role === "user" ? tr("店主") : "AI"}: ${message.text}`).join("\n") : input.text}` : input.text,
+                    visual?.config || current,
+                    user!.email,
+                    demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT,
+                    images,
+                    // A new shop takes the region from the owner's first visit; later ones keep their own.
+                    (visual?.config || current) ? (visual?.config || current)!.region : fresh.regionDefault,
+                    themeRunId ? { state: themeState, ...(savedChat ? { shopName: initialInterviewFacts(savedChat.messages).name, articles: initialInterviewFacts(savedChat.messages).articles, introductions: initialInterviewFacts(savedChat.messages).introductions } : {}), save: async state => {
+                      await store.put("initialThemeRun", themeRunId, state);
+                      await saveGeneration({ stage: state.candidate ? "reviewing" : state.feedback.length ? "repairing" : "generating", attempts: state.attempts, preview: initialThemePreview(state) });
+                    } } : undefined,
+                  );
+              if (!current && savedChat) {
+                const facts = initialInterviewFacts(savedChat.messages);
+                if (facts.name) proposed.config.name = facts.name;
+                if (facts.articles) proposed.config.appearance = { accent: "sage", layout: "standard", imageUrl: "", ...proposed.config.appearance, articles: facts.articles };
+                proposed.config = initialIntroductionPages(proposed.config, facts.introductions);
+              }
+              if (input.intent === "new-page") {
+                const added = proposed.config.pages.filter(page => !current!.pages.some(existing => existing.id === page.id));
+                if (!added.length) fail(400, tr("新しいページが見つかりませんでした。追加したいページをもう一度教えてください"));
+                proposed.config = shopSchema.parse({ ...current!, pages: [...current!.pages, ...added] });
+                proposed.summary = planSummary(current, proposed.config);
+              }
+              if (!input.config) validateProposedImages(proposed.config, visual?.config || current, images);
+              if (visual) {
+                proposed.config = validateVisualChange(
+                  visual.config,
+                  proposed.config,
+                  input.visual!.target,
+                );
+                proposed.summary = planSummary(current, proposed.config);
+              }
+              const plan: Plan = {
+                id: localPlanId || chatPlanId || randomUUID(),
+                local: !!input.local,
+                scope: input.local?.scope,
+                shopId: fresh.id,
+                base: fresh.revision,
+                ...proposed,
+                ...(themeRunId ? { themeRunId } : {}),
+                approved: false,
+                requiresSetup: !current && !input.config,
+                createdAt: Date.now(),
+                checklist:checklist(),
+                source: current,
+                ...(input.chat ? {chat:input.chat} : {}),
+                ...(!input.config && !input.visual ? { request: input.text.slice(0, 2000) } : {}),
+              };
+              if (!plan.summary.length) fail(400, tr("変更点がありません"));
+              artifacts(plan.config, '<title></title><div id="root"></div>');
+              await store.put("plan", plan.id, plan);
+              if (input.chat) await attachChatPlan(store,fresh,user!.email,input.chat,plan.id);
+              await saveGeneration({ stage: "complete", planId: plan.id, preview: undefined });
+              return json(res, plan);
+            } catch (error) {
+              await saveGeneration({ stage: "failed" }).catch(() => {});
+              throw error;
+            }
           }
           const p = action.match(/^plans\/([^/]+)\/(approve|publish)$/);
           if (p && method === "POST") {
@@ -2439,6 +2468,8 @@ export function createApp(
               googleAuthUrl: process.env.GOOGLE_CLIENT_ID ? languageUrl(`${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${hosted ? `&host=${encodeURIComponent(host)}` : ""}`) : undefined,
             });
           }
+          if (action === "slots/next" && method === "GET")
+            return json(res, await nextAvailableSlots(store, shop, config, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, url.searchParams.getAll("option")));
           if (action === "slots" && method === "GET")
             return json(
               res,

@@ -4,27 +4,35 @@ import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
 import { ConfigSummary, type Plan, type Workspace } from "./App";
 import { AssistantAnswer } from "./AssistantAnswer";
+import { z } from "zod";
 
 type Source = { path: string; title: string };
 type Reply = { answer: string; sources: Source[]; request?: string };
 type Message = { role: "user" | "assistant"; text: string; sources?: Source[]; voice?: boolean };
+const savedAssistantSchema = z.object({
+  messages: z.array(z.object({role:z.enum(["user","assistant"]),text:z.string().max(20000),sources:z.array(z.object({path:z.string(),title:z.string()})).optional(),voice:z.boolean().optional()})).max(100),
+  text:z.string().max(4000),draft:z.string().max(10000).optional(),planId:z.string().optional(),
+});
 
 /**
  * The shop assistant: questions answered from spec.md, history.md and the system OKF bundle.
  * A change request becomes an editable draft; approving it creates an ordinary change plan,
  * which is reviewed and applied exactly like other plans.
  */
-export function Assistant({ shop, voice, acceptPlan }: { shop: Workspace; voice: boolean; acceptPlan: (plan: Plan) => Promise<void> }) {
+export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Workspace; voice: boolean; userEmail: string; acceptPlan: (plan: Plan) => Promise<void> }) {
   const api = useApi();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [text, setText] = useState("");
+  const storageKey = `gemihub:assistant:${shop.id}:${userEmail}`;
+  const [saved] = useState(() => { try { return savedAssistantSchema.parse(JSON.parse(localStorage.getItem(storageKey) || "null")); } catch { return undefined; } });
+  const [messages, setMessages] = useState<Message[]>(saved?.messages || []);
+  const [text, setText] = useState(saved?.text || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [draft, setDraft] = useState<string>();
-  const [plan, setPlan] = useState<Plan>();
+  const [draft, setDraft] = useState<string|undefined>(saved?.draft);
+  const [plan, setPlan] = useState<Plan|undefined>(()=>shop.plans.find(plan=>plan.id===saved?.planId&&plan.base===shop.revision&&!plan.approved));
   const log = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => { try { localStorage.setItem(storageKey,JSON.stringify({messages:messages.slice(-100),text,draft,planId:plan?.id})); } catch { /* Storage may be unavailable in private browsing. */ } },[storageKey,messages,text,draft,plan?.id]);
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages.length, draft, plan?.id]);
   async function run(action: () => Promise<void>) {
     setBusy(true); setError("");
