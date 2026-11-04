@@ -1,3 +1,4 @@
+import { tr } from "../../shared/i18n";
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
@@ -19,3 +20,14 @@ export const Menus: Story = { name: "メモ・URLからメニューを設定", a
 export const Staff: Story = { name: "メモ・URLからスタッフを設定", args: { scenario: "manage-staff" }, play: open("staff") };
 export const Hours: Story = { name: "メモ・URLから営業時間を設定", args: { scenario: "manage-hours" }, play: open("hours") };
 export const Rules: Story = { name: "メモ・URLから予約ルールを設定", args: { scenario: "manage-rules" }, play: open("rules") };
+
+export const Refunds: Story = {
+  name: "メモから返金率を変更する", args: { scenario: "manage-payment" },
+  play: async context => {
+    await open("rules")(context);
+    const panel = context.canvasElement.querySelector(".live-settings-rules")!;
+    const textarea = panel.querySelector<HTMLTextAreaElement>(".settings-ai textarea")!;
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(textarea, tr("12時間前まで80%返金、1時間前まで50%返金に変更。ほかの返金条件はそのまま。"));
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  },
+};

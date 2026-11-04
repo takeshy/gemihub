@@ -3,7 +3,7 @@ import { shopExport, exportColumns, exportCsv, type ExportTable } from "../../se
 import type { Store } from "../../server/store";
 import { tr, listSeparator } from "../../shared/i18n";
 import { simulatePayment, simulateCancellation } from "../payment-mock";
-import { defaultRefundTiers, refundQuote } from "../../server/payment-domain";
+import { defaultRefundTiers, refundQuote, policyText } from "../../server/payment-domain";
 import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
 import { inquiryStatus } from "../../server/inquiries";
 import { answeredFinalDetails, initialSetupDemoReply, initialInterviewFacts, openingQuestions } from "../../server/request-intent";
@@ -597,7 +597,13 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (section === "basic") { label = tr("店名"); old = before.name; next.name = String(input.note).match(/(?:店名|Shop name)[:：]\s*([^\n]+)/i)?.[1] || "Moon Atelier"; proposed = next.name; }
       else if (section === "menus") { label = next.menus[0].name; old = String(next.menus[0].price); next.menus[0].price = regionOf(next).country === "US" ? 65 : 6500; proposed = String(next.menus[0].price); }
       else if (section === "hours") { label = tr("開店"); old = before.hours.start; next.hours.start = "09:00"; proposed = next.hours.start; }
-      else if (section === "rules") { label = tr("何日先まで予約できるか"); old = String(before.rules.advanceDays); next.rules.advanceDays = 45; proposed = "45"; }
+      else if (section === "rules") {
+        if (/refund|返金|キャンセル料/i.test(String(input.note))) {
+          label = tr("キャンセル時の返金条件"); old = before.rules.payment ? policyText(before.rules.payment.refundTiers) : tr("未設定");
+          next.rules.payment = { enabled: before.rules.payment?.enabled ?? false, refundTiers: [{ hoursBefore: 24, percent: 100 }, { hoursBefore: 12, percent: 80 }, { hoursBefore: 1, percent: 50 }, { hoursBefore: 0, percent: 0 }] };
+          proposed = policyText(next.rules.payment.refundTiers);
+        } else { label = tr("何日先まで予約できるか"); old = String(before.rules.advanceDays); next.rules.advanceDays = 45; proposed = "45"; }
+      }
       else {
         if (!next.staff.length) next.staff.push({id: "additional-staff", name: tr("スタッフ"), menuIds: next.menus.map(menu => menu.id), weekdays: [1, 2, 3, 4, 5], start: next.hours.start, end: next.hours.end});
         label = next.staff[0].name; old = before.staff[0]?.start || ""; next.staff[0].start = "09:00"; proposed = "09:00";

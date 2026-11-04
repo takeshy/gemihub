@@ -8,6 +8,7 @@ import { Store } from '../server/store.ts';
 import { createApp } from '../server/app.ts';
 import { sample, shopSchema } from '../server/domain.ts';
 import { proposeSettings } from '../server/settings-ai.ts';
+import { defaultRefundTiers } from '../server/payment-domain.ts';
 import { digest } from '../server/auth.ts';
 import { requestLocale } from '../server/i18n.ts';
 import { tr } from '../shared/i18n.ts';
@@ -28,7 +29,7 @@ const server = createApp(store, { ...intelligence, settings: (section, config, n
     const facts = section === 'basic' ? { name: 'Moon Atelier' }
       : section === 'menus' ? { items: [{ id: config.menus[0].id, name: config.menus[0].name, price: 6500 }, { name: 'Care', duration: 90, price: 8500 }] }
       : section === 'staff' ? { items: [{ id: config.staff[0].id, name: config.staff[0].name, start: '09:00' }] }
-      : section === 'hours' ? { start: '09:00' } : { advanceDays: 45 };
+      : section === 'hours' ? { start: '09:00' } : { payment: { refundTiers: [{ hoursBefore: 24, percent: 100 }, { hoursBefore: 12, percent: 80 }, { hoursBefore: 1, percent: 50 }, { hoursBefore: 0, percent: 0 }] } };
     return JSON.stringify({ facts, warnings: [] });
   },
 }) });
@@ -51,6 +52,7 @@ try {
     const label = text => language === 'en' ? (catalog[text] || text) : text;
     const shop = await store.createShop(`settings-${language}-${width}@example.com`);
     shop.published = requestLocale.run(language, () => shopSchema.parse(structuredClone(sample)));
+    shop.published.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
     shop.publication = 'provisional'; await store.saveShop(shop);
     const token = randomUUID(); await store.put('session', digest(token), { user: { email: shop.owner, name: 'Owner', role: 'owner', shopId: shop.id }, expires: Date.now() + 3600000 });
     for (const mode of ['app', 'storybook']) {
@@ -74,7 +76,7 @@ try {
         if (mode === 'storybook') await expect(toggle).toHaveAttribute('aria-expanded', 'true');
         else await toggle.click();
         const notes = panel.getByLabel(label('メモ・参考URL'), { exact: true });
-        const memo = 'Shop name: Moon Atelier\nhttps://public.example/shop';
+        const memo = section === 'rules' ? '12 hours 80% refund, 1 hour 50% refund; keep other tiers unchanged https://public.example/shop' : 'Shop name: Moon Atelier\nhttps://public.example/shop';
         await notes.fill(memo);
         const generate = panel.getByRole('button', { name: label('設定案を作る'), exact: true });
         const before = structuredClone((await store.shop(shop.id)).published), calls = generated;
@@ -96,12 +98,25 @@ try {
         await expect(panel.locator('.settings-ai-sources a')).toHaveAttribute('href', 'https://public.example/shop');
         await expect(panel.getByRole('button', { name: label('保存'), exact: true })).toBeDisabled();
         if (mode === 'app') { assert.deepEqual((await store.shop(shop.id)).published, before); assert.equal(generated, calls + 1); }
+        if (section === 'rules') {
+          const changes = panel.locator('.settings-ai-review dl');
+          await expect(changes).toContainText('80%'); await expect(changes).toContainText('50%');
+          assert.ok(!(await changes.innerText()).includes('[object Object]'));
+        }
         await page.screenshot({ path: `tmp/settings-ai/${mode}-${language}-${width}-${section}.png`, fullPage: true });
         await panel.getByRole('button', { name: label('入力欄に反映'), exact: true }).click();
         await expect(notes).toHaveCount(0);
         if (section === 'basic') {
           await expect(panel.locator('fieldset input').first()).toHaveValue('Moon Atelier');
           await expect(panel.locator('fieldset textarea').first()).toHaveValue('Keep this manual description.');
+        }
+        if (section === 'rules') {
+          const payment = panel.getByLabel(label('予約時にPayPalで全額お支払いいただく'), { exact: true });
+          await expect(payment).toBeChecked({ checked: mode === 'app' });
+          // A refund-only proposal preserves disabled payment. Enable it manually to inspect its tiers.
+          if (mode === 'storybook') await payment.check();
+          await expect(panel.getByLabel(label('返金条件{0}・返金率（%）').replace('{0}', '2'), { exact: true })).toHaveValue('80');
+          await expect(panel.getByLabel(label('返金条件{0}・返金率（%）').replace('{0}', '3'), { exact: true })).toHaveValue('50');
         }
         if (mode === 'app') {
           assert.deepEqual((await store.shop(shop.id)).published, before, 'apply to form must not save');
@@ -110,7 +125,20 @@ try {
         await panel.getByRole('button', { name: label('保存'), exact: true }).click();
         await expect(panel.getByRole('status')).toContainText(label(mode === 'app' ? '保存して仮公開に反映しました。' : '保存して本番に反映しました。'));
         if (mode === 'app') assert.notDeepEqual((await store.shop(shop.id)).published, before, 'save persists the reviewed form');
+        if (mode === 'app' && section === 'rules') {
+          const payment = (await store.shop(shop.id)).published.rules.payment;
+          assert.equal(payment.enabled, true); assert.equal(payment.refundTiers[1].percent, 80); assert.equal(payment.refundTiers[2].percent, 50);
+        }
         assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${mode}/${language}/${width}/${section}: overflow`);
+      }
+      if (mode === 'storybook') {
+        const entry = entries.find(entry => entry.title === '運営/設定/AIで設定' && entry.id.endsWith('--refunds')); assert.ok(entry);
+        await page.goto(`${storyOrigin}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&globals=locale:${language}`);
+        const panel = page.locator('.live-settings-rules');
+        await expect(panel.getByLabel(label('メモ・参考URL'), { exact: true })).toHaveValue(label('12時間前まで80%返金、1時間前まで50%返金に変更。ほかの返金条件はそのまま。'));
+        await panel.getByRole('button', { name: label('設定案を作る'), exact: true }).click();
+        await expect(panel.locator('.settings-ai-review dl')).toContainText('80%');
+        await expect(panel.locator('.settings-ai-review dl')).toContainText('70%');
       }
       assert.deepEqual(errors, []); assert.deepEqual(live, []);
       await context.close(); console.log(`${mode} ${language} ${width}px: all five sections, review/apply/save and responsive layout passed.`);

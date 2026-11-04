@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { sample, shopSchema } from "../server/domain.ts";
-import { applySettingsFacts, proposeSettings } from "../server/settings-ai.ts";
+import { applySettingsFacts, proposeSettings, settingsChanges } from "../server/settings-ai.ts";
 import { liveValue } from "../server/live-settings.ts";
 import { Store } from "../server/store.ts";
 import { createApp } from "../server/app.ts";
 import { digest } from "../server/auth.ts";
+import { defaultRefundTiers } from "../server/payment-domain.ts";
+import { requestLocale } from "../server/i18n.ts";
 import * as intelligence from "../server/ai.ts";
 
 const current = () => shopSchema.parse(structuredClone(sample));
@@ -29,7 +31,50 @@ test("AI settings apply only selected facts, preserve existing rows and append i
   assert.throws(() => applySettingsFacts(before, "staff", { items: [{ name: "New staff", menuIds: ["not-existing"] }] }));
   const incomplete = applySettingsFacts(before, "staff", { items: [{ name: "New staff" }] }); assert.equal(incomplete.config.staff.length, before.staff.length); assert.equal(incomplete.warnings.length, 1);
   assert.throws(() => applySettingsFacts(before, "hours", { start: "19:00", end: "18:00" }));
-  assert.deepEqual(applySettingsFacts(before, "rules", { advanceDays: 45, payment: { enabled: true } }).config.rules.payment, before.rules.payment);
+  assert.deepEqual(applySettingsFacts(before, "rules", { advanceDays: 45 }).config.rules.payment, before.rules.payment);
+});
+
+test("rules AI merges payment fields, preserves unspecified settings and validates refund tiers", () => {
+  const before = current();
+  before.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
+  const tiers = [{ hoursBefore: 24, percent: 100 }, { hoursBefore: 12, percent: 80 }, { hoursBefore: 1, percent: 50 }, { hoursBefore: 0, percent: 0 }];
+  const changed = applySettingsFacts(before, "rules", { payment: { refundTiers: tiers } }).config;
+  assert.deepEqual(changed.rules.payment, { enabled: true, refundTiers: tiers });
+  assert.deepEqual({ ...changed, rules: before.rules }, before);
+  assert.deepEqual(before.rules.payment.refundTiers, defaultRefundTiers);
+  assert.deepEqual(applySettingsFacts(changed, "rules", { payment: { enabled: false } }).config.rules.payment, { enabled: false, refundTiers: tiers });
+  assert.deepEqual(applySettingsFacts(changed, "rules", { advanceDays: 45 }).config.rules.payment, changed.rules.payment);
+  assert.deepEqual(applySettingsFacts(changed, "basic", { payment: { enabled: false } }).config.rules.payment, changed.rules.payment);
+  const unconfigured = current(); delete unconfigured.rules.payment;
+  assert.equal(applySettingsFacts(unconfigured, "rules", { payment: {} }).config.rules.payment, undefined);
+  assert.deepEqual(applySettingsFacts(unconfigured, "rules", { payment: { refundTiers: tiers } }).config.rules.payment, { enabled: false, refundTiers: tiers });
+  assert.deepEqual(applySettingsFacts(unconfigured, "rules", { payment: { enabled: true } }).config.rules.payment, { enabled: true, refundTiers: defaultRefundTiers });
+  for (const refundTiers of [[], [{ hoursBefore: 24, percent: 80 }], [{ hoursBefore: 24, percent: 40 }, { hoursBefore: 0, percent: 70 }], [{ hoursBefore: 0, percent: 101 }]]) {
+    assert.throws(() => applySettingsFacts(before, "rules", { payment: { refundTiers } }));
+  }
+});
+
+test("rules AI exposes payment facts and readable localized refund changes", async () => {
+  for (const language of ["ja", "en"] as const) await requestLocale.run(language, async () => {
+    const before = current(); before.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
+    const tiers = [{ hoursBefore: 48, percent: 100 }, { hoursBefore: 24, percent: 80 }, { hoursBefore: 0, percent: 0 }];
+    const proposal = await proposeSettings("rules", before, "48 hours full refund, 24 hours 80%, otherwise zero", { generate: async input => {
+      const schema = input.schema as any;
+      assert.ok(schema.properties.facts.properties.payment.properties.refundTiers);
+      const data = JSON.parse(input.contents[0].parts![0].text!);
+      assert.deepEqual(data.current.payment, before.rules.payment);
+      assert.match(input.system, /payment.refundTiers/);
+      return JSON.stringify({ facts: { payment: { refundTiers: tiers } }, warnings: [] });
+    } });
+    assert.deepEqual((proposal.value as any).payment, { enabled: true, refundTiers: tiers });
+    assert.equal(proposal.changes.length, 1);
+    assert.match(proposal.changes[0].before, /70%/); assert.match(proposal.changes[0].after, /80%/);
+    assert.ok(!JSON.stringify(proposal.changes).includes("[object Object]"));
+    if (language === "en") assert.equal(/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(JSON.stringify(proposal.changes)), false);
+    const enabled = structuredClone(before); enabled.rules.payment!.enabled = false;
+    assert.equal(settingsChanges(before, enabled, "rules").length, 1);
+    await assert.rejects(proposeSettings("rules", before, "invalid", { generate: async () => JSON.stringify({ facts: { payment: { refundTiers: [] } }, warnings: [] }) }), /設定案|suggestion/i);
+  });
 });
 
 test("AI extraction receives fetched page contents and keeps unknown facts unchanged", async () => {
@@ -58,7 +103,7 @@ test("settings suggestions are owner-only, idempotent drafts and do not block li
   const gate = new Promise<void>(resolve => { release = resolve; });
   const server = createApp(store, { ...intelligence, settings: async (section, config, note) => {
     calls++; if (hold) { started(); await gate; }
-    return proposeSettings(section, config, note, { generate: async () => JSON.stringify({ facts: section === "menus" ? { items: [{ name: "Care", duration: 90, price: 8500 }] } : { name: "AI shop" }, warnings: [] }) });
+    return proposeSettings(section, config, note, { generate: async () => JSON.stringify({ facts: section === "menus" ? { items: [{ name: "Care", duration: 90, price: 8500 }] } : section === "rules" ? { payment: { refundTiers: [{ hoursBefore: 24, percent: 100 }, { hoursBefore: 0, percent: 20 }] } } : { name: "AI shop" }, warnings: [] }) });
   } });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
@@ -78,6 +123,14 @@ test("settings suggestions are owner-only, idempotent drafts and do not block li
   assert.equal((await request("live-settings/menus/ai", { ...input, note: "different" })).status, 409);
   assert.equal((await request("live-settings/menus", { previous: original.menus, value: first.body.value, requestId: randomUUID() })).status, 200);
   assert.equal((await store.shop(shop.id))!.published!.menus.at(-1)!.name, "Care");
+  const saved = structuredClone((await store.shop(shop.id))!.published!);
+  const rulesInput = { value: saved.rules, note: "24h full, otherwise 20% refund", requestId: randomUUID() };
+  const rules = await request("live-settings/rules/ai", rulesInput);
+  assert.equal(rules.status, 200); assert.equal(rules.body.value.payment.refundTiers[1].percent, 20);
+  assert.deepEqual((await request("live-settings/rules/ai", rulesInput)).body, rules.body);
+  assert.deepEqual((await store.shop(shop.id))!.published, saved, "refund suggestions do not save");
+  assert.equal((await request("live-settings/rules", { value: rules.body.value, requestId: randomUUID() })).status, 200);
+  assert.deepEqual((await store.shop(shop.id))!.published!.rules.payment, rules.body.value.payment);
   hold = true;
   const generating = request("live-settings/basic/ai", { value: liveValue((await store.shop(shop.id))!.published!, "basic"), note: "name", requestId: randomUUID() });
   await began;

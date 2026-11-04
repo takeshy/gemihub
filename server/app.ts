@@ -1453,7 +1453,6 @@ export function createApp(
             const proposed = await (intelligence.settings || proposeSettings)(section, current, input.note);
             const config = updateLiveValue(current, section, proposed.value);
             if (section === "basic" && (["region", "notificationEmail", "map"] as const).some(key => !same(current[key], config[key]))) fail(400, tr("設定案を作成できませんでした。メモの内容を具体的にして、もう一度お試しください。"));
-            if (section === "rules" && !same(current.rules.payment, config.rules.payment)) fail(400, tr("設定案を作成できませんでした。メモの内容を具体的にして、もう一度お試しください。"));
             const proposal = { ...proposed, value: liveValue(config, section), changes: settingsChanges(current, config, section) };
             await store.put("settingsAiProposal", id, { shopId: shop.id, hash, proposal, expires: Date.now() + 3600000 });
             return json(res, proposal);

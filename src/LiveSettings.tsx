@@ -63,6 +63,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
     {notice && <p className="notice" role="status">{notice}</p>}
     {aiOpen && <section className="settings-ai" aria-label={tr("AIで{0}を設定", heading)}>
       <p>{tr("メモや参考URLから設定案を作ります。内容を確認して入力欄に反映し、「保存」を押すまでお店の設定は変わりません。")}</p>
+      {section === "rules" && <p className="small">{tr("返金率もここで変更案を作れます。たとえば「12時間前まで80%返金、1時間前まで50%返金」。キャンセル料で依頼することもできます。変更は保存後の新しい予約に適用されます。")}</p>}
       <label>{tr("メモ・参考URL")}<textarea aria-label={tr("メモ・参考URL")} rows={5} maxLength={12000} disabled={busy} value={aiNote} onChange={event => { setAiNote(event.target.value); setProposal(undefined); }} placeholder={tr("お店の紹介や料金表のメモ、参考にしたい公開ページのURLを入力してください。")}/></label>
       <p className="small muted">{tr("ログイン不要のWebページを3件まで参照できます。読み取れないページは、必要な部分をメモとして貼り付けてください。")}</p>
       <div className="actions"><button type="button" disabled={busy || !aiNote.trim()} onClick={async () => {

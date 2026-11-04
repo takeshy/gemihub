@@ -34,7 +34,7 @@ A booking and shop management system for small independent businesses and salons
 - **Weekday opening hours:** Keep normal hours and override individual weekdays, such as closing at 19:00 normally and 21:00 on Tuesdays and Fridays.
 - **PayPal prepayment & automated refunds:** Accept PayPal payments at booking time and automatically calculate refunds upon cancellation based on your shop's policy.
 - **Cancellations and refunds:** Cancelling an eligible paid booking automatically accepts a replacement reservation. If someone books, the refund increases; before payment starts and before the deadline, the customer can undo the cancellation. New customers see discounted appointments they can book at the displayed price.
-- **Shop controls:** Enable or disable replacement bookings per service under **Settings → Services and prices** (default on). Default refunds are 100% from 24 hours, 70% from 12 hours, 40% from one hour, then 0%. Available discounts are 10%, 30% and 50%; expired requests settle without relisting. See the illustrated steps at `/manual#guide-cancellations` in the app.
+- **Shop controls:** Enable or disable replacement bookings per service under **Settings → Services and prices** (default on). The Booking rules AI can also propose refund-rate changes for review and saving. Default refunds are 100% from 24 hours, 70% from 12 hours, 40% from one hour, then 0%. Available discounts are 10%, 30% and 50%; expired requests settle without relisting. See the illustrated steps at `/manual#guide-cancellations` in the app.
 
 ### 3. Daily Operations & CRM
 - **Booking & inquiry management:** Track daily reservations by staff or date, reply to customer inquiries via email, and track resolution status.
