@@ -43,14 +43,16 @@ try {
     const bar = page.locator('.judge-bar');
     const toggle = () => page.keyboard.press('Control+Shift+L');
     await page.goto(`${origin}/?lang=${language}`);
-    await expect(header).toContainText('John');
-    await expect(menu).toHaveCount(0); await expect(banner).toHaveCount(0);
-    await page.keyboard.press('Control+Shift+Alt+L'); await expect(menu).toHaveCount(0);
-    await toggle(); await expect(menu).toBeVisible(); await expect(banner).toBeVisible();
+    // Judges see their controls by default; the shortcut hides them for clean recordings.
+    await expect(menu).toBeVisible(); await expect(banner).toBeVisible();
     await expect(header).toContainText(owner.name); await expect(header).not.toContainText('John');
-    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'L', code: 'KeyL', ctrlKey: true, shiftKey: true, repeat: true })));
-    await expect(menu).toBeVisible();
+    await page.keyboard.press('Control+Shift+Alt+L'); await expect(menu).toBeVisible();
     await toggle(); await expect(menu).toHaveCount(0); await expect(banner).toHaveCount(0); await expect(header).toContainText('John');
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'L', code: 'KeyL', ctrlKey: true, shiftKey: true, repeat: true })));
+    await expect(menu).toHaveCount(0);
+    // A new tab starts with the controls shown; this tab keeps them hidden across reloads.
+    const fresh = await context.newPage();
+    await fresh.goto(`${origin}/?lang=${language}`); await expect(fresh.locator('.app-header a[href="/judge-menu"]')).toBeVisible(); await fresh.close();
     assert.equal(roleChanges.length,0,'the shortcut only shows controls and never switches roles');
     assert.equal((await (await context.request.get(`${origin}/api/session`)).json()).user.email,owner.email);
     await page.reload(); await expect(header).toContainText('John'); await expect(menu).toHaveCount(0);
@@ -64,12 +66,11 @@ try {
     await bar.getByRole('button', { name: label('お客様として試す'), exact: true }).click();
     const registration = page.locator('.customer-registration');
     await expect(registration).toBeVisible();
-    await expect(registration.getByLabel(label('お名前'), { exact: true })).toHaveValue('John');
-    await expect(bar).toHaveCount(0);
+    await expect(bar).toContainText(label('審査用のお客様としてログイン中です。'));
     const customer = await (await context.request.get(`${origin}/api/session`)).json();
     assert.equal(customer.judgeCustomer, true); assert.notEqual(customer.user.name, 'John');
-    await toggle(); await expect(bar).toContainText(label('審査用のお客様としてログイン中です。'));
     await toggle(); await expect(bar).toHaveCount(0);
+    await page.reload(); await expect(registration).toBeVisible(); await expect(bar).toHaveCount(0);
     await expect(registration.getByLabel(label('お名前'), { exact: true })).toHaveValue('John');
     await page.screenshot({ path: `tmp/judge-controls/customer-${language}-${width}.png`, fullPage: true });
     // An owner-only shop must offer real slots after trial-customer registration.
