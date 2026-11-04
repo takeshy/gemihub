@@ -66,8 +66,9 @@ try{
   assert.deepEqual(editorRequests,[]);
   await page.getByRole('button',{name:'Get started',exact:true}).click();
   const chat=page.getByRole('log',{name:'Chat with AI',exact:true});
-  await chat.getByText('What kind of business do you run?',{exact:true}).waitFor();
-  for(const [answer,expected] of [['A nail salon',/Choose the features/],['1,2,3,4',/other pages/],['No other pages',/Anything else/]]){
+  // The demo interview asks for the name and logo first, as in tests/i18n.test.ts.
+  await chat.getByText('What is your shop’s name?',{exact:true}).waitFor();
+  for(const [answer,expected] of [['Moon Atelier',/logo/],['No logo',/What kind of business do you run\?/],['A nail salon',/Choose the features/],['1,2,3,4',/other pages/],['No other pages',/Anything else/]]){
     await page.getByLabel('Your message to AI',{exact:true}).fill(answer);
     await page.getByRole('button',{name:'Send',exact:true}).click();
     await chat.getByText(expected).last().waitFor();

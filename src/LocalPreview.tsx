@@ -100,9 +100,14 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         if (!active) return;
         setIndex(remote);
         if (!cached) restore({ ...current, downloaded: [], index: remote, fixtures: sampleFixtures(current.config) });
-        else if (!cached.pending) {
-          const updated = syncPreviewArticleFeatures(cached, current.config);
-          restore({ ...updated, index: remote, downloaded: cached.downloaded || cached.source?.pages.map(p => p.id) || [], config: { ...updated.config, region: current.config.region, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
+        else {
+          // Build on the draft as it is now: screens chosen while this request was in flight
+          // (e.g. a published article added to the fixtures) must not be reverted to the cached copy.
+          const local = latestDraft.current || cached;
+          if (!local.pending) {
+            const updated = syncPreviewArticleFeatures(local, current.config);
+            restore({ ...updated, index: remote, downloaded: local.downloaded || local.source?.pages.map(p => p.id) || [], config: { ...updated.config, region: current.config.region, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
+          }
         }
       } catch (e) { if (!cached) throw e; setError(tr("リモートの最新状態を確認できません。ローカル編集は保持しています。更新確認を再試行してください。")); }
     });

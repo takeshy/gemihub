@@ -30,31 +30,32 @@ try{
     await attachment.waitFor();
     const positions=await Promise.all([attachment,voiceToggle,submit].map(button=>button.boundingBox()));
     assert.ok(positions.every(position=>Math.abs(position.y-positions[0].y)<2),"attachment, voice and send share the input toolbar on desktop and mobile");
+    // Questions in the change chat are answered without creating a proposal.
     await composer.waitFor();await composer.fill("指名なしの予約について教えてください。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('.chat-message-assistant').length===2);
-    await composer.fill("水曜日をお休みにしたい場合はどうすればよいですか？");await page.getByRole("button",{name:"送信",exact:true}).click();
+    await composer.fill("水曜日の営業時間はどうなっていますか？");await page.getByRole("button",{name:"送信",exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('.chat-message-assistant').length===3);
     assert.equal(await page.getByRole("button",{name:"変更案を確認する",exact:true}).count(),0);
-    await page.getByRole("button",{name:"新ページ作成",exact:true}).click();
-    await page.getByRole("button",{name:"はじめる",exact:true}).click();
-    await composer.fill("新しいページを追加したいです。");await page.getByRole("button",{name:"送信",exact:true}).click();
-    await log.getByText("どんな内容を載せて、メニューには何と表示したいですか？",{exact:true}).waitFor();
-    await composer.fill("予約方法と持ち物を載せるFAQで、メニューは「よくある質問」にしてください。");await page.getByRole("button",{name:"送信",exact:true}).click();
+    // A new page is requested in a fresh conversation of the same chat.
+    const restart=page.getByRole("button",{name:"新しい会話をはじめる",exact:true});
+    await restart.click();await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
+    await composer.fill("予約方法と持ち物を載せるFAQページを追加したいです。メニューは「よくある質問」にしてください。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await page.getByRole("button",{name:"変更案を確認する",exact:true}).waitFor();
     assert.equal(await page.locator('.request-review').count(),0);
     await page.getByRole("button",{name:"変更案を確認する",exact:true}).click();
-    await page.getByRole("heading",{name:"このページを追加してよいですか？",exact:true}).waitFor();
+    await page.getByRole("heading",{name:"このように変更してよいですか？",exact:true}).waitFor();
     await page.getByRole("button",{name:"チャットに戻る",exact:true}).click();
+    // Reloading restores the current conversation; a new one keeps past conversations behind the scenes.
     await page.reload();
-    await page.getByRole("button",{name:"はじめる",exact:true}).click();
-    await composer.waitFor();
-    assert.equal(await log.getByText("新しいページを追加したいです。",{exact:true}).count(),0,"past conversations stay behind the scenes");
+    await log.getByText(/予約方法と持ち物を載せるFAQページ/).first().waitFor();
+    assert.equal(await page.getByRole("button",{name:"はじめる",exact:true}).count(),0);
     assert.equal(await page.getByText(/保存したチャット|新しいチャット|このチャットの文脈/).count(),0);
+    await restart.click();await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
+    assert.equal(await log.getByText(/予約方法と持ち物を載せるFAQページ/).count(),0,"past conversations stay behind the scenes");
     await composer.fill("以前に相談したFAQの内容を教えてください。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await log.getByText(/以前は「.*予約方法と持ち物/).waitFor();
     assert.ok(await page.evaluate(()=>window.__omaiStoryLastHistory.length>0),"the AI receives relevant saved history automatically");
-    await page.getByRole("button",{name:"修正",exact:true}).click();
-    await page.getByRole("button",{name:"はじめる",exact:true}).click();
+    await restart.click();await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
     const speechDialog=page.getByRole("dialog",{name:"音声入力",exact:true});
     const transcript=speechDialog.getByRole("textbox",{name:"書き起こした内容",exact:true});
     assert.equal(await inputArea.locator('.dictation-settings').count(),0);
@@ -85,7 +86,7 @@ try{
     await transcript.fill("");await speechDialog.getByRole("button",{name:"音声入力を再開",exact:true}).click();
     await dictate([["料金の設定について相談したいです。おわり。",true]]);
     await log.getByText("料金の設定について相談したいです。",{exact:true}).waitFor();
-    await page.reload();await page.getByRole("button",{name:"はじめる",exact:true}).click();await voiceToggle.click();
+    await page.reload();await composer.waitFor();await voiceToggle.click();
     await speechDialog.getByRole("button",{name:"音声入力を止める",exact:true}).click();
     await settings.locator('summary').click();assert.equal(await settings.getByLabel("終了キーワード",{exact:true}).inputValue(),"おわり");
     await settings.getByLabel("終了キーワード",{exact:true}).fill("以上");
@@ -94,7 +95,7 @@ try{
     await page.evaluate(()=>window.__recognitions.at(-1).onerror?.({error:'not-allowed'}));
     await speechDialog.getByRole("alert").filter({hasText:"マイクの使用が許可"}).waitFor();assert.equal(await transcript.inputValue(),"権限エラーでも下書き");
     await speechDialog.getByRole("button",{name:"送信",exact:true}).click();await log.getByText("権限エラーでも下書き",{exact:true}).waitFor();
-    await voiceToggle.click();await page.keyboard.press("Escape");await page.getByRole("button",{name:"新ページ作成",exact:true}).click();
+    await voiceToggle.click();await page.keyboard.press("Escape");await restart.click();
     assert.equal(await page.evaluate(()=>window.__recognitions.every(rec=>!rec.active)),true);
     assert.equal(await page.evaluate(()=>window.__liveSockets),0);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
@@ -117,7 +118,14 @@ try{
     assert.equal(await page.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).count(),0);
     await composer.fill("落ち着いた雰囲気にしてください。ほかにはありません。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await page.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).waitFor();
+    // Reloading resumes the saved interview, so forget the story's saved conversation to start over by voice.
+    await page.evaluate(()=>{for(const key of Object.keys(localStorage))if(key.startsWith("gemihub:storybook-chats:")||key.startsWith("gemihub:shop-chat-draft:"))localStorage.removeItem(key);});
     await page.reload();await page.getByRole("button",{name:"はじめる",exact:true}).click();
+    await log.getByText("お店の名前を教えてください。",{exact:true}).waitFor();
+    await voiceToggle.click();await dictate([["月のアトリエ。以上。",true]]);
+    await log.getByText(/使いたいロゴはありますか/).waitFor();
+    await voiceToggle.click();await dictate([["なし。以上。",true]]);
+    await log.getByText("どういう業種のお店ですか？",{exact:true}).waitFor();
     await voiceToggle.click();await dictate([["ネイルサロンです。以上。",true]]);
     await log.getByText(/ほしい機能を次から選んでください。/).waitFor();
     await voiceToggle.click();await dictate([["1、2、3。以上。",true]]);
@@ -128,7 +136,8 @@ try{
     await voiceToggle.click();await dictate([["ほかにはありません。以上。",true]]);
     await page.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.__recognitions.every(rec=>!rec.active)),true);
-    assert.equal(await page.locator('.screen-name-list li').count(),8);
+    // "1、2、3" chooses introduction, booking and blog (announcements are option 4): six screens.
+    assert.equal(await page.locator('.screen-name-list li').count(),6);
     assert.equal(await page.locator('.theme-preview .site-header').count(),1);
     assert.deepEqual(errors,[]);
     await context.close();

@@ -22,7 +22,11 @@ try{
   shop.published=requestLocale.run(language,()=>structuredClone(sample));shop.published.staff=[shop.published.staff[0]];shop.published.hours.closedWeekdays=[];await store.saveShop(shop);
   await store.put('user',email,{email,name:'Owner',role:'owner',calendarRefreshToken:encrypt('calendar-test')});
   const session=`owner-${language}-${width}`;await store.put('session',digest(session),{user:{email,name:'Owner',role:'owner',shopId:shop.id},expires:Date.now()+600000});
+  // Booking controls are for signed-in customers (check:booking-login); the owner's settings are verified through one.
+  const customerSession=`customer-${language}-${width}`,customerEmail=`customer-${language}-${width}@example.com`;await store.put('session',digest(customerSession),{user:{email:customerEmail,name:'Customer',role:'customer',shopId:shop.id},expires:Date.now()+600000});
+  await store.put('customer',`${shop.id}:${customerEmail}`,{shopId:shop.id,email:customerEmail,name:'Customer',birthDate:'1990-01-01',gender:'not_specified'});
   const context=await browser.newContext({locale:language==='ja'?'ja-JP':'en-US',viewport:{width,height:950}});await context.addCookies([{name:'gemihub_session',value:session,url:origin}]);
+  const signIn=token=>context.addCookies([{name:'gemihub_session',value:token,url:origin}]);
   const page=await context.newPage();active=page;const errors=[],calendarRequests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',req=>{if(/\/calendar(?:\?|$)/.test(req.url()))calendarRequests.push(req.url());});
   await page.goto(`${origin}/?shop=${shop.id}&tab=staff&lang=${language}`);
   const staff=page.locator('.live-settings-staff');await expect(staff.locator('.staff-editor')).toHaveCount(1);
@@ -46,7 +50,7 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
   await hours.screenshot({path:`tmp/owner-booking/hours-${language}-${width}.png`});
   await page.reload();await expect(page.locator('.live-settings-hours').getByLabel(label('{0}曜の閉店',label('火')),{exact:true})).toHaveValue('21:00');
-  await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);
+  await signIn(customerSession);await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);
   await expect(page.getByRole('heading',{name:label('02 日時'),exact:true})).toBeVisible();
   await expect(page.getByLabel(label('スタッフ'),{exact:true})).toHaveCount(0);
   await expect(page.locator('.salon-details').first()).toContainText(`${label('{0}曜',label('火'))} 09:00 – 21:00`);
@@ -54,7 +58,7 @@ try{
   await page.screenshot({path:`tmp/owner-booking/reservation-${language}-${width}.png`,fullPage:true});
   await page.goto(`${origin}/s/${shop.slug}?pane=about&lang=${language}`);await expect(page.locator('.public-staff-list')).toContainText('Owner Morita');await page.locator('.public-staff-list .staff-photo').scrollIntoViewIfNeeded();await expect(page.locator('.public-staff-list img')).toBeVisible();await page.screenshot({path:`tmp/owner-booking/profile-${language}-${width}.png`,fullPage:true});
   // The owner's shift uses the same controls and booking rules as additional staff.
-  await page.goto(`${origin}/?shop=${shop.id}&tab=staff&lang=${language}`);
+  await signIn(session);await page.goto(`${origin}/?shop=${shop.id}&tab=staff&lang=${language}`);
   const workingDate=shopDate((await store.shop(shop.id)).published,Date.now()+4*86400000),workingDay=new Date(workingDate+'T12:00:00Z').getUTCDay();
   await expect(owner.getByLabel(label('勤務開始'),{exact:true})).toBeVisible();
   await owner.getByLabel(label('勤務開始'),{exact:true}).fill('11:00');await owner.getByLabel(label('勤務終了'),{exact:true}).fill('14:00');
@@ -64,10 +68,11 @@ try{
   const shift=(await store.shop(shop.id)).published.staff.find(person=>person.id===ownerStaffId);assert.deepEqual(shift.weekdays,[workingDay]);assert.deepEqual(shift.menuIds,['simple']);assert.equal(shift.start,'11:00');assert.equal(shift.end,'14:00');
   await page.reload();await expect(owner.getByLabel(label('勤務開始'),{exact:true})).toHaveValue('11:00');await expect(owner.getByLabel(label('勤務終了'),{exact:true})).toHaveValue('14:00');await expect(owner.getByLabel(secondMenu,{exact:true})).not.toBeChecked();
   await page.screenshot({path:`tmp/owner-booking/shift-${language}-${width}.png`,fullPage:true});
-  await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);await page.locator('.date-input input[type=text]').fill(workingDate.replaceAll('-','/'));
+  await signIn(customerSession);await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);await page.locator('.date-input input[type=text]').fill(workingDate.replaceAll('-','/'));
   const clock=utcHour=>new Date(`${workingDate}T${String(utcHour).padStart(2,'0')}:00:00Z`).toLocaleTimeString(language==='ja'?'ja-JP':'en-US',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'});
   await expect(page.locator('.time-grid button').first()).toHaveText(clock(2));await expect(page.locator('.time-grid button').last()).toHaveText(clock(4));
-  const rejectedMenu=page.waitForResponse(response=>response.url().includes('/slots?')&&new URL(response.url()).searchParams.get('menu')==='design');await page.locator('.menu-options button').filter({hasText:secondMenu}).click();assert.deepEqual(await(await rejectedMenu).json(),[]);await expect(page.locator('.time-grid button')).toHaveCount(0);
+  // A date equal to the automatic first date stays automatic, so the switch may search again (slots/next); either way no slot is offered.
+  const rejectedMenu=page.waitForResponse(response=>/\/slots(?:\/next)?\?/.test(response.url())&&new URL(response.url()).searchParams.get('menu')==='design');await page.locator('.menu-options button').filter({hasText:secondMenu}).click();const rejected=await(await rejectedMenu).json();assert.deepEqual(Array.isArray(rejected)?rejected:rejected.slots,[]);await expect(page.locator('.time-grid button')).toHaveCount(0);
   assert.equal(calendarRequests.length,0);assert.deepEqual(errors,[]);
   await context.close();console.log(`${language} ${width}px: owner name/photo and working days/hours/services save and reload, actual slot restrictions, automatic Calendar, last staff deletion and weekday opening hours passed.`);
  }

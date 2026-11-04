@@ -3,7 +3,8 @@ import React, { useMemo, useState } from "react";
 import { App } from "../App";
 import { ApiProvider } from "../api";
 import { createMockClient, scenarioProps, type Scenario } from "./mock";
-export function Screen({ scenario }: { scenario: Scenario }) {
+/** `autoplay: false` (URL `&args=autoplay:!false`) opens a story without its play steps, for checks that drive it themselves. */
+export function Screen({ scenario }: { scenario: Scenario; autoplay?: boolean }) {
   const client = useMemo(() => createMockClient(scenario), [scenario]);
   const [notice, setNotice] = useState("");
   const [route, setRoute] = useState<{ path: string; search: string; version: number }>();
