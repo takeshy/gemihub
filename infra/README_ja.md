@@ -136,3 +136,14 @@ Terraform のテストはモックプロバイダーを使い、クラウドへ�
 Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と `projects/495062043717/secrets/google-client-secret/versions/1` を参照します。有効バージョン番号のみ確認済みで、秘密値は取得・コピーしません。Terraformはこの2つの既存シークレットに実行アカウントの参照権限を設定し、共有デプロイヤーへバージョン固定の参照を出力します。従来の認証情報を使う場合は両方の `*_secret_ref` をnullにして、既存Client IDと従来のsecretバージョンを指定できます。
 
 既存の `gemihub.net` のDNS・証明書・certificate-map entryはkiokuflow側のstateに残します。初回配置のprivate tfvarsに `manage_app_domain_dns_certificate = false` を設定してください。このモジュールは店舗用の追加DNS/TLSだけを作り、apexの同じリソースを重複作成しません。新規ドメインを一から管理する場合だけtrueにします。
+
+
+## 公開HTMLのバケット配信
+
+`google_storage_bucket.storefront` は店舗の完成HTMLと、そのHTMLが参照するCSS・画像を置く専用バケットです。一般公開を禁止し、実行用サービスアカウントだけにバケット単位の `storage.objectUser`（オブジェクトの作成・読み取り・削除）を付与します。仮公開も同じバケットへ保存しますが、オブジェクトへ直接アクセスさせず、既存ドメインのアプリが本人確認を行ってから返します。ロードバランサーや公開DNSの変更は不要です。CDNからバケットを直接公開する構成にはしていません。
+
+適用順は、Terraformの変更内容を確認してバケットとIAMを作成し、`shared_vm_registration` の更新された環境変数 `STOREFRONT_BUCKET` を共有VMへ登録し、その後アプリをデプロイします。バケットの作成や登録はコードの変更だけでは完了しません。ローカルのインメモリStoreでは、外部のGCSに接続せず専用のメモリ実装を使います。
+
+公開時には、日英と店舗ドメイン用・`/s/{slug}`用のHTMLを生成します。ビルド済みの共通CSSと管理画像（表示用サイズ）は、中身のハッシュ名で店舗ごとに1回だけ保存し（`shops/{id}/assets/`）、長期キャッシュ付きで配信します。HTMLには埋め込まず参照します。全オブジェクトの保存後にFirestoreの `storefrontRelease` を切り替えます。アップロードに失敗したら以前の公開版を維持します。HTMLにセッション・会員情報・通知先メールは保存しません。運用中の公開・設定保存・記事更新では再生成し、読めない画像は保存を止めずに省きます。公開版がない店舗や、古い生成処理（`storefrontRenderer`）の公開版は、裏の定期処理が間隔を空けながら作り直します。公開版が一つもない店舗は、最初の閲覧でも一度だけ変換します。
+
+現行版が古い場合でも消さないよう、日数だけによるライフサイクル削除は設定しません。アプリは現行版と直前の2版（`storefrontPrevious`）を残し、それより古い版のHTMLと、残した版が使っていないCSS・画像を削除します。`terraform test` はリソースを実際に作らず、非公開バケットとIAM・環境変数の構成を確認します。

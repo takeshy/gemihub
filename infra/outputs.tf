@@ -21,6 +21,7 @@ output "shared_vm_registration" {
           PORT                                                            = "8080"
           APP_ORIGIN                                                      = "https://${var.app_domain}"
           SITE_DOMAIN                                                     = var.site_domain
+          STOREFRONT_BUCKET                                               = google_storage_bucket.storefront.name
           GOOGLE_CLOUD_PROJECT                                            = var.project_id
           FIRESTORE_DATABASE_ID                                           = google_firestore_database.app.name
           GOOGLE_CLOUD_LOCATION                                           = var.vertex_location
@@ -81,3 +82,4 @@ output "build_account" { value = google_service_account.build.email }
 output "build_account_resource" { value = google_service_account.build.id }
 output "bootstrap_image" { value = local.image }
 output "build_source_bucket" { value = google_storage_bucket.build_source.name }
+output "storefront_bucket" { value = google_storage_bucket.storefront.name }

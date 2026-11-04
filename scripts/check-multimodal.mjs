@@ -43,8 +43,9 @@ try {
   await page.getByRole("button",{name:"送信",exact:true}).click();
   await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText("お客様が指名・指名なしを選べます。",{exact:false}).last().waitFor();
   assert.equal(await page.getByRole("button",{name:"変更案を確認する",exact:true}).count(),0);
-  await page.getByRole("button",{name:"修正",exact:true}).click();
-  await page.getByRole("button",{name:"はじめる",exact:true}).click();
+  // Changes are asked in the same chat; a new conversation keeps this request separate.
+  await page.getByRole("button",{name:"新しい会話をはじめる",exact:true}).click();
+  await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
   await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("水曜日もお休みに変更したい");
   await page.getByRole("button",{name:"送信",exact:true}).click();
   await page.getByRole("button",{name:"変更案を確認する",exact:true}).last().click();
@@ -111,8 +112,9 @@ try {
   await capture("06-publish.jpg", ".publication-preview");
   await page.getByRole("button",{name:"本番公開する",exact:true}).click();
   await page.getByText("本番公開しました。ログインしていない方もページを表示できます。",{exact:true}).waitFor();
-  for (const story of ["provisional-page", "customer"]) {
-    await open(story, "自分のための、ひとときを。");
+  // The owner viewing a provisional page is not a customer, so booking asks for sign-in (check:booking-login).
+  for (const [story, heading] of [["provisional-page", "ご予約にはログインが必要です。"], ["customer", "自分のための、ひとときを。"]]) {
+    await open(story, heading);
     assert.equal(await page.getByRole("button", {name: "修正する", exact: true}).count(), 0);
     if (story === "provisional-page") {
       await page.getByText("仮公開中 ·", {exact:false}).waitFor();
@@ -157,18 +159,22 @@ try {
     await page.getByLabel("変更する対象を確認").selectOption("name");
     await page.getByRole("button", {name: "この箇所を修正する"}).click();
     await page.getByText("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。", {exact: false}).waitFor();
-    await page.locator(".local-preview-screen").getByText("季節のアトリエ", {exact: true}).waitFor();
+    await page.locator(".local-preview-screen").getByRole("heading", {name: "季節のアトリエ", exact: true}).waitFor();
     assert.equal(await page.getByRole("heading", {name: "差分プランを作成しました"}).count(), 0);
     assert.ok(await page.evaluate(() => Object.values(localStorage).some(value => {
       try { const draft = JSON.parse(value); return draft.config?.name === "季節のアトリエ" && draft.source?.name !== "季節のアトリエ" && !draft.pending; }
       catch { return false; }
     })), "pen changes are saved locally before publication");
+    // The pen chat panel covers the editor toolbar; close it before publishing.
+    await page.getByRole("complementary", {name: "画面の修正チャット"}).getByRole("button", {name: "閉じる", exact: true}).click();
     await page.getByRole("button", {name: "反映する", exact: true}).click();
     await capture("23-pen-plan.jpg", '.local-preview [role="dialog"][aria-label="本番への反映内容"]');
     await page.getByRole("button", {name: "この内容を本番に反映", exact: true}).click();
     await page.getByText("本番に反映しました。サンプルの予約・問い合わせ・記事は本番には保存していません。", {exact: false}).waitFor();
   }
   await page.setViewportSize({width: 390, height: 844});
+  // Conversations are restored on reload; forget the one started above so the first-visit guide shows.
+  await page.evaluate(() => { for (const key of Object.keys(localStorage)) if (key.startsWith("gemihub:storybook-chats:") || key.startsWith("gemihub:shop-chat-draft:")) localStorage.removeItem(key); });
   await open("onboarding", "AIとお店をつくる");
   await page.getByRole("heading", {name:"こんな風にすすみます",exact:true}).waitFor();
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "onboarding fits mobile viewport");

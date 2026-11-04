@@ -132,7 +132,8 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
       if(!alive.current)return;
       acceptChat(saved);
     } else if(!current.current) await ensureChat(false);
-    if(alive.current)setViewPlan(undefined);
+    // The chat is open now, so an earlier failed restoration no longer replaces it with the retry screen.
+    if(alive.current){setRestoreError(false);setViewPlan(undefined);}
   }
   // The images are the ones sent with that message; the composer is cleared after sending.
   async function createPlan(requestText:string,reference:ChatReference,images:string[]=[]) {

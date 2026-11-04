@@ -19,7 +19,7 @@ try{
    if(user==='new')await store.put('customer',`${shop.id}:new@example.com`,{shopId:shop.id,email:'new@example.com',name:'New member'});
    const context=await browser.newContext({viewport:{width,height:950},locale:language==='ja'?'ja-JP':'en-US'});
    if(user!=='anonymous')await context.addCookies([{name:'gemihub_session',value:user,url:origin}]);
-   const page=await context.newPage(),errors=[],slots=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>{if(new URL(request.url()).pathname.endsWith('/slots'))slots.push(request.url());});
+   const page=await context.newPage(),errors=[],slots=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',request=>{if(/\/slots(?:\/next)?$/.test(new URL(request.url()).pathname))slots.push(request.url());});
    await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);
    const denied=['anonymous','owner','foreign'].includes(user);
    if(denied){

@@ -22,7 +22,8 @@ try {
         const page = await context.newPage();
         const errors = [];
         page.on("pageerror", error => errors.push(error.message));
-        await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`);
+        // Without its play steps, so this check sends the failing message itself (text or voice).
+        await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story&args=autoplay:!false`);
         await page.getByRole("button", { name: "はじめる", exact: true }).click();
         const composer = page.getByRole("textbox", { name: "AIに伝えたいこと", exact: true });
         const form = page.getByRole("form", { name: "メッセージの入力", exact: true });

@@ -105,7 +105,7 @@ try {
         }
         if (mode === 'app') {
           assert.deepEqual((await store.shop(shop.id)).published, before, 'apply to form must not save');
-          if (section === 'menus') { const row = panel.locator('.menu-edit-block').last(); await expect(row.getByLabel(label('メニュー名'), { exact: true })).toHaveValue('Care'); await expect(row.getByRole('checkbox')).not.toBeChecked(); }
+          if (section === 'menus') { const row = panel.locator('.menu-edit-block').last(); await expect(row.getByLabel(label('メニュー名'), { exact: true })).toHaveValue('Care'); await expect(row.getByRole('checkbox', { name: label('有効'), exact: true })).not.toBeChecked(); }
         }
         await panel.getByRole('button', { name: label('保存'), exact: true }).click();
         await expect(panel.getByRole('status')).toContainText(label(mode === 'app' ? '保存して仮公開に反映しました。' : '保存して本番に反映しました。'));

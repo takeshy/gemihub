@@ -78,7 +78,7 @@ test("email links authenticate only the intended shop and origin, preserve exist
   const hostedView = await call(base, undefined, "", shop.domain);
   assert.equal(new URL(hostedView.body.googleAuthUrl).searchParams.get("host"), shop.domain);
   const hostedToken = tokenFrom(mails.at(-1)!.text);
-  assert.match(mails.at(-1)!.text, /https:\/\/customer\.example\.com\/\?lang=ja#email-login=/);
+  assert.match(mails.at(-1)!.text, /https:\/\/customer\.example\.com\/\?pane=mine&lang=ja#email-login=/);
   const concurrent = await Promise.all([call(`${base}/auth/email/verify`, { token: hostedToken }, "", shop.domain), call(`${base}/auth/email/verify`, { token: hostedToken }, "", shop.domain)]);
   assert.deepEqual(concurrent.map(value => value.status).sort(), [200, 400]);
   const fresh = concurrent.find(value => value.status === 200)!;
