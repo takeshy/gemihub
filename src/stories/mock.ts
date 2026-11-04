@@ -19,6 +19,7 @@ import type { LibraryImage } from "../../server/image-library-domain";
 import { scopedSource, scopedConfig, type ReleaseScope } from "../../server/pages";
 import { shopSystem, systemSvg } from "../../server/shop-system";
 import { storyPosts } from "./posts";
+import { createTransferFixtures, customerBooking, customerTransferScenarios, type TransferScenario } from "./transfer-fixtures";
 import {
   publicPosts,
   summarizePost,
@@ -46,6 +47,7 @@ import {
   type Booking,
 } from "../../server/domain";
 export type Scenario =
+  | TransferScenario
   | "us-settings"
   | "us-menus"
   | "us-booking"
@@ -131,6 +133,7 @@ export type Scenario =
   | "contact"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
+  ...customerTransferScenarios,
   "menu-addons",
   "us-booking",
   "payment-reservation",
@@ -171,7 +174,7 @@ export function scenarioProps(scenario: Scenario) {
                 : "/",
     // Remote/conflict fixtures change the FAQ page, so open that page rather than the default booking screen.
     search: ["editor-remote", "editor-conflict"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
-    initialTab: ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
+    initialTab: scenario.startsWith("owner-transfer-") ? "bookings" : ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
           "image-library": "build", "image-library-empty": "build", "image-library-generation": "build",
@@ -201,7 +204,7 @@ export function scenarioProps(scenario: Scenario) {
         } as Partial<Record<Scenario, string>>
       )[scenario] || "build",
     initialPane:
-      ["paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
+      (scenario.startsWith("transfer-") && scenario !== "transfer-offers") || ["paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
         ? undefined
         : scenario === "contact"
           ? "contact"
@@ -229,7 +232,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     config.pages = initialIntroductionPages(config, { staff: true, products: true }).pages;
   }
   config.hours.closedWeekdays = [];
-  if (["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
+  if (scenario.startsWith("transfer-") || scenario.startsWith("owner-transfer-") || ["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
   if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-remote-tree", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
     { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてでも予約できますか？</h2><p>初めてのお客様も歓迎しています。</p><h2>当日の持ち物は？</h2><p>特にありません。お気軽にお越しください。</p>"), layout: "standard", imageUrl: "" },
@@ -423,6 +426,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
           shopId: shop.id,
         },
   };
+  const transferFixtures = createTransferFixtures(scenario, shop, session);
   if (scenario.startsWith("calendar-")) {
     shop.isOwner = false;
     session.user = { email: "haru@example.com", name: tr("はる"), role: "customer", shopId: shop.id };
@@ -468,6 +472,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     const input = (data || {}) as Record<string, unknown>;
     let result: unknown;
     if (action === "/api/session") result = session;
+    else if (transferFixtures.handles(action)) result = transferFixtures.request(action, data);
     else if (action === "/api/workspace") result = { shops: [shop] };
     else if (action === "/api/invitations") result = [];
     else if (action === `/api/shops/${shop.id}/export`) {
@@ -864,10 +869,12 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action.endsWith("/status")) {
       const b = shop.bookings.find((b) => b.id === action.split("/").at(-2));
       if (!b) throw new Error(tr("予約がありません"));
+      transferFixtures.release(b.id);
       if (input.status === "cancelled") simulateCancellation(b, "shop");
       else b.status = input.status as Booking["status"];
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/retry`) {
+      transferFixtures.retry();
       for (const booking of shop.bookings) if (booking.payment?.cancellation?.status === "awaiting_funds") booking.payment.cancellation.status = "completed";
       shop.jobs = [];
       result = { ok: true };
@@ -920,7 +927,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else if (action.endsWith("/bookings") && data === undefined)
         result = preview
           ? []
-          : shop.bookings.filter((b) => b.customer === session.user?.email);
+          : shop.bookings.filter((b) => b.customer === session.user?.email).map(customerBooking);
       else if (action.endsWith("/bookings")) {
         const start = String(input.start);
         const date = dateJST(new Date(start));
@@ -955,6 +962,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
             b.customer === "guest@example.com",
         );
         if (!b) throw new Error(tr("予約がありません"));
+        transferFixtures.release(b.id);
         simulateCancellation(b, "customer");
         result = { ok: true };
       } else if (action.endsWith("/auth/email")) result = { ok: true };

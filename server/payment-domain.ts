@@ -2,7 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 
 export const defaultRefundTiers = [
-  { hoursBefore: 72, percent: 100 },
+  { hoursBefore: 48, percent: 100 },
   { hoursBefore: 24, percent: 50 },
   { hoursBefore: 0, percent: 0 },
 ];

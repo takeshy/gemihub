@@ -33,6 +33,7 @@ A booking and shop management system for small independent businesses and salons
 - **Add-on services:** Configure removal or care as an optional addition to selected services. Prices and durations are combined for availability, booking and payment; options in the same group are mutually exclusive.
 - **Weekday opening hours:** Keep normal hours and override individual weekdays, such as closing at 19:00 normally and 21:00 on Tuesdays and Fridays.
 - **PayPal prepayment & automated refunds:** Accept PayPal payments at booking time and automatically calculate refunds upon cancellation based on your shop's policy.
+- **Cancellations and refunds:** Cancelling an eligible paid booking automatically accepts a replacement reservation. If someone books, the refund increases; before payment starts, the customer can undo the cancellation. New customers see discounted appointments they can book at the displayed price.
 
 ### 3. Daily Operations & CRM
 - **Booking & inquiry management:** Track daily reservations by staff or date, reply to customer inquiries via email, and track resolution status.
@@ -86,6 +87,7 @@ Open http://localhost:3000 and click **Try the salon demo** (use http://localhos
 
 - For development with hot reload, run `npm run dev` (server) and `npm run dev:web` (Vite at http://localhost:5173) in separate terminals.
 - To browse all screens with isolated mock data, run `npm run storybook` (http://localhost:6005).
+- Cancellation stories are under **Customer screens → Cancellations and discounted appointments** and **Management → Bookings and customers → Replacement bookings** (15 states). Cancellation, undo, payment confirmation and refund retry are simulated. After `npm run build-storybook`, run `npm run check:storybook:transfers` to check their interactions in Japanese/English and desktop/mobile widths; set `CHROMIUM` to an installed browser path if needed.
 
 ### 2. Connect Google and Vertex AI
 

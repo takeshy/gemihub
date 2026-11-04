@@ -725,6 +725,13 @@ pre {
   background: #f1eae4;
   color: #987c66;
 }
+.status.transfer {
+  background: #e7eef4;
+  color: #4f6f8c;
+}
+.transfer-offers { margin-bottom: 24px; }
+.transfer-status { margin: 8px 0; }
+.transfer-history { margin-top: 24px; }
 .inquiry {
   padding: 25px 0;
   border-top: 1px solid var(--line);

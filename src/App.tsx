@@ -3,6 +3,7 @@ import { Brand } from "./Brand";
 import { tr, intlLocale, listSeparator } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
+import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers, type CancellationQuote, type MyTransfers, type TransferCheckout, type TransferListing } from "./Transfers";
 import { BookingComplete } from "./BookingComplete";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
@@ -68,6 +69,7 @@ export type Workspace = Shop & {
   plans: Plan[];
   bookings: Booking[];
   paymentCheckouts?: { id: string; start: string; amount: number; currency?: Currency; phase: string; review: boolean; customer: string; name: string }[];
+  transferListings?: { id: string; bookingId: string; price: number; currency: Currency; discountPercent: number; deadline: string; buying: boolean; review: boolean }[];
   inquiries: Inquiry[];
   members: { email: string; accepted: boolean; status?: string }[];
   jobs: { type: string; error?: string }[];
@@ -777,7 +779,11 @@ export function ConfigEditor({
               }
             />
             <span>{tr("有効")}</span></label>
-        </div><label className="check-field"><input type="checkbox" checked={m.optionFor !== undefined} onChange={event => put("menus", c.menus.map((menu,index) => {
+        </div>{!m.optionFor && <label className="check-field"><input type="checkbox" checked={m.transferable !== false} onChange={event => put("menus", c.menus.map((menu, index) => {
+          if (index !== i) return menu;
+          const { transferable: _transferable, ...rest } = menu;
+          return event.target.checked ? rest : { ...rest, transferable: false };
+        }))} /><span>{tr("キャンセル後に代わりの予約を受け付ける（指名・事前カウンセリング前提なら外す）")}</span></label>}<label className="check-field"><input type="checkbox" checked={m.optionFor !== undefined} onChange={event => put("menus", c.menus.map((menu,index) => {
           if (index !== i) return menu;
           if (event.target.checked) return { ...menu, optionFor: [] };
           const { optionFor: _for, optionGroup: _group, ...standalone } = menu; return standalone;
@@ -1059,12 +1065,13 @@ function Reservations({
             <div className="booking-card" key={b.id}>
               <div>
                 <span className={`status ${b.status}`}>
-                  {b.status === "active"
+                  {shop.transferListings?.some(listing => listing.bookingId === b.id) ? tr("キャンセル受付済み") : b.status === "active"
                     ? tr("予約確定")
                     : b.status === "no_show"
                       ? tr("無断キャンセル")
                       : tr("キャンセル済み")}
                 </span>
+                {!!b.transfers?.length && <span className="status transfer">{tr("キャンセル枠からの予約")}</span>}
                 <h3>
                   {b.name} {tr(" 様 ")}<small>{when(b.start)}</small>
                 </h3>
@@ -1074,6 +1081,10 @@ function Reservations({
                   {bookingStaffName(shop.published, b.staffId)}
                 </p>
                 <span className="small muted">{b.customer}</span>
+                {(() => {
+                  const listing = shop.transferListings?.find(listing => listing.bookingId === b.id);
+                  return listing && <p className="transfer-status" role="status"><span className="status transfer">{tr("お得な空き枠")}</span> {tr("{0}（{1}%引き）・{2}まで", paid(listing.price, listing.currency), listing.discountPercent, when(listing.deadline))}{listing.review ? tr("・PayPalの決済結果を照合してください") : listing.buying ? tr("・代わりの方が支払い手続き中") : ""}</p>;
+                })()}
                 <PaymentDetails booking={b} operator />
                 {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
               </div>
@@ -1100,7 +1111,7 @@ function Reservations({
                   ))}
                 </div>
               )}
-              {b.payment?.cancellation && ["pending", "retrying", "awaiting_funds"].includes(b.payment.cancellation.status) && <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/retry`, {}); await reload(); })}>{tr("返金状況を再確認")}</button>}
+              {(b.payment?.cancellation && ["pending", "retrying", "awaiting_funds"].includes(b.payment.cancellation.status) || b.transfers?.some(entry => ["pending", "retrying", "awaiting_funds"].includes(entry.refund.status))) && <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/retry`, {}); await reload(); })}>{tr("返金状況を再確認")}</button>}
             </div>
           ))}
       </div>
@@ -1256,6 +1267,8 @@ export function PublicShop({
   const [mine, setMine] = useState<Booking[]>([]);
   type PendingCheckout = { id: string; phase: string; expires: number; approvalUrl?: string; review?: boolean; start: string; amount: number; currency?: Currency };
   const [checkouts, setCheckouts] = useState<PendingCheckout[]>([]);
+  const [listings, setListings] = useState<TransferListing[]>([]);
+  const [myTransfers, setMyTransfers] = useState<MyTransfers>({ selling: [], buying: [] });
   const [paymentConsent, setPaymentConsent] = useState(false);
   const processedReturn = useRef("");
   useEffect(() => { setPaymentConsent(false); }, [menu, optionIds, data?.config.rules.payment, selected]);
@@ -1270,18 +1283,19 @@ export function PublicShop({
   const confirmed = completedBooking && isCustomer && completedBooking.customer === session.user?.email && completedBooking.shopId === data?.shopId ? completedBooking : undefined;
   const leavePaymentReturn = (nextPane: string) => {
     const query = new URLSearchParams(search);
-    if (onPaneChange || !query.has("checkout")) return false;
-    for (const key of ["checkout","paypal","token","PayerID"]) query.delete(key);
+    if (onPaneChange) return false;
+    if (!query.has("transfer") && !query.has("checkout")) return false;
+    for (const key of ["checkout","transfer","paypal","token","PayerID"]) query.delete(key);
     query.set("pane",nextPane); navigate(`${basePath || "/"}?${query}`);
     return true;
   };
   const loadMine = async () => {
     if (isCustomer) {
-      const [bookings, pending] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`)]);
-      setMine(bookings); setCheckouts(pending);
+      const [bookings, pending, transfers] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`), api<MyTransfers>(`${base}/transfers/mine`)]);
+      setMine(bookings); setCheckouts(pending); setMyTransfers(transfers);
       setCompletedBooking(current => {
         const saved = current && bookings.find(booking => booking.id === current.id);
-        return saved ? saved.status === "active" ? saved : undefined : current;
+        return saved ? saved.status === "active" && !transfers.selling.some(listing => listing.bookingId === saved.id && listing.phase === "listed") ? saved : undefined : current;
       });
     }
   };
@@ -1300,6 +1314,33 @@ export function PublicShop({
     notify(result.ok ? tr("予約内容はマイページで確認してください。") : result.checkout.phase === "expired" ? tr("お支払い手続きは終了しました。空き枠から選び直してください。") : result.checkout.phase === "failed" ? tr("お支払いが完了しませんでした。空き枠から選び直してください。") : tr("支払いを確認中です。マイページで状況を再確認できます。"));
     await loadMine();
   };
+  const confirmTransfer = async (id: string, abandon = false) => {
+    const result = await api<{ ok: boolean; booking?: Booking; checkout: TransferCheckout }>(`${base}/transfers/${id}/${abandon ? "abandon" : "capture"}`, {});
+    if (result.ok && finishBooking(result.booking)) return;
+    notify(result.ok ? tr("予約内容はマイページで確認してください。") : result.checkout.phase === "expired" ? tr("お支払い手続きは終了しました。空き枠の一覧から選び直してください。") : result.checkout.phase === "failed" ? tr("お支払いが完了しませんでした。空き枠の一覧から選び直してください。") : tr("支払いを確認中です。マイページで状況を再確認できます。"));
+    await loadMine();
+  };
+  const startTransfer = async (checkout: TransferCheckout) => {
+    if (checkout.phase === "awaiting_approval" && checkout.approvalUrl) { window.location.assign(checkout.approvalUrl); return; }
+    if (checkout.phase === "captured" || checkout.phase === "capturing") { await confirmTransfer(checkout.id); return; }
+    setPane("mine"); await loadMine(); notify(tr("マイページでお支払いの状況を確認してください。"));
+  };
+  useEffect(() => {
+    if (!isCustomer || !data) return;
+    const params = new URLSearchParams(search || "");
+    const id = params.get("transfer");
+    const action = params.get("paypal");
+    if (!id || !["return", "cancel"].includes(action || "") || processedReturn.current === `transfer:${id}:${action}`) return;
+    processedReturn.current = `transfer:${id}:${action}`;
+    setPane("mine");
+    run(async () => { await confirmTransfer(id, action === "cancel"); });
+  }, [isCustomer, data?.shopId, search]);
+  useEffect(() => {
+    if (!data || pane !== "reserve" || category || pageSlug || confirmed) return;
+    let cancelled = false;
+    api<TransferListing[]>(`${base}/transfers`).then(result => { if (!cancelled) setListings(result); }).catch(() => { if (!cancelled) setListings([]); });
+    return () => { cancelled = true; };
+  }, [base, data?.shopId, pane, category, pageSlug, confirmed, session.user?.email]);
   useEffect(() => {
     if (!isCustomer || !data) return;
     const params = new URLSearchParams(search || "");
@@ -1409,6 +1450,7 @@ export function PublicShop({
                   {["creating", "awaiting_approval"].includes(checkout.phase) && <button disabled={busy} onClick={() => run(async () => confirmCheckout(checkout.id, true))}>{tr("支払いを中止")}</button>}
                 </div>
               </div>)}
+              <TransferBuying base={base} buying={myTransfers.buying} busy={busy} run={run} confirm={confirmTransfer} reload={loadMine} />
               {!mine.length ? (
                 <Empty text={tr("ご予約はまだありません。")} />
               ) : (
@@ -1416,7 +1458,7 @@ export function PublicShop({
                   <div className="booking-card" key={b.id}>
                     <div>
                       <span className={`status ${b.status}`}>
-                        {b.status === "active"
+                        {myTransfers.selling.some(listing => listing.bookingId === b.id && listing.phase === "listed") ? tr("キャンセル受付済み") : b.status === "active"
                           ? tr("予約確定")
                           : b.status === "no_show"
                             ? tr("無断キャンセル")
@@ -1426,22 +1468,27 @@ export function PublicShop({
                       <p>
                         {bookingMenuName(c, b)}
                       </p>
+                      {b.transferredIn && <p className="small muted">{tr("お得な空き枠からご予約いただきました。")}</p>}
                       {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
                       <PaymentDetails booking={b} />
+                      <BookingTransferControl base={base} listing={myTransfers.selling.find(listing => listing.bookingId === b.id && listing.phase === "listed")} busy={busy} run={run} reload={loadMine} notify={notify} />
                     </div>
-                    {(b.status === "active" || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
+                    {((b.status === "active" && !myTransfers.selling.some(listing => listing.bookingId === b.id && listing.phase === "listed")) || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
                       <button disabled={busy}
                         onClick={() =>
                           run(async () => {
                             let expectedRefund: number | undefined;
+                            let expectedTransfer: CancellationQuote["transfer"];
                             if (b.payment && !b.payment.cancellation) {
-                              const quote = await api<{ amount: number; percent: number }>(`${base}/bookings/${b.id}/cancel-quote`);
-                              if (!window.confirm(tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", paid(quote.amount, b.payment.currency), quote.percent))) return;
+                              const quote = await api<CancellationQuote>(`${base}/bookings/${b.id}/cancel-quote`);
+                              const message = quote.transfer ? tr("予約をキャンセルしますか？\n返金予定額：{0}\n代わりに利用する方が見つかると、返金額が{1}に増えます。\n受付期限：{2}\n予約が入るか受付期限を過ぎると、返金額が確定します。ほかの方の支払い開始前なら、キャンセルを取り消せます。", paid(quote.amount, b.payment.currency), paid(quote.transfer.price, b.payment.currency), when(quote.transfer.deadline)) : tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", paid(quote.amount, b.payment.currency), quote.percent);
+                              if (!window.confirm(message)) return;
                               expectedRefund = quote.amount;
+                              expectedTransfer = quote.transfer;
                             }
-                            await api(`${base}/bookings/${b.id}/cancel`, { expectedRefund });
+                            const result = await api<{ cancellationPending?: boolean }>(`${base}/bookings/${b.id}/cancel`, { expectedRefund, expectedTransfer });
                             await loadMine();
-                            notify(tr("予約をキャンセルしました。"));
+                            notify(result.cancellationPending ? tr("キャンセルを受け付けました") : tr("予約をキャンセルしました。"));
                           })
                         }
                       >
@@ -1451,6 +1498,7 @@ export function PublicShop({
                   </div>
                 ))
               )}
+              <TransferHistory selling={myTransfers.selling} />
             </div>
   );
   const bookingSection = () => confirmed ? <BookingComplete booking={confirmed} config={c} simulation={data.paymentSimulation} onMine={() => {
@@ -1459,6 +1507,8 @@ export function PublicShop({
     setPane("mine");
     void run(loadMine);
   }} onNew={() => { if (leavePaymentReturn("reserve")) return; setCompletedBooking(undefined); setSelected(""); setTimes([]); setBookingMessage(""); setPaymentConsent(false); setRequestId(createRequestId()); }}/> : (
+            <>
+            <TransferOffers base={base} listings={listings} name={name} busy={busy} run={run} simulation={data.paymentSimulation} onStarted={startTransfer} />
             <div className="reservation-layout">
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
@@ -1615,6 +1665,7 @@ export function PublicShop({
                 <p className="small muted">{c.address}</p>
               </div>
             </div>
+            </>
   );
   const aboutMenus = () => <div className="about-menus">{c.menus
                 .filter((m) => m.active)

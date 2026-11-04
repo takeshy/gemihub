@@ -64,7 +64,7 @@ async function setup() {
 test("refund boundaries, rounding, invalid tiers, shop full refund", () => {
   const start = "2026-12-01T10:00:00.000Z";
   const at = (hours: number) => new Date(Date.parse(start) - hours * 3600000).toISOString();
-  for (const [hours, percent, amount] of [[73, 100, 5501], [72, 100, 5501], [71.999, 50, 2750], [24, 50, 2750], [23.999, 0, 0], [0, 0, 0], [-1, 0, 0]]) {
+  for (const [hours, percent, amount] of [[49, 100, 5501], [48, 100, 5501], [47.999, 50, 2750], [24, 50, 2750], [23.999, 0, 0], [0, 0, 0], [-1, 0, 0]]) {
     assert.deepEqual(refundQuote(5501, start, at(hours), defaultRefundTiers, "customer"), { percent, amount });
     assert.deepEqual(refundQuote(5501, start, at(hours), defaultRefundTiers, "shop"), { percent: 100, amount: 5501 });
   }
@@ -99,7 +99,7 @@ test("lost capture response, restart, Sheets failure and immutable half refund r
   c = (await store.get<Checkout>("checkout", c.id))!;
   assert.equal(c.phase, "confirmed"); assert.equal(f.calls.capture, 1);
   config.rules.payment!.refundTiers = [{ hoursBefore: 0, percent: 100 }]; config.menus[0].price = 99999; shop.published = config; await store.saveShop(shop);
-  const at = new Date(Date.parse(booking.start) - 48 * 3600000).toISOString();
+  const at = new Date(Date.parse(booking.start) - 30 * 3600000).toISOString();
   f.state.lostRefund = true;
   await service.cancel(c, booking.customer, "customer", at);
   c = (await store.get<Checkout>("checkout", c.id))!;

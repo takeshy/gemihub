@@ -1,6 +1,7 @@
 import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import { paymentRulesSchema, type BookingPayment } from "./payment-domain.ts";
+import type { BookingTransfer } from "./transfer-domain.ts";
 import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
 import { regionSchema, regionOf, currencyOf, validPrice, toMinor, fromMinor, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
 import { themeSchema, compilePresentation } from "../shared/presentation.ts";
@@ -44,6 +45,8 @@ export const shopSchema = z
           optionFor: z.array(z.string().regex(/^[a-z0-9_-]+$/)).max(50).optional(),
           /** Only one option in the same group may be selected for a booking. */
           optionGroup: z.string().trim().min(1).max(80).optional(),
+          /** false: bookings with this menu cannot be offered for transfer (absent means allowed). */
+          transferable: z.boolean().optional(),
         }),
       )
       .min(1)
@@ -136,6 +139,9 @@ export function menuSelection(config: ShopConfig, menuId: string, optionIds: rea
   return { base, options: selected, optionIds: selected.map(option => option.id), items, duration: items.reduce((total,item)=>total+item.duration,0), price: fromMinor(items.reduce((total,item)=>total+toMinor(item.price,currency),0),currency) };
 }
 export const bookingMenuName = (config: ShopConfig | null | undefined, booking: Pick<Booking, "menuId" | "items">) => booking.items?.length ? booking.items.map(item=>item.name).join(" + ") : config?.menus.find(menu=>menu.id===booking.menuId)?.name || booking.menuId;
+/** Every menu in the booking (base and add-ons) must exist and allow transfer. */
+export const bookingTransferable = (config: Pick<ShopConfig, "menus">, booking: Pick<Booking, "menuId" | "optionIds">) =>
+  [booking.menuId, ...(booking.optionIds || [])].every(id => { const menu = config.menus.find(menu => menu.id === id); return !!menu && menu.transferable !== false; });
 export type Booking = {
   id: string;
   requestKey?: string;
@@ -153,6 +159,10 @@ export type Booking = {
   status: "active" | "cancelled" | "no_show";
   createdAt: string;
   payment?: BookingPayment;
+  /** Holder changes through transfer listings, oldest first; `payment` is always the current holder's. */
+  transfers?: BookingTransfer[];
+  /** Customer view only: set instead of `transfers`, which carries earlier holders' details. */
+  transferredIn?: boolean;
   updatedBy?: string;
   updatedAt?: string;
 };

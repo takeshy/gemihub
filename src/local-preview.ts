@@ -85,6 +85,10 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     else if (action === `${base}/slots/next`) result = firstAvailableSlots(config, bookings, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, url.searchParams.getAll("option"));
     else if (action === `${base}/slots`) result = slots(config, bookings, url.searchParams.get("date") || "", url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined,undefined,url.searchParams.getAll("option"));
     else if (action === `${base}/checkouts`) result = [];
+    // Transfers need a second customer and real payments, so the offline preview shows none.
+    else if (action === `${base}/transfers`) result = [];
+    else if (action === `${base}/transfers/mine`) result = { selling: [], buying: [] };
+    else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/transfer-quote")) result = { eligible: false, reason: tr("譲渡は公開中の予約ページで利用できます。") };
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {
       const optionIds = (data as {optionIds?:string[]}).optionIds || [];

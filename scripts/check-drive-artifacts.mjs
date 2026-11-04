@@ -40,7 +40,8 @@ const server = createServer(async (req, res) => {
     if (path === '/api/session') res.end(JSON.stringify({ demo: false, hosted: 'hosted', user: { ...source.auth, role: 'customer', shopId: 'hosted-id' } }));
     else if (path === '/api/public/hosted') res.end(JSON.stringify({ config: serverConfig, shopId: 'hosted-id', recentPosts: [] }));
     else if (path === `/api/public/hosted/images/${imageId}`) res.end(JSON.stringify(image));
-    else if (path === '/api/public/hosted/bookings' || path === '/api/public/hosted/slots' || path === '/api/public/hosted/checkouts') res.end('[]');
+    else if (path === '/api/public/hosted/bookings' || path === '/api/public/hosted/slots' || path === '/api/public/hosted/checkouts' || path === '/api/public/hosted/transfers') res.end('[]');
+    else if (path === '/api/public/hosted/transfers/mine') res.end('{"selling":[],"buying":[]}');
     else { res.writeHead(404); res.end('{"error":"unexpected request"}'); }
     return;
   }

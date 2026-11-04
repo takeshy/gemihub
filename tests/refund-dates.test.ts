@@ -2,13 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { refundWindows, refundQuote, defaultRefundTiers, type RefundTiers } from "../server/payment-domain.ts";
+import { refundWindows, refundQuote, type RefundTiers } from "../server/payment-domain.ts";
 import type { Booking } from "../server/domain.ts";
 import { PaymentDetails } from "../src/PaymentDetails.tsx";
 import { ShopRegionContext } from "../src/money.ts";
 import { requestLocale } from "../server/i18n.ts";
 import { localDateTime, type Region } from "../shared/region.ts";
 
+// Date math is checked with a 72-hour first tier (the default before 2026-11-05), independent of the current default.
+const defaultRefundTiers: RefundTiers = [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }];
 const jp: Region = { country: "JP", timeZone: "Asia/Tokyo" }, us: Region = { country: "US", timeZone: "America/New_York" };
 const booking = (start: string, policy: RefundTiers = structuredClone(defaultRefundTiers)): Booking => ({ id: "dated", shopId: "shop", customer: "guest@example.com", name: "Guest", menuId: "simple", staffId: "aoi", price: 5500, message: "", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: "2026-01-01T00:00:00Z", payment: { provider: "paypal", environment: "live", orderId: "order", captureId: "capture", amount: 5500, currency: "JPY", policy } });
 const render = (record: Booking, region: Region, language: "ja" | "en") => requestLocale.run(language, () => renderToStaticMarkup(React.createElement(ShopRegionContext.Provider, { value: region }, React.createElement(PaymentDetails, { booking: record }))));

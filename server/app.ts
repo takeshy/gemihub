@@ -9,6 +9,7 @@ import { tr, intlLocale, getLocale, listSeparator } from "../shared/i18n.ts";
 import { localeForRequest, requestLocale, regionForRequest } from "./i18n.ts";
 import { paypalGateway, type PaymentGateway } from "./paypal.ts";
 import { paymentService, checkoutView, type Checkout } from "./payments.ts";
+import { transferService, buyerBusy, type Transfer, type TransferEvent } from "./transfers.ts";
 import { refundTiersSchema, policyText, refundQuote } from "./payment-domain.ts";
 import { articleFiles, articleToolContext } from "./article-files.ts";
 import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts";
@@ -49,6 +50,7 @@ import {
   documents,
   planSummary,
   bookingStaffName,
+  bookingTransferable,
   menuSelection,
   bookingMenuName,
   ownerStaffId,
@@ -311,6 +313,7 @@ export function createApp(
           staff: bookingStaffName(config, booking.staffId),
           customer: booking.name, email: booking.customer, price: booking.price,
           ...(booking.payment ? { paid: booking.payment.amount, refund: booking.payment.cancellation ? { amount: booking.payment.cancellation.amount, status: booking.payment.cancellation.status } : undefined } : {}),
+          ...(booking.transfers?.length ? { transfers: booking.transfers.map(entry => ({ at: entry.at, from: entry.from.name, to: entry.to.name, price: entry.price, discountPercent: entry.discountPercent, refundToPreviousHolder: { amount: entry.refund.amount, status: entry.refund.status } })) } : {}),
         }));
         if (kind === "inquiries") return (await inquiries(shop)).map(inquiry => ({ at: inquiry.at, name: inquiry.name, email: inquiry.email, status: inquiry.status, message: inquiry.message.slice(0, 500), replied: !!inquiry.reply }));
         return customerSummaries(aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, undefined, await store.records<import("./customers.ts").CustomerRecord>("customer", shop)));
@@ -430,6 +433,61 @@ export function createApp(
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
     });
   });
+  const shopWhen = (config: ShopConfig, at: string) => new Date(at).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" });
+  async function transferNotice(transfer: Transfer, booking: Booking, event: TransferEvent) {
+    const key = `transfer:${transfer.id}:${event}`;
+    if (await store.get("paymentNotice", key)) return;
+    const shop = await store.shop(transfer.shopId);
+    if (!shop?.published) return;
+    const config = await effective(shop);
+    const money = (amount: number) => formatMinor(amount, transfer.currency, intlLocale());
+    const visit = tr("予約: {0}\nメニュー: {1}", shopWhen(config, booking.start), bookingMenuName(config, booking));
+    await store.transaction(async () => {
+      if (event === "listed")
+        await notify(shop, config, transfer.seller, tr("{0} キャンセルを受け付けました", config.name),
+          tr("{0} 様\n{1}\n返金予定額: {6}（{5}%）\n代わりに利用する方が見つかると、返金額が{2}に増えます。\n空き枠の割引率: {3}%\n受付期限: {4}\n予約が入るか受付期限を過ぎると、返金額が確定します。期限前に始まった支払いの確認を待つ場合があります。\nほかの方の支払い開始前なら、マイページからキャンセルを取り消して元の予約に戻せます。", transfer.sellerName, visit, money(transfer.price), transfer.discountPercent, shopWhen(config, transfer.deadline), transfer.unsold.percent, money(transfer.unsold.amount)), []);
+      else if (event === "sold") {
+        const entry = booking.transfers?.find(entry => entry.id === transfer.id);
+        // A delayed notice may run after another transfer; address the holder from this sale.
+        const recipient = entry?.to || { customer: transfer.buyer!.customer, name: transfer.buyer!.name };
+        const refund = entry ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[entry.refund.status] : "";
+        await notify(shop, config, transfer.seller, tr("{0} 代わりの予約が入りました", config.name),
+          tr("{0} 様\n{1}\n代わりに利用する方の予約が入り、返金額が増えました。\n返金額: {2}\n{3}", transfer.sellerName, visit, money(transfer.price), refund), []);
+        await notify(shop, config, recipient.customer, tr("{0} ご予約を承りました（お得な空き枠）", config.name),
+          tr("{0} 様\n{1}\n支払額: {2}\nお得な空き枠からのご予約が確定しました。\n返金条件（お支払い額に対して）: {3}", recipient.name, visit, money(transfer.price), policyText(transfer.policy)), []);
+        await notify(shop, config, config.notificationEmail, tr("{0} 代わりの予約が入りました", config.name),
+          tr("{0}\n{1} 様 → {2} 様\n支払額: {3}（新しい支払いと同額を元の予約者へ返金。お店の受取総額は変わりません）", visit, transfer.sellerName, recipient.name, money(transfer.price)), [shop.owner]);
+        const fresh = await store.shop(shop.id);
+        if (fresh) {
+          fresh.history.push({ at: entry?.at || new Date().toISOString(), summary: tr("キャンセル枠の予約が成立：{0} {1}（{2} 様 → {3} 様、{4}を支払い・同額を返金）", shopWhen(config, booking.start), bookingMenuName(config, booking), transfer.sellerName, recipient.name, money(transfer.price)) });
+          await store.saveShop(fresh);
+          await enqueue(fresh, "posts", {}, `transfer-history:${transfer.id}`);
+        }
+      } else
+        await notify(shop, config, transfer.seller, tr("{0} キャンセルの返金額が確定しました", config.name),
+          tr("{0} 様\n{1}\n受付期限を過ぎたため、キャンセル受付時の返金予定額（{2}%返金・{3}）で確定しました。返金の状況は別のメールとマイページでお知らせします。", transfer.sellerName, visit, transfer.unsold.percent, money(transfer.unsold.amount)), []);
+      await store.put("paymentNotice", key, { at: new Date().toISOString() });
+    });
+  }
+  const transfers = transferService(store, paymentGateway, payments, transferNotice);
+  /** Customers never see earlier holders' identities or payment IDs. */
+  const customerBooking = (booking: Booking): Booking => {
+    const { transfers: history, requestKey: _requestKey, ...rest } = booking;
+    return history?.length ? { ...rest, message: "", transferredIn: true } : rest;
+  };
+  async function cancellationQuote(c: Checkout, config: ShopConfig, at = new Date().toISOString()) {
+    const p = c.booking.payment!;
+    if (p.cancellation) return p.cancellation;
+    const listed = await transfers.active(c.shopId, c.booking.id);
+    if (listed) return { ...listed.unsold, transfer: { id: listed.id, price: listed.price, deadline: listed.deadline } };
+    const quote = refundQuote(p.amount, c.booking.start, at, p.policy, "customer");
+    const { terms } = bookingTransferable(config, c.booking) ? await transfers.quote(c, at) : {};
+    return { ...quote, ...(terms ? { transfer: { price: terms.price, deadline: terms.deadline } } : {}) };
+  }
+  const transferCheckoutView = (t: Transfer) => ({ id: t.id, phase: t.buyer?.phase || "expired", expires: t.buyer?.expires || 0, approvalUrl: t.buyer?.phase === "awaiting_approval" ? t.buyer.approvalUrl : undefined, review: !!t.buyer?.review, amount: t.price, currency: t.currency });
+  async function operatorTransfers(shopId: string) {
+    return (await transfers.forShop(shopId)).filter(t => t.phase === "listed").map(t => ({ id: t.id, bookingId: t.bookingId, price: t.price, currency: t.currency, discountPercent: t.discountPercent, deadline: t.deadline, buying: buyerBusy(t), review: !!t.buyer?.review }));
+  }
   async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
     if (fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
     if (plan.base !== fresh.revision) fail(409, tr("本番の内容が変わりました。最新の内容を読み直してください"));
@@ -1100,6 +1158,7 @@ export function createApp(
               isOwner: user.email === shop.owner,
               bookings: await store.bookings(shop.id),
               paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
+              transferListings: await operatorTransfers(shop.id),
               inquiries: await inquiries(shop),
               plans: await Promise.all((await store.list<Plan>("plan"))
                 .filter((p) => p.shopId === shop.id)
@@ -2115,6 +2174,7 @@ export function createApp(
             return json(res, {
               bookings: await store.bookings(fresh.id),
               paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === fresh.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
+              transferListings: await operatorTransfers(fresh.id),
               inquiries: await inquiries(fresh),
             });
           }
@@ -2184,6 +2244,7 @@ export function createApp(
               ) || fail(404, tr("予約がありません"));
             const paid = await store.get<Checkout>("checkout", b.id);
             if (paid?.shopId === fresh.id && paid.phase === "confirmed") {
+              if (paid.booking.status === "active" && !paid.booking.payment?.cancellation) await transfers.release(fresh.id, b.id);
               if (input.status === "cancelled") {
                 const booking = await payments.cancel(paid, user!.email, "shop");
                 await flush(fresh);
@@ -2322,7 +2383,8 @@ export function createApp(
           }
           if (action === "retry" && method === "POST") {
             await payments.reconcile(fresh.id);
-            await flush(fresh);
+            await transfers.reconcile(fresh.id);
+            await flush(await store.shop(fresh.id) || fresh);
             return json(res, { ok: true });
           }
           if (action === "documents" && method === "GET")
@@ -2384,19 +2446,25 @@ export function createApp(
               if (paid.shopId !== shop.id || paid.customer !== u.email) fail(404, tr("予約がありません"));
               if (paid.phase !== "confirmed" || !paid.booking.payment) fail(409, tr("支払いを確認中です。確定後にキャンセルしてください。"));
               if (paidCancellation[2] === "cancel-quote") {
-                const p = paid.booking.payment;
-                return json(res, p.cancellation || refundQuote(p.amount, paid.booking.start, new Date().toISOString(), p.policy, "customer"));
+                return json(res, await cancellationQuote(paid, await effective(shop)));
               }
-              const input = z.object({ expectedRefund: z.number().int().min(0).optional() }).parse(await body(req));
+              const input = z.object({ expectedRefund: z.number().int().min(0).optional(), expectedTransfer: z.object({ price: z.number().int().positive(), deadline: z.iso.datetime() }).optional() }).parse(await body(req));
               const at = new Date().toISOString();
               if (!paid.booking.payment!.cancellation) {
-                const p = paid.booking.payment!;
-                const quote = refundQuote(p.amount, paid.booking.start, at, p.policy, "customer");
+                const quote = await cancellationQuote(paid, await effective(shop), at);
                 if (input.expectedRefund !== quote.amount) fail(409, tr("返金額を再確認してからキャンセルしてください。時間の経過で返金額が変わる場合があります。"));
+                const offer = "transfer" in quote ? quote.transfer : undefined;
+                if (offer) {
+                  if (!("id" in offer) && (!input.expectedTransfer || input.expectedTransfer.price !== offer.price || input.expectedTransfer.deadline !== offer.deadline)) fail(409, tr("キャンセル条件が変わりました。返金予定額と受付期限を確認し直してください。"));
+                  if (!("id" in offer)) await transfers.list(paid, u.email, offer, at);
+                  await flush(shop);
+                  return json(res, { ok: true, cancellationPending: true, booking: customerBooking(paid.booking) });
+                }
+                if (input.expectedTransfer) fail(409, tr("キャンセル条件が変わりました。返金予定額と受付期限を確認し直してください。"));
               }
               const booking = await payments.cancel(paid, u.email, "customer", at);
               await flush(shop);
-              return json(res, { ok: true, booking });
+              return json(res, { ok: true, booking: customerBooking(booking) });
             }
             if (paidCancellation[2] === "cancel-quote") fail(404, tr("支払い済みの予約がありません"));
           }
@@ -2496,7 +2564,88 @@ export function createApp(
               return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id, b.optionIds)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
             });
             await flush(shop);
-            return json(res, { ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? c.booking : undefined, checkout: checkoutView(c) });
+            return json(res, { ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? customerBooking(c.booking) : undefined, checkout: checkoutView(c) });
+          }
+          const transferView = async (t: Transfer) => {
+            const booking = (await store.get<Checkout>("checkout", t.bookingId))?.booking;
+            return booking && { id: t.id, bookingId: t.bookingId, start: booking.start, end: booking.end, menu: bookingMenuName(config, booking), staff: bookingStaffName(config, booking.staffId), amount: t.price, currency: t.currency, discountPercent: t.discountPercent, deadline: t.deadline, policy: t.policy, bookingActive: booking.status === "active" };
+          };
+          if (action === "transfers" && method === "GET") {
+            const now = Date.now();
+            const open = (await transfers.forShop(shop.id)).filter(t => t.phase === "listed" && Date.parse(t.deadline) > now);
+            const views = [];
+            for (const t of open) {
+              const view = await transferView(t);
+              if (view?.bookingActive) views.push({ ...view, available: !buyerBusy(t, now), mine: !!user && t.seller === user.email });
+            }
+            return json(res, views.sort((a, b) => a.start.localeCompare(b.start)));
+          }
+          if (action === "transfers/mine" && method === "GET") {
+            const u = customer();
+            const now = Date.now();
+            const all = await transfers.forShop(shop.id);
+            const selling = [];
+            for (const t of all.filter(t => t.seller === u.email).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50)) {
+              const view = await transferView(t);
+              const entry = (await store.get<Checkout>("checkout", t.bookingId))?.booking.transfers?.find(entry => entry.id === t.id);
+              if (view) selling.push({ ...view, phase: t.phase, buying: buyerBusy(t, now), unsold: t.unsold, ...(entry ? { refund: { amount: entry.refund.amount, status: entry.refund.status } } : {}) });
+            }
+            const buying = [];
+            for (const t of all.filter(t => t.phase === "listed" && t.buyer?.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(t.buyer.phase))) {
+              const view = await transferView(t);
+              if (view) buying.push({ ...view, phase: t.buyer!.phase, expires: t.buyer!.expires, approvalUrl: t.buyer!.phase === "awaiting_approval" ? t.buyer!.approvalUrl : undefined, review: !!t.buyer!.review });
+            }
+            return json(res, { selling, buying });
+          }
+          const transferAction = action.match(/^bookings\/([a-f0-9]{64})\/(transfer-quote|transfer)$/);
+          if (transferAction && ((method === "GET" && transferAction[2] === "transfer-quote") || (method === "POST" && transferAction[2] === "transfer"))) {
+            const u = customer();
+            const c = await store.get<Checkout>("checkout", transferAction[1]);
+            if (!c || c.shopId !== shop.id || c.customer !== u.email) fail(404, tr("予約がありません"));
+            if (!bookingTransferable(config, c.booking)) fail(409, tr("このメニューはキャンセル後の予約受付に対応していません"));
+            if (transferAction[2] === "transfer-quote") {
+              const { terms, reason } = await transfers.quote(c);
+              return json(res, terms ? { eligible: true, ...terms } : { eligible: false, reason });
+            }
+            const input = z.object({ price: z.number().int().positive(), deadline: z.iso.datetime() }).parse(await body(req));
+            const t = await transfers.list(c, u.email, input);
+            await flush(shop);
+            return json(res, { ok: true, transfer: await transferView(t) });
+          }
+          const listingAction = action.match(/^transfers\/([a-f0-9]{64})\/(withdraw|checkout|capture|abandon|resume)$/);
+          if (listingAction && method === "POST") {
+            const u = customer();
+            const t = await store.get<Transfer>("transfer", listingAction[1]);
+            if (!t || t.shopId !== shop.id) fail(404, tr("この空き枠は見つかりません"));
+            const verb = listingAction[2];
+            if (verb === "withdraw") {
+              if (t.seller !== u.email) fail(404, tr("この空き枠は見つかりません"));
+              if (Date.now() >= Date.parse(t.deadline)) fail(409, tr("受付期限を過ぎたため、キャンセルは取り消せません。返金状況をご確認ください。"));
+              await transfers.withdraw(t);
+              return json(res, { ok: true });
+            }
+            if (verb === "checkout") {
+              if (!await ownProfile()) fail(428, tr("先に会員情報を登録してください"));
+              const input = z.object({ name: z.string().min(1).max(100), requestId: z.uuid(), consent: z.object({ amount: z.number().int().positive(), policy: refundTiersSchema }) }).parse(await body(req));
+              if (input.consent.amount !== t.price || JSON.stringify(input.consent.policy) !== JSON.stringify(t.policy)) fail(409, tr("支払額と返金条件を読み直し、同意してからPayPalへ進んでください。"));
+              const storefront = hosted ? `https://${host}/` : `${origin()}/s/${shop.slug}`;
+              const back = new URL(storefront);
+              back.searchParams.set("pane", "mine"); back.searchParams.set("transfer", t.id);
+              back.searchParams.set("paypal", "return");
+              const returnUrl = back.href;
+              back.searchParams.set("paypal", "cancel");
+              await transfers.begin(t, { customer: u.email, name: input.name, requestKey: `${u.email}:${input.requestId}` }, returnUrl, back.href, config.name);
+              return json(res, { ok: false, checkout: transferCheckoutView(t) });
+            }
+            if (t.buyer?.customer !== u.email) fail(404, tr("お支払いの記録がありません"));
+            if (verb === "abandon") {
+              if (["creating", "awaiting_approval"].includes(t.buyer!.phase)) { t.buyer!.phase = "expired"; await store.put("transfer", t.id, t); }
+            } else if (verb === "resume") await transfers.createOrder(t);
+            else await transfers.capture(t);
+            await flush(await store.shop(shop.id) || shop);
+            const booking = t.phase === "sold" ? (await store.get<Checkout>("checkout", t.bookingId))?.booking : undefined;
+            const own = booking?.customer === u.email ? booking : undefined;
+            return json(res, { ok: !!own, booking: own && customerBooking(own), checkout: transferCheckoutView(t) });
           }
           if (action === "bookings" && method === "GET") {
             const u = customer();
@@ -2504,7 +2653,7 @@ export function createApp(
               res,
               (await store.bookings(shop.id)).filter(
                 (b) => b.customer === u.email,
-              ),
+              ).map(customerBooking),
             );
           }
           if (action === "bookings" && method === "POST") {
@@ -2536,11 +2685,11 @@ export function createApp(
             if (pending) {
               if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || JSON.stringify([...(pending.booking.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort()) || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
               await payments.create(pending);
-              return json(res, { ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? pending.booking : undefined, checkout: checkoutView(pending) });
+              return json(res, { ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? customerBooking(pending.booking) : undefined, checkout: checkoutView(pending) });
             }
             if (previous) {
               if (JSON.stringify([...(previous.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort())) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
-              return json(res, { ok: true, booking: previous });
+              return json(res, { ok: true, booking: customerBooking(previous) });
             }
             const selection = menuSelection(config, input.menuId, input.optionIds);
             if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
@@ -2593,7 +2742,7 @@ export function createApp(
               );
             });
             await flush(shop);
-            return json(res, { ok: true, booking: b });
+            return json(res, { ok: true, booking: customerBooking(b) });
           }
           const cancel = action.match(/^bookings\/([^/]+)\/cancel$/);
           if (cancel && method === "POST") {
@@ -2821,7 +2970,12 @@ export function createApp(
         void store
           .locked(shop.id, async () => {
             const fresh = await store.shop(shop.id);
-            if (fresh) { await payments.reconcile(fresh.id); await flush(fresh); }
+            if (fresh) {
+              await payments.reconcile(fresh.id);
+              await transfers.reconcile(fresh.id);
+              // Transfers can append to history.md; flush the latest shop so a posts sync never saves a stale copy.
+              await flush(await store.shop(fresh.id) || fresh);
+            }
           })
           .catch(console.error);
     })().catch(console.error);
