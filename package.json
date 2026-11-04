@@ -50,6 +50,8 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:region": "node --import tsx scripts/check-region.mjs",
     "check:i18n:browser": "node --import tsx scripts/check-i18n-browser.mjs",
+    "capture:manual:cancellations": "node scripts/capture-manual-cancellations.mjs",
+    "check:manual": "node scripts/capture-manual-cancellations.mjs --check",
     "capture:manual:en": "node scripts/capture-manual-en.mjs",
     "check:payments": "node scripts/check-payments.mjs",
     "check:refund-dates": "node scripts/check-refund-dates.mjs",
