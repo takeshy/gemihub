@@ -56,12 +56,17 @@ try {
     const customer=await context.request.post(origin+'/api/demo-login',{headers:{Origin:origin},data:{role:'customer',shopId:shop.id,email:`guest-${width}@example.com`}});assert.equal(customer.status(),200);
     // A browser instant whose Japanese and US dates differ reveals wrong-zone initial date state.
     await page.clock.setFixedTime(new Date('2026-01-15T04:30:00Z'));
+    // The initial date is the server's first available date in the shop's zone (tests/booking-initial-date.test.ts).
+    const next=page.waitForResponse(response=>new URL(response.url()).pathname===`/api/public/${shop.slug}/slots/next`);
     await page.goto(origin+`/s/${shop.slug}?pane=reserve`);
     const date=page.getByRole('textbox',{name:'Preferred date (America/Los_Angeles)',exact:true});await date.waitFor();
-    assert.equal(await date.inputValue(),'2026/01/14');
+    const first=(await (await next).json()).date;assert.match(first,/^\d{4}-\d{2}-\d{2}$/);
+    await page.waitForFunction(([selector,value])=>document.querySelector(selector)?.value===value,['.date-input input[type=text]',first.replaceAll('-','/')]);
     assert.equal(await date.locator('..').locator('input[type=date]').getAttribute('min'),'2026-01-14');
     await page.getByText('$55.25',{exact:false}).first().waitFor();
-    const day=dateIn(Date.now()+4*86400000,regionOf(saved).timeZone);await date.fill(day);await date.blur();
+    // Back to the server's clock so the booking window (min/max) matches the slots the server offers.
+    await page.clock.setFixedTime(new Date());
+    const day=dateIn(Date.now()+4*86400000,regionOf(saved).timeZone);await date.fill(day);await date.blur();assert.equal(await date.inputValue(),day.replaceAll('-','/'),'a chosen date is kept');
     await page.locator('.time-grid button').first().waitFor();
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
     await page.screenshot({path:`tmp/region/booking-us-${width}.png`,fullPage:true});

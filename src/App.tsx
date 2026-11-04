@@ -40,7 +40,7 @@ import { ImageLibrary } from "./ImageLibrary";
 import { articleKinds } from "../shared/article-features";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
-import { GoogleMap } from "./GoogleMap";
+import { ShopAbout } from "./ShopAbout";
 import { Presentation } from "./Presentation";
 import type { ScreenId } from "../shared/screens";
 import { paid, createDisplay, useShopDisplay, ShopRegionContext } from "./money";
@@ -1667,22 +1667,6 @@ export function PublicShop({
             </div>
             </>
   );
-  const aboutMenus = () => <div className="about-menus">{c.menus
-                .filter((m) => m.active)
-                .map((m) => (
-                  <div className="menu-row" key={m.id}>
-                    <MenuImage imageId={m.imageId} imageBase={`${base}/menu-images`} name={m.name} />
-                    {m.name}{m.optionFor && <span className="pill">{tr("追加メニュー")}</span>} · {m.duration}{tr("分 ")}<b>{yen(m.price)}</b>
-                  </div>
-                ))}</div>;
-  const aboutStaff = () => <div className="public-staff-list">{bookingStaff(c).map(person => <div key={person.id}><MenuImage imageId={person.imageId} imageBase={`${base}/images`} name={person.name} className="staff-photo"/><span>{person.name}</span></div>)}</div>;
-  const aboutAccess = () => <><p>{c.address}</p><GoogleMap config={c} /></>;
-  const aboutHours = () => <><p>
-                {hoursText(c)} {tr(" / 定休日：")}{c.hours.closedWeekdays.map((d) => weekdays()[d]).join(listSeparator())}
-              </p>
-              {c.hours.holidays.length > 0 && (
-                <p>{tr("臨時休業：")}{c.hours.holidays.join(listSeparator("、"))}</p>
-              )}</>;
   const contactForm = () => (
             <form
               className="panel contact-form"
@@ -1738,7 +1722,7 @@ export function PublicShop({
           <button
             className={!category && !pageSlug && pane === id ? "active" : ""}
             onClick={() =>
-              (category || pageSlug) ? navigate(`${basePath || "/"}?pane=${id}`) : onPaneChange ? onPaneChange(id) : setPane(id)
+              onPaneChange ? onPaneChange(id) : navigate(`${basePath || "/"}?pane=${id}`)
             }
             key={id}
           >
@@ -1778,20 +1762,7 @@ export function PublicShop({
         <>
           {pane === "mine" && screen("mine", { news: mineNews(), mypage: <>{mineMember()}{minePanel()}</> }, <>{mineNews()}{mineMember()}{minePanel()}</>)}
           {pane === "reserve" && (isCustomer ? (() => { const booking = bookingSection(); return screen("reserve", { booking }, booking); })() : loginRequired())}
-          {pane === "about" && screen("about", { menus: aboutMenus(), staff: aboutStaff(), access: aboutAccess(), hours: aboutHours() }, (
-            <div className="panel about">
-              <h2>{c.name}</h2>
-              <p>{c.description}</p>
-              <h3>{tr("メニュー")}</h3>
-              {aboutMenus()}
-              <h3>{tr("スタッフ")}</h3>
-              {aboutStaff()}
-              <h3>{tr("アクセス")}</h3>
-              {aboutAccess()}
-              <h3>{tr("営業時間")}</h3>
-              {aboutHours()}
-            </div>
-          ))}
+          {pane === "about" && <ShopAbout config={c} imageBase={`${base}/images`} menuImageBase={`${base}/menu-images`} />}
           {pane === "contact" && (() => { const form = contactForm(); return screen("contact", { form }, form); })()}
         </>
       )}

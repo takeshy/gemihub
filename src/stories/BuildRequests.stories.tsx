@@ -22,6 +22,6 @@ export const ShopSpecification: Story = { name: "トップの変更履歴・現�
 
 export const AIPageBuilder: Story = { name: "相談・修正・新ページ作成を選ぶ", args: { scenario: "page-builder" } };
 
-export const ProposalFailure: Story = { name: "変更案の作成失敗・チャットから再試行", tags: ["expected-alert"], args: { scenario: "proposal-failure" }, play: ({ canvasElement }) => sendFirstMessage(canvasElement, getLocale() === "en" ? "I want to add a foot care menu" : "メニューにフットケアを追加したい") };
+export const ProposalFailure: Story = { name: "変更案の作成失敗・チャットから再試行", tags: ["expected-alert"], args: { scenario: "proposal-failure", autoplay: true }, play: ({ canvasElement, args }) => args.autoplay === false ? undefined : sendFirstMessage(canvasElement, getLocale() === "en" ? "I want to add a foot care menu" : "メニューにフットケアを追加したい") };
 
-export const QuestionFailure: Story = { name: "メッセージ送信失敗・下書きを復元", tags: ["expected-alert"], args: { scenario: "question-failure" }, play: ({ canvasElement }) => sendFirstMessage(canvasElement, getLocale() === "en" ? "I want to open until 7 pm" : "営業時間を19時までにしたい") };
+export const QuestionFailure: Story = { name: "メッセージ送信失敗・下書きを復元", tags: ["expected-alert"], args: { scenario: "question-failure", autoplay: true }, play: ({ canvasElement, args }) => args.autoplay === false ? undefined : sendFirstMessage(canvasElement, getLocale() === "en" ? "I want to open until 7 pm" : "営業時間を19時までにしたい") };

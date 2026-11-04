@@ -7,4 +7,4 @@ RUN npm run build
 USER node
 ENV NODE_ENV=production PORT=3000
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "--env-file-if-exists=.env", "--import", "tsx", "server/index.ts"]

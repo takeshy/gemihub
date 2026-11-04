@@ -36,6 +36,8 @@ try{
     const composer=page.getByRole('textbox',{name:language==='ja'?'AIに伝えたいこと':'Your message to AI',exact:true});
     const log=page.getByRole('log',{name:language==='ja'?'AIとのチャット':'Chat with AI',exact:true});
     const starts=[];page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/conversations'))starts.push(request.url());});
+    // The saved conversation is restored when the page opens; make that restoration fail first.
+    await page.route(`**/conversations/${chat.id}`,route=>route.abort());
     await page.goto(`${origin}/?lang=${language}`);await back.waitFor();
     // Screens are listed by name; the theme sample shows the real header and footer around placeholder content.
     assert.equal(await page.locator('.screen-name-list li').count(),9);
@@ -48,7 +50,6 @@ try{
     await page.screenshot({path:`tmp/review-chat/review-${language}-${width}.png`,fullPage:true});
     if(process.env.UPDATE_MANUAL==='1'&&width===1280)await writeFile(`public/manual/${language==='en'?'en/':''}04-plan.jpg`,await page.locator('.screen-gallery').screenshot({type:'jpeg',quality:86}));
     // A failed restoration must leave the review available for retry, not open a new chat.
-    await page.route(`**/conversations/${chat.id}`,route=>route.abort());
     await back.click();await page.getByRole('alert').waitFor();assert.equal(await back.count(),1);
     await page.unroute(`**/conversations/${chat.id}`);
     await back.click();await composer.waitFor();
@@ -57,7 +58,8 @@ try{
     assert.equal(await page.getByRole('button',{name:language==='ja'?'はじめる':'Get started',exact:true}).count(),0);
     await composer.fill('Keep the existing layout.');
     // Opening and closing the same proposal must keep an unsent draft too.
-    await page.getByRole('button',{name:language==='ja'?'変更案を確認する':'Review proposal',exact:true}).click();
+    // Before publication the proposal opens as a screen preview.
+    await page.getByRole('button',{name:language==='ja'?'画面イメージを確認する':'View screen preview',exact:true}).click();
     await back.click();assert.equal(await composer.inputValue(),'Keep the existing layout.');
     await page.reload();await back.click();await composer.waitFor();assert.ok((await log.innerText()).includes(original));
     await composer.fill('Please add a contact page.');

@@ -9,6 +9,10 @@ Add the gemihub.net booking service to the existing `shared-apps` VM (`geminihub
 
 These files implement configuration and operating procedures. Production deployment/publication is not complete until actual domains, OAuth client, and available models are configured and the plan has been reviewed and applied.
 
+Firestore locks expire after five minutes without renewal. Active operations renew them every minute; a later operation atomically replaces an expired lock. No startup-wide deletion or Firestore TTL policy is needed, and independent instances can share the database. Store writes verify lock ownership in the same transaction, so a process that resumes after losing its lock cannot overwrite the new owner's data. Normal shutdown still waits for pending operations to release their locks.
+
+Booking/payment reconciliation, configuration/file synchronization and mail delivery run independently under separate locks. A blocked Drive export does not block a capture/refund, and a slow PayPal response does not block file synchronization. A changed public configuration takes the booking lock only for its final database save. Reset acquires the affected locks before archiving the shop.
+
 | Resources | Terraform owner |
 | --- | --- |
 | gemihub-web APIs, service accounts, Firestore, Secret Manager, Artifact Registry, DNS, certificates, build | This repository's `infra/` |
@@ -143,3 +147,32 @@ Secretの値をtfvarsや登録JSONに書かず、`paypal_secret_version`でバ�
 Google OAuth for gemihub.net reuses `projects/495062043717/secrets/google-client-id/versions/1` and `projects/495062043717/secrets/google-client-secret/versions/1`. Both enabled version numbers were checked without reading payloads. Terraform grants the service runtime access to these two secrets and exports versioned references for the shared deployer; credentials are not copied into this repository. To supply the client ID directly, set both `google_client_id_secret_ref` and `google_client_secret_ref` to null and configure the client ID and managed secret version.
 
 For the existing gemihub.net deployment, set `manage_app_domain_dns_certificate = false` in private tfvars. Keep the existing apex DNS and certificate-map entry in kiokuflow state. This module then creates only the additional storefront DNS/TLS resources. Set it to true only when managing a fresh apex domain.
+
+
+## Generated storefront storage
+
+`google_storage_bucket.storefront` stores finished shop HTML and the CSS/images it refers to. Public access is prevented. Grant only bucket-scoped `storage.objectUser` (create, read and delete objects) to the runtime account. Provisional pages use the same private bucket, with the existing domain gateway enforcing authentication before reading an object. No DNS or load-balancer changes are required; this implementation does not expose the bucket directly through a public CDN.
+
+Review/apply the bucket and IAM configuration first, update the shared VM registration with its `STOREFRONT_BUCKET` environment variable, then deploy the app. Code changes alone do not create these resources. In-memory stores use the local test storage implementation without GCS access.
+
+Publication generates Japanese/English HTML for both shop hosts and `/s/{slug}` addresses. Built CSS and managed images (display size) are stored once per shop under content-hash names (`shops/{id}/assets/`) and served with long-lived caching; pages refer to them instead of embedding them. Commit the Firestore `storefrontRelease` reference only after all objects are uploaded. An interrupted upload preserves the previous release. Never embed session state, profiles or notification addresses. Regenerate on publication, operational settings saves and article updates. Unreadable images are left out rather than blocking the save. Shops without a release, or with one from an older generator (`storefrontRenderer`), are rebuilt by the background loop with exponential backoff; a first visit converts a shop without any release once.
+
+Do not expire objects solely by age: an old release can still be active. The app keeps the current release and the two before it (`storefrontPrevious`), and deletes older releases' pages and any assets no kept release uses. `terraform test` verifies the private bucket, scoped IAM and runtime environment without provisioning resources.
+
+### Adding to an existing shared VM
+
+When gemihub-web already runs on the shared VM, proceed in this order:
+
+1. Review `terraform -chdir=infra plan` for the bucket, IAM and registration changes, then apply. `shared_vm_registration` gains `STOREFRONT_BUCKET` in `env`; any other variables added since the last registration are included too.
+2. Export the registration and rebuild the bundle with the step 4 commands. `fetch-vars` refuses to overwrite an existing local `infra/shared-vm/terraform.tfvars`. Compare it with the stored copy (`gcloud storage cat gs://takeshy-work-kakeratta-terraform/vars/shared-vm/terraform.tfvars | diff - infra/shared-vm/terraform.tfvars`): continue if identical; otherwise review the local changes before using `--force`.
+3. Upload the bundle to `gs://geminihub-486523-shared-apps/` under the object name `prepare-bundle.py` printed, before applying: the VM metadata will point to it.
+4. The shared VM plan should show one change, the `shared-additional-bundle` metadata of `google_compute_instance.apps` (`0 to add, 1 to change, 0 to destroy`). Do not apply a plan that recreates the VM or changes other apps. Run `upload-vars` after applying.
+5. Copy the bundle to the VM and run `install-additional.sh`. It is done when it prints `gemihub-web ready` and the Nginx configuration test succeeds. The running image does not change, so the new variables are unused until the next deployment.
+6. Deploy the app.
+
+After deploying, verify that:
+
+- Existing shops get a release on their first visit or from the 60-second background loop: storefront pages load, and `gcloud storage ls gs://geminihub-486523-gemihub-web-storefront/shops/` lists files per shop.
+- Page HTML refers to CSS and images under `/_assets/`, and those return 200.
+- Sign-in, booking and inquiries still work on the `?pane=reserve`, `?pane=mine` and `?pane=contact` screens.
+- A shop whose release fails logs `Storefront <shop id>: background release failed`; retries back off from 30 seconds up to one hour.

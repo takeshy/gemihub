@@ -30,7 +30,7 @@ import { resolveTxt } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { z } from "zod";
-import { Store, isArchivedShop, type Shop, type User } from "./store.ts";
+import { Store, bookingLockKey, mailLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
 import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
@@ -114,16 +114,12 @@ import {
   summarizePost,
   type Post,
 } from "./post-domain.ts";
-import {
-  renderArticle,
-  renderArchive,
-  renderHomeWithPosts,
-} from "./post-renderer.tsx";
 import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
 import { editorIndex, contentHash } from "./editor-sync.ts";
 import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from "./page-ai.ts";
 import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
-import { renderCustomPage } from "./page-renderer.tsx";
+import { buildStorefront, canonicalBase, storefrontAssetName, storefrontAssetObject, storefrontAssetType, storefrontFile, storefrontGarbage, storefrontObject, storefrontRenderer, storefrontRetainedReleases, storefrontShell, writeStorefront, type StorefrontRelease } from "./storefront-build.tsx";
+import { bucketStorefrontFiles, memoryStorefrontFiles, type StorefrontFiles } from "./storefront-files.ts";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
 import { calendarGateway, calendarScope, connections, connectOwnerCalendar, bookingCalendars, availableSlots, nextAvailableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 /**
@@ -233,8 +229,10 @@ export function createApp(
   paymentGateway: PaymentGateway = paypalGateway(),
   liveConnector?: LiveConnector,
   loginMailer?: LoginMailer,
+  storefrontFiles?: StorefrontFiles,
 ) {
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
+  const pageFiles = storefrontFiles || (store.memory ? memoryStorefrontFiles(store) : bucketStorefrontFiles());
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
   const customerEmailLogin = emailLogin(store, loginMailer || (async (shop, to, subject, text) => {
     if (shop.judge) { await enqueue(shop, "mail", { to, subject, body: text }); return; }
@@ -338,7 +336,64 @@ export function createApp(
     if (isArchivedShop(shop) || user?.authMethod === "email" || user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
   };
   const inquiries = (shop: Shop) => store.records<Inquiry>("inquiry", shop);
+  const customersFor = async (shop: Shop, url: URL) => {
+    const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
+    const now = new Date();
+    return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
+  };
   const postsFor = (shop: Shop) => store.records<Post>("post", shop);
+  // A missing or unreadable image is left out of the public page instead of blocking every save.
+  async function storefrontImages(shop: Shop, posts: Post[]) {
+    const token = store.memory ? "" : await ownerToken(shop) || "";
+    const images: Record<string, import("./menu-image-domain.ts").MenuImageData> = {};
+    for (const id of new Set([...managedImageIds(shop.published!), ...publishedPostImageIds(posts)])) {
+      try { images[id] = await readMenuImage(store, shop, id, crmFiles, token, "display"); }
+      catch (error) { console.warn(`Storefront ${shop.id}: image ${id} left out of the public page`, error); }
+    }
+    return images;
+  }
+  async function savePublicShop(shop: Shop) {
+    let dropped: StorefrontRelease[] = [];
+    if (shop.published) {
+      try {
+        const posts = await postsFor(shop);
+        const build = buildStorefront(shop, publicPosts(posts), origin(), await storefrontShell(), await storefrontImages(shop, posts));
+        const release = await writeStorefront(pageFiles, shop.id, build);
+        const history = [shop.storefrontRelease, ...shop.storefrontPrevious || []].filter((item): item is StorefrontRelease => !!item && item.id !== release.id);
+        shop.storefrontPrevious = history.slice(0, storefrontRetainedReleases);
+        dropped = history.slice(storefrontRetainedReleases);
+        shop.storefrontRelease = release;
+        storefrontRetry.delete(shop.id);
+      } catch (error) {
+        console.error(error);
+        fail(503, tr("公開ページの保存に失敗しました。以前の公開ページは保持しています。同じ操作を再試行してください。"));
+      }
+    }
+    // Only a changed configuration needs to commit between booking operations.
+    // Refreshing files for the same configuration remains independent.
+    const current = await store.shop(shop.id);
+    if (JSON.stringify(current?.published) === JSON.stringify(shop.published)) await store.saveShop(shop);
+    else await store.locked(bookingLockKey(shop.id), () => store.saveShop(shop));
+    // Only releases older than the retained ones are removed; a failed cleanup is retried on the next release.
+    if (dropped.length) {
+      const kept = [shop.storefrontRelease!, ...shop.storefrontPrevious || []];
+      for (const path of storefrontGarbage(shop.id, kept, dropped)) await pageFiles.remove(path).catch(error => console.warn(`Storefront ${shop.id}: could not delete ${path}`, error));
+    }
+  }
+  // Shops without a release from the current generator are rebuilt by the background loop; failures back off.
+  const storefrontRetry = new Map<string, { at: number; delay: number }>();
+  const storefrontCurrent = (shop: Shop) => !!shop.storefrontRelease && shop.storefrontRelease.renderer === storefrontRenderer;
+  async function ensureStorefront(shop: Shop) {
+    if (!shop.published || storefrontCurrent(shop) || shop.publishingPlanId) return;
+    const retry = storefrontRetry.get(shop.id);
+    if (retry && retry.at > Date.now()) return;
+    try { await savePublicShop(shop); }
+    catch (error) {
+      const delay = Math.min((retry?.delay || 30000) * 2, 3600000);
+      storefrontRetry.set(shop.id, { at: Date.now() + delay, delay });
+      throw error;
+    }
+  }
   const effective = async (shop: Shop) => {
     if (shop.publishingPlanId)
       fail(503, tr("予約ページを更新中です。しばらくしてからお試しください。"));
@@ -379,13 +434,13 @@ export function createApp(
       ...data,
     });
   }
-  async function flush(shop: Shop) {
+  async function flushJobs(shop: Shop, type: Job["type"]) {
     if (!shop.google) return;
     const token = await ownerToken(shop);
     if (!token) return;
     for (const job of (await store.list<Job>("job")).filter(
       // Post pages wait for an in-flight publish/restore; mail is never held back by it.
-      (j) => j.shopId === shop.id && !(shop.publishingPlanId && j.type === "posts"),
+      (j) => j.shopId === shop.id && j.type === type && !(shop.publishingPlanId && j.type === "posts"),
     )) {
       await requestLocale.run(job.locale || "ja", async () => {
         try {
@@ -402,6 +457,13 @@ export function createApp(
       });
     }
   }
+  // File exports mutate Drive IDs also used by publication, so their callers
+  // retain the configuration lock. Delivery never runs file-export jobs.
+  const flushFiles = (shop: Shop) => flushJobs(shop, "posts");
+  const flushMail = (shop: Shop) => store.locked(mailLockKey(shop.id), async () => {
+    const fresh = await store.shop(shop.id);
+    if (fresh) await flushJobs(fresh, "mail");
+  });
   async function notify(
     shop: Shop,
     config: ShopConfig,
@@ -424,7 +486,7 @@ export function createApp(
     if (await store.get("paymentNotice", key)) return;
     const shop = await store.shop(booking.shopId);
     if (!shop?.published) return;
-    const config = await effective(shop);
+    const config = shop.published;
     const refund = booking.payment?.cancellation;
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
@@ -439,7 +501,7 @@ export function createApp(
     if (await store.get("paymentNotice", key)) return;
     const shop = await store.shop(transfer.shopId);
     if (!shop?.published) return;
-    const config = await effective(shop);
+    const config = shop.published;
     const money = (amount: number) => formatMinor(amount, transfer.currency, intlLocale());
     const visit = tr("予約: {0}\nメニュー: {1}", shopWhen(config, booking.start), bookingMenuName(config, booking));
     await store.transaction(async () => {
@@ -457,12 +519,11 @@ export function createApp(
           tr("{0} 様\n{1}\n支払額: {2}\nお得な空き枠からのご予約が確定しました。\n返金条件（お支払い額に対して）: {3}", recipient.name, visit, money(transfer.price), policyText(transfer.policy)), []);
         await notify(shop, config, config.notificationEmail, tr("{0} 代わりの予約が入りました", config.name),
           tr("{0}\n{1} 様 → {2} 様\n支払額: {3}（新しい支払いと同額を元の予約者へ返金。お店の受取総額は変わりません）", visit, transfer.sellerName, recipient.name, money(transfer.price)), [shop.owner]);
-        const fresh = await store.shop(shop.id);
-        if (fresh) {
-          fresh.history.push({ at: entry?.at || new Date().toISOString(), summary: tr("キャンセル枠の予約が成立：{0} {1}（{2} 様 → {3} 様、{4}を支払い・同額を返金）", shopWhen(config, booking.start), bookingMenuName(config, booking), transfer.sellerName, recipient.name, money(transfer.price)) });
-          await store.saveShop(fresh);
-          await enqueue(fresh, "posts", {}, `transfer-history:${transfer.id}`);
-        }
+        // Booking operations never wait for Drive/configuration work. Keep the
+        // history intent in the same transaction as the notices; apply it later
+        // under the configuration lock so publication cannot overwrite it.
+        await store.put("transferHistory", transfer.id, { shopId: shop.id, entry: { at: entry?.at || new Date().toISOString(), summary: tr("キャンセル枠の予約が成立：{0} {1}（{2} 様 → {3} 様、{4}を支払い・同額を返金）", shopWhen(config, booking.start), bookingMenuName(config, booking), transfer.sellerName, recipient.name, money(transfer.price)) } });
+        await enqueue(shop, "posts", {}, `transfer-history:${transfer.id}`);
       } else
         await notify(shop, config, transfer.seller, tr("{0} キャンセルの返金額が確定しました", config.name),
           tr("{0} 様\n{1}\n受付期限を過ぎたため、キャンセル受付時の返金予定額（{2}%返金・{3}）で確定しました。返金の状況は別のメールとマイページでお知らせします。", transfer.sellerName, visit, transfer.unsold.percent, money(transfer.unsold.amount)), []);
@@ -488,6 +549,30 @@ export function createApp(
   async function operatorTransfers(shopId: string) {
     return (await transfers.forShop(shopId)).filter(t => t.phase === "listed").map(t => ({ id: t.id, bookingId: t.bookingId, price: t.price, currency: t.currency, discountPercent: t.discountPercent, deadline: t.deadline, buying: buyerBusy(t), review: !!t.buyer?.review }));
   }
+  const reconcilePayments = (shopId: string) => store.locked(bookingLockKey(shopId), async () => {
+    if (await store.shop(shopId)) { await payments.reconcile(shopId); await transfers.reconcile(shopId); }
+  });
+  async function applyTransferHistory(shop: Shop) {
+    const pending = (await store.entries<{ shopId: string; entry: Shop["history"][number]; applied?: boolean }>("transferHistory", shop)).filter(row => !row.value.applied);
+    if (!pending.length) return;
+    await store.transaction(async () => {
+      shop.history.push(...pending.map(row => row.value.entry));
+      await store.saveShop(shop);
+      for (const row of pending) await store.put("transferHistory", row.id, { ...row.value, applied: true });
+    });
+  }
+  const syncTransferHistory = (shopId: string) => store.locked(shopId, async () => {
+    const shop = await store.shop(shopId);
+    if (shop) await applyTransferHistory(shop);
+  });
+  const syncFiles = (shopId: string) => store.locked(shopId, async () => {
+    const fresh = await store.shop(shopId);
+    if (!fresh) return;
+    await applyTransferHistory(fresh);
+    await flushFiles(fresh);
+    // Converts old publications and refreshes releases from an older generator.
+    await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
+  });
   async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
     if (fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
     if (plan.base !== fresh.revision) fail(409, tr("本番の内容が変わりました。最新の内容を読み直してください"));
@@ -557,10 +642,10 @@ export function createApp(
     fresh.revision++;
     fresh.lastPublishedPlanId = plan.id;
     retireDesignVersions(fresh);
-    await store.saveShop(fresh);
+    await savePublicShop(fresh);
     await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
     if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
-    await flush(fresh);
+    await flushFiles(fresh);
     return { ok: true, url: `/s/${fresh.slug}` };
   }
   const rate = new Map<
@@ -639,6 +724,18 @@ export function createApp(
         // Judge AI calls share one quota per judge, charged once per request before the first model call.
         aiUsage.enterWith({ charge: () => chargeJudge(user.email) });
       }
+      // A shop published before static releases is converted once; repeated failures wait for the backoff instead of rebuilding per request.
+      const firstStorefront = async (id: string) => {
+        if ((storefrontRetry.get(id)?.at || 0) > Date.now()) { res.setHeader("Retry-After", "60"); fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。")); }
+        const shop = await store.locked(id, async () => {
+          const current = await store.shop(id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(current);
+          if (!current.storefrontRelease) await ensureStorefront(current);
+          return current;
+        });
+        if (!shop.storefrontRelease) { res.setHeader("Retry-After", "60"); fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。")); }
+        return shop;
+      };
       const assertStorefrontAccess = (shop: Shop) => {
         // A judge's own trial customer may use the judge's provisional shop; nobody else may.
         const trialCustomer = !!shop.judge && !!user && isJudgeCustomerEmail(user.email) && user.shopId === shop.id;
@@ -720,7 +817,7 @@ export function createApp(
         if (!ticket || ticket.host !== host || ticket.expires < Date.now())
           fail(400, tr("ログインの有効期限が切れました"));
         await login(store, res, ticket.user);
-        return redirect(res, publicHost ? "/" : `/s/${ticket.slug}`);
+        return redirect(res, `${publicHost ? "/" : `/s/${ticket.slug}`}?pane=mine`);
       }
       const staffLogin = path.match(/^\/api\/staff-login\/([^/]+)$/);
       if (staffLogin && method === "GET" && !publicHost) {
@@ -931,7 +1028,7 @@ export function createApp(
         return redirect(
           res,
           pending.shopId
-            ? `/s/${(await store.shop(pending.shopId))!.slug}`
+            ? `/s/${(await store.shop(pending.shopId))!.slug}?pane=mine`
             : "/",
         );
       }
@@ -1029,7 +1126,7 @@ export function createApp(
               const previous = saved.shopId ? await store.shop(saved.shopId) : undefined;
               await store.put("judgeUsage", user.email, { ...usage, resets: { day, count: resets + 1 } });
               if (previous && !previous.judge?.archivedAt) {
-                await store.locked(previous.id, async () => {
+                await store.locked(previous.id, () => store.locked(bookingLockKey(previous.id), () => store.locked(mailLockKey(previous.id), async () => {
                   const fresh = (await store.shop(previous.id))!;
                   const token = await store.ownerToken(fresh);
                   if (fresh.google && token) await trashFile(token, fresh.google.folderId);
@@ -1038,7 +1135,7 @@ export function createApp(
                     if (entry.value.user?.shopId === fresh.id && isJudgeCustomerEmail(entry.value.user.email)) await store.delete("session", entry.id);
                   // Keep the old records for audit, but detach them from the judge so a new shop is created.
                   await store.saveShop({ ...fresh, owner: `${user.email}#archived-${fresh.id}`, judge: { ...fresh.judge!, archivedAt: new Date().toISOString() } });
-                });
+                })));
               }
               const shop = await store.createShop(user.email, regionForRequest(req));
               if (!shop.judge) { shop.judge = { createdAt: new Date().toISOString() }; await store.saveShop(shop); }
@@ -1237,6 +1334,68 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (action === "operations" && method === "GET") return json(res, {
+          bookings: await store.bookings(shop.id),
+          paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
+          transferListings: await operatorTransfers(shop.id),
+          inquiries: await inquiries(shop),
+        });
+        if (action === "retry" && method === "POST") {
+          await Promise.all([reconcilePayments(shop.id).then(() => flushMail(shop)), syncFiles(shop.id), flushMail(shop)]);
+          await syncTransferHistory(shop.id);
+          return json(res, { ok: true });
+        }
+        const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
+        if (cancellation && method === "POST") {
+          const result = await store.locked(bookingLockKey(shop.id), async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            await assertOperator(user, fresh);
+            const input = z.object({ status: z.enum(["cancelled", "no_show"]) }).parse(await body(req));
+            const b = (await store.bookings(fresh.id)).find(b => b.id === cancellation[1]) || fail(404, tr("予約がありません"));
+            const paid = await store.get<Checkout>("checkout", b.id);
+            if (paid?.shopId === fresh.id && paid.phase === "confirmed") {
+              if (paid.booking.status === "active" && !paid.booking.payment?.cancellation) await transfers.release(fresh.id, b.id);
+              if (input.status === "cancelled") return { ok: true, booking: await payments.cancel(paid, user!.email, "shop") };
+              if (paid.booking.status !== "active") fail(409, tr("この予約は処理済みです"));
+              paid.booking.status = "no_show"; paid.booking.updatedBy = user!.email; paid.booking.updatedAt = new Date().toISOString();
+              await store.put("checkout", paid.id, paid); await payments.sync(paid);
+              return { ok: true, booking: paid.booking };
+            }
+            if (b.payment) fail(409, tr("支払いの記録を確認してください"));
+            if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
+            const config = fresh.published!;
+            b.status = input.status; b.updatedBy = user!.email; b.updatedAt = new Date().toISOString();
+            await store.saveBooking(b);
+            await notify(fresh, config, b.customer, tr("予約の状態が変更されました"), tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status));
+            return { ok: true };
+          });
+          await flushMail(shop);
+          return json(res, result);
+        }
+        const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
+        // CRM reads must not wait for AI, publication or reconciliation writers.
+        if (customerRoute && method === "GET") {
+          const customers = await customersFor(shop, url);
+          if (!customerRoute[1]) return json(res, customerSummaries(customers));
+          const email = normalizeEmail(decodeURIComponent(customerRoute[1]));
+          const customer = customers.find(customer => customer.email === email) || fail(404, tr("お客様が見つかりません"));
+          const tail = customerRoute[2] || "";
+          if (!tail) return json(res, customer);
+          if (tail === "images") return json(res, {
+            name: customer.name,
+            images: customerImages((await store.records<CustomerNote>("customerNote", shop)).filter(note => normalizeEmail(note.email) === email)),
+          });
+          const fileRoute = tail.match(/^notes\/([^/]+)\/files\/([^/]+)$/);
+          if (fileRoute) {
+            const note = (await store.records<CustomerNote>("customerNote", shop)).find(note => note.id === fileRoute[1] && normalizeEmail(note.email) === email && note.status === "active") || fail(404, tr("メモがありません"));
+            const attachment = note.attachments.find(file => file.id === fileRoute[2]) || fail(404, tr("添付ファイルがありません"));
+            const token = store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"));
+            const data = await crmFiles.read(shop, token, attachment.id);
+            if (data.length !== attachment.size) fail(409, tr("添付ファイルが変更されています"));
+            return json(res, { data: data.toString("base64") });
+          }
+          fail(404, tr("見つかりません"));
+        }
         // These reads must stay available while a model call holds the shop write lock.
         if (action === "conversations" && method === "GET") return json(res, { email: user!.email, conversations: await conversations(store, shop, user!.email) });
         const conversationRead = action.match(/^conversations\/([a-f0-9]{64})(\/progress)?$/);
@@ -1464,11 +1623,11 @@ export function createApp(
             delete fresh.publishingError;
             // Drafts, article records, bookings, customer/inquiry records and payments are untouched.
             retireDesignVersions(fresh);
-            await store.saveShop(fresh);
+            await savePublicShop(fresh);
             await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
             // Post pages embed the header/footer, so they follow the restored design.
             await enqueue(fresh, "posts");
-            await flush(fresh);
+            await flushFiles(fresh);
             return json(res, { ok: true });
           }
           if (action === "export" && method === "GET") {
@@ -1895,10 +2054,10 @@ export function createApp(
             await store.transaction(async () => {
               await store.put("post", post.id, post);
               if(requestId)await store.put("postCreation",creationId,{hash:creationHash,postId:post.id});
-              if (publish) await store.saveShop(fresh);
+              if (publish) await savePublicShop(fresh);
               await enqueue(fresh, "posts");
             });
-            await flush(fresh);
+            await flushFiles(fresh);
             return json(res, post);
           }
           const postAction = action.match(
@@ -1961,10 +2120,10 @@ export function createApp(
             post.updatedBy = user!.email;
             await store.transaction(async () => {
               await store.put("post", post.id, post);
-              await store.saveShop(fresh);
+              await savePublicShop(fresh);
               await enqueue(fresh, "posts");
             });
-            await flush(fresh);
+            await flushFiles(fresh);
             return json(res, post);
           }
           if (action === "plan" && method === "POST") {
@@ -2166,33 +2325,16 @@ export function createApp(
             if (fresh.publication !== "public") {
               fresh.publication = "public";
               fresh.history.push({ at: new Date().toISOString(), summary: tr("本番公開に切り替えました") });
-              await store.saveShop(fresh);
+              await savePublicShop(fresh);
             }
             return json(res, { ok: true, url: `/s/${fresh.slug}` });
           }
-          if (action === "operations" && method === "GET") {
-            return json(res, {
-              bookings: await store.bookings(fresh.id),
-              paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === fresh.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
-              transferListings: await operatorTransfers(fresh.id),
-              inquiries: await inquiries(fresh),
-            });
-          }
-          const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
-          if (customerRoute && (method === "GET" || method === "POST")) {
-            const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
-            const now = new Date();
-            const loadCustomers = async () => aggregateCustomers(await store.bookings(fresh.id), await inquiries(fresh), await store.records<CustomerNote>("customerNote", fresh), now, customerSince(filter, now, regionOf(fresh.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", fresh), regionOf(fresh.published).timeZone);
+          if (customerRoute && method === "POST") {
+            const loadCustomers = () => customersFor(fresh, url);
             const customers = await loadCustomers();
-            if (!customerRoute[1] && method === "GET") return json(res, customerSummaries(customers));
             const email = normalizeEmail(decodeURIComponent(customerRoute[1] || ""));
             const customer = customers.find(customer => customer.email === email) || fail(404, tr("お客様が見つかりません"));
             const tail = customerRoute[2] || "";
-            if (!tail && method === "GET") return json(res, customer);
-            if (tail === "images" && method === "GET") return json(res, {
-              name: customer.name,
-              images: customerImages((await store.records<CustomerNote>("customerNote", fresh)).filter(note => normalizeEmail(note.email) === email)),
-            });
             if (tail === "notes" && method === "POST") {
               const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
               await addCustomerNote(store, fresh, email, user!.email, await body(req, 15 * 1024 * 1024), crmFiles, token);
@@ -2201,13 +2343,6 @@ export function createApp(
             const noteRoute = tail.match(/^notes\/([^/]+)(?:\/(delete|files)(?:\/([^/]+))?)?$/);
             if (noteRoute) {
               const note = (await store.records<CustomerNote>("customerNote", fresh)).find(note => note.id === noteRoute[1] && normalizeEmail(note.email) === email && note.status === "active") || fail(404, tr("メモがありません"));
-              if (noteRoute[2] === "files" && noteRoute[3] && method === "GET") {
-                const attachment = note.attachments.find(file => file.id === noteRoute[3]) || fail(404, tr("添付ファイルがありません"));
-                const token = store.memory ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です"));
-                const data = await crmFiles.read(fresh, token, attachment.id);
-                if (data.length !== attachment.size) fail(409, tr("添付ファイルが変更されています"));
-                return json(res, { data: data.toString("base64") });
-              }
               if (method === "POST" && (!noteRoute[2] || noteRoute[2] === "delete")) {
                 const input = z.object({ text: z.string().max(10000).optional(), attachmentNames: z.array(customerAttachmentSchema.pick({ id: true, name: true })).max(5).optional(), previousUpdatedAt: z.string() }).parse(await body(req));
                 if (input.previousUpdatedAt !== note.updatedAt) fail(409, tr("メモが更新されています。詳細を開き直して確認してください。入力内容は画面に残っています"));
@@ -2233,45 +2368,6 @@ export function createApp(
               }
             }
           }
-          const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
-          if (cancellation && method === "POST") {
-            const input = z
-              .object({ status: z.enum(["cancelled", "no_show"]) })
-              .parse(await body(req));
-            const b =
-              (await store.bookings(fresh.id)).find(
-                (b) => b.id === cancellation[1],
-              ) || fail(404, tr("予約がありません"));
-            const paid = await store.get<Checkout>("checkout", b.id);
-            if (paid?.shopId === fresh.id && paid.phase === "confirmed") {
-              if (paid.booking.status === "active" && !paid.booking.payment?.cancellation) await transfers.release(fresh.id, b.id);
-              if (input.status === "cancelled") {
-                const booking = await payments.cancel(paid, user!.email, "shop");
-                await flush(fresh);
-                return json(res, { ok: true, booking });
-              }
-              if (paid.booking.status !== "active") fail(409, tr("この予約は処理済みです"));
-              paid.booking.status = "no_show"; paid.booking.updatedBy = user!.email; paid.booking.updatedAt = new Date().toISOString();
-              await store.put("checkout", paid.id, paid); await payments.sync(paid); await flush(fresh);
-              return json(res, { ok: true, booking: paid.booking });
-            }
-            if (b.payment) fail(409, tr("支払いの記録を確認してください"));
-            if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
-            const config = await effective(fresh);
-            b.status = input.status;
-            b.updatedBy = user!.email;
-            b.updatedAt = new Date().toISOString();
-            await store.saveBooking(b);
-            await notify(
-              fresh,
-              config,
-              b.customer,
-              tr("予約の状態が変更されました"),
-              tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status),
-            );
-            await flush(fresh);
-            return json(res, { ok: true });
-          }
           const inquiryAction=action.match(/^inquiries\/([^/]+)\/(reply|status)$/);
           if(inquiryAction&&method==="POST"){
             const q=(await inquiries(fresh)).find(q=>q.id===inquiryAction[1]&&q.shopId===fresh.id)||fail(404,tr("お問い合わせがありません"));
@@ -2286,13 +2382,13 @@ export function createApp(
             const hash=digest(JSON.stringify({text:input.text,previousReply:input.previousReply??null,status:input.status??null}));
             const operation=await store.get<{hash:string;done:boolean}>("inquiryReplyRequest",key);
             if(operation&&operation.hash!==hash)fail(409,tr("返信内容が変わっています。入力し直してください"));
-            if(operation?.done){await flush(fresh);return json(res,{ok:true});}
+            if(operation?.done){await flushMail(fresh);return json(res,{ok:true});}
             if(input.previousReply!==undefined&&q.reply!==input.previousReply&&!(operation&&q.reply===input.text))fail(409,tr("他の担当者が返信しています。最新の状態を確認してください"));
             await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:false});
             q.reply=input.text;q.status=input.status||inquiryStatus(q);await store.put("inquiry",q.id,q);
             await enqueue(fresh,"mail",{to:q.email,subject:tr("{0} からの返信", fresh.published!.name),body:input.text},digest(`${key}:mail`));
             await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:true});
-            await flush(fresh);return json(res,{ok:true});
+            await flushMail(fresh);return json(res,{ok:true});
           }
           if (action === "invite" && method === "POST") {
             assertOwner(user, fresh);
@@ -2319,7 +2415,7 @@ export function createApp(
               subject: tr("お店の運営に招待されました"),
               body: tr("{0}の運営に招待されました。{1} にこのメールアドレスの Google アカウントでログインして招待を承諾してください。", fresh.published?.name || tr("お店"), origin()),
             });
-            await flush(fresh);
+            await flushMail(fresh);
             return json(res, { ok: true });
           }
           if (action === "members/revoke" && method === "POST") {
@@ -2366,7 +2462,7 @@ export function createApp(
               fresh.domain = domain;
               fresh.domainVerified = false;
               fresh.domainToken = randomBytes(24).toString("hex");
-              await store.saveShop(fresh);
+              await savePublicShop(fresh);
               return json(res, { ok: true });
             });
           }
@@ -2378,13 +2474,7 @@ export function createApp(
             if (!records.some((r) => r.join("") === fresh.domainToken))
               fail(400, tr("確認用 TXT レコードが見つかりません"));
             fresh.domainVerified = true;
-            await store.saveShop(fresh);
-            return json(res, { ok: true });
-          }
-          if (action === "retry" && method === "POST") {
-            await payments.reconcile(fresh.id);
-            await transfers.reconcile(fresh.id);
-            await flush(await store.shop(fresh.id) || fresh);
+            await savePublicShop(fresh);
             return json(res, { ok: true });
           }
           if (action === "documents" && method === "GET")
@@ -2430,8 +2520,10 @@ export function createApp(
           if (!ids.includes(imageRead[2]) && !(imageRead[1] === "images" && publishedPostImageIds(await postsFor(shop)).includes(imageRead[2]))) fail(404, tr("画像がありません"));
           return await imageResponse(req, res, shop, imageRead[2], url);
         }
-        return await store.locked(shopRef.id, async () => {
-          const shop = (await store.shop(shopRef.id))!;
+        const bookingAction = /^(?:bookings|checkouts|slots|transfers)(?:\/|$)/.test(action);
+        let deliverMail = false;
+        const result = await store.locked(bookingAction ? bookingLockKey(shopRef.id) : shopRef.id, async () => {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
           assertStorefrontAccess(shop);
           const customer = () => {
             if (!user || user.role !== "customer" || user.shopId !== shop.id)
@@ -2446,25 +2538,25 @@ export function createApp(
               if (paid.shopId !== shop.id || paid.customer !== u.email) fail(404, tr("予約がありません"));
               if (paid.phase !== "confirmed" || !paid.booking.payment) fail(409, tr("支払いを確認中です。確定後にキャンセルしてください。"));
               if (paidCancellation[2] === "cancel-quote") {
-                return json(res, await cancellationQuote(paid, await effective(shop)));
+                return (await cancellationQuote(paid, shop.published!));
               }
               const input = z.object({ expectedRefund: z.number().int().min(0).optional(), expectedTransfer: z.object({ price: z.number().int().positive(), deadline: z.iso.datetime() }).optional() }).parse(await body(req));
               const at = new Date().toISOString();
               if (!paid.booking.payment!.cancellation) {
-                const quote = await cancellationQuote(paid, await effective(shop), at);
+                const quote = await cancellationQuote(paid, shop.published!, at);
                 if (input.expectedRefund !== quote.amount) fail(409, tr("返金額を再確認してからキャンセルしてください。時間の経過で返金額が変わる場合があります。"));
                 const offer = "transfer" in quote ? quote.transfer : undefined;
                 if (offer) {
                   if (!("id" in offer) && (!input.expectedTransfer || input.expectedTransfer.price !== offer.price || input.expectedTransfer.deadline !== offer.deadline)) fail(409, tr("キャンセル条件が変わりました。返金予定額と受付期限を確認し直してください。"));
                   if (!("id" in offer)) await transfers.list(paid, u.email, offer, at);
-                  await flush(shop);
-                  return json(res, { ok: true, cancellationPending: true, booking: customerBooking(paid.booking) });
+                  deliverMail = true;
+                  return ({ ok: true, cancellationPending: true, booking: customerBooking(paid.booking) });
                 }
                 if (input.expectedTransfer) fail(409, tr("キャンセル条件が変わりました。返金予定額と受付期限を確認し直してください。"));
               }
               const booking = await payments.cancel(paid, u.email, "customer", at);
-              await flush(shop);
-              return json(res, { ok: true, booking: customerBooking(booking) });
+              deliverMail = true;
+              return ({ ok: true, booking: customerBooking(booking) });
             }
             if (paidCancellation[2] === "cancel-quote") fail(404, tr("支払い済みの予約がありません"));
           }
@@ -2483,7 +2575,7 @@ export function createApp(
             const all = livePosts.filter(
               (p) => !category || p.category === category,
             );
-            return json(res, {
+            return ({
               items: all
                 .slice((page - 1) * size, page * size)
                 .map(summarizePost),
@@ -2501,13 +2593,14 @@ export function createApp(
                 (p) =>
                   p.category === postRoute[1] && postKey(p) === postRoute[2],
               ) || fail(404, tr("記事がありません"));
-            return json(res, post);
+            return (post);
           }
-          const config = await effective(shop);
+          const existingPayment = action === "checkouts" || action.startsWith("checkouts/") || (action === "bookings" && method === "GET") || action === "transfers" || action === "transfers/mine" || /^transfers\/[a-f0-9]{64}\/(capture|abandon|resume|withdraw)$/.test(action);
+          const config = existingPayment ? shop.published! : await effective(shop);
           const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
           if (action === "profile" && method === "GET") {
             const u = customer();
-            return json(res, { email: u.email, profile: await ownProfile(), suggestedName: u.name });
+            return ({ email: u.email, profile: await ownProfile(), suggestedName: u.name });
           }
           if (action === "profile" && method === "POST") {
             const u = customer();
@@ -2515,12 +2608,12 @@ export function createApp(
             const key = `${shop.id}:${u.email}`;
             const previous = await store.get<Record<string, unknown>>("customer", key);
             await store.put("customer", key, { ...previous, ...profile, shopId: shop.id, email: u.email, updatedBy: u.email, updatedAt: new Date().toISOString() });
-            return json(res, { profile });
+            return ({ profile });
           }
           if (!action && method === "GET") {
             const isCustomer = user?.role === "customer" && user.shopId === shop.id;
             const profile = isCustomer ? await ownProfile() : undefined;
-            return json(res, {
+            return ({
               config:
                 user?.email === shop.owner && user.authMethod !== "email" && !publicHost
                   ? config
@@ -2532,23 +2625,20 @@ export function createApp(
               preview: false,
               publication: shop.publication || "public",
               recentPosts: livePosts.slice(0, 5).map(summarizePost),
-              authUrl: `${languageUrl(`${publicHost ? `https://${host}` : origin()}${publicHost ? "/" : `/s/${shop.slug}`}`)}#email-login`,
+              authUrl: `${languageUrl(`${publicHost ? `https://${host}` : origin()}${publicHost ? "/" : `/s/${shop.slug}`}?pane=mine`)}#email-login`,
               googleAuthUrl: process.env.GOOGLE_CLIENT_ID ? languageUrl(`${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${hosted ? `&host=${encodeURIComponent(host)}` : ""}`) : undefined,
             });
           }
           if (action === "slots/next" && method === "GET")
-            return json(res, await nextAvailableSlots(store, shop, config, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, url.searchParams.getAll("option")));
+            return (await nextAvailableSlots(store, shop, config, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, url.searchParams.getAll("option")));
           if (action === "slots" && method === "GET")
-            return json(
-              res,
-              await availableSlots(store, shop, config,
+            return (await availableSlots(store, shop, config,
                 url.searchParams.get("date") || "",
                 url.searchParams.get("menu") || "",
-                url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")),
-            );
+                url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")));
           if (action === "checkouts" && method === "GET") {
             const u = customer();
-            return json(res, (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && c.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(checkoutView));
+            return ((await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && c.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(checkoutView));
           }
           const checkoutAction = action.match(/^checkouts\/([a-f0-9]{64})\/(capture|abandon|resume)$/);
           if (checkoutAction && method === "POST") {
@@ -2563,8 +2653,8 @@ export function createApp(
               const date = dateIn(b.start, regionOf(config).timeZone);
               return (await availableSlots(store, shop, config, date, b.menuId, b.staffId, calendar, c.id, b.optionIds)).some(slot => slot.start === b.start && slot.end === b.end && slot.staffId === b.staffId);
             });
-            await flush(shop);
-            return json(res, { ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? customerBooking(c.booking) : undefined, checkout: checkoutView(c) });
+            deliverMail = true;
+            return ({ ok: c.phase === "confirmed", booking: c.phase === "confirmed" ? customerBooking(c.booking) : undefined, checkout: checkoutView(c) });
           }
           const transferView = async (t: Transfer) => {
             const booking = (await store.get<Checkout>("checkout", t.bookingId))?.booking;
@@ -2578,7 +2668,7 @@ export function createApp(
               const view = await transferView(t);
               if (view?.bookingActive) views.push({ ...view, available: !buyerBusy(t, now), mine: !!user && t.seller === user.email });
             }
-            return json(res, views.sort((a, b) => a.start.localeCompare(b.start)));
+            return (views.sort((a, b) => a.start.localeCompare(b.start)));
           }
           if (action === "transfers/mine" && method === "GET") {
             const u = customer();
@@ -2595,7 +2685,7 @@ export function createApp(
               const view = await transferView(t);
               if (view) buying.push({ ...view, phase: t.buyer!.phase, expires: t.buyer!.expires, approvalUrl: t.buyer!.phase === "awaiting_approval" ? t.buyer!.approvalUrl : undefined, review: !!t.buyer!.review });
             }
-            return json(res, { selling, buying });
+            return ({ selling, buying });
           }
           const transferAction = action.match(/^bookings\/([a-f0-9]{64})\/(transfer-quote|transfer)$/);
           if (transferAction && ((method === "GET" && transferAction[2] === "transfer-quote") || (method === "POST" && transferAction[2] === "transfer"))) {
@@ -2605,12 +2695,12 @@ export function createApp(
             if (!bookingTransferable(config, c.booking)) fail(409, tr("このメニューはキャンセル後の予約受付に対応していません"));
             if (transferAction[2] === "transfer-quote") {
               const { terms, reason } = await transfers.quote(c);
-              return json(res, terms ? { eligible: true, ...terms } : { eligible: false, reason });
+              return (terms ? { eligible: true, ...terms } : { eligible: false, reason });
             }
             const input = z.object({ price: z.number().int().positive(), deadline: z.iso.datetime() }).parse(await body(req));
             const t = await transfers.list(c, u.email, input);
-            await flush(shop);
-            return json(res, { ok: true, transfer: await transferView(t) });
+            deliverMail = true;
+            return ({ ok: true, transfer: await transferView(t) });
           }
           const listingAction = action.match(/^transfers\/([a-f0-9]{64})\/(withdraw|checkout|capture|abandon|resume)$/);
           if (listingAction && method === "POST") {
@@ -2622,7 +2712,7 @@ export function createApp(
               if (t.seller !== u.email) fail(404, tr("この空き枠は見つかりません"));
               if (Date.now() >= Date.parse(t.deadline)) fail(409, tr("受付期限を過ぎたため、キャンセルは取り消せません。返金状況をご確認ください。"));
               await transfers.withdraw(t);
-              return json(res, { ok: true });
+              return ({ ok: true });
             }
             if (verb === "checkout") {
               if (!await ownProfile()) fail(428, tr("先に会員情報を登録してください"));
@@ -2635,26 +2725,23 @@ export function createApp(
               const returnUrl = back.href;
               back.searchParams.set("paypal", "cancel");
               await transfers.begin(t, { customer: u.email, name: input.name, requestKey: `${u.email}:${input.requestId}` }, returnUrl, back.href, config.name);
-              return json(res, { ok: false, checkout: transferCheckoutView(t) });
+              return ({ ok: false, checkout: transferCheckoutView(t) });
             }
             if (t.buyer?.customer !== u.email) fail(404, tr("お支払いの記録がありません"));
             if (verb === "abandon") {
               if (["creating", "awaiting_approval"].includes(t.buyer!.phase)) { t.buyer!.phase = "expired"; await store.put("transfer", t.id, t); }
             } else if (verb === "resume") await transfers.createOrder(t);
             else await transfers.capture(t);
-            await flush(await store.shop(shop.id) || shop);
+            deliverMail = true;
             const booking = t.phase === "sold" ? (await store.get<Checkout>("checkout", t.bookingId))?.booking : undefined;
             const own = booking?.customer === u.email ? booking : undefined;
-            return json(res, { ok: !!own, booking: own && customerBooking(own), checkout: transferCheckoutView(t) });
+            return ({ ok: !!own, booking: own && customerBooking(own), checkout: transferCheckoutView(t) });
           }
           if (action === "bookings" && method === "GET") {
             const u = customer();
-            return json(
-              res,
-              (await store.bookings(shop.id)).filter(
+            return ((await store.bookings(shop.id)).filter(
                 (b) => b.customer === u.email,
-              ).map(customerBooking),
-            );
+              ).map(customerBooking));
           }
           if (action === "bookings" && method === "POST") {
             const u = customer();
@@ -2685,11 +2772,11 @@ export function createApp(
             if (pending) {
               if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || JSON.stringify([...(pending.booking.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort()) || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
               await payments.create(pending);
-              return json(res, { ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? customerBooking(pending.booking) : undefined, checkout: checkoutView(pending) });
+              return ({ ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? customerBooking(pending.booking) : undefined, checkout: checkoutView(pending) });
             }
             if (previous) {
               if (JSON.stringify([...(previous.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort())) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
-              return json(res, { ok: true, booking: customerBooking(previous) });
+              return ({ ok: true, booking: customerBooking(previous) });
             }
             const selection = menuSelection(config, input.menuId, input.optionIds);
             if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
@@ -2723,7 +2810,7 @@ export function createApp(
               const returnUrl = back.href;
               back.searchParams.set("paypal", "cancel");
               const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href, currencyOf(regionOf(config)), config.name);
-              return json(res, { ok: false, checkout: checkoutView(checkout) });
+              return ({ ok: false, checkout: checkoutView(checkout) });
             }
             await store.transaction(async () => {
               await store.saveBooking(b);
@@ -2741,8 +2828,8 @@ export function createApp(
                 [shop.owner, config.notificationEmail],
               );
             });
-            await flush(shop);
-            return json(res, { ok: true, booking: customerBooking(b) });
+            deliverMail = true;
+            return ({ ok: true, booking: customerBooking(b) });
           }
           const cancel = action.match(/^bookings\/([^/]+)\/cancel$/);
           if (cancel && method === "POST") {
@@ -2774,8 +2861,8 @@ export function createApp(
                 tr("{0} 様\n予約: {1}\nメニュー: {2}", b.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, b)),
               );
             });
-            await flush(shop);
-            return json(res, { ok: true });
+            deliverMail = true;
+            return ({ ok: true });
           }
           if (action === "inquiries" && method === "POST") {
             const u = customer();
@@ -2803,11 +2890,56 @@ export function createApp(
               tr("{0} お問い合わせを受け付けました", config.name),
               input.message,
             );
-            await flush(shop);
-            return json(res, { ok: true });
+            deliverMail = true;
+            return ({ ok: true });
           }
           fail(404, tr("見つかりません"));
         });
+        if (deliverMail) {
+          await flushMail(shopRef);
+          void syncTransferHistory(shopRef.id).catch(console.error);
+        }
+        return json(res, result);
+      }
+      if (path === "/robots.txt" && (method === "GET" || method === "HEAD")) {
+        const indexable = (shop: Shop) => shop.published && shop.publication !== "provisional" && !shop.judge;
+        const shops = publicHost ? [hosted!] : allShops;
+        const sitemaps = shops.filter(shop => indexable(shop) && canonicalBase(shop, origin()) === (publicHost ? `https://${host}` : `${origin()}/s/${shop.slug}`)).map(shop => `${canonicalBase(shop, origin())}/sitemap.xml`);
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(method === "HEAD" ? undefined : `User-agent: *\nDisallow: /api/\nDisallow: /auth/\nDisallow: /admin\nDisallow: /judge\nDisallow: /publication-preview\nDisallow: /settings\n${sitemaps.map(url => `Sitemap: ${url}\n`).join("")}`);
+        return;
+      }
+      const sitemap = publicHost && path === "/sitemap.xml" ? hosted : allShops.find(shop => path === `/s/${shop.slug}/sitemap.xml`);
+      if ((method === "GET" || method === "HEAD") && sitemap) {
+        if (!sitemap.published || sitemap.publication === "provisional" || sitemap.judge || canonicalBase(sitemap, origin()) !== (publicHost ? `https://${host}` : `${origin()}/s/${sitemap.slug}`)) fail(404, tr("ページがありません"));
+        // Reads never wait for a publication in progress; only a shop without any release is converted first.
+        let shop = await store.shop(sitemap.id) || fail(404, tr("お店がありません"));
+        if (!shop.published || shop.publication === "provisional" || shop.judge) fail(404, tr("ページがありません"));
+        if (!shop.storefrontRelease) shop = await firstStorefront(shop.id);
+        const xml = await pageFiles.read(storefrontObject(shop.id, shop.storefrontRelease!, storefrontFile("sitemap.xml", publicHost, getLocale())));
+        if (xml === undefined) fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。"));
+        res.setHeader("Content-Type", "application/xml; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache");
+        res.end(method === "HEAD" ? undefined : xml);
+        return;
+      }
+      const assetRoute = publicHost ? path.match(/^\/_assets\/([^/]+)$/) : path.match(/^\/s\/([^/]+)\/_assets\/([^/]+)$/);
+      if (assetRoute && (method === "GET" || method === "HEAD")) {
+        const name = assetRoute[publicHost ? 1 : 2];
+        const ref = publicHost ? hosted : allShops.find(item => item.slug === assetRoute[1] && item.published);
+        const shop = ref && await store.shop(ref.id);
+        if (!shop?.published || !storefrontAssetName.test(name)) fail(404, tr("見つかりません"));
+        if (shop.publication === "provisional" && !user) fail(404, tr("見つかりません"));
+        assertStorefrontAccess(shop);
+        // Pages of the retained releases may still be open in a browser, so their assets stay available.
+        if (![shop.storefrontRelease, ...shop.storefrontPrevious || []].some(release => release?.assets?.includes(name))) fail(404, tr("見つかりません"));
+        const body = await pageFiles.read(storefrontAssetObject(shop.id, name)) || fail(404, tr("見つかりません"));
+        res.setHeader("Content-Type", storefrontAssetType(name));
+        // Names are content hashes; restricted shops (provisional, judge) are never stored in shared caches.
+        res.setHeader("Cache-Control", res.hasHeader("X-Robots-Tag") ? "private, max-age=3600" : "public, max-age=31536000, immutable");
+        res.end(method === "HEAD" ? undefined : body);
+        return;
       }
       if (path.startsWith("/api/") || path.startsWith("/auth/"))
         fail(404, tr("見つかりません"));
@@ -2834,7 +2966,7 @@ export function createApp(
       }
       const manualAsset = /^\/manual\/(?:en\/)?[a-z0-9-]+\.jpg$/.test(path);
       const asset =
-        path.startsWith("/assets/") || path === "/live-audio.js" || manualAsset;
+        path.startsWith("/assets/") || path === "/live-audio.js" || path === "/storefront-login.js" || manualAsset;
       if (
         !asset &&
         path !== "/" &&
@@ -2846,14 +2978,18 @@ export function createApp(
             ))
       )
         fail(404, tr("見つかりません"));
-      let data: Buffer;
-      try {
-        data = await readFile(asset ? file : resolve(root, "index.html"));
-      } catch {
-        fail(404, tr("画面を表示するには npm run build を実行してください"));
+      const appShell = async () => {
+        let shell: Buffer;
+        try { shell = await readFile(resolve(root, "index.html")); }
+        catch { return fail(404, tr("画面を表示するには npm run build を実行してください")); }
+        return Buffer.from(localizeShell(shell.toString("utf8")));
+      };
+      let data = Buffer.alloc(0);
+      if (asset) {
+        try { data = await readFile(file); }
+        catch { fail(404, tr("見つかりません")); }
       }
       if (!asset) {
-        data = Buffer.from(localizeShell(data.toString("utf8")));
         const local = path.match(
           /^\/s\/([^/]+)(?:\/(blogs|announcements|pages)(?:\/([a-z0-9-]+))?)?$/,
         );
@@ -2865,8 +3001,7 @@ export function createApp(
         const category = local?.[2] || custom?.[1];
         const key = local?.[3] || custom?.[2];
         if (shopRef?.published) {
-          await store.locked(shopRef.id, async () => {
-          const shop = await store.shop(shopRef.id);
+          let shop = await store.shop(shopRef.id);
           if (!shop?.published) fail(404, tr("公開されたお店がありません"));
           if (shop.publication === "provisional" && !user) {
             res.setHeader("Cache-Control", "no-store");
@@ -2875,35 +3010,30 @@ export function createApp(
             return redirect(res, `${origin()}/auth/google?shop=${encodeURIComponent(shop.slug)}${publicHost ? `&host=${encodeURIComponent(host)}` : ""}`);
           }
           assertStorefrontAccess(shop);
-          const posts = publicPosts(await postsFor(shop));
-          const base = publicHost ? "" : `/s/${shop.slug}`;
-          const shell = data.toString("utf8");
-          if (category === "pages") {
-            const config = await effective(shop);
-            const page = config.pages.find(p => p.slug === key) || fail(404, tr("ページがありません"));
-            data = Buffer.from(renderCustomPage(page, shell, base));
-          } else if (category) {
-            const parsed = postCategorySchema.parse(category);
-            if (key && key !== "index") {
-              const post =
-                posts.find(
-                  (p) => p.category === parsed && postKey(p) === key,
-                ) || fail(404, tr("記事がありません"));
-              data = Buffer.from(renderArticle(post, shell, base));
-            } else
-              data = Buffer.from(renderArchive(parsed, posts, shell, base));
-          } else
-            data = Buffer.from(
-              renderHomeWithPosts(
-                shop.published,
-                shell,
-                posts.slice(0, 5).map(summarizePost),
-                base,
-              ),
-            );
-          });
+          const operation = !category && (["reserve", "mine", "contact"].includes(url.searchParams.get("pane") || "") || url.searchParams.has("checkout"));
+          if (operation) {
+            // An empty app shell is used only for interactive customer operations.
+            // Public HTML is never mounted or replaced by React.
+            res.setHeader("X-Robots-Tag", "noindex, nofollow");
+            data = await appShell();
+          } else {
+            // One-time conversion for shops published before static releases were introduced.
+            // Subsequent reads use only the selected bucket objects, never a request-time render.
+            if (!shop.storefrontRelease) shop = await firstStorefront(shop.id);
+            const route = category ? `${category}${key && key !== "index" ? `/${key}` : ""}` : "";
+            const page = storefrontFile(route, publicHost, getLocale());
+            const release = shop.storefrontRelease!;
+            if (!release.paths.includes(page)) fail(404, tr("ページがありません"));
+            const html = await pageFiles.read(storefrontObject(shop.id, release, page));
+            if (html === undefined) fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。"));
+            data = Buffer.from(html);
+            const etag = `"${digest(`${release.id}:${page}`)}"`;
+            res.setHeader("ETag", etag);
+            if (!res.hasHeader("X-Robots-Tag") && req.headers["if-none-match"] === etag) { res.writeHead(304); res.end(); }
+          }
           if (res.writableEnded) return;
         } else if (category || local) fail(404, tr("公開されたお店がありません"));
+        else data = await appShell();
       }
       res.setHeader(
         "Content-Type",
@@ -2918,7 +3048,7 @@ export function createApp(
       );
       res.setHeader(
         "Cache-Control",
-        manualAsset
+        manualAsset || path === "/storefront-login.js"
           ? "no-cache"
           : asset
             ? "public, max-age=31536000, immutable"
@@ -2961,26 +3091,23 @@ export function createApp(
     if (user.judge) await chargeJudge(user.email);
     return { data: await shopData(shop) };
   }, liveConnector);
+  let stopped = false;
   const timer = setInterval(() => {
     void (async () => {
       await store.cleanup();
-      for (const shop of (await store.list<Shop>("shop")).filter(
+      if (stopped) return;
+      const shops = await store.list<Shop>("shop");
+      if (stopped) return;
+      for (const shop of shops.filter(
         (s) => s.published && !isArchivedShop(s),
-      ))
-        void store
-          .locked(shop.id, async () => {
-            const fresh = await store.shop(shop.id);
-            if (fresh) {
-              await payments.reconcile(fresh.id);
-              await transfers.reconcile(fresh.id);
-              // Transfers can append to history.md; flush the latest shop so a posts sync never saves a stale copy.
-              await flush(await store.shop(fresh.id) || fresh);
-            }
-          })
-          .catch(console.error);
+      )) {
+        void reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)).catch(console.error);
+        void syncFiles(shop.id).catch(console.error);
+        void flushMail(shop).catch(console.error);
+      }
     })().catch(console.error);
   }, 60000);
   timer.unref();
-  server.on("close", () => clearInterval(timer));
+  server.on("close", () => { stopped = true; clearInterval(timer); });
   return server;
 }

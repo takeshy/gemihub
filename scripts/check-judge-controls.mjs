@@ -59,8 +59,9 @@ try {
     await page.screenshot({ path: `tmp/judge-controls/owner-${language}-${width}.png`, fullPage: true });
     assert.equal((await store.get('user', owner.email)).name, owner.name, 'the display alias never overwrites the judge account');
 
-    // The same shortcut exposes customer switching on the real storefront.
-    await page.goto(`${origin}/s/${shop.slug}?pane=about&lang=${language}`);
+    // The same shortcut exposes customer switching on the storefront's operation screens
+    // (generated public pages carry no session, so they do not start the app).
+    await page.goto(`${origin}/s/${shop.slug}?pane=reserve&lang=${language}`);
     await expect(page.locator('.public-nav')).toBeVisible(); await expect(bar).toHaveCount(0);
     await toggle(); await expect(bar).toBeVisible();
     await bar.getByRole('button', { name: label('お客様として試す'), exact: true }).click();

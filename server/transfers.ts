@@ -37,7 +37,7 @@ export const buyerBusy = (t: Transfer, now = Date.now()) => !!t.buyer &&
   (["capturing", "captured"].includes(t.buyer.phase) || (["creating", "awaiting_approval"].includes(t.buyer.phase) && t.buyer.expires > now));
 export const pendingTransferRefund = (booking: Booking) => (booking.transfers || []).some(entry => ["retrying", "pending", "awaiting_funds"].includes(entry.refund.status));
 
-// All methods run under the shop's cross-process lock. Persist the journal BEFORE each PayPal mutation.
+// Callers hold the shop's booking/payment lock. Persist the journal BEFORE each PayPal mutation.
 export function transferService(store: Store, gateway: PaymentGateway, payments: ReturnType<typeof paymentService>, onEvent: (transfer: Transfer, booking: Booking, event: TransferEvent) => Promise<void> = async () => {}) {
   const save = (t: Transfer) => store.put("transfer", t.id, t);
   const saveCheckout = (c: Checkout) => store.put("checkout", c.id, c);

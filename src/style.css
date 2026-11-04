@@ -882,7 +882,8 @@ pre {
   padding: 20px 0;
   margin-bottom: 10px;
 }
-.public-nav button {
+.public-nav button,
+.public-nav a {
   background: none;
   border: 0;
   border-radius: 0;
@@ -1157,7 +1158,8 @@ pre {
     gap: 5px;
     justify-content: space-between;
   }
-  .public-nav button {
+  .public-nav button,
+  .public-nav a {
     font-size: 10px;
     padding: 12px 8px;
   }
@@ -2350,8 +2352,8 @@ pre {
 @media(max-width:600px) { .article-wysimark { overflow-x: auto; } .article-wysimark [contenteditable="true"] { min-width: 0; } }
 
 .language-switcher { display:flex; justify-content:flex-end; gap:.25rem; padding:.4rem max(1rem, calc((100vw - 1200px)/2)); background:var(--paper, #faf9f6); }
-.language-switcher button { padding:.3rem .65rem; font-size:.8rem; min-height:32px; }
-.language-switcher button[aria-current="true"] { font-weight:700; opacity:1; text-decoration:underline; }
+.language-switcher button, .language-switcher a { padding:.3rem .65rem; font-size:.8rem; min-height:32px; }
+.language-switcher [aria-current="true"] { font-weight:700; opacity:1; text-decoration:underline; }
 
 .blog-editor-layout, .blog-editor-layout > div, .article-rich-editor { min-width: 0; }
 .post-content { overflow-wrap: anywhere; }

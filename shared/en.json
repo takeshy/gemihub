@@ -2871,5 +2871,15 @@
   "お得な空き枠からの予約": "Booking a discounted appointment",
   "キャンセル受付中の予約の管理": "Manage pending cancellation requests",
   "キャンセル枠から入った予約と履歴": "Replacement bookings and history",
-  "・代わりの方が支払い手続き中": " · Someone else is paying for the appointment"
+  "・代わりの方が支払い手続き中": " · Someone else is paying for the appointment",
+  "操作の有効期限が切れました。最新の状態を確認して再試行してください": "This operation has expired. Check the latest state and retry",
+  "公開ページの保存に失敗しました。以前の公開ページは保持しています。同じ操作を再試行してください。": "Could not save the public pages. The previous published pages are preserved. Please retry the same operation.",
+  "公開ページを読み込めません。しばらくしてからお試しください。": "Could not load the public page. Please try again shortly.",
+  "公開ページ": "Public storefront",
+  "静的HTML": "Static HTML",
+  "公開トップ・API不要": "Public home without API requests",
+  "記事一覧": "Article archive",
+  "記事本文": "Article content",
+  "固定ページ": "Custom page",
+  "本人限定の仮公開": "Owner-only provisional page"
 }

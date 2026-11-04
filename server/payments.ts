@@ -26,7 +26,7 @@ export async function paymentHolds(store: Store, shopId: string, exclude?: strin
 export function checkoutView(c: Checkout) {
   return { id: c.id, phase: c.phase, expires: c.expires, approvalUrl: c.phase === "awaiting_approval" ? c.approvalUrl : undefined, review: !!c.review, start: c.booking.start, amount: c.booking.price, currency: c.currency || "JPY" };
 }
-// All methods run under the shop's cross-process lock. Persist the journal BEFORE each PayPal mutation.
+// Callers hold the shop's booking/payment lock. Persist the journal BEFORE each PayPal mutation.
 export function paymentService(store: Store, gateway: PaymentGateway, onChange: (booking: Booking, event: string) => Promise<void> = async () => {}) {
   const save = (c: Checkout) => store.put("checkout", c.id, c);
   function checkEnvironment(c: Checkout) {

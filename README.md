@@ -52,7 +52,8 @@ A booking and shop management system for small independent businesses and salons
          ▼
    [ gemihub Server ] ── (Intent understanding, proposals, images) ──► [ Vertex AI (Gemini) ]
      │            │
-     │            └── (Business data, sessions, locks) ──────────► [ Cloud Firestore ]
+     │            ├── (Business data, sessions, locks) ──────────► [ Cloud Firestore ]
+     │            └── (Generated public storefront pages) ───────► [ Cloud Storage (private) ]
      │
      └── (Images, attachments, specs, exports) ────────────► [ Owner's Google Drive ]
 ```
@@ -65,6 +66,8 @@ A booking and shop management system for small independent businesses and salons
   In **Consult & ask**, a dedicated research LLM checks the system docs, the shop's `spec.md`, `history.md`, and live ledger records to answer with sources—explicitly stating when something is not defined instead of guessing. Change requests only go live after the owner previews the diff and approves on screen, recording the request in `history.md`.
 - **Data storage and export:**
   Business data (settings, bookings, customers, inquiries, articles, and AI chats) lives in **Firestore**. Owners can download a JSON export or CSV tables from **Publication settings**. Images, attachments, specs, history, and offline HTML exports remain in the owner's **Google Drive**; exported records include file references, not the file bytes.
+- **Public storefront as generated pages:**
+  Publishing (and saving settings, designs or articles) generates the shop's home, custom pages, article archives and articles as finished HTML in Japanese and English, and stores them in a private Cloud Storage bucket. The server checks access and returns the stored page, so public content needs no JavaScript or API calls and carries search metadata and sitemaps. CSS and images are stored once per shop and cached by browsers. Booking, My page and inquiries open the app as interactive screens.
 
 ---
 
@@ -108,6 +111,7 @@ Update `.env` (see `.env.example` for all options):
 | `VERTEX_REVIEW_MODEL` | Optional first-theme review model; defaults to `VERTEX_MODEL` in a fresh context |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Web application OAuth credentials (redirect URI: `${APP_ORIGIN}/auth/google/callback`) |
 | `APP_ORIGIN` | Management origin (e.g., `http://localhost:3000` locally) |
+| `STOREFRONT_BUCKET` | Private Cloud Storage bucket for generated storefront pages (required with Firestore; the in-memory demo keeps them in memory). Deployment creates it: see [infra/README.md](infra/README.md#generated-storefront-storage) |
 
 For PayPal Sandbox testing, also set `PAYPAL_ENVIRONMENT=sandbox`, `PAYPAL_CLIENT_ID`, and `PAYPAL_CLIENT_SECRET_FILE`.
 

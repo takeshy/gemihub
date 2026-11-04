@@ -150,8 +150,8 @@ test("CRM API is scoped to operators and shop; notes persist, reject stale edits
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   process.env.APP_ORIGIN = origin;
   t.after(() => { server.close(); void store.close(); });
-  async function request(path: string, id = "owner", data?: unknown) {
-    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  async function request(path: string, id = "owner", data?: unknown, signal?: AbortSignal) {
+    const response = await fetch(origin + path, { signal, method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: response.status, body: await response.json() };
   }
   const base = `/api/shops/${shop.id}/customers`;
@@ -201,6 +201,16 @@ test("CRM API is scoped to operators and shop; notes persist, reject stale edits
   assert.equal((await request(`${profile}/notes`, "owner", { ...input, text: "changed retry" })).status, 409);
   const notePath = `${profile}/notes/${note.id}`;
   const filePath = `${notePath}/files/${note.attachments[0].id}`;
+  let entered!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const holding = store.locked(shop.id, async () => { entered(); await gate; });
+  await started;
+  try {
+    for (const id of ["owner", "staff"]) for (const path of [base, profile, `${profile}/images`, filePath]) {
+      assert.equal((await request(path, id, undefined, AbortSignal.timeout(2000))).status, 200, "CRM reads do not wait for the shop write lock");
+    }
+  } finally { release(); await holding; }
   assert.equal((await request(filePath, "staff")).body.data, input.files[0].data);
   assert.equal((await request(`${notePath}/files/missing`)).status, 404);
   assert.equal((await request(`${base}/only%40example.com/notes/${note.id}/files/${note.attachments[0].id}`)).status, 404);

@@ -42,6 +42,7 @@ export function emailLogin(store: Store, send: LoginMailer) {
       await store.put("emailLogin", key, { shopId: shop.id, email, origin: requestOrigin, expires: Date.now() + lifetime } satisfies Challenge);
       // Fragments stay out of HTTP requests, access logs, and referrer headers.
       const link = new URL(storefrontPath, requestOrigin);
+      link.searchParams.set("pane", "mine");
       link.searchParams.set("lang", getLocale());
       link.hash = new URLSearchParams({ "email-login": token }).toString();
       try {

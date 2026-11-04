@@ -166,6 +166,26 @@ resource "google_storage_bucket_iam_member" "build_source" {
   member = "serviceAccount:${google_service_account.build.email}"
 }
 
+# Generated storefront HTML stays private: the existing authenticated gateway selects a release.
+resource "google_storage_bucket" "storefront" {
+  project                     = var.project_id
+  name                        = "${var.project_id}-gemihub-web-storefront"
+  location                    = upper(var.region)
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = false
+  depends_on                  = [google_project_service.app]
+  lifecycle { prevent_destroy = true }
+}
+
+resource "google_storage_bucket_iam_member" "storefront" {
+  # Create, read and delete objects (old releases are pruned); no bucket IAM or settings changes.
+  for_each = toset(["roles/storage.objectUser"])
+  bucket   = google_storage_bucket.storefront.name
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 resource "google_cloudbuild_trigger" "deploy" {
   count           = var.repository == "" ? 0 : 1
   project         = var.project_id
