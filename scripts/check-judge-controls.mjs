@@ -5,6 +5,8 @@ import { createApp } from '../server/app.ts';
 import { sample, ownerStaffId, shopDate } from '../server/domain.ts';
 import { encrypt } from '../server/google.ts';
 import { Store } from '../server/store.ts';
+import { digest } from '../server/auth.ts';
+import { randomBytes } from 'node:crypto';
 
 process.env.NODE_ENV = 'production';
 process.env.DEMO_MODE = 'false';
@@ -114,6 +116,17 @@ try {
     const resumed=await (await context.request.get(`${origin}/api/session`)).json();
     assert.equal(resumed.user.email,owner.email);assert.equal(resumed.user.shopId,shop.id);
     assert.equal((await store.list('shop')).length,shopsBefore);
+    // A real customer email login must retain the owner return route, including its UI.
+    const emailToken = randomBytes(32).toString('base64url');
+    await store.put('emailLogin', digest(emailToken), {shopId: shop.id, email: 'returning@example.com', origin, expires: Date.now() + 60000});
+    const emailLogin = await context.request.post(`${origin}/api/public/${shop.slug}/auth/email/verify`, {headers: {Origin: origin}, data: {token: emailToken}});
+    assert.equal(emailLogin.status(), 200);
+    await page.goto(`${origin}/judge-menu?lang=${language}`);
+    await toggle(); // Show the controls hidden earlier for the recording.
+    await expect(page.getByRole('button', {name: label('店主に戻る'), exact: true})).toBeVisible();
+    await expect(page.getByRole('button', {name: label('お客様として試す'), exact: true})).toHaveCount(0);
+    await Promise.all([page.waitForNavigation(), page.getByRole('button', {name: label('店主に戻る'), exact: true}).click()]);
+    assert.equal((await (await context.request.get(`${origin}/api/session`)).json()).user.shopId, shop.id);
     assert.deepEqual(errors, []);
     await context.close();
     console.log(`${language} ${width}px: shortcut preserves roles; owner-only slots, availability retry, booking, management recovery and invitation resume verified.`);

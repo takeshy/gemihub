@@ -773,6 +773,14 @@ export function createApp(
         if (user && isJudgeCustomerEmail(user.email) && user.shopId !== shop.id) return;
         return { id, expires: saved.expires, owner, shop };
       };
+      const rememberJudgeOwner = async (shopId: string) => {
+        if (publicHost || !user?.judge || user.role !== "owner" || user.shopId !== shopId) return;
+        const owner = await store.get<User>("user", user.email);
+        const shop = await store.shop(shopId);
+        if (!judgeActive() || !owner?.judge || owner.shopId !== shopId || shop?.owner !== owner.email || !shop.judge) return;
+        const expires = Math.min(s!.expires, judgeUntil()!.getTime());
+        appendCookie(res, `gemihub_judge_owner=${cookie(req, "gemihub_session")}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((expires - Date.now()) / 1000))}${origin().startsWith("https:") ? "; Secure" : ""}`);
+      };
       if (user?.judge) {
         // Judge AI calls share one quota per judge, charged once per request before the first model call.
         aiUsage.enterWith({ charge: () => chargeJudge(user.email) });
@@ -869,6 +877,15 @@ export function createApp(
         }>("ticket", key);
         if (!ticket || ticket.host !== host || ticket.expires < Date.now())
           fail(400, tr("ログインの有効期限が切れました"));
+        if (ticket.user.judge) {
+          const owner = await store.get<User>("user", ticket.user.email);
+          const shop = owner?.shopId ? await store.shop(owner.shopId) : undefined;
+          if (publicHost || !judgeActive() || !owner?.judge || owner.role !== "owner" || owner.shopId !== ticket.user.shopId || !shop?.judge || shop.owner !== owner.email)
+            fail(400, tr("ログインの有効期限が切れました"));
+          await login(store, res, owner, judgeUntil()!.getTime());
+          appendCookie(res, `gemihub_judge_owner=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${origin().startsWith("https:") ? "; Secure" : ""}`);
+          return redirect(res, "/");
+        }
         await login(store, res, ticket.user);
         return redirect(res, `${publicHost ? "/" : `/s/${ticket.slug}`}?pane=mine`);
       }
@@ -1074,6 +1091,7 @@ export function createApp(
             `https://${pending.returnHost}/auth/complete?ticket=${ticket}`,
           );
         }
+        if (pending.shopId) await rememberJudgeOwner(pending.shopId);
         await login(store, res, u);
         if (!pending.shopId && u.legacyNotes) {
           return redirect(res, "/settings/migration");
@@ -2638,6 +2656,7 @@ export function createApp(
           }
           if (action === "auth/email/info") return json(res, await customerEmailLogin.info(shop, requestOrigin, input));
           const customer = await customerEmailLogin.verify(shop, requestOrigin, input);
+          await rememberJudgeOwner(shop.id);
           await login(store, res, customer);
           return json(res, { ok: true, redirectTo: `${storefrontPath}?pane=mine&lang=${getLocale()}` });
         }

@@ -196,7 +196,7 @@ export function App({
           <div className="demo-banner judge-banner">
             {tr("審査員アクセス · メールは送信されません。内容は")}<a href="/judge-menu">{tr("審査メニュー")}</a>{tr("で確認できます。")}</div>
         )}
-        {showOperatorControls && path !== "/judge-menu" && !session.hosted && (session.judgeCustomer || session.user?.judge || session.judgeOwnerAvailable) && <JudgeBar customer={!!session.judgeCustomer || !session.user} recovery={session.judgeOwnerAvailable} run={run} />}
+        {showOperatorControls && path !== "/judge-menu" && !session.hosted && (session.judgeCustomer || session.user?.judge || session.judgeOwnerAvailable) && <JudgeBar customer={session.user?.role !== "owner"} recovery={session.judgeOwnerAvailable} run={run} />}
         {error && (
           <div className="alert" role="alert">
             {error}
@@ -213,7 +213,7 @@ export function App({
         {/^\/judge\/[^/]+$/.test(path) ? (
           <JudgeStart invite={path.split("/")[2]} signedIn={!!(session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable)} run={run} />
         ) : path === "/judge-menu" && (session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable) ? (
-          <JudgeMenu customer={!!session.judgeCustomer || !session.user} canReturnToOwner={session.judgeOwnerAvailable} run={run} />
+          <JudgeMenu customer={session.user?.role !== "owner"} canReturnToOwner={session.judgeOwnerAvailable} run={run} />
         ) : path === "/admin" && session.user?.admin ? (
           <Admin run={run} />
         ) : path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.accessPending ? (
