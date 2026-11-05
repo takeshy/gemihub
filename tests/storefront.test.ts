@@ -101,6 +101,29 @@ test("publication uploads before cutover, reads never rebuild, and failed update
   assert.match(await (await get(top + "/pages/story?lang=en")).text(), /STORY_BODY/);
   assert.match(await (await get(top + "/sitemap.xml")).text(), /pages\/story/);
 
+  await store.put("session", digest("customer"), { user: { email: "customer@example.com", role: "customer", name: "Customer", shopId: shop.id }, expires: Date.now() + 600000 });
+  await store.put("session", digest("foreign"), { user: { email: "foreign@example.com", role: "customer", name: "Foreign customer", shopId: "another-shop" }, expires: Date.now() + 600000 });
+  for (const path of [top, top + "/pages/story", top + "/announcements"]) for (const lang of ["ja", "en"]) {
+    const url = `${path}?lang=${lang}`;
+    const anonymous = await get(url), anonymousHtml = await anonymous.text();
+    assert.match(anonymousHtml, /<section class="public-auth">/);
+    assert.match(anonymous.headers.get("vary")!, /Cookie/);
+    for (const account of ["owner", "customer"]) {
+      const cookie = `gemihub_session=${account}`;
+      const signedIn = await get(url, cookie, { "If-None-Match": anonymous.headers.get("etag")! });
+      assert.equal(signedIn.status, 200, "signing in cannot reuse the anonymous page");
+      const signedInHtml = await signedIn.text();
+      assert.equal(signedInHtml, anonymousHtml.replace(/<section class="public-auth">[\s\S]*?<\/section>/, ""), "only the fixed sign-in prompt changes");
+      assert.doesNotMatch(signedInHtml, /<section class="public-auth">/);
+      assert.match(signedIn.headers.get("vary")!, /Cookie/);
+      const etag = signedIn.headers.get("etag")!;
+      assert.equal((await get(url, cookie, { "If-None-Match": etag })).status, 304);
+      assert.equal((await get(url, "", { "If-None-Match": etag })).status, 200, "logging out restores the anonymous prompt");
+    }
+    assert.match(await (await get(url, "gemihub_session=foreign")).text(), /<section class="public-auth">/, "a customer of another shop can still sign in");
+  }
+  assert.equal(writes, before, "session-specific sign-in visibility never rebuilds the release");
+
   const value = { ...liveValue(shop.published, "basic") as object, description: "NEXT_DESCRIPTION" };
   let releaseHold!: () => void;
   hold = new Promise<void>(resolve => { releaseHold = resolve; });

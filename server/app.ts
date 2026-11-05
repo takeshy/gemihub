@@ -3025,8 +3025,11 @@ export function createApp(
             if (!release.paths.includes(page)) fail(404, tr("ページがありません"));
             const html = await pageFiles.read(storefrontObject(shop.id, release, page));
             if (html === undefined) fail(503, tr("公開ページを読み込めません。しばらくしてからお試しください。"));
-            data = Buffer.from(html);
-            const etag = `"${digest(`${release.id}:${page}`)}"`;
+            const signedIn = (user?.role === "owner" && user.email === shop.owner) || (user?.role === "customer" && user.shopId === shop.id);
+            // The shared release contains the anonymous sign-in link. Omit only that
+            // fixed section for this shop's owner/customer, including older releases.
+            data = signedIn ? Buffer.from(html.toString().replace(/<section class="public-auth"><a class="button primary" href="[^"]*#email-login">[^<]*<\/a><\/section>/, "")) : Buffer.from(html);
+            const etag = `"${digest(`${release.id}:${page}${signedIn ? ":signed-in" : ""}`)}"`;
             res.setHeader("ETag", etag);
             if (!res.hasHeader("X-Robots-Tag") && req.headers["if-none-match"] === etag) { res.writeHead(304); res.end(); }
           }
