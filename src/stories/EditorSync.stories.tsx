@@ -1,6 +1,7 @@
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
+import { tr } from "../../shared/i18n";
 
 const meta = {
   title: "運営/画面の編集/同期と競合",
@@ -39,4 +40,16 @@ export const PageConflict: Story = {
   name: "競合・プレビュー比較とAI結合",
   args: { scenario: "editor-conflict" },
   loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("conflict"); return {}; }],
+};
+export const LocalChanges: Story = {
+  name: "変更あり・本番と比較",
+  args: { scenario: "editor-local" },
+  loaders: [async () => { const { seedEditor } = await import("./sync-fixtures"); seedEditor("local"); return {}; }],
+  play: async ({ canvasElement }) => {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const button = [...canvasElement.querySelectorAll<HTMLButtonElement>(".editor-toolbar button")].find(item => item.textContent === tr("変更を比較"));
+      if (button && !button.disabled) { button.click(); return; }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  },
 };

@@ -74,6 +74,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     } else if (!review && dialog?.open) dialog.close();
   }, [review, !!draft]);
   const [pullReview, setPullReview] = useState(false);
+  // Side-by-side preview of this screen as published and as edited here, to see what "変更あり" means.
+  const [comparing, setComparing] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   // While the pen shows the captured screen, the live preview below would duplicate it.
   const [penOpen, setPenOpen] = useState(false);
@@ -203,6 +205,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     if (currentStatus === "unfetched" || currentStatus === "remote") await fetchScope(target);
     if (version !== selectionVersion.current) return;
     if (value !== screen || requestedArticle !== route.articleKey) setFixtureEditing(undefined);
+    setComparing(false);
     setScreen(value);
     if (currentStatus === "conflict") await compareConflict(target);
     setInvalid("");
@@ -373,6 +376,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       </div>
       {draft && (summary.length > 0 || draft.pending) && <div className="actions">
         <button className="primary" disabled={busy || !saved || !!invalid || !releaseConfig || !index || !status || status === "conflict" || status === "remote" || status === "unfetched" || !!conflict} onClick={() => setReview(true)}>{draft.pending ? tr("反映を再試行") : tr("反映する")}</button>
+        {!draft.pending && status === "local" && <button disabled={busy || !!conflict} aria-pressed={comparing} onClick={() => setComparing(value => !value)}>{tr("変更を比較")}</button>}
         <button disabled={busy || !!draft.pending || !!conflict} onClick={() => setPullReview(true)}>{tr("変更を取り消す")}</button>
       </div>}
       {status === "conflict" && !conflict && <button disabled={busy || !!draft?.pending} onClick={() => void run(async () => compareConflict())}>{tr("競合を比較して解決")}</button>}
@@ -413,9 +417,15 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       </div>
       {conflict.proposed !== undefined && <div><h3>{tr("AIの結合案")}</h3><p>{conflict.explanation}</p><SyncPreview config={draft.config} value={conflict.proposed} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /><button className="primary" disabled={busy} onClick={() => void run(async () => resolveConflict("merged"))}>{tr("結合案をローカルに採用")}</button></div>}
     </section>}
-    {draft && <>
+    {comparing && status === "local" && draft && !conflict && !draft.pending && <section className="panel conflict-dialog" aria-label={tr("変更内容の比較")}>
+      <h2>{tr("変更内容の比較")}</h2><p>{tr("この画面のローカル編集と、いまの本番を並べて表示します。比較しても何も変更しません。")}</p>
+      {summary.length > 0 && <ul className="check-list">{summary.map(item => <li key={item}>{item}</li>)}</ul>}
+      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル（編集後）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} /></div><div><h3>{tr("本番（反映前）")}</h3><SyncPreview config={draft.source || draft.config} value={scopedSource(draft.source, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} /></div></div>
+      <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
+    </section>}
+    {draft && !(comparing && status === "local") && <>
       {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
-    {draft && mock && !conflict && <>
+    {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
         if (link && !link.getAttribute("href")?.startsWith("/s/local-preview")) {

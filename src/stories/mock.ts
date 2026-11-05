@@ -79,6 +79,7 @@ export type Scenario =
   | "editor-remote"
   | "editor-remote-tree"
   | "editor-conflict"
+  | "editor-local"
   | "page-builder"
   | "proposal-failure"
   | "question-failure"
@@ -173,7 +174,7 @@ export function scenarioProps(scenario: Scenario) {
                 ? "/s/salon-nagi"
                 : "/",
     // Remote/conflict fixtures change the FAQ page, so open that page rather than the default booking screen.
-    search: ["editor-remote", "editor-conflict"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
+    search: ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
     initialTab: scenario.startsWith("owner-transfer-") ? "bookings" : ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
@@ -184,7 +185,7 @@ export function scenarioProps(scenario: Scenario) {
           "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
           "local-editor-pages": "try",
-          "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "page-builder": "build",
+          "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "editor-local": "try", "page-builder": "build",
           "manage-basic": "basic", "manage-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
@@ -234,7 +235,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   config.hours.closedWeekdays = [];
   if (scenario.startsWith("transfer-") || scenario.startsWith("owner-transfer-") || ["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
-  if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-remote-tree", "editor-conflict", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
+  if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-remote-tree", "editor-conflict", "editor-local", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
     { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてでも予約できますか？</h2><p>初めてのお客様も歓迎しています。</p><h2>当日の持ち物は？</h2><p>特にありません。お気軽にお越しください。</p>"), layout: "standard", imageUrl: "" },
     { id: "about-us", slug: "about-us", title: tr("私たちのお店"), navigationLabel: tr("店舗紹介"), body: tr("<h2>大切にしていること</h2><p>一人ひとりに合った時間をご用意します。</p>"), layout: "compact", imageUrl: "" },
   ];
