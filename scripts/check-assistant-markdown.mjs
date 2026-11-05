@@ -32,12 +32,47 @@ try {
     const context = await browser.newContext({ viewport: { width, height: 950 }, locale: language === 'ja' ? 'ja-JP' : 'en-US' });
     await context.addCookies([{ name: 'gemihub_session', value: session, url: origin }]);
     const page = await context.newPage(), errors = [], remoteImages = [];
+    // Exercise the live-voice controls without microphone permissions or a remote AI connection.
+    let voiceEnabled = true;
+    await page.route('**/api/session', async route => {
+      const response = await route.fetch(), session = await response.json();
+      await route.fulfill({ response, json: { ...session, assistantVoice: voiceEnabled } });
+    });
+    await page.addInitScript(() => {
+      window.__microphoneStops = 0;
+      window.__audioCloses = 0;
+      Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => {
+        if (window.__delayMicrophone) await new Promise(resolve => { window.__resolveMicrophone = resolve; });
+        return { getTracks: () => [{ stop() { window.__microphoneStops++; } }] };
+      } } });
+      window.AudioContext = class {
+        audioWorklet = { addModule: async () => {} };
+        async resume() {} async close() { window.__audioCloses++; }
+        createMediaStreamSource() { return { connect() {} }; }
+      };
+      window.AudioWorkletNode = class { port = {}; connect() {} };
+    });
+    let voiceSocket, voiceConnections = 0;
+    await page.routeWebSocket('**/assistant/live', socket => { voiceSocket = socket; voiceConnections++; socket.send(JSON.stringify({ type: 'ready' })); });
     page.setDefaultTimeout(15000);
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (request.url().startsWith('https://untrusted.invalid/')) remoteImages.push(request.url()); });
     await page.goto(`${origin}/?tab=assistant&shop=${shop.id}&lang=${language}`);
     const input = page.getByRole('textbox', { name: language === 'ja' ? 'アシスタントへの質問' : 'Question for the assistant', exact: true });
+    const chatMode = page.locator('.assistant-modes button').nth(0), voiceMode = page.locator('.assistant-modes button').nth(1);
     await expect(input).toBeVisible();
+    const assertComposer = async () => {
+      const layout = await page.locator('.assistant .chat-composer').evaluate(form => {
+        const send = form.querySelector('.chat-send').getBoundingClientRect();
+        const textarea = form.querySelector('textarea').getBoundingClientRect();
+        return { height: form.getBoundingClientRect().height, inputHeight: textarea.height, sendGap: send.top - textarea.bottom, textSize: parseFloat(getComputedStyle(form.querySelector('textarea')).fontSize) };
+      });
+      assert.ok(layout.inputHeight <= 100 && layout.height < 170 && layout.sendGap <= 10, 'chat composer stays compact without an unused action row');
+      assert.ok(layout.textSize >= 16, 'input stays readable without iPhone focus zoom');
+    };
+    await assertComposer();
+    await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.assistant-voice')).toHaveCount(0);
     const typography = await page.evaluate(() => {
       const size = element => parseFloat(getComputedStyle(element).fontSize);
       const brand = document.querySelector('.app-header .brand').getBoundingClientRect();
@@ -77,9 +112,61 @@ try {
     await input.fill('plain'); await input.press('Control+Enter');
     await expect(page.locator('.assistant-markdown').nth(1).locator('p')).toHaveCount(2);
     assert.equal(calls.at(-1).messages.at(-1).text, markdown, 'formatting does not rewrite model history');
+    await page.evaluate(key => localStorage.removeItem(key), `gemihub:assistant:${shop.id}:${shop.owner}`);
+    await page.reload();
+    await input.fill('Keep this unsent draft.');
+    await voiceMode.click();
+    await expect(voiceMode).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.assistant .chat-composer, .assistant .chat-send')).toHaveCount(0);
+    await expect(input).toHaveCount(0);
+    await expect(page.locator('.assistant-voice button')).toHaveAttribute('aria-pressed', 'false');
+    assert.equal(voiceConnections, 0, 'switching modes alone does not open the microphone connection');
+    await page.locator('.assistant-voice button').click();
+    await expect(page.locator('.assistant-voice button')).toHaveAttribute('aria-pressed', 'true');
+    voiceSocket.send(JSON.stringify({ type: 'turn', question: 'どういうところがこのシステムのポイント？', answer: 'システムの強みを確認しますね。' }));
+    await expect(page.locator('.assistant-log .chat-message')).toHaveCount(2);
+    const bubbles = await page.locator('.assistant-log .chat-message').evaluateAll(elements => elements.map(element => {
+      const style = getComputedStyle(element), bounds = element.getBoundingClientRect();
+      return { top: bounds.top, bottom: bounds.bottom, margin: style.margin, background: style.backgroundColor };
+    }));
+    assert.ok(bubbles.every(bubble => bubble.margin === '0px'), 'conversation spacing comes from one consistent gap');
+    assert.ok(bubbles[1].top - bubbles[0].bottom <= 13, 'short voice turns do not leave a large blank gap');
+    assert.notEqual(bubbles[0].background, bubbles[1].background, 'user and assistant messages are visually distinct');
+    await expect(page.locator('.assistant .chat-composer')).toHaveCount(0);
+    await page.screenshot({ path: `tmp/assistant-markdown/voice-${language}-${width}.png`, fullPage: true });
+    voiceSocket.send(JSON.stringify({ type: 'heard', text: 'A long live transcript that can wrap safely below the voice and send buttons. '.repeat(2) }));
+    await expect(page.locator('.assistant-caption')).toBeVisible();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await chatMode.click();
+    await expect(page.locator('.assistant-voice')).toHaveCount(0);
+    await expect(input).toHaveValue('Keep this unsent draft.');
+    await expect(page.locator('.assistant-log .chat-message')).toHaveCount(2);
+    await expect.poll(() => page.evaluate(() => window.__microphoneStops)).toBe(1);
+    assert.equal(await page.evaluate(() => window.__audioCloses), 2, 'switching to chat closes capture and playback');
+    await assertComposer();
+    // Leaving while microphone permission is pending must not leak a late stream or connection.
+    await page.evaluate(() => { window.__delayMicrophone = true; });
+    await voiceMode.click();
+    await page.locator('.assistant-voice button').click();
+    await page.waitForFunction(() => !!window.__resolveMicrophone);
+    await chatMode.click();
+    await page.evaluate(() => { window.__resolveMicrophone(); window.__delayMicrophone = false; });
+    await expect.poll(() => page.evaluate(() => window.__microphoneStops)).toBe(2);
+    assert.equal(voiceConnections, 1, 'cancelled microphone setup never opens a connection');
+    await voiceMode.click();
+    await page.locator('.assistant-voice button').click();
+    await expect(page.locator('.assistant-voice button')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('.assistant-voice button').click();
+    await expect(page.locator('.assistant-voice button')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.assistant .chat-composer')).toHaveCount(0);
+    voiceEnabled = false;
+    await page.reload();
+    await expect(input).toHaveValue('Keep this unsent draft.');
+    await expect(page.locator('.assistant-modes, .assistant-voice')).toHaveCount(0);
+    await assertComposer();
     assert.deepEqual(errors, []);
     await context.close();
-    console.log(`${language} ${width}px: formatted answer, table, code, sources, literal question and safe links passed.`);
+    console.log(`${language} ${width}px: formatted answers, chat/voice modes, draft/history preservation and microphone cleanup passed.`);
   }
 } finally {
   await browser?.close();
