@@ -624,7 +624,13 @@ export function paypalOps(options: PayPalOpsOptions) {
       const body = [value.summary, "", ...send.items.map(item => `- ${alertLine(item)}`), "", tr("管理画面: {0}", link)].join("\n");
       try {
         await options.notifyOwner(shop, subject, body);
-      } catch { return value; }
+      } catch {
+        // A failed send (e.g. the owner's Google needs reconnecting) still counts as this hour's run;
+        // otherwise every minute would repeat the PayPal reads and the AI summary. Notices are not
+        // recorded, so the same items are mailed on the next scheduled run.
+        await markChecked();
+        return value;
+      }
       for (const item of send.items) await store.put("paypalAlertNotice", `${shop.id}:${item.id}`, { shopId: shop.id, fingerprint: item.fingerprint, notifiedAt: new Date().toISOString() });
       if (send.digest) await store.put("paypalDigest", shop.id, { shopId: shop.id, date: send.today, at: new Date().toISOString() });
       await markChecked();

@@ -406,3 +406,29 @@ test("HTTP proposal execution releases its booking lock before applying durable 
   assert.equal(retry.status, 200);
   assert.equal((await store.shop(shop.id))!.history.filter(entry => entry.summary.startsWith("PayPal")).length, 1);
 });
+
+test("a failed owner mail still counts as the hourly run and is retried on the next one", async () => {
+  const { store, shop, checkout } = await setup();
+  Object.assign(checkout.booking.payment!.cancellation!, { status: "manual_review" });
+  await store.put("checkout", checkout.id, checkout);
+  const gateway = fakeGateway("PENDING", "REFUNDED");
+  let summaries = 0, attempts = 0, fail = true;
+  const ops = paypalOps({
+    store, gateway, reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid",
+    notifyOwner: async () => { attempts++; if (fail) throw new Error("Google reconnect required"); },
+    summarize: async () => { summaries++; return "summary"; },
+  });
+  await ops.check(shop, { notify: true });
+  const reads = gateway.reads.length;
+  for (let minute = 0; minute < 3; minute++) await ops.check(shop, { notify: true });
+  assert.equal(summaries, 1, "minute ticks inside the hour do not summarize again");
+  assert.equal(attempts, 1);
+  assert.equal(gateway.reads.length, reads, "minute ticks inside the hour do not read PayPal again");
+  fail = false;
+  await store.put("paypalAlertRun", shop.id, { shopId: shop.id, checkedAt: new Date(Date.now() - 2 * 3600000).toISOString() });
+  await ops.check(shop, { notify: true });
+  assert.equal(attempts, 2, "the unsent items are mailed on the next scheduled run");
+  await store.put("paypalAlertRun", shop.id, { shopId: shop.id, checkedAt: new Date(Date.now() - 2 * 3600000).toISOString() });
+  await ops.check(shop, { notify: true });
+  assert.equal(attempts, 2, "once sent, the same items are not mailed again");
+});
