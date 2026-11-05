@@ -77,7 +77,11 @@ export function attachAssistantLive(server: Server, authorize: (req: IncomingMes
         contextWindowCompression: { triggerTokens: "24000", slidingWindow: { targetTokens: "12000" } },
         systemInstruction: conversationInstruction(true),
         tools: [{ functionDeclarations: [
-          { name: "investigate", description: tr("お店のシステム・設定・経緯・実データについての事実を調査担当に調べてもらう。事実の質問には必ずこれを使う。"), parameters: { type: Type.OBJECT, properties: { question: { type: Type.STRING, description: tr("調べたいこと。会話の文脈を補って一文で") } }, required: ["question"] } },
+          { name: "investigate", description: tr("お店のシステム・設定・経緯・実データについての事実を調査担当に調べてもらう。事実の質問には必ずこれを使う。"), parameters: { type: Type.OBJECT, properties: {
+            question: { type: Type.STRING, description: tr("調べたいこと。会話の文脈を補って一文で") },
+            usage: { type: Type.BOOLEAN, description: tr("使い方・機能・仕組み・ルール（どう操作するか、何ができるか）の質問なら true。お店の設定値・経緯・実データだけの質問なら false") },
+            records: { type: Type.ARRAY, items: { type: Type.STRING, enum: ["bookings", "customers", "inquiries"] }, description: tr("答えるのに必要な実データ。bookings は予約台帳、customers はお客様ごとの来店回数・最終来店日・合計金額、inquiries はお問い合わせ。不要なら省略") },
+          }, required: ["question"] } },
           { name: "draft_request", description: tr("設定の変更や新しいページの作成を頼まれたとき、依頼文の下書きを画面に出す。反映はしない。"), parameters: { type: Type.OBJECT, properties: {
             change: { type: Type.STRING, description: tr("頼まれた変更の内容。時期や対象を具体的に") },
             constraints: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("この依頼に特有の注意点（任意）") },

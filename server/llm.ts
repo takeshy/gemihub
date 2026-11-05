@@ -24,6 +24,22 @@ async function beforeModelCall() {
 }
 
 const unavailable = (message: string) => Object.assign(new Error(message), { status: 503 });
+/**
+ * Runs one model call. With `timeoutMs`, a call that has not answered in time is aborted and retried
+ * once: an occasional response takes minutes while the same request normally answers in seconds.
+ */
+async function withDeadline<T>(timeoutMs: number | undefined, run: (signal?: AbortSignal) => Promise<T>): Promise<T> {
+  if (!timeoutMs) return run();
+  for (let attempt = 0; ; attempt++) {
+    const signal = AbortSignal.timeout(timeoutMs);
+    try { return await run(signal); }
+    catch (error) {
+      if (!signal.aborted) throw error;
+      if (attempt >= 1) throw Object.assign(new Error(tr("AIの応答に時間がかかっています。少し時間をおいてお試しください。")), { status: 504 });
+      console.warn(`Model call exceeded ${timeoutMs} ms; retrying once`);
+    }
+  }
+}
 export function openAiStatus() {
   return { key: !!process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL || "", imageModel: process.env.OPENAI_IMAGE_MODEL || "" };
 }
@@ -93,36 +109,36 @@ export function toOpenAiInput(contents: Content[]): OpenAiInput[] {
 }
 
 /** Generates JSON text matching the schema. Callers keep validating with zod. */
-export async function generateJson(input: { system: string; contents: Content[]; schema: Record<string, unknown>; location?: string; unavailableMessage?: string; purpose?: "review" }): Promise<string> {
+export async function generateJson(input: { system: string; contents: Content[]; schema: Record<string, unknown>; location?: string; unavailableMessage?: string; purpose?: "review"; timeoutMs?: number }): Promise<string> {
   const provider = await requireText(input.unavailableMessage || tr("AI の接続がまだ設定されていません"));
   await beforeModelCall();
   if (provider === "openai") {
-    const response = await openai().responses.create({
+    const response = await withDeadline(input.timeoutMs, signal => openai().responses.create({
       model: input.purpose === "review" ? process.env.OPENAI_REVIEW_MODEL || process.env.OPENAI_MODEL! : process.env.OPENAI_MODEL!,
       instructions: input.system,
       input: toOpenAiInput(input.contents),
       text: { format: { type: "json_schema", name: "result", schema: input.schema, strict: false } },
-    });
+    }, signal ? { signal, maxRetries: 0 } : undefined));
     return response.output_text || "{}";
   }
-  const response = await vertexClient(input.location).models.generateContent({
+  const response = await withDeadline(input.timeoutMs, signal => vertexClient(input.location).models.generateContent({
     model: input.purpose === "review" ? process.env.VERTEX_REVIEW_MODEL || process.env.VERTEX_MODEL! : process.env.VERTEX_MODEL!, contents: input.contents,
-    config: { responseMimeType: "application/json", responseJsonSchema: input.schema, systemInstruction: input.system },
-  });
+    config: { responseMimeType: "application/json", responseJsonSchema: input.schema, systemInstruction: input.system, ...(signal ? { abortSignal: signal } : {}) },
+  }));
   return response.text || "{}";
 }
 
 /** One tool-calling round. The result keeps Gemini's shape so the shared tool loop is unchanged. */
-export async function generateWithTools(input: { system: string; contents: Content[]; tools: ToolDeclaration[] }): Promise<ToolResponse> {
+export async function generateWithTools(input: { system: string; contents: Content[]; tools: ToolDeclaration[]; timeoutMs?: number }): Promise<ToolResponse> {
   const provider = await requireText(tr("AI の接続がまだ設定されていません"));
   await beforeModelCall();
   if (provider === "openai") {
-    const response = await openai().responses.create({
+    const response = await withDeadline(input.timeoutMs, signal => openai().responses.create({
       model: process.env.OPENAI_MODEL!,
       instructions: input.system,
       input: toOpenAiInput(input.contents),
       tools: input.tools.map(tool => ({ type: "function" as const, name: tool.name, description: tool.description, parameters: tool.parametersJsonSchema, strict: false })),
-    });
+    }, signal ? { signal, maxRetries: 0 } : undefined));
     const calls = response.output.filter((item): item is OpenAI.Responses.ResponseFunctionToolCall => item.type === "function_call");
     const functionCalls = calls.map(call => {
       let args: Record<string, unknown> = {};
@@ -132,10 +148,10 @@ export async function generateWithTools(input: { system: string; contents: Conte
     const parts: Part[] = functionCalls.length ? functionCalls.map(functionCall => ({ functionCall })) : [{ text: response.output_text || "" }];
     return { functionCalls, text: response.output_text || "", candidates: [{ content: { role: "model", parts } }] } as ToolResponse;
   }
-  return vertexClient().models.generateContent({
+  return withDeadline(input.timeoutMs, signal => vertexClient().models.generateContent({
     model: process.env.VERTEX_MODEL!, contents: input.contents,
-    config: { systemInstruction: input.system, tools: [{ functionDeclarations: input.tools }] },
-  });
+    config: { systemInstruction: input.system, tools: [{ functionDeclarations: input.tools }], ...(signal ? { abortSignal: signal } : {}) },
+  }));
 }
 
 const openAiSizes: Record<string, "1024x1024" | "1536x1024" | "1024x1536"> = { "1:1": "1024x1024", "4:3": "1536x1024", "16:9": "1536x1024", "3:4": "1024x1536", "9:16": "1024x1536" };

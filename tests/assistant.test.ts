@@ -49,24 +49,30 @@ test("the shared system OKF bundle is v0.2 with complete chapter frontmatter and
   }
 });
 
-test("research reads records and chapters read-only and keeps only sources it actually read", async () => {
+test("research is one call over the material the caller chose, without tools, and cites only what it was given", async () => {
   const data = shopData({ bookings: [{ id: "b1", start: "2026-11-04T10:00:00+09:00", status: "active" }, { id: "b2", start: "2026-11-05T10:00:00+09:00", status: "active" }] });
-  scripted([], [
-    call("read_records", { kind: "bookings" }),
-    call("read_system_file", { path: "payments.md" }, "c2"),
-    say(""),
-    say(JSON.stringify({ answer: "今週の予約は2件です（予約台帳）。", sources: ["sheet:bookings", "system/payments.md", "system/booking.md"] })),
-  ]);
-  const result = await research("今週の予約は何件？", data);
+  let seen = scripted([], [say(JSON.stringify({ answer: "今週の予約は2件です（予約台帳）。", sources: ["sheet:bookings", "system/payments.md", "spec.md"] }))]);
+  const result = await research("今週の予約は何件？", data, { records: ["bookings"] });
   assert.equal(result.answer, "今週の予約は2件です（予約台帳）。");
+  assert.deepEqual(data.reads, ["bookings"], "only the requested record kinds are read");
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].tools, undefined, "the research layer gets no tools");
+  const input = JSON.stringify(seen[0].input);
+  assert.ok(input.includes("spec.md") && input.includes("history.md") && input.includes("sheet:bookings"));
+  assert.ok(!input.includes("system/payments.md"), "OKF chapters are given only for usage questions");
+  assert.deepEqual(result.sources.map(source => source.path), ["sheet:bookings", "spec.md"], "material that was not given is not cited");
+  // Usage questions get every OKF chapter up front and no records unless asked for.
+  seen = scripted([], [say(JSON.stringify({ answer: "マイページから取り消せます。", sources: ["system/booking.md"] }))]);
+  const usage = await research("お客様はどこからキャンセルする？", data, { usage: true });
+  assert.ok(Object.keys(systemBundle()).every(path => JSON.stringify(seen[0].input).includes(path)));
   assert.deepEqual(data.reads, ["bookings"]);
-  assert.deepEqual(result.sources.map(source => source.path), ["sheet:bookings", "system/payments.md"], "unread chapters are not cited");
+  assert.deepEqual(usage.sources.map(source => source.path), ["system/booking.md"]);
 });
 
 test("the conversation layer researches facts and turns change requests into a draft without applying anything", async () => {
   const data = shopData();
   let seen = scripted([call("investigate", { question: "キャンセル時の返金ルール" }), say("開始72時間前までなら全額返金です。")], [
-    say(""), say(JSON.stringify({ answer: "rules.payment.refundTiers により72時間前まで100%返金。", sources: ["spec.md"] })),
+    say(JSON.stringify({ answer: "rules.payment.refundTiers により72時間前まで100%返金。", sources: ["spec.md"] })),
   ]);
   const answer = await converse({ question: "キャンセルしたら返金はどうなる？", messages: [], data });
   assert.equal(answer.answer, "開始72時間前までなら全額返金です。");
@@ -76,7 +82,7 @@ test("the conversation layer researches facts and turns change requests into a d
   assert.deepEqual((conversationCall.tools as { name: string }[]).map(tool => tool.name), ["investigate", "draft_request"], "conversation has no direct data access");
 
   seen = scripted([call("draft_request", { change: "来月から水曜を定休日にする" }), say("下書きを作りました。画面で承認してください。")], [
-    say(""), say(JSON.stringify({ answer: "hours.closedWeekdays は [2]（火曜）。", sources: ["spec.md"] })),
+    say(JSON.stringify({ answer: "hours.closedWeekdays は [2]（火曜）。", sources: ["spec.md"] })),
   ]);
   const request = await converse({ question: "来月から水曜を定休日にして", messages: [], data });
   assert.equal(request.draft?.current, "hours.closedWeekdays は [2]（火曜）。");
@@ -165,7 +171,7 @@ test("Live voice uses the same two tools, relays research results and shows draf
   assert.deepEqual(declarations, ["investigate", "draft_request"]);
   assert.match(String(parameters!.config!.systemInstruction), /調べますね|Let me check/);
 
-  scripted([], [say(""), say(JSON.stringify({ answer: "hours.closedWeekdays は [2]。", sources: ["spec.md"] }))]);
+  scripted([], [say(JSON.stringify({ answer: "hours.closedWeekdays は [2]。", sources: ["spec.md"] }))]);
   parameters!.callbacks!.onmessage!({ toolCall: { functionCalls: [{ id: "v1", name: "draft_request", args: { change: "来月から水曜を定休日にする" } }] } } as never);
   const draft = await until("draft");
   assert.match(String(draft.text), /## 頼まれた変更\n来月から水曜を定休日にする/);
