@@ -80,6 +80,8 @@ gcloud builds submit . --project=geminihub-486523 --region=asia-northeast1 \
 
 The caller needs `iam.serviceAccounts.actAs` on the build account. The build account receives source-bucket read, registry write, logging, and shared-VM IAP/OS Login permissions. VM-side permissions become effective in the next step, so `_DEPLOY=false` is required for the bootstrap build.
 
+Cloud Build's per-build SSH key expires after 10 minutes and an EXIT trap removes that exact public key from the build account's OS Login profile on both success and failure. This prevents ephemeral build keys from accumulating at OS Login's 32 KiB profile limit. If an older deployment already filled the profile, inspect it as the build service account and remove only unused build-generated keys. Preserve the POSIX profile and keys used by other identities. See [Google's OS Login troubleshooting guidance](https://docs.cloud.google.com/compute/docs/troubleshooting/troubleshoot-os-login#os_login_profile_size_limit_exceeded).
+
 ## 4. Register on the shared VM
 
 ```sh

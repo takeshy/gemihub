@@ -12,9 +12,17 @@ steps:
       - -ceu
       - |
         if [[ '${_DEPLOY}' != 'true' ]]; then exit 0; fi
+        cleanup_build_key() {
+          if [[ -f /tmp/build-ssh.pub ]]; then
+            gcloud compute os-login ssh-keys remove --project='${_SHARED_PROJECT}' \
+              --key-file=/tmp/build-ssh.pub --quiet || \
+              echo 'WARNING: Could not remove the build SSH key; it expires after 10 minutes.' >&2
+          fi
+        }
+        trap cleanup_build_key EXIT
         gcloud compute ssh '${_SHARED_INSTANCE}' \
           --project='${_SHARED_PROJECT}' --zone='${_SHARED_ZONE}' \
-          --tunnel-through-iap --ssh-key-file=/tmp/build-ssh --quiet \
+          --tunnel-through-iap --ssh-key-file=/tmp/build-ssh --ssh-key-expire-after=10m --quiet \
           --command='sudo python3 /opt/shared-apps/deploy.py --app gemihub-web --image ${_IMAGE} && sudo python3 /opt/shared-apps/register.py --persist'
 images: ['${_IMAGE}']
 substitutions:

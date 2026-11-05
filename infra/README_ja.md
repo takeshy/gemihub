@@ -72,6 +72,8 @@ gcloud builds submit . --project=geminihub-486523 --region=asia-northeast1 \
 
 このコマンドを実行する人にはビルド SA の `iam.serviceAccounts.actAs` が必要です。ビルド SA 自身にはソース bucket の読取、対象 registry の書込、ログ、共有 VM の IAP / OS Login を付与します。共有 VM 側の権限は次のステップで有効になるため、初回ビルドは `_DEPLOY=false` が必須です。
 
+Cloud BuildのSSH鍵には10分の有効期限を設定し、成功・失敗どちらでもEXITトラップで、そのビルドが作成した公開鍵だけをビルドSAのOS Loginプロファイルから削除します。これにより、一時鍵の蓄積による32 KiB上限を防ぎます。旧方式の鍵で上限に達した場合は、ビルドSA自身のプロファイルを確認し、使われていないビルド由来の鍵だけを整理します。POSIXプロファイルや別アカウントの鍵は削除しません。[GoogleのOS Loginトラブルシューティング](https://docs.cloud.google.com/compute/docs/troubleshooting/troubleshoot-os-login#os_login_profile_size_limit_exceeded)を参照してください。
+
 ## 4. 共有 VM に登録する
 
 ```sh
