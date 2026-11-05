@@ -156,10 +156,15 @@ export function App({
   const isPublic = !!match || !!session.hosted;
   return (
     <>
-      <LanguageSwitcher />
+      {isPublic && <LanguageSwitcher />}
       {!isPublic && <header className="app-header">
         <Brand />
         <div className="header-right">
+          <div className="header-language"><LanguageSwitcher /></div>
+          <details className="header-language-menu">
+            <summary>{tr("言語")}</summary>
+            <LanguageSwitcher embedded />
+          </details>
           <span className="small muted">
             {displaySession.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
@@ -354,6 +359,8 @@ function Dashboard({
   // Until the first workspace response, an empty list means "loading", not "no shops".
   const [loaded, setLoaded] = useState(false);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
+  const [editorTreeOpen, setEditorTreeOpen] = useState(true);
+  const editorTreeId = useId();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuToggle = useRef<HTMLButtonElement>(null);
   const menuId = useId();
@@ -465,15 +472,25 @@ function Dashboard({
               <div className="sidebar-settings-items" role="group" aria-label={label}>
                 {settingItems.map(([setting, settingIcon, settingLabel]) => <button key={setting} className={view === setting ? "active" : ""} aria-current={view === setting ? "page" : undefined} onClick={() => setTab(setting)}><span aria-hidden="true">{settingIcon}</span>{settingLabel}</button>)}
               </div>
-            </details> : <React.Fragment key={id}><button
+            </details> : id === "try" ? <div className="sidebar-editor" key={id}>
+              <div className={`sidebar-editor-row${view === id ? " active" : ""}`}>
+                <button className="sidebar-editor-open" aria-current={view === id ? "page" : undefined} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>
+                <button type="button" className="sidebar-editor-toggle" aria-label={editorTreeOpen ? tr("画面一覧を折り畳む") : tr("画面一覧を開く")} aria-expanded={editorTreeOpen} aria-controls={editorTreeId} onClick={() => setEditorTreeOpen(open => !open)}><span aria-hidden="true">{editorTreeOpen ? "▾" : "▸"}</span></button>
+              </div>
+              <div className="sidebar-editor-tree" id={editorTreeId} hidden={!editorTreeOpen} ref={setTreeHost} />
+            </div> : <button key={id}
               className={view === id ? "active" : ""}
               aria-current={view === id ? "page" : undefined}
               onClick={() => setTab(id)}
             >
               <span aria-hidden="true">{icon}</span>
               {label}
-            </button>{id === "try" && <div className="sidebar-editor-tree" ref={setTreeHost} />}</React.Fragment>
+            </button>
           ))}
+          <div className="sidebar-language">
+            <span className="small muted">{tr("言語")}</span>
+            <LanguageSwitcher embedded />
+          </div>
         </nav>
         <div className="sidebar-bottom">
           <i className={shop?.published ? "online" : ""} />

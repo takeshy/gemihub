@@ -49,7 +49,13 @@ try {
   const tab = async value => { await expect.poll(() => query().get('tab')).toBe(value); assert.equal(query().get('lang'), language); };
   await page.goto(`${origin}/?lang=${language}&shop=${shops[0].id}&tab=basic`);
   await expect(page.locator('.live-settings-basic')).toBeVisible();
+  const headerLanguage = page.locator('.app-header .header-language');
+  const menuLanguage = nav.locator('.sidebar-language');
+  assert.equal(await page.locator('.app-header').evaluate(element => element.getBoundingClientRect().top), 0, 'no language strip above the header');
   if (width <= 760) {
+   await expect(headerLanguage).toBeHidden();
+   await expect(page.locator('.header-language-menu')).toBeHidden();
+   await expect(menuLanguage).toBeHidden();
    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
    await expect(toggle).toContainText(label('お店の基本情報'));
    await expect(nav).toBeHidden();
@@ -57,6 +63,7 @@ try {
    await page.screenshot({ path: `tmp/dashboard-navigation/${language}-${width}-menu-closed.png`, fullPage: true });
    await openMenu();
    await expect(nav).toBeVisible();
+   await expect(menuLanguage).toBeVisible();
    await page.keyboard.press('Escape');
    await expect(nav).toBeHidden();
    await expect(toggle).toBeFocused();
@@ -73,13 +80,33 @@ try {
    await toggle.click();
    await page.setViewportSize({ width: 1280, height: 950 });
    await expect(toggle).toBeHidden(); await expect(nav).toBeVisible();
+   await expect(headerLanguage).toBeVisible(); await expect(menuLanguage).toBeHidden();
    await page.setViewportSize({ width, height: 950 });
    await expect(nav).toBeHidden();
   } else {
    await expect(toggle).toBeHidden();
+   await expect(headerLanguage).toBeVisible(); await expect(menuLanguage).toBeHidden();
   }
   await openMenu();
   await expect(nav.getByRole('tree')).toBeVisible();
+  const editorToggle = nav.locator('.sidebar-editor-toggle');
+  const beforeCollapse = page.url();
+  await editorToggle.click();
+  await expect(editorToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(nav.locator('.sidebar-editor-tree')).toBeHidden();
+  assert.equal(page.url(), beforeCollapse, 'collapsing the tree does not navigate');
+  if (width <= 760) await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await item('メニュー・料金').click();
+  await expect(page.locator('.live-settings-menus')).toBeVisible();
+  await openMenu(); await item('画面を試す・編集').click();
+  await expect(page.locator('.local-preview-screen')).toBeVisible();
+  await openMenu();
+  await expect(editorToggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(nav.locator('.sidebar-editor-tree')).toBeHidden();
+  await editorToggle.focus(); await page.keyboard.press('Enter');
+  await expect(editorToggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(nav.getByRole('tree')).toBeVisible();
+  await item('お店の基本情報').click(); await openMenu();
   await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(0);
   const originalHistoryLength = await page.evaluate(() => history.length);
   await openMenu(); await item('お店の基本情報').click();
@@ -177,6 +204,27 @@ try {
   if (width <= 760) await toggle.click();
   await page.screenshot({ path: `tmp/dashboard-navigation/${language}-${width}.png`, fullPage: true });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), JSON.stringify(await page.evaluate(() => [...document.querySelectorAll('body *')].filter(element => element.getBoundingClientRect().right > innerWidth + 1).slice(0, 8).map(element => ({ tag: element.tagName, className: element.className, right: element.getBoundingClientRect().right })))));
+  // Switching languages from either location preserves the current shop and screen URL.
+  const beforeLanguage = new URL(page.url()), nextLanguage = language === 'ja' ? 'en' : 'ja';
+  await openMenu();
+  await (width <= 760 ? menuLanguage : headerLanguage).getByRole('button', { name: nextLanguage === 'ja' ? '日本語' : 'English', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('lang')).toBe(nextLanguage);
+  await expect(page.locator('.local-preview-screen')).toBeVisible();
+  for (const key of ['shop', 'tab', 'screen']) assert.equal(query().get(key), beforeLanguage.searchParams.get(key));
+  assert.equal(await page.evaluate(() => localStorage.getItem('gemihub:locale')), nextLanguage);
+  // Pages without a management sidebar still offer language selection in the header.
+  await page.goto(`${origin}/manual?lang=${language}`);
+  await expect(page.locator('.manual')).toBeVisible();
+  if (width <= 760) {
+   const fallback = page.locator('.header-language-menu');
+   await expect(fallback).toBeVisible();
+   await expect(fallback.locator('.language-switcher')).toBeHidden();
+   await fallback.locator('summary').click();
+   await expect(fallback.locator('.language-switcher')).toBeVisible();
+   await fallback.getByRole('button', { name: nextLanguage === 'ja' ? '日本語' : 'English', exact: true }).click();
+   await expect.poll(() => query().get('lang')).toBe(nextLanguage);
+   assert.equal(new URL(page.url()).pathname, '/manual');
+  } else await expect(headerLanguage).toBeVisible();
   assert.deepEqual(errors, []); await context.close(); console.log(`${language} ${width}px: tab/screen/shop URLs, back/forward, direct links, reload, draft preservation and publication guards passed.`);
  }
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); await store.close(); }

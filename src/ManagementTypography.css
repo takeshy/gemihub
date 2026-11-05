@@ -4,7 +4,9 @@
 .app-header :is(.text-button, .small) { font-size: 14px; line-height: 1.7; }
 .app-header .text-button { display: inline-flex; align-items: center; min-height: 40px; }
 .app-header .muted { color: #617167; }
-.language-switcher:has(~ .app-header) button { font-size: 14px; min-height: 40px; }
+.app-header .language-switcher { padding: 0; background: transparent; }
+.app-header .language-switcher button { font-size: 14px; min-height: 40px; }
+.header-language-menu, .sidebar-language { display: none; }
 
 .dashboard { font-size: 16px; grid-template-columns: 260px minmax(0, 1fr); }
 .dashboard .public-shop { font-size: 14px; }
@@ -27,9 +29,18 @@
 .dashboard .chat-composer > textarea { font-size: 16px; }
 .dashboard .chat-composer-toolbar button { font-size: 14px; min-height: 40px; }
 .mobile-menu-toggle { display: none; }
+.sidebar-editor { min-width: 0; }
+.sidebar-editor-row { display: flex; align-items: stretch; border-radius: 8px; }
+.dashboard aside nav .sidebar-editor-open { flex: 1; min-width: 0; }
+.dashboard aside nav .sidebar-editor-toggle { flex: 0 0 44px; justify-content: center; padding: 0; border-left: 1px solid var(--line); border-radius: 0 8px 8px 0; }
 
 @media (max-width: 760px) {
   .app-header { min-height: 68px; padding: 12px 20px; }
+  .header-language { display: none; }
+  .header-language-menu { display: block; position: relative; }
+  .header-language-menu summary { cursor: pointer; min-height: 40px; padding: 8px 6px; font-size: 14px; }
+  .header-language-menu > .language-switcher { position: absolute; top: 100%; right: 0; z-index: 20; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: white; box-shadow: 0 4px 16px #233d2714; }
+  .app-header:has(~ main .dashboard > aside) .header-language-menu { display: none; }
   .dashboard aside { padding: 10px 12px; }
   .dashboard .mobile-menu-toggle { display: flex; width: 100%; min-height: 48px; padding: 10px 12px; gap: 10px; text-align: left; background: #f4f6ef; }
   .mobile-menu-icon { flex: 0 0 22px; font-size: 24px; line-height: 1; text-align: center; }
@@ -38,9 +49,15 @@
   .dashboard aside:not(.mobile-menu-open) > :is(nav, select) { display: none; }
   .dashboard aside > select { margin-top: 12px; }
   .dashboard aside nav { flex-direction: column; flex-wrap: nowrap; overflow: visible; gap: 4px; margin-top: 12px; }
+  .sidebar-language { display: block; margin-top: 12px; padding: 12px; border-top: 1px solid var(--line); }
+  .sidebar-language > span { display: block; margin-bottom: 8px; }
+  .dashboard aside .sidebar-language .language-switcher { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; gap: 8px; padding: 0; background: transparent; }
+  .dashboard aside .sidebar-language button { justify-content: center; padding: 8px 12px; border: 1px solid #dce3d8; background: white; }
   .dashboard aside nav button { white-space: normal; }
   .dashboard aside nav > button { width: 100%; padding: 12px; }
   .dashboard aside nav > button.active { box-shadow: inset 3px 0 var(--green); }
+  .dashboard .sidebar-editor-row.active { box-shadow: inset 3px 0 var(--green); }
+  .dashboard aside nav .sidebar-editor-open { padding: 12px; }
   .dashboard .sidebar-settings { flex: none; }
   .dashboard .sidebar-settings summary { min-height: 44px; padding: 12px; }
   .dashboard .sidebar-settings-items { flex-direction: column; flex-wrap: nowrap; margin: 0 0 8px 22px; padding: 4px 0 4px 12px; }
