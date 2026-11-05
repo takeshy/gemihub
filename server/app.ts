@@ -118,7 +118,7 @@ import {
 import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
 import { editorIndex, contentHash } from "./editor-sync.ts";
 import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from "./page-ai.ts";
-import { pageSchema, headerSchema, footerSchema } from "./pages.ts";
+import { pageSchema, headerPartSchema, footerPartSchema } from "./pages.ts";
 import { buildStorefront, canonicalBase, storefrontAssetName, storefrontAssetObject, storefrontAssetType, storefrontFile, storefrontGarbage, storefrontObject, storefrontRenderer, storefrontRetainedReleases, storefrontShell, writeStorefront, type StorefrontRelease } from "./storefront-build.tsx";
 import { bucketStorefrontFiles, memoryStorefrontFiles, type StorefrontFiles } from "./storefront-files.ts";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
@@ -1892,7 +1892,7 @@ export function createApp(
           if (action === "local-editor/merge" && method === "POST") {
             assertOwner(user, fresh);
             const input = z.object({ scope: releaseScopeSchema, baseline: z.unknown(), localValue: z.unknown(), expectedRemote: z.unknown() }).parse(await body(req, 1500000));
-            const outputSchema = input.scope.kind === "page" ? pageSchema.nullable() : input.scope.kind === "part" ? (input.scope.part === "header" ? headerSchema : footerSchema) : profileSchema;
+            const outputSchema = input.scope.kind === "page" ? pageSchema.nullable() : input.scope.kind === "part" ? (input.scope.part === "header" ? headerPartSchema : footerPartSchema) : profileSchema;
             const valueSchema = outputSchema.nullable();
             const baseline = valueSchema.parse(input.baseline), localValue = valueSchema.parse(input.localValue), expectedRemote = valueSchema.parse(input.expectedRemote);
             const current = fresh.published ? await effective(fresh) : null;

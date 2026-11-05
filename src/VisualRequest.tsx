@@ -63,7 +63,7 @@ export async function capturePage(root: HTMLElement) {
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/png");
 }
-export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, initialPlan, onPlan, disabled = false}: {
+export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, historyHost, initialPlan, onPlan, disabled = false}: {
   shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
   local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
   screen?: { id: string; label: string; file: string };
@@ -72,6 +72,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   /** The capture replaces the live preview while it is being annotated. */
   onActiveChange?: (active: boolean) => void;
   triggerHost?: HTMLElement | null;
+  historyHost?: HTMLElement | null;
   initialPlan?: Plan;
   onPlan?: (plan: Plan) => void;
   disabled?: boolean;
@@ -82,6 +83,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
+  const ownsBusy = useRef(false);
   const locked = busy || disabled;
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
@@ -133,7 +135,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
     canvas.current.getContext("2d")!.drawImage(img, 0, 0);
     setMarked(false); setResult(undefined); setTarget("");
   }
-  useEffect(() => { alive.current = true; return () => { alive.current = false; onActiveChange?.(false); onBusyChange?.(false); }; }, []);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; onActiveChange?.(false); if (ownsBusy.current) onBusyChange?.(false); }; }, []);
   useEffect(() => { if (image) { void reset(); canvas.current?.scrollIntoView({ block: "nearest" }); } }, [image]);
   useEffect(() => { onActiveChange?.(!!image); }, [image]);
   useEffect(() => {
@@ -145,10 +147,10 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, result, error, busy]);
   async function run(fn: () => Promise<void>) {
     if (locked) return;
-    setBusy(true); onBusyChange?.(true); setError("");
+    ownsBusy.current = true; setBusy(true); onBusyChange?.(true); setError("");
     try { await fn(); }
     catch (e) { if (alive.current) setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (alive.current) { setBusy(false); onBusyChange?.(false); } }
+    finally { if (alive.current) { ownsBusy.current = false; setBusy(false); onBusyChange?.(false); } }
   }
   const capture = () => run(async () => {
     setOpen(true); await frame(); await frame();
@@ -182,14 +184,15 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       } catch (e) { failed.current = text; if (alive.current) setInstruction(current => current || text); throw e; }
     });
   }
-  const trigger = <button className={`${triggerHost ? "editor-pen-button" : ""}${image ? " selected" : ""}`} aria-pressed={!!image} title={image ? tr("ペンをやめてプレビューに戻る") : tr("この画面を修正する")} disabled={locked} onClick={() => image ? close() : void capture()}>{image ? tr("修正をやめる") : tr("修正する")}</button>;
+  const trigger = <button className={`${triggerHost ? "editor-pen-button" : ""}${image ? " selected" : ""}`} aria-pressed={!!image} title={image ? tr("ペンをやめてプレビューに戻る") : tr("この画面を修正する")} disabled={locked} onClick={() => image ? close() : void capture()}><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z" /></svg>{image ? tr("修正をやめる") : tr("修正する")}</button>;
   const historyControls = <div className="visual-edit-history" role="group" aria-label={tr("修正履歴")}>
     <button type="button" disabled={locked || history.scope !== scopeKey || history.index === 0} aria-label={tr("前の状態に戻る")} onClick={() => moveHistory(-1)}><span aria-hidden="true">←</span>{tr("戻る")}</button>
     <span className="small muted" aria-live="polite">{history.index + 1} / {history.entries.length}</span>
     <button type="button" disabled={locked || history.scope !== scopeKey || history.index >= history.entries.length - 1} aria-label={tr("次の状態に進む")} onClick={() => moveHistory(1)}>{tr("進む")}<span aria-hidden="true">→</span></button>
   </div>;
   return <>
-    {triggerHost && createPortal(<>{trigger}{!open && history.entries.length > 1 && historyControls}</>, triggerHost)}
+    {triggerHost && createPortal(<>{trigger}{!historyHost && !open && history.entries.length > 1 && historyControls}</>, triggerHost)}
+    {triggerHost && historyHost && !open && history.entries.length > 1 && createPortal(historyControls, historyHost)}
     {(!triggerHost || image) && <div className="visual-request panel" data-capture-ignore>
       {!triggerHost && <>{trigger}{!open && history.entries.length > 1 && historyControls}</>}
       {image && <>

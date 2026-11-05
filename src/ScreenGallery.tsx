@@ -6,6 +6,7 @@ import { createPreviewClient, sampleFixtures, type Fixtures } from "./local-prev
 import type { ShopConfig } from "../server/domain";
 import { postKey } from "../server/post-domain";
 import { ChromePreview, ThemeBody } from "./SiteChrome";
+import { hasThemeFrame } from "../shared/theme-editing";
 import { articleKinds } from "../shared/article-features";
 
 export type PreviewScreen = { id: string; name: string; description: string; pane?: string; category?: "blogs" | "announcements"; article?: boolean; pageSlug?: string };
@@ -66,7 +67,7 @@ export function ScreenGallery({ config, shopId, themeRef }: { config: ShopConfig
     <p className="small muted">{tr("色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。")}</p>
     <div className="theme-preview" ref={themeRef} inert aria-hidden="true">
       <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/menu-images`} />
-      <div className={`public-shop accent-${accent} layout-${layout}${config.appearance?.theme?" custom-theme":""}`}><ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><div className="theme-placeholder"><span>{tr("ここに各種画面の内容が入ります")}</span></div></ThemeBody></div>
+      <div className={`public-shop accent-${accent} layout-${layout}${hasThemeFrame(config.appearance?.theme)?" custom-theme":""}`}><ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><div className="theme-placeholder"><span>{tr("ここに各種画面の内容が入ります")}</span></div></ThemeBody></div>
       <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/menu-images`} />
     </div>
   </section>;

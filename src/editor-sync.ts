@@ -1,5 +1,5 @@
 import { tr } from "../shared/i18n";
-import { pageValue, scopedSource, type ReleaseScope } from "../server/pages";
+import { pageValue, scopedSource, replacePart, replaceShared, type ReleaseScope } from "../server/pages";
 import { sha256 } from "@noble/hashes/sha2.js";
 import type { EditorIndex } from "../server/editor-index-schema";
 import type { LocalDraft } from "./local-preview";
@@ -21,10 +21,10 @@ export async function syncStatus(draft: LocalDraft, index: EditorIndex, scope: R
 }
 
 import { shopSchema, type ShopConfig } from "../server/domain";
-import { pageSchema, headerSchema, footerSchema } from "../server/pages";
+import { pageSchema } from "../server/pages";
 export function replaceScope(config: ShopConfig, scope: ReleaseScope, value: unknown): ShopConfig {
-  if (scope.kind === "shared") return shopSchema.parse(value === null ? config : { ...config, ...(value as object), appearance: (value as Partial<ShopConfig>).appearance });
-  if (scope.kind === "part") return shopSchema.parse({ ...config, [scope.part]: (scope.part === "header" ? headerSchema : footerSchema).parse(value) });
+  if (scope.kind === "shared") return shopSchema.parse(replaceShared(config, value));
+  if (scope.kind === "part") return shopSchema.parse(replacePart(config, scope.part, value));
   const page = value === null ? null : pageSchema.parse(value);
   if (page && page.id !== scope.pageId) throw new Error(tr("ページIDが一致しません"));
   const exists = config.pages.some(p => p.id === scope.pageId);

@@ -19,6 +19,7 @@ import { ShopOverview } from "./ShopOverview";
 import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
 import { SiteHeader, SiteFooter, ThemeBody } from "./SiteChrome";
+import { hasThemeFrame } from "../shared/theme-editing";
 import { CustomPage } from "./CustomPage";
 import { LiveSettings } from "./LiveSettings";
 import { LocalPreview } from "./LocalPreview";
@@ -1749,7 +1750,7 @@ export function PublicShop({
   );
   return (
     <ShopRegionContext.Provider value={regionOf(c)}>
-    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${c.appearance?.theme ? " custom-theme" : ""}`}>
+    <div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${hasThemeFrame(c.appearance?.theme) ? " custom-theme" : ""}`}>
       {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
       <nav className="public-nav">

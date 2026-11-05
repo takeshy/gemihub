@@ -624,7 +624,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/local-editor/index`) result = {
       base: shop.revision, published: !!shop.published, lastPublishedPlanId: shop.lastPublishedPlanId,
       sharedHash: await fingerprint(scopedSource(shop.published, { kind: "shared" })),
-      parts: { header: await fingerprint(shop.published?.header || null), footer: await fingerprint(shop.published?.footer || null) },
+      parts: { header: await fingerprint(scopedSource(shop.published, { kind: "part", part: "header" })), footer: await fingerprint(scopedSource(shop.published, { kind: "part", part: "footer" })) },
       pages: await Promise.all((shop.published?.pages || []).map(async p => ({ id: p.id, title: p.title, slug: p.slug, hash: await fingerprint(p) }))),
     };
     else if (action === `/api/shops/${shop.id}/local-editor/shared`) result = { base: shop.revision, source: shop.published ? { ...shop.published, pages: [] } : null, config: { ...(shop.published || config), pages: [] }, lastPublishedPlanId: shop.lastPublishedPlanId };

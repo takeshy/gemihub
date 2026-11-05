@@ -14,7 +14,7 @@ export function ScreenTree({ draft, index, statuses, selected, disabled, onChoos
   };
   const pages = [...(draft?.config.pages || []), ...(index?.pages || []).filter(p => !draft?.config.pages.some(l => l.id === p.id)), ...(draft?.source?.pages || []).filter(p => !draft?.config.pages.some(l => l.id === p.id) && !index?.pages.some(l => l.id === p.id))];
   const groups = [
-    { label: tr("共通パーツ"), items: [["part:header", tr("ヘッダー")], ["part:footer", tr("フッター")]] },
+    { label: tr("共通パーツ"), items: [["part:header", tr("ヘッダー")], ["part:footer", tr("フッター")], ["theme", tr("全体の枠")]] },
     { label: tr("予約・お店の情報"), items: [["mine", tr("マイページ")], ["reserve", tr("予約")], ["about", tr("お店のこと")], ["contact", tr("お問い合わせ")]] },
     { label: articles.length === 1 ? articles[0] === "blogs" ? tr("ブログ") : tr("お知らせ") : tr("ブログ・お知らせ"), items: [["blogs", tr("ブログ一覧")], ["blogs:article", tr("ブログ記事")], ["announcements", tr("お知らせ一覧")], ["announcements:article", tr("お知らせ記事")]].filter(([id]) => articles.some(category => id === category || id === `${category}:article`)) },
     { label: tr("追加ページ"), items: pages.map(p => [`page:${p.id}`, p.title]) },

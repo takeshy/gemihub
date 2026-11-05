@@ -1,5 +1,6 @@
 import React from "react";
 import { SiteHeader, SiteFooter, ThemeBody } from "./SiteChrome";
+import { hasThemeFrame } from "../shared/theme-editing";
 import { CustomPage } from "./CustomPage";
 import { PostContent } from "./PostContent";
 import { ShopAbout } from "./ShopAbout";
@@ -44,7 +45,7 @@ export function StaticStorefront({ config: c, view, base, provisional = false, i
   else content = <CustomPage page={view.page} resolvedImages={resolved} />;
   return <>
     <LanguageLinks href={`${base}${path ? `/${path}` : ""}`} />
-    <main><div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${c.appearance?.theme ? " custom-theme" : ""}`}>
+    <main><div className={`public-shop accent-${c.appearance?.accent || "sage"} layout-${c.appearance?.layout || "standard"}${hasThemeFrame(c.appearance?.theme) ? " custom-theme" : ""}`}>
       {provisional && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       <SiteHeader config={c} resolvedImages={resolved}><Navigation config={c} base={base} /></SiteHeader>
       <ThemeBody config={c} resolvedImages={resolved}><section className="public-auth"><a className="button primary" href={`${link(`${base || "/"}?pane=mine`)}#email-login`}>{tr("会員登録・ログイン")}</a></section>{content}</ThemeBody>

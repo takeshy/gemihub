@@ -2,7 +2,8 @@ import { tr } from "../shared/i18n";
 import React, { useRef, useState } from "react";
 import type { ShopConfig } from "../server/domain";
 import { themeSchema, type Theme } from "../shared/presentation";
-import { screenDesignError, screenSlots, screenStarter, themeStarter, type ScreenId } from "../shared/screens";
+import { screenDesignError, screenSlots, screenStarter, type ScreenId } from "../shared/screens";
+import { defaultAppearance, standardTheme, themeHtmlKey, type ThemePart } from "../shared/theme-editing";
 import { ImagePicker } from "./ImageLibrary";
 
 // HTML/CSS editors for built-in screens and the shared theme. Text stays local while it is being
@@ -78,34 +79,34 @@ export function ScreenDesignEditor({ config, screen, shopId, onChange }: { confi
   </div>;
 }
 
-/** The shared theme: header, the frame around every screen, and footer, with one stylesheet. */
-export function ThemeDesignEditor({ config, shopId, onChange }: { config: ShopConfig; shopId: string; onChange: (config: ShopConfig) => void }) {
+/** Each part edits its own HTML. Only the frame editor owns the common stylesheet. */
+export function ThemeDesignEditor({ config, part, shopId, onChange, openFrame }: { config: ShopConfig; part: ThemePart; shopId: string; onChange: (config: ShopConfig) => void; openFrame?: () => void }) {
   const saved = config.appearance?.theme;
-  const [theme, setTheme] = useState<Theme | undefined>(saved);
+  const base = saved || standardTheme;
+  const [html, setHtml] = useState(base[themeHtmlKey(part)]);
+  const [css, setCss] = useState(base.css);
   const [error, setError] = useState("");
-  const appearance = config.appearance || { accent: "sage" as const, layout: "standard" as const, imageUrl: "" };
-  if (!theme) return <div className="design-editor">
-    <p>{tr("ヘッダー・フッター・全体の枠を HTML と CSS で作れます。")}</p>
-    <button type="button" onClick={() => setTheme(themeStarter)}>{tr("全体の枠を HTML で作る")}</button>
-  </div>;
-  const set = (key: keyof Theme) => (value: string) => setTheme({ ...theme, [key]: value });
+  function apply(nextHtml = html, nextCss = css) {
+    const theme: Theme = { ...base, [themeHtmlKey(part)]: nextHtml, ...(part === "body" ? { css: nextCss } : {}) };
+    const parsed = themeSchema.safeParse(theme);
+    if (!parsed.success) { setError(parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(" / ")); return; }
+    setError(""); onChange({ ...config, appearance: { ...(config.appearance || defaultAppearance), theme: parsed.data } });
+  }
   return <div className="design-editor">
-    <h4>{tr("ヘッダー")}</h4><SlotList allowed={["title", "subtitle", "details", "image", "navigation"]} required={["navigation"]} />
-    <CodeArea label={tr("ヘッダーの HTML")} value={theme.headerHtml} onChange={set("headerHtml")} rows={8} shopId={shopId} />
-    <h4>{tr("全体の枠")}</h4><SlotList allowed={["content"]} required={["content"]} />
-    <CodeArea label={tr("全体の枠の HTML")} value={theme.bodyHtml} onChange={set("bodyHtml")} rows={5} shopId={shopId} />
-    <h4>{tr("フッター")}</h4><SlotList allowed={["content"]} required={["content"]} />
-    <CodeArea label={tr("フッターの HTML")} value={theme.footerHtml} onChange={set("footerHtml")} rows={5} shopId={shopId} />
-    <CodeArea label={tr("全体の CSS（ヘッダー・枠・フッター共通）")} value={theme.css} onChange={set("css")} rows={12} />
+    <p className="small muted">{part === "body" ? tr("全画面に共通する枠の HTML と、ヘッダー・フッターにも使う共通 CSS を編集します。") : tr("このパーツの HTML を編集します。共通 CSS は「全体の枠」で編集できます。")}</p>
+    <SlotList allowed={part === "header" ? ["title", "subtitle", "details", "image", "navigation"] : ["content"]} required={part === "header" ? ["navigation"] : ["content"]} />
+    <CodeArea label={part === "header" ? tr("ヘッダーの HTML") : part === "footer" ? tr("フッターの HTML") : tr("全体の枠の HTML")} value={html} onChange={setHtml} rows={part === "header" ? 8 : 5} shopId={shopId} />
+    {part === "body" && <CodeArea label={tr("全体の CSS（ヘッダー・枠・フッター共通）")} value={css} onChange={setCss} rows={12} />}
+    {part !== "body" && openFrame && <button type="button" className="text-button" onClick={openFrame}>{tr("全体の枠・共通 CSS を編集")}</button>}
     <p className="small muted">{rules()}</p>
     {error && <p className="alert" role="alert">{error}</p>}
     <div className="actions">
-      {saved && <button type="button" onClick={() => { if (window.confirm(tr("全体の枠の HTML をやめて標準のデザインに戻しますか？"))) { const { theme: _theme, ...rest } = appearance; void _theme; setTheme(undefined); setError(""); onChange({ ...config, appearance: rest }); } }}>{tr("標準のデザインに戻す")}</button>}
-      <button type="button" className="primary" onClick={() => {
-        const parsed = themeSchema.safeParse(theme);
-        if (!parsed.success) { setError(parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(" / ")); return; }
-        setError(""); onChange({ ...config, appearance: { ...appearance, theme: parsed.data } });
-      }}>{tr("プレビューに反映")}</button>
+      {saved && <button type="button" onClick={() => {
+        if (!window.confirm(part === "body" ? tr("枠の HTML と共通 CSS を標準に戻しますか？ヘッダー・フッターの HTML は残ります。") : tr("このパーツの HTML を標準に戻しますか？他のパーツと共通 CSS は残ります。"))) return;
+        setHtml(standardTheme[themeHtmlKey(part)]); if (part === "body") setCss("");
+        apply(standardTheme[themeHtmlKey(part)], "");
+      }}>{tr("標準の表示に戻す")}</button>}
+      <button type="button" className="primary" onClick={() => apply()}>{tr("プレビューに反映")}</button>
     </div>
   </div>;
 }

@@ -10,6 +10,7 @@ import { clients, createFolder, readDriveText, trashFile } from "./google.ts";
 import type { Shop, Store } from "./store.ts";
 import { managedImageIds } from "./image-references.ts";
 import { screenIds } from "../shared/screens.ts";
+import { partValue, replacePart } from "./pages.ts";
 
 // An allowlist: operational settings and all business records can never enter a version.
 const designSchema = z.object({
@@ -43,7 +44,7 @@ export function parseTargetKey(key: string): DesignTarget {
 /** The target's value in a design; undefined means the target does not exist (a page that was not created yet). */
 function targetValue(design: PublishedDesign, target: DesignTarget): unknown {
   if (target.kind === "screen") return design.screens?.[target.screen] ?? null;
-  if (target.kind === "part") return design[target.part];
+  if (target.kind === "part") return partValue(design, target.part);
   return design.pages.find(page => page.id === target.pageId);
 }
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("base64url").slice(0, 22);
@@ -103,7 +104,7 @@ export function restoreDesign(current: ShopConfig, design: PublishedDesign, targ
       const value = saved.screens?.[target.screen];
       if (value) screens[target.screen] = value; else delete screens[target.screen];
       next.screens = screens;
-    } else if (target.kind === "part") next[target.part] = saved[target.part] as never;
+    } else if (target.kind === "part") return shopSchema.parse(replacePart(next, target.part, partValue(saved, target.part)));
     else {
       const page = saved.pages.find(item => item.id === target.pageId);
       if (!page) throw new Error(tr("この版にはこのページがありません"));

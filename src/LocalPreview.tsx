@@ -13,6 +13,7 @@ import { ScreenDesignEditor, ThemeDesignEditor } from "./DesignEditor";
 import { screenIds, type ScreenId } from "../shared/screens";
 import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, type ReleaseScope, type ShopPage } from "../server/pages";
 import { FixtureEditor } from "./FixtureEditor";
+import { fixtureScope, fixturePostEntries, hasFixtureFields } from "./fixture-scope";
 import { VisualRequest } from "./VisualRequest";
 import { DesignVersionHistory } from "./DesignVersionHistory";
 import { regionOf } from "../shared/region";
@@ -20,6 +21,7 @@ import { shopSchema, planSummary, bookingStaff, type ShopConfig } from "../serve
 import { postKey, type PostCategory, type PublicPost } from "../server/post-domain";
 import { createRequestId } from "./request-id";
 import { articleKinds } from "../shared/article-features";
+import { standardTheme, themeHtmlKey } from "../shared/theme-editing";
 import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, syncPreviewArticleFeatures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
 
 type Snapshot = Pick<LocalDraft, "base" | "source" | "config"> & { lastPublishedPlanId?: string };
@@ -48,6 +50,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   }, []);
   const [screen, setScreen] = useState("reserve");
   const [penHost, setPenHost] = useState<HTMLSpanElement | null>(null);
+  const [historyHost, setHistoryHost] = useState<HTMLSpanElement | null>(null);
   const [visibility, setVisibility] = useState<Record<string, { header?: boolean; footer?: boolean }>>({});
   const [index, setIndex] = useState<EditorIndex>();
   const [statuses, setStatuses] = useState<Record<string, SyncStatus>>({});
@@ -61,6 +64,15 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   const [notice, setNotice] = useState("");
   const [saved, setSaved] = useState(false);
   const [review, setReview] = useState(false);
+  const releaseReview = useRef<HTMLDialogElement>(null);
+  const releaseHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const dialog = releaseReview.current;
+    if (review && dialog && !dialog.open) {
+      dialog.showModal();
+      releaseHeading.current?.focus();
+    } else if (!review && dialog?.open) dialog.close();
+  }, [review, !!draft]);
   const [pullReview, setPullReview] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   // While the pen shows the captured screen, the live preview below would duplicate it.
@@ -190,6 +202,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     if (version !== selectionVersion.current) return;
     if (currentStatus === "unfetched" || currentStatus === "remote") await fetchScope(target);
     if (version !== selectionVersion.current) return;
+    if (value !== screen || requestedArticle !== route.articleKey) setFixtureEditing(undefined);
     setScreen(value);
     if (currentStatus === "conflict") await compareConflict(target);
     setInvalid("");
@@ -197,7 +210,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       const page = latestDraft.current?.config.pages.find(p => p.id === value.slice(5)) || currentIndex?.pages.find(p=>p.id===value.slice(5));
       setPageEditing(undefined); setRoute({ pane: "reserve", pageSlug: page?.slug }); setVersion(v => v + 1); return;
     }
-    if (target.kind === "part") { setRoute({ pane: "reserve" }); setVersion(v => v + 1); return; }
+    if (target.kind === "part" || value === "theme") { setRoute({ pane: value === "theme" ? "about" : "reserve" }); setVersion(v => v + 1); return; }
     if (category === "blogs" || category === "announcements") {
       if (articleKey && article && !latestDraft.current?.fixtures.posts.some(post => post.category === category && postKey(post) === articleKey)) {
         const snapshot = await api<{ posts: PublicPost[] }>(`/api/shops/${shop.id}/publication-preview`);
@@ -228,7 +241,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     const selection=JSON.stringify([initialScreen,initialArticleKey]);
     if(entrySelected.current===selection)return;
     entrySelected.current=selection;
-    const screens=["part:header","part:footer","reserve","about","mine","contact",...articleKinds(draft.config).flatMap(category=>[category,`${category}:article`]),...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
+    const screens=["part:header","part:footer","theme","reserve","about","mine","contact",...articleKinds(draft.config).flatMap(category=>[category,`${category}:article`]),...index.pages.map(page=>`page:${page.id}`),...draft.config.pages.map(page=>`page:${page.id}`)];
     if(!screens.includes(initialScreen)){setError(tr("指定された画面が見つかりません。画面一覧から選んでください。"));return;}
     void run(async()=>choose(initialScreen,initialArticleKey,true));
   },[draft,index,initialScreen,initialArticleKey]);
@@ -339,7 +352,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     });
   }, [status, screen, index, busy, !!draft?.pending, !!conflict]);
   const screenPage = scope.kind === "page" ? allPages.find(p => p.id === scope.pageId) : undefined;
-  const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
+  const samples = draft ? fixtureScope(draft.config, screen, route.articleKey, draft.fixtures) : undefined;
+  const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("全体の枠") : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
   // The exported file that renders this screen, so the pen request names the screen even without marks.
   // Each screen restores only its own design; article screens have none of their own (use the whole-design history).
   const historyTarget = scope.kind === "page" ? `page:${scope.pageId}` : scope.kind === "part" ? `part:${scope.part}` : (screenIds as readonly string[]).includes(screen) ? `screen:${screen}` : undefined;
@@ -350,11 +364,12 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     <div className="editor-toolbar">
       <div><strong>{screenLabel}</strong>{summary.length > 0 && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? tr("変更あり") : tr("未保存")}</span>}</div>
       <div className="editor-tools"><span ref={setPenHost} />
-        {scope.kind !== "part" && <details ref={displayMenu} className="preview-display-menu"><summary>{tr("表示")}</summary><div>
-          <label><input type="checkbox" checked={visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />{tr("ヘッダーを表示")}</label>
-          <label><input type="checkbox" checked={visibility[screen]?.footer === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />{tr("フッターを表示")}</label>
+        {scope.kind !== "part" && <details ref={displayMenu} className="preview-display-menu"><summary><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 16h18" /></svg>{tr("表示")}</summary><div>
+          <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.header !== true : visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />{tr("ヘッダーを表示")}</label>
+          <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.footer !== true : visibility[screen]?.footer === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />{tr("フッターを表示")}</label>
           <p>{tr("この画面のプレビューだけに適用")}</p>
         </div></details>}
+        <span ref={setHistoryHost} />
       </div>
       {draft && (summary.length > 0 || draft.pending) && <div className="actions">
         <button className="primary" disabled={busy || !saved || !!invalid || !releaseConfig || !index || !status || status === "conflict" || status === "remote" || status === "unfetched" || !!conflict} onClick={() => setReview(true)}>{draft.pending ? tr("反映を再試行") : tr("反映する")}</button>
@@ -372,7 +387,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       }
       setError("");
     }} />}
-    {error && <p className="alert" role="alert">{error}</p>}
+    {error && !review && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice small" role="status">{notice}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
     {invalid && <p className="alert" role="alert">{invalid}{tr("（編集欄で確認してください）")}</p>}
     {!draft && <p className="panel">{busy ? tr("画面を開いています…") : tr("画面を読み込めませんでした。ページを再読み込みしてください。")}</p>}
@@ -399,7 +414,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       {conflict.proposed !== undefined && <div><h3>{tr("AIの結合案")}</h3><p>{conflict.explanation}</p><SyncPreview config={draft.config} value={conflict.proposed} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /><button className="primary" disabled={busy} onClick={() => void run(async () => resolveConflict("merged"))}>{tr("結合案をローカルに採用")}</button></div>}
     </section>}
     {draft && <>
-      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
@@ -409,7 +424,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         }
       }}>
         {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
-          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={visibility[screen]?.header !== false} hideFooter={visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
+          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={screen === "theme" ? visibility[screen]?.header === true : visibility[screen]?.header !== false} hideFooter={screen === "theme" ? visibility[screen]?.footer === true : visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
             const pageMatch = url.pathname.match(/^\/s\/local-preview\/pages\/([^/]+)$/);
@@ -422,8 +437,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     </>}    {draft && !conflict && <div className="panel editor-secondary">
       {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダー") : tr("フッター")}{tr("の内容を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
       {scope.kind === "shared" && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
-      {scope.kind === "shared" && <details key={`theme:${screen}`}><summary>{tr("ヘッダー・フッター・全体の枠の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={JSON.stringify(draft.config.appearance?.theme || null).length} config={draft.config} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
-      {scope.kind === "part" && <p className="small muted">{tr("ヘッダー・フッターのデザインを HTML で直すときは、予約などの画面を開き「ヘッダー・フッター・全体の枠の HTML を編集」を使います。")}</p>}
+      {scope.kind === "part" && <details key={`part-html:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダーの HTML を編集") : tr("フッターの HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`${scope.part}:${(draft.config.appearance?.theme || standardTheme)[themeHtmlKey(scope.part)]}`} part={scope.part} config={draft.config} shopId={shop.id} onChange={changeConfig} openFrame={() => void run(async () => choose("theme"))} /></fieldset></details>}
+      {screen === "theme" && <fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`body:${draft.config.appearance?.theme?.bodyHtml}:${draft.config.appearance?.theme?.css}`} part="body" config={draft.config} shopId={shop.id} onChange={changeConfig} /></fieldset>}
       {scope.kind === "page" && <details key={`page:${scope.pageId}`}><summary>{tr("このページの内容を編集")}</summary>
         {scope.kind === "page" && <>
           {!draft.source && <p className="notice">{tr("追加ページを公開する前に、予約画面などを選んでお店の共通設定を反映してください。")}</p>}
@@ -437,15 +452,18 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
           }}>{tr("削除を取り消す")}</button></p>}
         </>}
       </details>}
-        <details><summary>{tr("サンプルデータを編集")}</summary>
-          <p>{tr("お客様の名前・予約・記事を変更できます。ここでのデータと練習中の操作は本番に反映しません。")}</p>
-          <fieldset disabled={busy || !!draft.pending || !!conflict}><FixtureEditor config={draft.config} value={fixtureEditing || draft.fixtures} onChange={setFixtureEditing} /></fieldset>
+        {samples && hasFixtureFields(samples) && (!samples.articleBody || fixturePostEntries(draft.fixtures, samples).length > 0) && <details key={`fixtures:${screen}:${route.articleKey || ""}`}><summary>{tr("サンプルデータを編集")}</summary>
+          <p>{tr("この画面で使うサンプルだけを編集します。サンプルデータと練習中の操作は本番に反映しません。")}</p>
+          <fieldset disabled={busy || !!draft.pending || !!conflict}><FixtureEditor config={draft.config} value={fixtureEditing || draft.fixtures} onChange={setFixtureEditing} scope={samples} /></fieldset>
           <button disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
             const fixtures = fixturesSchema.parse(fixtureEditing || draft.fixtures);
-            if (fixtures.bookings.some(b => !bookingStaff(draft.config).some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !bookingStaff(draft.config).some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
-            save({ ...draft, fixtures }); setScreen("reserve"); setRoute({ pane: "reserve" }); setVersion(v => v + 1); setNotice(tr("サンプルデータを保存しました。"));
+            if (samples.bookings && fixtures.bookings.some(b => !bookingStaff(draft.config).some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !bookingStaff(draft.config).some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
+            const articleIndex = samples.articleBody ? fixturePostEntries(draft.fixtures, samples)[0]?.index : undefined;
+            save({ ...draft, fixtures });
+            await choose(screen, articleIndex === undefined ? route.articleKey : postKey(fixtures.posts[articleIndex]));
+            setNotice(tr("サンプルデータを保存しました。"));
           })}>{tr("サンプルをプレビューに反映")}</button>
-        </details>
+        </details>}
         {!!draft.backups?.length && <details><summary>{tr("競合解決前の控え")}</summary>{draft.backups.map((backup, i) => <p key={`${backup.at}-${i}`}>{backup.at} <button disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
           const config = replaceScope(draft.config, backup.scope, backup.localValue);
           const source = backup.baseline === null && backup.scope.kind === "shared" ? null : replaceScope(draft.source || draft.config, backup.scope, backup.baseline);
@@ -458,12 +476,16 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       <button disabled={busy} onClick={() => void run(async () => { const latest = await remoteValue(scope); await adopt(scope, latest, latest, true); setPullReview(false); setNotice(tr("この画面の変更を取り消しました。")); })}>{tr("この画面の変更を取り消す")}</button>
       <button disabled={busy} onClick={() => setPullReview(false)}>{tr("戻る")}</button>
     </div>}
-    {review && draft && <div className="panel" role="dialog" aria-modal="true" aria-label={tr("本番への反映内容")}>
-      <h3>{tr("本番への反映内容：")}{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || tr("ページ削除") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : tr("お店の共通設定")}</h3><ul>{summary.map(s => <li key={s}>{s}</li>)}</ul>
+    {draft && createPortal(<dialog ref={releaseReview} className="editor-release-dialog" aria-label={tr("本番への反映内容")} onClose={() => setReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
+      <h3 ref={releaseHeading} tabIndex={-1}>{tr("本番への反映内容：")}{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || tr("ページ削除") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("全体の枠") : tr("お店の共通設定")}</h3><ul>{summary.map(s => <li key={s}>{s}</li>)}</ul>
       <details><summary>{tr("設定の変更前と変更後")}</summary><div className="local-diff"><pre>{JSON.stringify(draft.source, null, 2)}</pre><pre>{JSON.stringify(draft.config, null, 2)}</pre></div></details>
       <p>{tr("選んだページ（または共通設定）だけを本番に反映します。他のページのローカル編集と、サンプルデータは含みません。")}</p>
+      {error && <p className="alert" role="alert">{error}</p>}
+      {busy && <p className="notice" role="status">{tr("本番に反映しています…このままお待ちください。")}</p>}
+      <div className="actions editor-release-actions">
       <button className="primary" disabled={busy || !saved} onClick={() => void run(release)}>{tr("この内容を本番に反映")}</button>
       <button disabled={busy} onClick={() => setReview(false)}>{tr("戻る")}</button>
-    </div>}
+      </div>
+    </dialog>, document.body)}
   </div>;
 }

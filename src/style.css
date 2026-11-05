@@ -1,3 +1,16 @@
+/* Important rules in the first layer also cover late-loaded editors and theme CSS.
+   Keep pinch zoom enabled; fix the small control text that triggers focus zoom. */
+@layer mobile-inputs {
+  @media (max-width: 760px), (hover: none) and (pointer: coarse) {
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"], [type="color"]),
+    textarea,
+    select,
+    [contenteditable]:not([contenteditable="false" i]) {
+      font-size: max(16px, 1em) !important;
+    }
+  }
+}
+
 :root {
   font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
   color: #283c35;
@@ -1790,6 +1803,19 @@ pre {
 .local-preview-screen { background: #fffdf8; border: 1px solid var(--line); overflow: hidden; border-radius: 14px; }
 .local-diff { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 .local-diff pre { max-height: 400px; overflow: auto; }
+.editor-release-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: #fffdf8; color: #283c35; }
+.editor-release-dialog::backdrop { background: #18392c80; }
+.editor-release-dialog h3 { margin: 0 0 16px; font-size: 20px; overflow-wrap: anywhere; }
+.editor-release-dialog h3:focus { outline: none; }
+.editor-release-dialog summary { cursor: pointer; font-weight: 600; }
+.editor-release-dialog .local-diff { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+.editor-release-dialog pre { min-width: 0; max-width: 100%; max-height: 240px; }
+.editor-release-actions { position: sticky; bottom: -24px; margin: 20px -24px -24px; padding: 16px 24px 24px; border-top: 1px solid var(--line); background: #fffdf8; }
+.editor-release-actions button { min-height: 44px; font-size: 14px; }
+@media (max-width: 600px) {
+  .editor-release-dialog { padding: 20px; }
+  .editor-release-actions { bottom: -20px; margin-inline: -20px; margin-bottom: -20px; padding: 16px 20px 20px; }
+}
 .screen-tree { max-height: 380px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 20px 0; }
 .screen-tree [role=group] { display: flex; flex-direction: column; border-left: 2px solid var(--line); margin: 10px 0 16px 8px; padding-left: 16px; gap: 6px; }
 .screen-tree button { text-align: left; justify-content: flex-start; }
@@ -1840,22 +1866,34 @@ pre {
 .site-footer-center { text-align: center; }
 .site-footer-left { text-align: left; }
 .chrome-editor label { display: block; margin: 14px 0; }
-.editor-toolbar { justify-content: flex-start; padding: 8px 0; gap: 8px 14px; font-size: 12px; }
-.editor-toolbar > div:first-child { display: flex; align-items: center; gap: 8px; }
+.editor-toolbar { justify-content: flex-start; padding: 12px 14px; gap: 10px 14px; font-size: 16px; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 8px #233d2706; }
+.editor-toolbar > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .editor-change-badge { padding: 2px 6px; border-radius: 5px; background: #fcf2d9; color: #78530f; font-size: 10px; }
 .editor-change-badge.unsaved { background: #fbe3df; color: #9d3025; }
-.editor-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.editor-toolbar button, .editor-toolbar summary { font-size: 11px; padding: 7px 10px; min-height: 32px; }
+.editor-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-left: auto; min-width: 0; }
+.editor-tools > span { display: contents; }
+.editor-toolbar button, .editor-toolbar summary { font-size: 14px; padding: 10px 14px; min-height: 44px; }
+.editor-action-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+.editor-toolbar .editor-pen-button { order: 1; gap: 8px; font-weight: 700; background: var(--green); border-color: var(--green); color: white; box-shadow: 0 2px 5px #254e3c24; }
+.editor-toolbar .editor-pen-button:hover { background: #376653; }
+.editor-toolbar .editor-pen-button.selected { box-shadow: 0 0 0 3px #c6dbc9; }
+.editor-tools .visual-edit-history { order: 3; }
 .editor-toolbar .actions { margin: 0; gap: 6px; }
-.local-preview .preview-display-menu { position: relative; margin: 0; }
-.preview-display-menu summary { list-style: none; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.local-preview .preview-display-menu { position: relative; order: 2; margin: 0; }
+.preview-display-menu summary { display: flex; align-items: center; justify-content: center; gap: 8px; list-style: none; cursor: pointer; font-weight: 700; color: var(--green); border: 1px solid #6e896d; border-radius: 8px; background: #eef3e8; }
+.preview-display-menu summary:hover, .preview-display-menu[open] summary { background: #e1ebd9; }
+.preview-display-menu summary:focus-visible { outline: 3px solid #6e9b78; outline-offset: 3px; }
 .preview-display-menu summary::after { content: ' ▾'; }
 .preview-display-menu summary::-webkit-details-marker { display: none; }
-.preview-display-menu > div { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; width: 228px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: white; box-shadow: 0 8px 22px #25332315; }
-.preview-display-menu label { display: flex; align-items: center; gap: 6px; margin: 8px 0; font-size: 12px; }
-.preview-display-menu p { color: #818979; font-size: 10px; margin: 12px 0 0; }
+.preview-display-menu > div { position: absolute; right: 0; top: calc(100% + 8px); z-index: 5; width: min(280px, calc(100vw - 64px)); padding: 12px 16px; border: 1px solid #a9bda2; border-radius: 10px; background: white; box-shadow: 0 8px 24px #25332326; }
+.preview-display-menu label { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 4px 0; font-size: 14px; }
+.preview-display-menu input[type="checkbox"] { width: 18px; height: 18px; }
+.preview-display-menu p { color: #59675d; font-size: 12px; margin: 10px 0 0; }
 @media (max-width: 760px) {
-  .editor-toolbar { gap: 8px; }
+  .editor-toolbar { gap: 12px; padding: 12px; }
+  .editor-toolbar > div:first-child, .editor-tools { width: 100%; }
+  .editor-tools { margin-left: 0; }
+  .editor-tools .preview-display-menu { margin-left: auto; }
   .editor-toolbar > .actions { width: 100%; }
 }
 
@@ -2526,7 +2564,7 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .visual-edit-history button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 7px 9px; white-space: nowrap; }
 .visual-edit-history > span { min-width: 30px; text-align: center; white-space: nowrap; }
 .visual-chat-view { justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-.editor-tools > span:has(.visual-edit-history) { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.editor-tools > span:has(.visual-edit-history) { display: contents; }
 .weekday-hours { margin: 18px 0; border: 1px solid #dce0d2; border-radius: 8px; padding: 16px; min-width: 0; }
 .weekday-hours-row { margin: 10px 0; }
 .weekday-hours-row > label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
