@@ -1,12 +1,14 @@
+Build and run your own booking site by talking to AI. Customers prepay with PayPal, cancellations are refunded automatically, and cancelled slots are offered again so customers can get more back.
+
 ## Inspiration
 
 A friend of mine is a nail artist, and the hair salon I go to is a small independent shop. Both rely on the industry's dominant booking platform, paying listing fees and booking commissions, but the platform does not offer prepayment at booking. When a customer does not show up, the shop loses the revenue and is still charged the booking commission unless it processes the cancellation on the platform. Worse, the platform's rigid layout leaves no room to express a shop's unique style or atmosphere.
 
 I've been on the other side, too. I once forgot an appointment, offered to pay for the missed slot, and was waved off with "don't worry about it"—leaving things awkward for both of us. The shop couldn't ask, and I couldn't pay.
 
-Sometimes, when I'm feeling unwell, I wish I could let someone else take my appointment and go on a different day. Asking the shop to reschedule at the last minute can feel awkward. If I cover a discount, the appointment becomes more appealing to someone else, giving the shop a better chance of filling the slot.
+Sometimes, when I'm feeling unwell, I wish I could let someone else take my appointment. Cancelling at the last minute can feel awkward. If I cover a discount, the appointment becomes more appealing to someone else, giving the shop a better chance of filling the slot.
 
-**gemihub** is my answer: a booking site a small shop truly owns, built and edited in its own words. Customers prepay with PayPal when they book, and cancellations are refunded automatically under the shop's policy—so the system, not the people, handles the awkward money conversation.
+**gemihub** is my answer: a booking site a small shop truly owns, built and edited in its own words. Customers prepay with PayPal when they book, and cancellations are refunded automatically under the shop's policy—so the system, not the people, handles the awkward money conversation. And when a customer has to cancel, the slot is offered again so everyone loses less.
 
 ## What it does
 
