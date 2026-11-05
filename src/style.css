@@ -2579,6 +2579,12 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .weekday-hours-row { margin: 10px 0; }
 .weekday-hours-row > label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
 .weekday-hours-row > .form-grid { margin-top: 8px; }
+.special-day-row.form-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; margin-bottom: 12px; }
+.special-day-row > .text-button { min-height: 44px; }
+@media (max-width: 760px) {
+  .special-day-row.form-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .special-day-row > :first-child { grid-column: 1 / -1; }
+}
 .menu-option-settings,.booking-options { min-width: 0; border: 1px solid #dce0d2; border-radius: 8px; padding: 16px; margin: 14px 0; }
 .booking-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; min-height: 44px; }
 .booking-option > input { width: 18px; min-height: 18px; flex: 0 0 18px; margin-top: 5px; }

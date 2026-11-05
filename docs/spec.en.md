@@ -278,6 +278,8 @@ Normal owner sign-in requests Calendar FreeBusy alongside Drive and Gmail, valid
 
 Allow weekday start/end overrides while retaining normal hours. Closures and holidays take precedence; duplicate weekdays and invalid time ranges are rejected. Availability, owner working hours, public pages, diagrams, and AI settings use the same schedule.
 
+Special opening days (date, start, end) cover exceptions such as opening on a public holiday that falls on a closed weekday or staying open late on one date. A special day opens the date even on a closed weekday and replaces the weekday and normal hours. Staff who handle the service take bookings during those hours regardless of their regular working days and hours. A substitute day off is a temporary closure; a date in both lists, duplicate dates and invalid ranges are rejected. Public pages, diagrams and AI settings show them too.
+
 Menus may be add-ons restricted to selected standalone services. A nonempty selection group permits at most one chosen option. Only eligible options appear in booking, and changing the base service clears the options. The server rejects standalone add-ons, invalid parents, duplicate options and duplicate groups. Combined prices use integer currency units; availability covers the full combined duration and requires staff qualified for every item. One booking stores the chosen IDs and immutable item names, prices and durations. PayPal consent, holds, capture, refunds, retry identities, notifications, customer history, JSON/CSV exports and offline previews retain the combined selection and total.
 
 ## Managed image delivery

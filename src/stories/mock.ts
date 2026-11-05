@@ -121,6 +121,7 @@ export type Scenario =
   | "menu-addons"
   | "manage-addons"
   | "weekday-hours"
+  | "special-days"
   | "calendar-connected"
   | "calendar-member"
   | "calendar-missing-staff"
@@ -188,7 +189,7 @@ export function scenarioProps(scenario: Scenario) {
           "local-editor": "try",
           "local-editor-pages": "try",
           "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "editor-local": "try", "page-builder": "build",
-          "manage-basic": "basic", "manage-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
+          "manage-basic": "basic", "manage-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "special-days": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
           bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
@@ -230,6 +231,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
     ];
   }
   if(scenario==="weekday-hours"){config.staff=[];config.ownerBooking=true;config.hours={start:"09:00",end:"19:00",closedWeekdays:[3],holidays:[],weekdayHours:[{day:2,start:"09:00",end:"21:00"},{day:5,start:"09:00",end:"21:00"}]};}
+  // Monday is the regular day off; a public holiday Monday opens and the Tuesday after closes instead.
+  if(scenario==="special-days"){config.staff=[];config.ownerBooking=true;config.hours={start:"10:00",end:"19:00",closedWeekdays:[1],holidays:["2027-01-12"],specialDays:[{date:"2027-01-11",start:"10:00",end:"18:00"},{date:"2026-12-24",start:"10:00",end:"22:00"}]};}
   if (scenario === "initial-theme") {
     config.appearance = { accent: "sage", layout: "standard", imageUrl: "", theme: exampleTheme, articles: { blogs: false, announcements: true } };
     config.pages = initialIntroductionPages(config, { staff: true, products: true }).pages;

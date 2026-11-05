@@ -4,7 +4,7 @@ import { GoogleMap } from "./GoogleMap";
 import { MenuImage } from "./MenuImage";
 import { intlLocale, listSeparator, tr } from "../shared/i18n";
 import { currencyOf, formatMoney, regionOf } from "../shared/region";
-import { bookingStaff, hoursText, type ShopConfig } from "../server/domain";
+import { bookingStaff, hoursText, specialDaysText, type ShopConfig } from "../server/domain";
 
 /** `imageSources` maps image ids to URLs for static pages; without it, images load through `imageBase`. */
 export function ShopAbout({ config: c, imageSources = {}, imageBase, menuImageBase = imageBase }: { config: ShopConfig; imageSources?: Record<string, string>; imageBase?: string; menuImageBase?: string }) {
@@ -15,7 +15,7 @@ export function ShopAbout({ config: c, imageSources = {}, imageBase, menuImageBa
   const staff = <div className="public-staff-list">{bookingStaff(c).map(person => <div key={person.id}>{image(person.imageId, person.name, "staff-photo")}<span>{person.name}</span></div>)}</div>;
   const access = <><p>{c.address}</p><GoogleMap config={c} /></>;
   const days = [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
-  const hours = <><p>{hoursText(c)}{tr(" / 定休日：")}{c.hours.closedWeekdays.map(day => days[day]).join(listSeparator())}</p>{!!c.hours.holidays.length && <p>{tr("臨時休業：")}{c.hours.holidays.join(listSeparator("、"))}</p>}</>;
+  const hours = <><p>{hoursText(c)}{tr(" / 定休日：")}{c.hours.closedWeekdays.map(day => days[day]).join(listSeparator())}</p>{!!c.hours.holidays.length && <p>{tr("臨時休業：")}{c.hours.holidays.join(listSeparator("、"))}</p>}{!!c.hours.specialDays?.length && <p>{tr("特別営業日：")}{specialDaysText(c)}</p>}</>;
   return <Presentation design={c.screens?.about} imageBase={imageBase} resolvedImages={imageSources} slots={{ menus, staff, access, hours }} fallback={<div className="panel about"><h2>{c.name}</h2><p>{c.description}</p><h3>{tr("メニュー")}</h3>{menus}<h3>{tr("スタッフ")}</h3>{staff}<h3>{tr("アクセス")}</h3>{access}<h3>{tr("営業時間")}</h3>{hours}</div>} />;
 }
 

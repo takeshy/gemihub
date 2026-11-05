@@ -30,7 +30,7 @@ import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
 import React, { useEffect, useState, useRef, useId } from "react";
 import { useApi } from "./api";
-import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
+import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import "./ManagementTypography.css";
@@ -654,6 +654,7 @@ export function ConfigSummary({ config: c }: { config: ShopConfig }) {
           <li>{tr("予約の時刻は")}{c.rules.interval}{tr("分ごとに選べます。")}</li>
           <li>{c.rules.payment?.enabled ? tr("予約時にPayPalでお支払い。{0}", policyText(c.rules.payment.refundTiers)) : tr("キャンセルは開始の{0}時間前までです。", c.rules.cancelHours)}</li>
           <li>{tr("臨時のお休み：")}{c.hours.holidays.join(listSeparator("、")) || tr("なし")}</li>
+          {!!c.hours.specialDays?.length && <li>{tr("特別営業日：")}{specialDaysText(c)}</li>}
         </ul>
       </details>
     </div>
@@ -980,6 +981,7 @@ export function ConfigEditor({
           }
         />
       </Field>
+      <SpecialDays hours={c.hours} onChange={specialDays => put("hours", { ...c.hours, specialDays })} />
       </>}
       {(!section || section === "rules") && <>
       <h3>{tr("予約のルール")}</h3>
@@ -1818,3 +1820,25 @@ export function PublicShop({
     </ShopRegionContext.Provider>
   );
 }
+
+/** Dates with their own hours: open on a holiday that falls on a closed weekday, or open late on one date. */
+function SpecialDays({ hours, onChange }: { hours: ShopConfig["hours"]; onChange: (value: NonNullable<ShopConfig["hours"]["specialDays"]>) => void }) {
+  const days = hours.specialDays || [];
+  const change = (index: number, value: Partial<(typeof days)[number]>) => onChange(days.map((day, i) => i === index ? { ...day, ...value } : day));
+  return <fieldset className="weekday-hours special-days"><legend>{tr("特別営業日")}</legend>
+    <p className="small muted">{tr("祝日だけ定休日でも営業する、特定の日だけ夜遅くまで開ける、など日付ごとの営業時間です。定休日でもこの日は営業し、スタッフ全員がこの時間で予約を受けます。かわりに休む日は臨時休業日に入れてください。")}</p>
+    {days.map((day, index) => <div className="form-grid special-day-row" key={index}>
+      <Field label={tr("日付")}><DateInput aria-label={tr("日付")} required value={day.date} onValueChange={date => change(index, { date })} /></Field>
+      <Field label={tr("開店")}><input type="time" required value={day.start} onChange={event => change(index, { start: event.target.value })} /></Field>
+      <Field label={tr("閉店")}><input type="time" required value={day.end} onChange={event => change(index, { end: event.target.value })} /></Field>
+      <button type="button" className="text-button" aria-label={tr("{0} の特別営業日を削除", day.date || tr("日付未入力"))} onClick={() => onChange(days.filter((_, i) => i !== index))}>{tr("削除")}</button>
+    </div>)}
+    <button type="button" disabled={days.length >= 100} onClick={() => onChange([...days, { date: nextFreeDate(days.map(day => day.date)), start: hours.start, end: hours.end }])}>{tr("特別営業日を追加")}</button>
+  </fieldset>;
+}
+const nextFreeDate = (taken: string[]) => {
+  for (let day = 1; ; day++) {
+    const date = new Date(Date.now() + day * 86400000).toISOString().slice(0, 10);
+    if (!taken.includes(date)) return date;
+  }
+};

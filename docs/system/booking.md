@@ -23,7 +23,7 @@ Customers see and cancel their own bookings on My page.
 A slot is offered only when all of the following hold:
 
 - The menu is active (`menus[].active`).
-- The date is not a closed weekday (`hours.closedWeekdays`, 0 = Sunday) or a listed holiday (`hours.holidays`).
+- The date is not a listed holiday (`hours.holidays`), and is not a closed weekday (`hours.closedWeekdays`, 0 = Sunday) unless it is a special opening day (`hours.specialDays`).
 - The date is within `rules.advanceDays` days from today. Same-day booking requires `rules.sameDay: true`.
 - The start is at least `rules.leadMinutes` minutes from now.
 - Start times step by `rules.interval` minutes from `hours.start`, and the menu (`menus[].duration`) must finish by `hours.end`.
@@ -32,7 +32,9 @@ A slot is offered only when all of the following hold:
 
 Dates, weekdays, holidays, opening hours and staff shifts use the shop's `region.timeZone`; absent settings mean Asia/Tokyo. The booking horizon counts local calendar days. Calendar FreeBusy queries cover local midnight to the following local midnight (23 or 25 hours on US summer-time transitions). Durations and lead times are elapsed minutes. Nonexistent spring-forward times are not offered; a repeated fall-back start uses its earlier occurrence, and appointment ends must stay within opening hours and staff shifts. ISO booking records remain UTC.
 
-`hours.weekdayHours` overrides the normal start/end for specific weekdays; regular closed days and holidays still take precedence. By default, the owner handles every service during those actual daily opening hours until owner working conditions are configured. New shops retain the owner's availability when additional staff are added later; legacy explicit staff schedules remain supported.
+`hours.weekdayHours` overrides the normal start/end for specific weekdays; regular closed days and holidays still take precedence.
+
+`hours.specialDays` lists dates with their own `start`–`end`, such as a public holiday opened on a regular closed weekday or a late night on one date. A special day opens the date even on a closed weekday and its hours replace the weekday and normal hours. On a special day, every staff member who handles the menu is available for those hours; their regular `weekdays` and `start`–`end` are not checked. A substitute day off is entered as a holiday. A date cannot be both a holiday and a special day. By default, the owner handles every service during those actual daily opening hours until owner working conditions are configured. New shops retain the owner's availability when additional staff are added later; legacy explicit staff schedules remain supported.
 
 In owner-enabled shops, Staff and shifts includes an Owner information card for the owner's name, photo, working days, hours and services. Saving it retains a `staff` row with the reserved ID `owner`; it is a profile for the existing owner booking resource, so it never adds a second booking resource or a staff login. Owner rows with `customAvailability: true` use their stored `weekdays`, `start`, `end` and `menuIds` just like other staff, intersected with shop opening hours and closures. Earlier name/photo-only profiles omit this marker and keep all services and all opening hours, including weekday overrides. Editing working conditions, either manually or through settings AI, opts into configured availability. Name/photo changes alone preserve the previous availability mode. Customer-facing names and photos use the saved profile. The owner's Google sign-in supplies Calendar consent; no separate staff-account or Calendar setup is required.
 

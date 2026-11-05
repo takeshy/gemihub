@@ -18,7 +18,7 @@ What the settings in `spec.md` mean and how changes are requested, approved, pub
 - `notificationEmail`: where the shop receives booking and inquiry emails.
 - `menus[]`: `id`, `name`, `duration` (minutes), `price` (major currency units: whole yen for JP, dollars with up to two decimals for US), `active`, optional image.
 - `staff[]`: `name`, `menuIds` they handle, `weekdays` (0 = Sunday), `start`, `end`, optional photo.
-- `hours`: `start`, `end`, `closedWeekdays`, `holidays` (dates).
+- `hours`: `start`, `end`, `closedWeekdays`, `holidays` (dates), `weekdayHours` (per-weekday hours) and `specialDays` (dates with their own hours that open even on a closed weekday).
 - `rules`: `interval`, `advanceDays`, `leadMinutes`, `sameDay`, `cancelHours`, and `payment` (`enabled`, `refundTiers`).
 - `pages[]`, `header`, `footer`, `appearance`: customer-facing pages and design.
 - `pages[]`: custom page bodies are checked HTML fragments, and `css` applies only to that page (layout, decoration and animation). Scripts, event attributes, forms, buttons, embedded documents, external CSS and CSS `url()` are rejected. Blog posts and announcements are Markdown.
