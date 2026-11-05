@@ -5,13 +5,13 @@ import { sample, type Booking } from "../server/domain.ts";
 import { defaultRefundTiers } from "../server/payment-domain.ts";
 import type { Checkout } from "../server/payments.ts";
 import type { PaymentGateway, PayPalOrder, PayPalRefund, PayPalTransaction } from "../server/paypal.ts";
-import { paypalOps } from "../server/paypal-ops.ts";
+import { paypalOps, relevantProposals } from "../server/paypal-ops.ts";
 
 process.env.DEMO_MODE = "true";
 
 const money = (value: number) => ({ currency_code: "JPY", value: String(value) });
 
-function fakeGateway(refundStatusValue: "PENDING" | "COMPLETED" = "PENDING"): PaymentGateway & { reads: string[] } {
+function fakeGateway(refundStatusValue: "PENDING" | "COMPLETED" = "PENDING", captureStatusValue = "COMPLETED"): PaymentGateway & { reads: string[] } {
   const reads: string[] = [];
   const order: PayPalOrder = {
     id: "ORDER1", status: "COMPLETED",
@@ -30,7 +30,7 @@ function fakeGateway(refundStatusValue: "PENDING" | "COMPLETED" = "PENDING"): Pa
     async capture() { throw new Error("write is not available"); },
     async refund() { throw new Error("write is not available"); },
     async refundStatus(id) { reads.push(`refund:${id}`); return { id, status: refundStatusValue, amount: money(4950) } satisfies PayPalRefund; },
-    async captureStatus(id) { reads.push(`capture:${id}`); return { id, status: "COMPLETED", amount: money(4950) }; },
+    async captureStatus(id) { reads.push(`capture:${id}`); return { id, status: captureStatusValue, amount: money(4950) }; },
     async transactions() { reads.push("transactions"); return [transaction("TX1", "ORDER1", "ORDER"), transaction("TX2", "CAP1", "CAPTURE"), transaction("TX3", "REF1", "REFUND"), transaction("TX4", "OTHER", "ORDER")]; },
   };
 }
@@ -65,7 +65,7 @@ async function setup() {
 test("PayPal tools are read-only and only accept IDs in the shop's own ledger", async () => {
   const { store, shop } = await setup();
   const gateway = fakeGateway();
-  const ops = paypalOps({ store, gateway, reconcile: async () => {}, closeTransfer: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+  const ops = paypalOps({ store, gateway, reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
   const tools = await ops.toolsFor(shop);
   assert.ok(tools);
   assert.deepEqual(tools!.tools.map(tool => tool.name).sort(), ["ledger_find_booking_payments", "paypal_get_capture", "paypal_get_order", "paypal_get_refund", "paypal_list_transactions"]);
@@ -89,7 +89,7 @@ test("alerts are detected from the ledger and the same unchanged item is not not
   let notices = 0;
   const payloads: string[] = [];
   const ops = paypalOps({
-    store, gateway: fakeGateway("COMPLETED"), reconcile: async () => {}, closeTransfer: async () => {}, recordHistory: async () => {},
+    store, gateway: fakeGateway("COMPLETED"), reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {},
     notifyOwner: async (_shop, subject, body) => { notices++; payloads.push(`${subject}\n${body}`); },
     appOrigin: () => "https://shop.invalid",
   });
@@ -113,6 +113,7 @@ test("a proposal executes through the existing reconcile path and expires when t
     store, gateway: fakeGateway(),
     reconcile: async () => { reconciled++; },
     closeTransfer: async () => {},
+    sync: async () => {},
     recordHistory: async () => { histories++; },
     appOrigin: () => "https://shop.invalid",
   });
@@ -129,4 +130,73 @@ test("a proposal executes through the existing reconcile path and expires when t
   const stale = await ops.execute(shop, { proposalId: item!.proposal!.id, alertId: item!.id, fingerprint: item!.fingerprint }, "owner@example.com");
   assert.equal(stale.ok, false);
   assert.match(stale.error, /状態が変わっています/);
+});
+
+test("ledger amounts reach the model in the same major units as PayPal, without customer email", async () => {
+  const { store, shop, booking, checkout } = await setup();
+  booking.payment!.currency = "USD";
+  booking.payment!.amount = 4950;
+  booking.payment!.cancellation!.amount = 4950;
+  checkout.booking = booking;
+  await store.put("checkout", checkout.id, checkout);
+  const ops = paypalOps({ store, gateway: fakeGateway(), reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+  const tools = await ops.toolsFor(shop);
+  const ledger = (await tools!.invoke("ledger_find_booking_payments", { customer: "alice@example.com" })).result as {
+    totals: { currency: string; payment: number; refund: number }[]; rows: { amount: number; name: string; refund: { amount: number } }[];
+  };
+  assert.equal(ledger.rows[0].amount, 49.5, "$49.50 is 49.5, not 4950 cents");
+  assert.equal(ledger.rows[0].refund.amount, 49.5);
+  assert.deepEqual(ledger.totals, [{ currency: "USD", payment: 49.5, refund: 49.5 }]);
+  assert.equal(ledger.rows[0].name, "Alice");
+  assert.ok(!JSON.stringify(ledger).includes("alice@example.com"), "customer email is matched on the server but never returned");
+  const transactions = (await tools!.invoke("paypal_list_transactions", { from: "2026-11-01T00:00:00Z", to: "2026-11-05T00:00:00Z", type: "all" })).result as { totals: { currency: string; refund: number }[] };
+  assert.ok(transactions.totals.every(total => total.refund >= 0), "refund totals are positive");
+});
+
+test("a refunded capture is the expected PayPal state, not a mismatch", async () => {
+  const { store, shop, checkout } = await setup();
+  checkout.booking.payment!.cancellation!.status = "completed";
+  await store.put("checkout", checkout.id, checkout);
+  for (const status of ["REFUNDED", "PARTIALLY_REFUNDED"]) {
+    const ops = paypalOps({ store, gateway: fakeGateway("COMPLETED", status), reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+    assert.deepEqual((await ops.check(shop, { force: true })).items, [], status);
+  }
+  const ops = paypalOps({ store, gateway: fakeGateway("COMPLETED", "REVERSED"), reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+  assert.ok((await ops.check(shop, { force: true })).items.some(item => item.kind === "state_mismatch" && item.paypalKind === "capture"));
+});
+
+test("live PayPal reads skip settled old payments and a ledger-only check keeps earlier mismatches", async () => {
+  const { store, shop, checkout } = await setup();
+  const gateway = fakeGateway("COMPLETED", "REVERSED");
+  const ops = paypalOps({ store, gateway, reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+  const first = await ops.check(shop, { force: true });
+  assert.ok(first.items.some(item => item.kind === "state_mismatch"));
+  gateway.reads.length = 0;
+  const ledgerOnly = await ops.check(shop, { force: true, live: "none" });
+  assert.deepEqual(gateway.reads, [], "a consult question does not read PayPal for every booking");
+  assert.ok(ledgerOnly.items.some(item => item.kind === "state_mismatch"), "earlier live findings are kept");
+  const old = new Date(Date.now() - 30 * 86400000).toISOString();
+  checkout.createdAt = Date.now() - 30 * 86400000;
+  Object.assign(checkout.booking.payment!.cancellation!, { status: "completed", at: old, attemptedAt: old });
+  await store.put("checkout", checkout.id, checkout);
+  gateway.reads.length = 0;
+  await ops.check(shop, { force: true });
+  assert.deepEqual(gateway.reads, [], "settled payments older than the window are not re-read");
+});
+
+test("manual review without a refund ID has no proposal, and consult proposals follow the named booking", async () => {
+  const { store, shop, checkout } = await setup();
+  Object.assign(checkout.booking.payment!.cancellation!, { status: "manual_review", refundId: undefined });
+  await store.put("checkout", checkout.id, checkout);
+  const ops = paypalOps({ store, gateway: fakeGateway(), reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+  const state = await ops.check(shop, { force: true });
+  const item = state.items.find(value => value.kind === "manual_review");
+  assert.ok(item && !item.proposal, "nothing can be read back from PayPal without a refund ID");
+  const proposal = (id: string, bookingId: string, paypalId: string) => ({
+    id, kind: "refund_stalled" as const, severity: "medium" as const, bookingId, paypalId, target: id, fingerprint: id,
+    proposal: { id, operation: "retry_refund" as const, alertId: id, bookingId, target: id, expected: "", fingerprint: id },
+  });
+  const items = [proposal("p1", "booking-aaaaaaaa", "REFUND-AAAA"), proposal("p2", "booking-bbbbbbbb", "REFUND-BBBB")];
+  assert.deepEqual(relevantProposals(items, ["What about REFUND-BBBB?"]).map(value => value.id), ["p2"]);
+  assert.deepEqual(relevantProposals(items, ["Anything stuck?"]).map(value => value.id), ["p1", "p2"]);
 });

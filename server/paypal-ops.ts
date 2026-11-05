@@ -1,11 +1,11 @@
 import { tr } from "../shared/i18n.ts";
 import { createHash } from "node:crypto";
-import { currencyOf, dateIn, formatMinor, fromMinor, regionOf, type Currency } from "../shared/region.ts";
+import { currencyOf, dateIn, formatMinor, fromMinor, regionOf, toMinor, type Currency } from "../shared/region.ts";
 import { requestLocale } from "./i18n.ts";
 import type { ToolDeclaration } from "./llm.ts";
 import type { Source } from "./assistant.ts";
 import type { PaymentGateway } from "./paypal.ts";
-import type { Store, Shop } from "./store.ts";
+import { bookingLockKey, type Store, type Shop } from "./store.ts";
 import type { Checkout } from "./payments.ts";
 import type { Booking } from "./domain.ts";
 import { buyerBusy, type Transfer } from "./transfers.ts";
@@ -15,7 +15,7 @@ import { z } from "zod";
 // existing payment/transfer services, behind an owner approval of a server-built proposal.
 
 export type PayPalSeverity = "high" | "medium" | "low";
-export type PayPalAlertKind = "refund_stalled" | "awaiting_funds" | "manual_review" | "capture_stalled" | "state_mismatch" | "unsold_slot" | "awaiting_approval";
+export type PayPalAlertKind = "refund_stalled" | "awaiting_funds" | "manual_review" | "capture_stalled" | "state_mismatch" | "unsold_slot";
 export type PayPalProposalOperation = "retry_refund" | "resync" | "complete_manual_review" | "close_transfer";
 export type PayPalProposal = {
   id: string;
@@ -63,6 +63,8 @@ export type PayPalOpsOptions = {
   /** Reconcile this shop's payments and transfers. The caller must not already hold the booking lock. */
   reconcile: (shopId: string) => Promise<void>;
   closeTransfer: (shopId: string, transferId: string) => Promise<void>;
+  /** The payment service's own ledger sync (booking save, confirmation, owner/customer notices). */
+  sync: (checkout: Checkout) => Promise<void>;
   recordHistory: (shopId: string, entry: Shop["history"][number]) => Promise<void>;
   notifyOwner?: (shop: Shop, subject: string, body: string) => Promise<void>;
   summarize?: (items: PayPalAlertItem[], locale: "ja" | "en") => Promise<string | undefined>;
@@ -74,7 +76,9 @@ type LedgerRef = { kind: RefKind; id: string; bookingId: string; transferId?: st
 type LedgerEntry = {
   bookingId: string;
   start: string;
+  /** Used only for server-side lookups; never handed to the model. */
   customer: string;
+  name: string;
   amount: number;
   currency: Currency;
   environment: string;
@@ -86,6 +90,7 @@ type LedgerEntry = {
 };
 type Ledger = { checkouts: Checkout[]; entries: LedgerEntry[]; refs: Map<string, LedgerRef> };
 
+const isCurrency = (value: string | undefined): value is Currency => value === "JPY" || value === "USD";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex").slice(0, 24);
 const hours = (from: string | number | undefined, now: number) => {
   const at = typeof from === "number" ? from : Date.parse(from || "");
@@ -99,12 +104,11 @@ const captureStallMinutes = () => {
   const value = Number(process.env.PAYPAL_CAPTURE_STALL_MINUTES || 15);
   return Number.isFinite(value) && value >= 0 ? value : 15;
 };
-const waitingApprovalMinutes = () => {
-  const value = Number(process.env.PAYPAL_APPROVAL_WAIT_MINUTES || 30);
-  return Number.isFinite(value) && value >= 0 ? value : 30;
-};
 const unsoldWarningMinutes = 120;
 const ledgerLimit = 50;
+/** Live PayPal verification covers open refunds and payments active in this window, newest first. */
+const liveWindowMs = 7 * 86400000;
+const liveLimit = 30;
 const checkIntervalMs = () => {
   const value = Number(process.env.PAYPAL_ALERT_INTERVAL_MINUTES || 60);
   return (Number.isFinite(value) && value > 0 ? value : 60) * 60000;
@@ -141,6 +145,7 @@ async function readLedger(store: Store, shop: Shop): Promise<Ledger> {
       bookingId: c.booking.id,
       start: c.booking.start,
       customer: c.customer,
+      name: c.booking.name || "",
       amount: p?.amount ?? c.booking.price,
       currency: p?.currency ?? c.currency ?? currencyOf(regionOf(shop.published)),
       environment: p?.environment ?? c.environment,
@@ -228,14 +233,15 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
       const range = period(input.from, input.to);
       const rows = await gateway.transactions({ ...range, type: input.type });
       const mine = rows.filter(row => [row.transaction_id, row.paypal_reference_id].some(id => !!id && ownedIds.has(id)));
-      const totals = new Map<string, { payment: number; refund: number }>();
+      // Sum in minor units to avoid float drift; PayPal reports refunds as negative amounts.
+      const totals = new Map<Currency, { payment: number; refund: number }>();
       for (const row of mine) {
         const currency = row.transaction_amount?.currency_code;
         const value = Number(row.transaction_amount?.value || 0);
-        if (!currency || !Number.isFinite(value)) continue;
+        if (!isCurrency(currency) || !Number.isFinite(value)) continue;
         const entry = totals.get(currency) || { payment: 0, refund: 0 };
-        const refund = row.paypal_reference_id_type?.toUpperCase() === "REFUND" || /REFUND|REVERSAL/.test(row.transaction_event_code || "");
-        if (refund) entry.refund += value; else entry.payment += value;
+        const refund = value < 0 || row.paypal_reference_id_type?.toUpperCase() === "REFUND" || /REFUND|REVERSAL/.test(row.transaction_event_code || "");
+        if (refund) entry.refund += toMinor(Math.abs(value), currency); else entry.payment += toMinor(value, currency);
         totals.set(currency, entry);
       }
       const source = keep(`paypal:transactions:${range.start.slice(0, 10)}:${range.end.slice(0, 10)}`, tr("PayPal取引（{0}〜{1}）", range.start.slice(0, 10), range.end.slice(0, 10)));
@@ -247,7 +253,7 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
         status: row.transaction_status,
         ...(row.paypal_reference_id ? { referenceId: row.paypal_reference_id } : {}),
       }));
-      return { result: { from: range.start, to: range.end, total: mine.length, totals: [...totals].map(([currency, value]) => ({ currency, ...value })), transactions }, source };
+      return { result: { from: range.start, to: range.end, total: mine.length, totals: [...totals].map(([currency, value]) => ({ currency, payment: fromMinor(value.payment, currency), refund: fromMinor(value.refund, currency) })), transactions }, source };
     }
     if (name === "ledger_find_booking_payments") {
       const input = lookup.parse(args || {});
@@ -258,14 +264,14 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
         if (input.bookingId && entry.bookingId !== input.bookingId) return false;
         if (input.customer) {
           const needle = input.customer.toLowerCase();
-          if (!entry.customer.toLowerCase().includes(needle) && !entry.bookingId.toLowerCase().includes(needle)) return false;
+          if (![entry.customer, entry.name, entry.bookingId].some(value => value.toLowerCase().includes(needle))) return false;
         }
         const at = Date.parse(entry.start);
         if (from !== undefined && Number.isFinite(from) && at < from) return false;
         if (to !== undefined && Number.isFinite(to) && at > to) return false;
         return true;
       });
-      const totals = new Map<string, { payment: number; refund: number }>();
+      const totals = new Map<Currency, { payment: number; refund: number }>();
       for (const entry of rows) {
         const value = totals.get(entry.currency) || { payment: 0, refund: 0 };
         value.payment += entry.amount;
@@ -274,9 +280,14 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
         totals.set(entry.currency, value);
       }
       const source = keep("sheet:paypal", tr("PayPalの台帳"));
-      return { result: { total: rows.length, totals: [...totals].map(([currency, value]) => ({ currency, ...value })), rows: rows.slice(0, ledgerLimit).map(entry => ({
-        bookingId: entry.bookingId, start: entry.start, customer: entry.customer, amount: entry.amount, currency: entry.currency,
-        environment: entry.environment, orderId: entry.orderId, captureId: entry.captureId, refund: entry.refund, transfers: entry.transfers,
+      // Ledger amounts are minor units; hand the model the same major-unit values the PayPal tools return.
+      const major = (value: number, currency: Currency) => fromMinor(value, currency);
+      const refundView = (refund: NonNullable<LedgerEntry["refund"]>, currency: Currency) => ({ ...(refund.id ? { id: refund.id } : {}), amount: major(refund.amount, currency), status: refund.status });
+      return { result: { total: rows.length, totals: [...totals].map(([currency, value]) => ({ currency, payment: major(value.payment, currency), refund: major(value.refund, currency) })), rows: rows.slice(0, ledgerLimit).map(entry => ({
+        bookingId: entry.bookingId, start: entry.start, name: entry.name, amount: major(entry.amount, entry.currency), currency: entry.currency,
+        environment: entry.environment, orderId: entry.orderId, captureId: entry.captureId,
+        ...(entry.refund ? { refund: refundView(entry.refund, entry.currency) } : {}),
+        transfers: entry.transfers.map(transfer => ({ id: transfer.id, at: transfer.at, currency: transfer.currency, refund: refundView(transfer.refund, transfer.currency) })),
       })), truncated: rows.length > ledgerLimit }, source };
     }
     throw new Error(tr("このPayPalツールは読み取り専用です"));
@@ -291,7 +302,6 @@ const kindLabel = (kind: PayPalAlertKind) => ({
   capture_stalled: tr("決済が未確定"),
   state_mismatch: tr("台帳とPayPalの状態不一致"),
   unsold_slot: tr("割引枠の売れ残り"),
-  awaiting_approval: tr("支払い手続きの放置"),
 } satisfies Record<PayPalAlertKind, string>)[kind];
 const severityLabel = (severity: PayPalSeverity) => ({ high: tr("緊急"), medium: tr("注意"), low: tr("確認") } satisfies Record<PayPalSeverity, string>)[severity];
 const operationLabel = (operation: PayPalProposalOperation) => ({
@@ -340,7 +350,13 @@ function makeItem(input: {
   return item;
 }
 
-async function detect(store: Store, gateway: PaymentGateway, shop: Shop, now = new Date()): Promise<PayPalAlertItem[]> {
+/**
+ * Which bookings get live PayPal reads: "recent" (open refunds and payments active in the last 7 days,
+ * capped), "none" (ledger rules only), or one booking ID (proposal verification).
+ */
+export type LiveScope = "recent" | "none" | { bookingId: string };
+
+async function detect(store: Store, gateway: PaymentGateway, shop: Shop, now = new Date(), live: LiveScope = "recent"): Promise<PayPalAlertItem[]> {
   const config = shop.published;
   if (!config) return [];
   const currency = currencyOf(regionOf(config));
@@ -359,8 +375,10 @@ async function detect(store: Store, gateway: PaymentGateway, shop: Shop, now = n
     if (input.refund.status === "manual_review") add(makeItem({
       kind: "manual_review", severity: "high", bookingId: input.booking.id, bookingLabel: label(input.booking),
       amount, currency: input.currency, ...(paypalId ? { paypalId, paypalKind: "refund" } : {}), since: input.since, ...(elapsed !== undefined ? { elapsedHours: elapsed } : {}),
-      status: input.refund.status, operation: "complete_manual_review", targetKind: "refund", targetId: input.targetId || paypalId,
-      target: input.target, expected: tr("PayPalで返金が完了していることを確認し、台帳を完了にします。"),
+      status: input.refund.status,
+      // Without a refund ID there is nothing to read back from PayPal; the owner checks the PayPal dashboard.
+      ...(paypalId ? { operation: "complete_manual_review" as const, targetKind: "refund" as const, targetId: paypalId } : {}),
+      target: input.target, expected: paypalId ? tr("PayPalで返金が完了していることを確認し、台帳を完了にします。") : tr("PayPalの管理画面で返金の有無を確認してください。"),
     }));
     else if (input.refund.status === "awaiting_funds") add(makeItem({
       kind: "awaiting_funds", severity: "medium", bookingId: input.booking.id, bookingLabel: label(input.booking),
@@ -400,15 +418,6 @@ async function detect(store: Store, gateway: PaymentGateway, shop: Shop, now = n
         target: tr("決済（予約 {0}）", booking.id.slice(0, 8)), expected: tr("PayPalから決済状態を取り直して台帳を更新します。"),
       }));
     }
-    if (c.phase === "awaiting_approval" && c.expires > current) {
-      const elapsed = hours(c.createdAt, current);
-      if (elapsed !== undefined && elapsed * 60 >= waitingApprovalMinutes()) add(makeItem({
-        kind: "awaiting_approval", severity: "low", bookingId: booking.id, bookingLabel: label(booking),
-        amount: booking.price, currency: c.currency || currency, ...(c.orderId ? { paypalId: c.orderId, paypalKind: "order" } : {}),
-        since: new Date(c.createdAt).toISOString(), elapsedHours: elapsed, status: c.phase,
-        target: tr("支払い手続き（予約 {0}）", booking.id.slice(0, 8)), expected: tr("お客様のPayPal画面での承認待ちです。"),
-      }));
-    }
   }
 
   for (const t of (await store.list<Transfer>("transfer")).filter(t => t.shopId === shop.id && t.phase === "listed")) {
@@ -421,28 +430,41 @@ async function detect(store: Store, gateway: PaymentGateway, shop: Shop, now = n
     }));
   }
 
-  // Live PayPal reads are advisory: a failed lookup is never treated as a mismatch.
-  for (const c of ledger.checkouts) {
-    if (!c.booking?.id) continue;
+  // Live PayPal reads are advisory: a failed lookup is never treated as a mismatch. They are bounded so
+  // a shop with a long payment history does not turn every check into hundreds of PayPal calls.
+  const settled = ["completed", "not_required"];
+  const lastActivity = (c: Checkout) => Math.max(c.createdAt || 0, ...[c.booking.payment?.cancellation?.attemptedAt, c.booking.payment?.cancellation?.at,
+    ...(c.booking.transfers || []).flatMap(entry => [entry.at, entry.refund.attemptedAt])].map(value => Date.parse(value || "")).filter(Number.isFinite));
+  const open = (c: Checkout) => {
     const p = c.booking.payment;
-    if (!p) continue;
+    return !!p?.cancellation && !settled.includes(p.cancellation.status) || (c.booking.transfers || []).some(entry => !settled.includes(entry.refund.status));
+  };
+  const liveTargets = live === "none" ? [] : ledger.checkouts
+    .filter(c => c.booking?.id && c.booking.payment && (typeof live === "object" ? c.booking.id === live.bookingId : open(c) || lastActivity(c) >= current - liveWindowMs))
+    .sort((a, b) => Number(open(b)) - Number(open(a)) || lastActivity(b) - lastActivity(a))
+    .slice(0, liveLimit);
+  for (const c of liveTargets) {
+    const p = c.booking.payment!;
     try {
       if (p.cancellation?.refundId) {
-        const live = await gateway.refundStatus(p.cancellation.refundId);
-        if (!refundMatches(p.cancellation.status, live.status)) add(makeItem({
+        const remote = await gateway.refundStatus(p.cancellation.refundId);
+        if (!refundMatches(p.cancellation.status, remote.status)) add(makeItem({
           kind: "state_mismatch", severity: "high", bookingId: c.booking.id, bookingLabel: label(c.booking),
           amount: p.cancellation.amount, currency: p.currency, paypalId: p.cancellation.refundId, paypalKind: "refund",
-          status: `${p.cancellation.status}:${live.status}`, operation: "resync", targetKind: "refund", targetId: p.cancellation.refundId,
+          status: `${p.cancellation.status}:${remote.status}`, operation: "resync", targetKind: "refund", targetId: p.cancellation.refundId,
           target: tr("返金 {0}", p.cancellation.refundId), expected: tr("PayPalの返金状態を台帳に反映します。"),
         }));
       }
       if (p.captureId && gateway.captureStatus) {
-        const live = await gateway.captureStatus(p.captureId);
-        const sameAmount = live.amount.currency_code === p.currency && Number(live.amount.value) === fromMinor(p.amount, p.currency);
-        if (live.status !== "COMPLETED" || !sameAmount) add(makeItem({
+        const remote = await gateway.captureStatus(p.captureId);
+        const sameAmount = remote.amount.currency_code === p.currency && Number(remote.amount.value) === fromMinor(p.amount, p.currency);
+        // A capture we refunded reads back as REFUNDED / PARTIALLY_REFUNDED; that is the expected state.
+        const refunded = !!p.cancellation?.refundId || (c.booking.transfers || []).some(entry => !!entry.refund.refundId);
+        const expected = remote.status === "COMPLETED" || refunded && ["REFUNDED", "PARTIALLY_REFUNDED"].includes(remote.status);
+        if (!expected || !sameAmount) add(makeItem({
           kind: "state_mismatch", severity: "high", bookingId: c.booking.id, bookingLabel: label(c.booking),
           amount: p.amount, currency: p.currency, paypalId: p.captureId, paypalKind: "capture",
-          status: `${c.phase}:${live.status}`, operation: "resync", targetKind: "capture", targetId: p.captureId,
+          status: `${c.phase}:${remote.status}`, operation: "resync", targetKind: "capture", targetId: p.captureId,
           target: tr("決済 {0}", p.captureId), expected: tr("PayPalの決済状態を台帳に反映します。"),
         }));
       }
@@ -450,20 +472,21 @@ async function detect(store: Store, gateway: PaymentGateway, shop: Shop, now = n
     for (const entry of c.booking.transfers || []) {
       if (!entry.refund.refundId) continue;
       try {
-        const live = await gateway.refundStatus(entry.refund.refundId);
-        if (!refundMatches(entry.refund.status, live.status)) add(makeItem({
+        const remote = await gateway.refundStatus(entry.refund.refundId);
+        if (!refundMatches(entry.refund.status, remote.status)) add(makeItem({
           kind: "state_mismatch", severity: "high", bookingId: c.booking.id, bookingLabel: label(c.booking),
           amount: entry.refund.amount, currency: entry.currency, paypalId: entry.refund.refundId, paypalKind: "refund",
-          status: `${entry.refund.status}:${live.status}`, operation: "resync", targetKind: "refund", targetId: entry.refund.refundId,
+          status: `${entry.refund.status}:${remote.status}`, operation: "resync", targetKind: "refund", targetId: entry.refund.refundId,
           target: tr("キャンセル枠の返金 {0}", entry.refund.refundId), expected: tr("PayPalの返金状態を台帳に反映します。"),
         }));
       } catch { /* Ignore an unavailable verification call. */ }
     }
   }
 
-  const order = { high: 0, medium: 1, low: 2 } satisfies Record<PayPalSeverity, number>;
-  return [...items.values()].sort((a, b) => order[a.severity] - order[b.severity] || a.kind.localeCompare(b.kind) || (a.bookingId || "").localeCompare(b.bookingId || ""));
+  return [...items.values()].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity] || a.kind.localeCompare(b.kind) || (a.bookingId || "").localeCompare(b.bookingId || ""));
 }
+
+const severityOrder = { high: 0, medium: 1, low: 2 } satisfies Record<PayPalSeverity, number>;
 
 function refundMatches(ledger: string, live: string) {
   if (live === "COMPLETED") return ledger === "completed";
@@ -498,35 +521,41 @@ function settingsOf(shop: Shop) {
   return { enabled: shop.paypalOps?.notify !== false, digestHour: Math.min(23, Math.max(0, shop.paypalOps?.digestHour ?? 9)) };
 }
 
-async function resyncLedger(store: Store, gateway: PaymentGateway, shopId: string, bookingId: string | undefined) {
+/** Reads one booking's refunds back from PayPal, then saves through the payment service's own sync. */
+async function resyncLedger(store: Store, gateway: PaymentGateway, sync: (c: Checkout) => Promise<void>, shopId: string, bookingId: string | undefined) {
   if (!bookingId) return;
   const c = await store.get<Checkout>("checkout", bookingId);
   if (!c || c.shopId !== shopId) return;
   const p = c.booking.payment;
-  if (p?.cancellation?.refundId) {
-    const live = await gateway.refundStatus(p.cancellation.refundId);
-    const status = live.status === "COMPLETED" ? "completed" : live.status === "PENDING" ? "pending" : "manual_review";
-    p.cancellation.status = live.amount && (live.amount.currency_code !== p.currency || Number(live.amount.value) !== fromMinor(p.cancellation.amount, p.currency)) ? "manual_review" : status;
-  }
+  const mapped = (remote: { status: string; amount?: { currency_code: string; value: string } }, amount: number, currency: Currency) => {
+    const status = remote.status === "COMPLETED" ? "completed" as const : remote.status === "PENDING" ? "pending" as const : "manual_review" as const;
+    return remote.amount && (remote.amount.currency_code !== currency || Number(remote.amount.value) !== fromMinor(amount, currency)) ? "manual_review" as const : status;
+  };
+  if (p?.cancellation?.refundId) p.cancellation.status = mapped(await gateway.refundStatus(p.cancellation.refundId), p.cancellation.amount, p.currency);
   for (const entry of c.booking.transfers || []) {
-    if (!entry.refund.refundId) continue;
-    const live = await gateway.refundStatus(entry.refund.refundId);
-    const status = live.status === "COMPLETED" ? "completed" : live.status === "PENDING" ? "pending" : "manual_review";
-    entry.refund.status = live.amount && (live.amount.currency_code !== entry.currency || Number(live.amount.value) !== fromMinor(entry.refund.amount, entry.currency)) ? "manual_review" : status;
+    if (entry.refund.refundId) entry.refund.status = mapped(await gateway.refundStatus(entry.refund.refundId), entry.refund.amount, entry.currency);
   }
-  if (p?.captureId && gateway.captureStatus) {
-    const live = await gateway.captureStatus(p.captureId);
-    if (live.status === "COMPLETED") {
-      if (c.phase === "capturing" || c.phase === "captured") { c.phase = "captured"; c.review = false; }
-    } else if (live.status === "PENDING") c.review = true;
-    else c.review = true;
-  }
-  await store.put("checkout", c.id, c);
-  if (c.phase === "captured") {
-    c.phase = "confirmed";
+  // Only a not-yet-confirmed capture is re-judged here; a confirmed booking keeps its capture and a
+  // remaining mismatch stays visible for the owner instead of being flagged for review.
+  if (c.phase === "captured" && p?.captureId && gateway.captureStatus && (await gateway.captureStatus(p.captureId)).status !== "COMPLETED") {
+    c.review = true;
     await store.put("checkout", c.id, c);
-    await store.saveBooking(c.booking);
-  } else if (c.phase === "confirmed") await store.saveBooking(c.booking);
+    return;
+  }
+  if (c.phase === "captured" || c.phase === "confirmed") await sync(c);
+  else await store.put("checkout", c.id, c);
+}
+
+/**
+ * Proposals to show under a consult answer. When the question, answer or sources name a booking or
+ * PayPal ID, only proposals for those; otherwise (e.g. "anything stuck?") the most urgent few.
+ */
+export function relevantProposals(items: PayPalAlertItem[], texts: string[], limit = 5) {
+  const text = texts.join("\n");
+  const named = (value: string | undefined, min = 8) => !!value && value.length >= min && text.includes(value);
+  const mentioned = items.filter(item => named(item.paypalId) || named(item.proposal?.targetId) || named(item.bookingId?.slice(0, 8)));
+  const unique = new Map((mentioned.length ? mentioned : items).flatMap(item => item.proposal ? [[item.proposal.id, item.proposal] as const] : []));
+  return [...unique.values()].slice(0, limit);
 }
 
 export function paypalOps(options: PayPalOpsOptions) {
@@ -541,53 +570,70 @@ export function paypalOps(options: PayPalOpsOptions) {
     const ledger = await readLedger(store, shop);
     return ledger.refs.size ? toolProvider(store, gateway, shop, ledger) : undefined;
   }
-  async function check(shop: Shop, opts: { notify?: boolean; forceDigest?: boolean; force?: boolean } = {}) {
+  /**
+   * Runs the rules and keeps state mismatches from the previous check for bookings this run did not
+   * read live, so a narrow check (one booking, or ledger-only) never drops the others.
+   */
+  async function detectMerged(shop: Shop, live: LiveScope) {
+    const items = await detect(store, gateway, shop, new Date(), live);
+    if (live === "recent") return items;
+    const ids = new Set(items.map(item => item.id));
+    const kept = ((await state(shop.id))?.items || []).filter(item => item.kind === "state_mismatch" && !ids.has(item.id) &&
+      (live === "none" || item.bookingId !== live.bookingId));
+    return [...items, ...kept].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity] || a.kind.localeCompare(b.kind) || (a.bookingId || "").localeCompare(b.bookingId || ""));
+  }
+  async function check(shop: Shop, opts: { notify?: boolean; forceDigest?: boolean; force?: boolean; live?: LiveScope } = {}) {
     const locale = shop.locale || (await store.get<{ locale: "ja" | "en" }>("shopLocale", shop.id))?.locale || "ja";
     return requestLocale.run(locale, async () => {
       if (!opts.force) {
         const last = await state(shop.id);
         if (last && Date.now() - Date.parse(last.checkedAt) < checkIntervalMs()) return last;
       }
-      const items = await detect(store, gateway, shop);
+      const items = await detectMerged(shop, opts.live || "recent");
+      const send = opts.notify ? await dueNotifications(shop, items, !!opts.forceDigest) : undefined;
+      // The AI summary costs a model call: write one only when mail goes out or the owner pressed "check now".
       let summary: string | undefined;
-      if (items.length && options.summarize && opts.notify !== false) {
+      if (items.length && options.summarize && (send?.items.length || opts.force && opts.notify)) {
         try { summary = (await options.summarize(items, locale))?.trim().slice(0, 1200); } catch { /* fall back to the deterministic summary */ }
       }
       const value = await saveState(shop, items, summary);
-      if (!opts.notify || shop.judge || !options.notifyOwner) return value;
-      const settings = settingsOf(shop);
-      if (!settings.enabled) return value;
-      const changed: PayPalAlertItem[] = [];
-      for (const item of items) {
-        const noticed = await store.get<{ fingerprint: string }>("paypalAlertNotice", `${shop.id}:${item.id}`);
-        if (noticed?.fingerprint !== item.fingerprint) changed.push(item);
-      }
-      const immediate = changed.filter(item => item.severity === "high");
-      const digestItems = changed.filter(item => item.severity !== "high");
-      const config = shop.published!;
-      const timeZone = regionOf(config).timeZone;
-      const now = new Date();
-      const today = dateIn(now, timeZone);
-      const lastDigest = await store.get<{ date: string }>("paypalDigest", shop.id);
-      const digestDue = !!opts.forceDigest || (localHour(now, timeZone) >= settings.digestHour && lastDigest?.date !== today);
-      const send = [...immediate, ...(digestDue ? digestItems : [])];
-      if (!send.length) return value;
-      const subject = tr("gemihub: 対応が必要なものが{0}件あります", send.length);
+      if (!send?.items.length || !options.notifyOwner) return value;
+      const subject = tr("gemihub: 対応が必要なものが{0}件あります", send.items.length);
       const link = `${options.appOrigin()}/?tab=assistant&shop=${shop.id}`;
-      const body = [value.summary, "", ...send.map(item => `- ${alertLine(item)}`), "", tr("管理画面: {0}", link)].join("\n");
+      const body = [value.summary, "", ...send.items.map(item => `- ${alertLine(item)}`), "", tr("管理画面: {0}", link)].join("\n");
       try {
         await options.notifyOwner(shop, subject, body);
       } catch { return value; }
-      for (const item of send) await store.put("paypalAlertNotice", `${shop.id}:${item.id}`, { shopId: shop.id, fingerprint: item.fingerprint, notifiedAt: new Date().toISOString() });
-      if (digestDue && digestItems.length) await store.put("paypalDigest", shop.id, { shopId: shop.id, date: today, at: new Date().toISOString() });
+      for (const item of send.items) await store.put("paypalAlertNotice", `${shop.id}:${item.id}`, { shopId: shop.id, fingerprint: item.fingerprint, notifiedAt: new Date().toISOString() });
+      if (send.digest) await store.put("paypalDigest", shop.id, { shopId: shop.id, date: send.today, at: new Date().toISOString() });
       return value;
     });
   }
+  /** Items to mail now: changed high-severity items at once, the rest in the daily digest. */
+  async function dueNotifications(shop: Shop, items: PayPalAlertItem[], forceDigest: boolean) {
+    if (shop.judge || !options.notifyOwner || !settingsOf(shop).enabled || !shop.published) return undefined;
+    const changed: PayPalAlertItem[] = [];
+    for (const item of items) {
+      const noticed = await store.get<{ fingerprint: string }>("paypalAlertNotice", `${shop.id}:${item.id}`);
+      if (noticed?.fingerprint !== item.fingerprint) changed.push(item);
+    }
+    const immediate = changed.filter(item => item.severity === "high");
+    const digestItems = changed.filter(item => item.severity !== "high");
+    const timeZone = regionOf(shop.published).timeZone;
+    const now = new Date();
+    const today = dateIn(now, timeZone);
+    const lastDigest = await store.get<{ date: string }>("paypalDigest", shop.id);
+    const digestDue = forceDigest || (localHour(now, timeZone) >= settingsOf(shop).digestHour && lastDigest?.date !== today);
+    return { items: [...immediate, ...(digestDue ? digestItems : [])], digest: digestDue && digestItems.length > 0, today };
+  }
   async function execute(shop: Shop, input: { proposalId: string; alertId: string; fingerprint: string }, actor: string) {
-    return store.locked(`bookings:${shop.id}`, async () => {
+    return store.locked(bookingLockKey(shop.id), async () => {
       const fresh = await store.shop(shop.id);
       if (!fresh) return { ok: false as const, error: tr("お店がありません") };
-      const before = await detect(store, gateway, fresh);
+      // Verify against live PayPal for the proposal's booking only; other bookings keep their last check.
+      const shown = (await state(fresh.id))?.items.find(value => value.id === input.alertId);
+      const live: LiveScope = shown?.bookingId ? { bookingId: shown.bookingId } : "none";
+      const before = await detectMerged(fresh, live);
       const item = before.find(value => value.id === input.alertId && value.proposal?.id === input.proposalId);
       if (!item || item.fingerprint !== input.fingerprint || !item.proposal)
         return { ok: false as const, error: tr("状態が変わっています。最新の状態を確認してください。"), state: await saveState(fresh, before) };
@@ -597,9 +643,9 @@ export function paypalOps(options: PayPalOpsOptions) {
         await options.closeTransfer(fresh.id, proposal.targetId);
       } else {
         await options.reconcile(fresh.id);
-        if (["resync", "complete_manual_review"].includes(proposal.operation)) await resyncLedger(store, gateway, fresh.id, proposal.bookingId);
+        if (["resync", "complete_manual_review"].includes(proposal.operation)) await resyncLedger(store, gateway, options.sync, fresh.id, proposal.bookingId);
       }
-      const after = await detect(store, gateway, fresh);
+      const after = await detectMerged(fresh, live);
       const remaining = after.find(value => value.id === item.id);
       const value = await saveState(fresh, after);
       if (["complete_manual_review", "close_transfer"].includes(proposal.operation) && remaining)
@@ -623,5 +669,5 @@ export function paypalOps(options: PayPalOpsOptions) {
     await store.saveShop(fresh);
     return fresh.paypalOps;
   }
-  return { toolsFor, detect: (shop: Shop, now?: Date) => detect(store, gateway, shop, now), check, state, execute, settings: settingsOf, updateSettings };
+  return { toolsFor, detect: (shop: Shop, now?: Date, live?: LiveScope) => detect(store, gateway, shop, now, live), check, state, execute, settings: settingsOf, updateSettings };
 }

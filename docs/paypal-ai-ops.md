@@ -22,7 +22,9 @@
 既存の読み取り専用リサーチエージェントに、PayPalの読み取りツールを追加する。回答には従来の出典（spec.md / history.md / 台帳）に加えて、PayPalの記録を出典として表示する。
 
 ### 1.2 追加するツール（読み取り専用）
-PayPal Agent Toolkit（`@paypal/agent-toolkit`）の読み取り系、または同等のREST呼び出しをサーバー側でラップする。
+PayPal Orders / Payments / Transaction Search の読み取りREST呼び出しをサーバー側でラップする（`server/paypal.ts`）。Agent Toolkit は書き込み系ツールを含み、gemihub の LLM（Gemini）とも前提が違うため使わない。
+
+- ツールは会話層が `investigate` に `paypal: true` を付けたときだけ渡す。それ以外の質問は従来どおりツールなしの1回呼び出し。
 
 | ツール名（エージェント向け） | 中身 | 入力 | 出力（要約） |
 | --- | --- | --- | --- |
@@ -34,7 +36,8 @@ PayPal Agent Toolkit（`@paypal/agent-toolkit`）の読み取り系、または�
 
 - ツール引数のIDは、そのショップの台帳に存在するものに限定（サーバー側で検証、なければ拒否）。
 - Transaction Searchの期間はサーバーで上限を強制。
-- 結果はエージェントに渡す前に必要項目だけに絞る（payerのメール等の個人情報は渡さない）。
+- 結果はエージェントに渡す前に必要項目だけに絞る（payerやお客様のメール等の個人情報は渡さない。顧客での検索はサーバー側で照合し、返すのは名前のみ）。
+- 金額はすべて通常の単位（49.5 など）で渡す。台帳の最小単位（セント・円）はサーバーで変換する。
 
 ### 1.3 回答の振る舞い
 - 台帳とPayPalの状態が食い違うときは、その差を明示する（例:「台帳では返金待ち、PayPalではCOMPLETED」）。
@@ -70,8 +73,9 @@ PayPal Agent Toolkit（`@paypal/agent-toolkit`）の読み取り系、または�
 | 決済未確定 | `capturing`のまま一定時間 / capture応答不明 | 高（即時） |
 | 状態の不一致 | 台帳とPayPalで状態が違う | 高 |
 | 割引枠の売れ残り | 再販中で締切まで残り2時間以内 | 低 |
-| 予約の未払い | `awaiting_approval`の放置（期限切れ前） | 低 |
 
+- `awaiting_approval` は checkout が10分で期限切れになるため検出対象にしない。
+- PayPalへの照会（状態の不一致）は、未完了の返金と直近7日に動きのある決済に限り、最大30件。返金済みの決済（`REFUNDED` / `PARTIALLY_REFUNDED`）は正常とみなす。相談画面からのチェックは台帳ルールのみで、前回の照会結果を引き継ぐ。
 - 検出はルールのみ。AIは**要約文を作るだけ**で、対象の選定や金額には関与しない。
 
 ### 2.4 通知の内容
@@ -89,7 +93,7 @@ PayPal Agent Toolkit（`@paypal/agent-toolkit`）の読み取り系、または�
 | --- | --- | --- |
 | 返金の再試行 | リコンサイラの即時再試行 | `retrying` / `pending` |
 | 状態の再同期 | PayPalから状態を取り直して台帳更新 | 不一致あり |
-| 手動確認を完了にする | 既存の手動確認フロー | `manual_review` |
+| 手動確認を完了にする | PayPalから返金状態を読み直し、完了なら台帳を更新（既存の同期処理） | `manual_review` かつ refund ID あり（ない場合はPayPal管理画面での確認を案内） |
 | 割引枠の再販を終了 | 既存の決着処理（期限前の確定） | 再販中 |
 
 - 新しい返金の作成・金額指定はAIから提案できない（v1）。
@@ -133,7 +137,7 @@ PayPal Agent Toolkit（`@paypal/agent-toolkit`）の読み取り系、または�
 4. PayPalの画面で同じ返金を確認（既存シーンにつなぐ）。
 
 Devpost追記案:
-"Consult & ask now reads live PayPal data through the PayPal Agent Toolkit, and a background check flags stuck refunds and unsold slots. The AI explains what it found and proposes a fix; the owner approves, and the server executes it with the same idempotent PayPal calls."
+"Consult & ask now reads live PayPal data through read-only PayPal Orders and Payments API tools, and a background check flags stuck refunds and unsold slots. The AI explains what it found and proposes a fix; the owner approves, and the server executes it with the same idempotent PayPal calls."
 
 ---
 

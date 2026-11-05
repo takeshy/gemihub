@@ -73,7 +73,7 @@ import { regionOf, currencyOf, dateIn, formatMinor } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
-import { paypalOps } from "./paypal-ops.ts";
+import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
 import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, type AiProvider } from "./llm.ts";
 import {
@@ -568,6 +568,7 @@ export function createApp(
       if (!transfer) fail(404, tr("この空き枠の受付は終了しています"));
       await transfers.close(transfer);
     },
+    sync: checkout => payments.sync(checkout),
     recordHistory: async (shopId, entry) => {
       await store.locked(shopId, async () => {
         const fresh = await store.shop(shopId);
@@ -1540,10 +1541,12 @@ export function createApp(
           }).parse(await body(req, 100000));
           const reply = await (intelligence.assistant || converse)({ question: input.question, messages: input.messages, data: await shopData(shop), demo: demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT });
           const paymentQuestion = reply.sources.some(source => source.path.startsWith("paypal:") || source.path === "sheet:paypal") || /paypal|refund|payment|stuck|alert|返金|支払|止ま|要対応/i.test(input.question);
+          // Ledger rules only: the research tools already read PayPal live for this answer, and the
+          // hourly check keeps live mismatches, so a question never fans out into many PayPal calls.
           const alerts = paymentQuestion
-            ? await paypal.check({ ...shop, locale: getLocale() }, { notify: false, force: true })
+            ? await paypal.check({ ...shop, locale: getLocale() }, { notify: false, force: true, live: "none" })
             : await paypal.state(shop.id);
-          const proposals = paymentQuestion ? [...new Map((alerts?.items || []).flatMap(item => item.proposal ? [[item.proposal.id, item.proposal] as const] : [])).values()].slice(0, 5) : [];
+          const proposals = paymentQuestion ? relevantProposals(alerts?.items || [], [input.question, reply.answer, ...reply.sources.map(source => source.path)]) : [];
           return json(res, { answer: reply.answer, sources: reply.sources, ...(reply.draft ? { draft: reply.draft, request: draftText(reply.draft) } : {}), ...(proposals.length ? { paypalProposals: proposals } : {}) });
         }
         if (action === "images/generate" && method === "POST") {

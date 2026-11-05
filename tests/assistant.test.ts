@@ -86,7 +86,7 @@ test("research reads PayPal through read-only tools and cites the record", async
     call("paypal_get_refund", { refundId: "REF1" }),
     say(JSON.stringify({ answer: "The $49.50 refund completed (PayPal REF1).", sources: ["paypal:refund:REF1"] })),
   ]);
-  const result = await research("Did the $49.50 refund go through?", data);
+  const result = await research("Did the $49.50 refund go through?", data, { paypal: true });
   assert.match(result.answer, /completed/);
   assert.deepEqual(result.sources.map(source => source.path), ["paypal:refund:REF1"]);
   assert.deepEqual(invoked, ["paypal_get_refund"]);
@@ -94,6 +94,16 @@ test("research reads PayPal through read-only tools and cites the record", async
   const names = (researchCall.tools as { name: string }[]).map(tool => tool.name);
   assert.deepEqual(names.sort(), ["ledger_find_booking_payments", "paypal_get_refund"]);
   assert.ok(names.every(name => /^(paypal_get_|ledger_find_)/.test(name)), "no write tool is exposed");
+});
+
+test("a shop with PayPal records still answers non-payment questions in one tool-free research call", async () => {
+  const data = shopData();
+  data.paypal = { tools: [{ name: "paypal_get_refund", description: "read refund", parametersJsonSchema: { type: "object", properties: {} } }], async invoke() { throw new Error("not used"); } };
+  const seen = scripted([], [say(JSON.stringify({ answer: "水曜は定休日です。", sources: ["spec.md"] }))]);
+  const result = await research("定休日は？", data);
+  assert.equal(result.answer, "水曜は定休日です。");
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].tools, undefined, "PayPal tools are offered only when investigate asks for paypal");
 });
 
 test("the conversation layer researches facts and turns change requests into a draft without applying anything", async () => {

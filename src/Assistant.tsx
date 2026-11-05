@@ -146,7 +146,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
 const severityText = (value: PayPalSeverity) => ({ high: tr("緊急"), medium: tr("注意"), low: tr("確認") } satisfies Record<PayPalSeverity, string>)[value];
 const kindText = (value: PayPalAlertKind) => ({
   refund_stalled: tr("返金の停滞"), awaiting_funds: tr("返金用残高の不足"), manual_review: tr("手動確認が必要"),
-  capture_stalled: tr("決済が未確定"), state_mismatch: tr("台帳とPayPalの状態不一致"), unsold_slot: tr("割引枠の売れ残り"), awaiting_approval: tr("支払い手続きの放置"),
+  capture_stalled: tr("決済が未確定"), state_mismatch: tr("台帳とPayPalの状態不一致"), unsold_slot: tr("割引枠の売れ残り"),
 } satisfies Record<PayPalAlertKind, string>)[value];
 const proposalOpText = (value: PayPalProposalOperation) => ({
   retry_refund: tr("返金の再試行"), resync: tr("状態の再同期"), complete_manual_review: tr("手動確認を完了にする"), close_transfer: tr("割引枠の再販を終了"),
