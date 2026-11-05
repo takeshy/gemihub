@@ -57,7 +57,7 @@ Show blog and announcement lists/articles in the tree and sample data only when 
 
 Show the selected screen first, without a repeated marketing heading or shared shop-details form. Collapse page/sample editors below it. Show Apply changes and Discard changes only when needed. Save local drafts per account/shop in localStorage; retain them on reload, make storage failures visible, and refuse to publish unsaved drafts. Drafts are local to the device and may be lost when site data is cleared.
 
-Check metadata on entry, every 30 seconds, and on focus. Fetch each screen's body automatically when opened. Mark changed items only, not internal cache states. Preserve local edits on remote changes; show conflict comparison instead of overwriting. Discard only the selected screen after confirmation.
+Check metadata on entry, every 30 seconds, and on focus. Fetch each screen's body automatically when opened. Mark changed items only, not internal cache states. Preserve local edits on remote changes; show conflict comparison instead of overwriting. A screen changed only locally offers Compare changes: read-only previews of the local edit and the live screen side by side, with the release summary. Comparing changes nothing and is not offered while the remote changed or a conflict exists. Discard only the selected screen after confirmation.
 
 Headers and footers are separate shared components. A compact toolbar holds screen name, changed state, pen editing, and display options. Hide headers/footers in preview by default; visibility changes affect only the current preview, never saved drafts or production. Display the selected component when editing it directly. The display menu closes on outside click or Escape, not internal interaction.
 
