@@ -19,6 +19,8 @@ export const Changes: Story = {
 };
 
 export const ShopSpecification: Story = { name: "トップの変更履歴・現在のお店の設定とAI相談", args: {scenario: "system"} };
+export const ShopSpecificationPayment: Story = { name: "現在の設定・PayPal決済と返金条件", args: { scenario: "system-payment" } };
+export const ShopSpecificationOwnerOnly: Story = { name: "現在の設定・店主のみ・ブログとお知らせなし", args: { scenario: "system-owner-only" } };
 
 export const AIPageBuilder: Story = { name: "相談・修正・新ページ作成を選ぶ", args: { scenario: "page-builder" } };
 

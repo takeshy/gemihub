@@ -1899,7 +1899,7 @@ pre {
 
 .shop-build-layout { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 22px; align-items: start; }
 .shop-spec-column, .shop-consultation { min-width: 0; }
-.shop-spec { padding: 26px; }
+.shop-spec { padding: 26px; container-type: inline-size; }
 .shop-spec h2, .shop-consultation h2, .shop-history h2 { margin: 5px 0; font-size: 20px; }
 .shop-spec .section-top { justify-content: space-between; }
 .shop-spec-intro { margin: 24px 0; }
@@ -1910,10 +1910,20 @@ pre {
 .spec-stats > div:last-child { border: 0; }
 .spec-stats strong { font-size: 27px; font-weight: 500; }
 .spec-stats span { font-size: 10px; color: #6f7e65; }
-.spec-booking-flow { display: grid; grid-template-columns: repeat(4, 1fr); padding: 0; list-style: none; margin: 24px 0; gap: 12px; }
+.spec-booking-flow { display: grid; grid-template-columns: repeat(var(--flow-steps, 4), minmax(0, 1fr)); padding: 0; list-style: none; margin: 24px 0; gap: 12px; }
 .spec-booking-flow li { position: relative; display: grid; gap: 7px; font-size: 10px; text-align: center; }
 .spec-booking-flow li + li::before { content: '→'; position: absolute; left: -12px; top: 10px; color: #9aab87; }
 .spec-booking-flow b { display: grid; place-items: center; width: 33px; height: 33px; border-radius: 50%; margin: auto; background: #edf2ea; color: var(--green); font-size: 12px; }
+.spec-booking-flow span, .spec-booking-flow small { overflow-wrap: anywhere; }
+.spec-booking-flow small { color: #6f7e65; font-size: inherit; }
+@container (max-width: 420px) {
+  .spec-booking-flow { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .spec-booking-flow li { grid-template-columns: 33px minmax(0, 1fr); column-gap: 12px; row-gap: 3px; text-align: left; align-items: center; }
+  .spec-booking-flow b { grid-row: 1 / 3; }
+  .spec-booking-flow span { font-size: 12px; }
+  .spec-booking-flow small { font-size: 11px; }
+  .spec-booking-flow li + li::before { content: '↓'; left: 12px; top: -19px; }
+}
 .spec-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .spec-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fffdf8; overflow-wrap: anywhere; }
 .spec-card h3 { font-size: 13px; margin: 0 0 15px; }

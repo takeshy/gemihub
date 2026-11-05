@@ -48,6 +48,8 @@ import {
 } from "../../server/domain";
 export type Scenario =
   | TransferScenario
+  | "system-payment"
+  | "system-owner-only"
   | "us-settings"
   | "us-menus"
   | "us-booking"
@@ -235,6 +237,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
   config.hours.closedWeekdays = [];
   if (scenario.startsWith("transfer-") || scenario.startsWith("owner-transfer-") || ["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
+  if (scenario === "system-payment") config.rules.payment = { enabled: true, refundTiers: [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }] };
+  if (scenario === "system-owner-only") {
+    config.staff = []; config.ownerBooking = true;
+    config.appearance = { accent: "sage", layout: "standard", imageUrl: "", articles: { blogs: false, announcements: false } };
+  }
   if (["production-preview", "local-editor-pages", "custom-page", "editor-unfetched", "editor-remote", "editor-remote-tree", "editor-conflict", "editor-local", "image-library", "image-library-generation", "image-page"].includes(scenario)) config.pages = [
     { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてでも予約できますか？</h2><p>初めてのお客様も歓迎しています。</p><h2>当日の持ち物は？</h2><p>特にありません。お気軽にお越しください。</p>"), layout: "standard", imageUrl: "" },
     { id: "about-us", slug: "about-us", title: tr("私たちのお店"), navigationLabel: tr("店舗紹介"), body: tr("<h2>大切にしていること</h2><p>一人ひとりに合った時間をご用意します。</p>"), layout: "compact", imageUrl: "" },

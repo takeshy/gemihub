@@ -18,6 +18,7 @@
     "build-storybook": "storybook build --disable-telemetry",
     "capture:manual": "node scripts/capture-manual.mjs",
     "check:multimodal": "node scripts/check-multimodal.mjs",
+    "check:shop-infographic": "node --import tsx scripts/check-shop-infographic.mjs",
     "check:review-chat": "node --import tsx scripts/check-review-chat.mjs",
     "check:shop-reset": "node --import tsx scripts/check-shop-reset.mjs",
     "check:judge-controls": "node --import tsx scripts/check-judge-controls.mjs",

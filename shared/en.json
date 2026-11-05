@@ -3080,5 +3080,21 @@
   "このお店の台帳から予約とPayPalの注文・決済・返金IDを探す。条件なしなら直近の記録を新しい順で返す。期間は来店日ではなく支払い・返金の受付日時で絞る。": "Find this shop's booking, PayPal order, capture and refund IDs in the ledger. With no filters, return recent records newest first. Date ranges filter payment/refund activity, not appointment dates.",
   "返金を探す場合は refund。省略時はすべての支払い・返金": "Use refund to find refunds. Defaults to all payment and refund activity.",
   "PayPalの取引検索を利用する権限がありません。台帳の注文・決済・返金IDによる個別照会を使ってください。": "PayPal Transaction Search is not authorized. Use individual order, capture or refund IDs from the ledger instead.",
-  " sheet:paypal はこのお店の直近の台帳で、start は来店日、paidAt と refund.at は支払い・返金の受付日時。直近の返金は refund.at または transfers[].at で選び、来店日で除外しない。返金の状態確認は台帳の返金IDを paypal_get_refund に渡す。台帳だけでPayPalの最新状態を確認したと言わない。返金を照会した回答には返金ID・PayPalの状態・金額・通貨を含める。取引検索は取引一覧や照合が必要なときだけ使い、既知の返金IDの照会を取引検索で代用しない。取引検索の権限不足は同じ検索を繰り返さず、台帳のIDによる個別照会を使う。": " sheet:paypal contains this shop's recent ledger. start is the appointment date; paidAt and refund.at are payment/refund activity times. Select recent refunds by refund.at or transfers[].at, never by appointment date. To check refund status, pass its ledger refund ID to paypal_get_refund. The ledger alone does not verify the current PayPal status. When reporting a refund lookup, include its refund ID, PayPal status, amount and currency. Use Transaction Search only for transaction lists or reconciliation, never in place of a known refund ID lookup. If Transaction Search is not authorized, do not repeat it; use individual IDs from the ledger."
+  " sheet:paypal はこのお店の直近の台帳で、start は来店日、paidAt と refund.at は支払い・返金の受付日時。直近の返金は refund.at または transfers[].at で選び、来店日で除外しない。返金の状態確認は台帳の返金IDを paypal_get_refund に渡す。台帳だけでPayPalの最新状態を確認したと言わない。返金を照会した回答には返金ID・PayPalの状態・金額・通貨を含める。取引検索は取引一覧や照合が必要なときだけ使い、既知の返金IDの照会を取引検索で代用しない。取引検索の権限不足は同じ検索を繰り返さず、台帳のIDによる個別照会を使う。": " sheet:paypal contains this shop's recent ledger. start is the appointment date; paidAt and refund.at are payment/refund activity times. Select recent refunds by refund.at or transfers[].at, never by appointment date. To check refund status, pass its ledger refund ID to paypal_get_refund. The ledger alone does not verify the current PayPal status. When reporting a refund lookup, include its refund ID, PayPal status, amount and currency. Use Transaction Search only for transaction lists or reconciliation, never in place of a known refund ID lookup. If Transaction Search is not authorized, do not repeat it; use individual IDs from the ledger.",
+  "メール認証またはGoogleログイン": "Email verification or Google login",
+  "PayPalで決済": "Pay with PayPal",
+  "有料の予約は全額お支払い": "Full payment for paid bookings",
+  "有料の予約はPayPalで全額決済してから確定します。": "Paid bookings are confirmed after full payment with PayPal.",
+  "予約時のオンライン決済はありません。": "No online payment is required at booking.",
+  "キャンセル時は予約時の条件で自動返金します。お店都合は全額返金します。": "Cancellations are automatically refunded under the terms saved at booking. Shop cancellations receive a full refund.",
+  "お客様と店主にメール通知": "Email the customer and owner",
+  "お支払いとキャンセル": "Payment and cancellation",
+  "現在の設定・PayPal決済と返金条件": "Current settings: PayPal payments and refund policy",
+  "現在の設定・店主のみ・ブログとお知らせなし": "Current settings: owner only, no blog or announcements",
+  "お店のページ": "Shop pages",
+  "① ログインから予約確定まで": "1. From login to booking confirmation",
+  "② お客様が指名・指名なしを選択": "2. Customers choose a staff member or any available staff",
+  "③ データの保存と書き出し": "3. Data storage and export",
+  "記録はFirestore、画像・添付はDriveへ。JSON・CSVで書き出せます。": "Records in Firestore; images and attachments in Drive. Export as JSON or CSV.",
+  "図には現在の設定に応じた予約の流れとお支払い・キャンセル条件を表示します。PayPalを有効にすると決済と返金条件が表示されます。無効にしたブログ・お知らせは表示されません。": "The diagram shows the booking flow and payment/cancellation terms for your current settings. Enabling PayPal adds payment and refund details. Disabled blogs and announcements are omitted."
 }
