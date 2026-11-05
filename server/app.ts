@@ -671,6 +671,10 @@ export function createApp(
       const method = req.method || "GET";
       const host = (req.headers.host || "").split(":")[0].toLowerCase();
       const appHost = new URL(origin()).hostname;
+      if (path === "/favicon.ico" && (method === "GET" || method === "HEAD")) {
+        res.setHeader("Cache-Control", "no-cache");
+        return redirect(res, "/assets/gemihub-mark.png");
+      }
       if (path === "/lp" && host === appHost && (method === "GET" || method === "HEAD")) {
         let shell: string;
         try { shell = await readFile(resolve("dist/index.html"), "utf8"); }
@@ -3044,6 +3048,7 @@ export function createApp(
               ".js": "application/javascript",
               ".css": "text/css",
               ".svg": "image/svg+xml",
+              ".png": "image/png",
               ".jpg": "image/jpeg",
             }[extname(file)] || "application/octet-stream"
           : "text/html; charset=utf-8",

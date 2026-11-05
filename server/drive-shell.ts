@@ -29,6 +29,10 @@ export function inlineDriveShell(shell: string, readAsset: ReadBuildAsset = read
       const rel = attribute(tag, "rel");
       const href = attribute(tag, "href");
       if (rel === "modulepreload") return "";
+      if (rel === "icon" && href) {
+        // The SVG icon stays self-contained when the export is opened from disk.
+        return href.endsWith(".svg") ? `<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(localAsset(href))}">` : "";
+      }
       if (rel !== "stylesheet" || !href) return tag;
       return `<style>${localAsset(href).replace(/<\/style/gi, "<\\/style")}</style>`;
     });

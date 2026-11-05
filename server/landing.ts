@@ -10,7 +10,7 @@ export function renderLanding(shell: string) {
   const title = escapeHtml(landingTitle());
   const description = escapeHtml(landingDescription());
   const canonical = `${productionOrigin}/lp${getLocale() === "en" ? "?lang=en" : ""}`;
-  const meta = `<link rel="icon" type="image/svg+xml" href="/assets/gemihub-mark.svg"><meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${canonical}"><link rel="canonical" href="${canonical}"><link rel="alternate" hreflang="ja" href="${productionOrigin}/lp"><link rel="alternate" hreflang="en" href="${productionOrigin}/lp?lang=en"><link rel="alternate" hreflang="x-default" href="${productionOrigin}/lp">`;
+  const meta = `<meta name="description" content="${description}"><meta property="og:type" content="website"><meta property="og:title" content="${title}"><meta property="og:description" content="${description}"><meta property="og:url" content="${canonical}"><link rel="canonical" href="${canonical}"><link rel="alternate" hreflang="ja" href="${productionOrigin}/lp"><link rel="alternate" hreflang="en" href="${productionOrigin}/lp?lang=en"><link rel="alternate" hreflang="x-default" href="${productionOrigin}/lp">`;
   return localizeShell(shell)
     .replace(/<title>[^<]*<\/title>/, () => `<title>${title}</title>`)
     .replace("</head>", () => `${meta}</head>`)
