@@ -63,6 +63,31 @@ try {
         .getByRole("heading", { name: "新しいお便りを書く", exact: true })
         .waitFor();
     };
+    const assertSidebarLayout = async () => {
+      const panel = page.locator('.article-ai-chat');
+      const panelBounds = await panel.boundingBox(), editorBounds = await page.locator('.post-editor').boundingBox();
+      const viewport = page.viewportSize();
+      assert.ok(panelBounds.x >= 0 && panelBounds.x + panelBounds.width <= viewport.width + 1, 'AI panel fits the viewport');
+      if (viewport.width >= 1000) assert.ok(editorBounds.x + editorBounds.width <= panelBounds.x + 1, 'article and right sidebar remain side by side');
+      else assert.ok(panelBounds.y > 0 && Math.abs(panelBounds.y + panelBounds.height - viewport.height) < 2, 'phone uses the existing bottom panel layout');
+      const actions = await panel.locator('.article-composer-actions > button').evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().toJSON()));
+      assert.ok(Math.abs(actions[0].top - actions[1].top) < 1 && actions[0].right <= actions[1].left, 'attachment and send controls share a row without overlap');
+      const formBounds = await panel.locator('form').boundingBox();
+      assert.ok(actions.every(action => action.top >= formBounds.y - 1 && action.bottom <= formBounds.y + formBounds.height + 1), 'attachment and send buttons remain fully visible inside the composer');
+      const overflow = await page.locator('.post-editor input,.post-editor select,.article-ai-chat textarea,.article-ai-chat select,.article-composer-actions > button').evaluateAll(elements => elements.filter(element => {
+        if (!element.checkVisibility()) return false;
+        const rect = element.getBoundingClientRect(), parent = element.closest('.article-ai-chat,.post-editor').getBoundingClientRect();
+        return rect.right > parent.right + 1 || rect.left < parent.left - 1;
+      }).map(element => element.className));
+      assert.deepEqual(overflow, [], 'metadata and sidebar controls fit their panels');
+      const focus = await panel.locator('.article-ai-composer').evaluate(form => {
+        const input = form.querySelector('textarea'), style = getComputedStyle(input), rect = input.getBoundingClientRect(), bounds = form.getBoundingClientRect();
+        const ring = parseFloat(style.outlineWidth) + Math.max(0, parseFloat(style.outlineOffset));
+        return { focused: document.activeElement === input, left: rect.left - ring, right: rect.right + ring, top: rect.top - ring, bottom: rect.bottom + ring, clipLeft: bounds.left + form.clientLeft, clipRight: bounds.left + form.clientLeft + form.clientWidth, clipTop: bounds.top + form.clientTop, clipBottom: bounds.top + form.clientTop + form.clientHeight };
+      });
+      if (focus.focused) assert.ok(focus.left >= focus.clipLeft - 1 && focus.right <= focus.clipRight + 1 && focus.top >= focus.clipTop - 1 && focus.bottom <= focus.clipBottom + 1, `the complete input focus ring fits the scroll area: ${JSON.stringify(focus)}`);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    };
     const openEditorImage = async () => {
       const toolbar = page.locator('.article-wysimark');
       const image = toolbar.getByRole('button', { name: '画像', exact: true });
@@ -224,6 +249,22 @@ try {
     await textEditor.fill('清書したい文章です。');
     const originalDraft = await textEditor.inputValue();
     await page.getByRole('button', { name: 'AIで清書する', exact: true }).click();
+    await page.locator('.article-ai-chat').waitFor();
+    assert.equal(await page.locator('.post-management-list').count(), 0, 'AI authoring hides the article list');
+    const previewBounds = await preview.boundingBox(), mainEditorBounds = await page.locator('.post-editor').boundingBox();
+    assert.ok(previewBounds.y >= 0 && previewBounds.y < mainEditorBounds.y, 'AI authoring brings the current preview to the top');
+    const articleBounds = await preview.getByText(originalDraft, { exact: true }).boundingBox(), aiBounds = await page.locator('.article-ai-chat').boundingBox();
+    assert.ok(articleBounds.y >= 0 && articleBounds.y + articleBounds.height < (width < 1000 ? aiBounds.y : 900), 'the article text is visible alongside the AI conversation');
+    assert.equal(await textEditor.inputValue(), originalDraft, 'article remains editable while AI is open');
+    const pendingRequest = 'この依頼は閉じても保持します。';
+    await page.getByRole('textbox', { name: 'AIに伝える内容', exact: true }).fill(pendingRequest);
+    await assertSidebarLayout();
+    await page.keyboard.press('Escape');
+    await page.locator('.article-ai-chat').waitFor({ state: 'detached' });
+    assert.equal(await page.locator('.post-management-list').isVisible(), true, 'closing AI restores the article list');
+    assert.equal(await page.evaluate(() => document.body.classList.contains('article-ai-open')), false);
+    await page.getByRole('button', { name: 'AIで清書する', exact: true }).click();
+    assert.equal(await page.getByRole('textbox', { name: 'AIに伝える内容', exact: true }).inputValue(), pendingRequest);
     await page.getByRole('button', { name: '自分で編集する', exact: true }).click();
     assert.equal(await textEditor.inputValue(), originalDraft, 'opening AI and returning preserves the draft');
     await page.getByRole('button', { name: 'AIで清書する', exact: true }).click();
@@ -246,10 +287,17 @@ try {
       .click();
     await chooser.waitFor({ state: "detached" });
     assert.ok((await composer.inputValue()).includes("[[images/"));
+    await page.locator('.article-ai-references summary').click();
     await page
       .getByRole("combobox", { name: "記事の参照ファイル", exact: true })
       .selectOption("spec.md");
     assert.ok((await composer.inputValue()).includes("[[spec.md]]"));
+    await page.waitForFunction(() => {
+      const form = document.querySelector('.article-ai-composer');
+      return form.querySelector('label').getBoundingClientRect().top >= form.getBoundingClientRect().top - 1;
+    });
+    await assertSidebarLayout();
+    await page.screenshot({ path: `tmp/article-ai-sidebar-${width}.png`, fullPage: true });
     await page.getByRole("button", { name: "送信する", exact: true }).click();
     await page
       .getByRole("log", { name: "記事の依頼", exact: true })
@@ -260,6 +308,7 @@ try {
       .waitFor();
     await preview.locator(".article-managed-image").first().scrollIntoViewIfNeeded();
     await preview.locator(".article-managed-image").first().locator("img").waitFor();
+    assert.ok((await textEditor.inputValue()).includes(originalDraft), 'AI updates the visible article without hiding its editor');
     await page
       .getByRole("button", { name: "自分で編集する", exact: true })
       .click();
@@ -278,6 +327,25 @@ try {
       path: `tmp/article-ai-${width}.png`,
       fullPage: true,
     });
+    assert.deepEqual(errors, []);
+    await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(entry.id)}&viewMode=story&globals=locale:en`);
+    await page.getByRole('button', { name: 'Polish with AI', exact: true }).click();
+    await page.locator('.article-ai-chat').waitFor();
+    await assertSidebarLayout();
+    for (const size of width < 1000 ? [{ width: 320, height: 900 }, { width: 390, height: 500 }] : [{ width: 1280, height: 500 }]) {
+      await page.setViewportSize(size);
+      await page.locator('.article-ai-chat textarea').fill('Keep the full input outline visible.');
+      await assertSidebarLayout();
+      const bottom = await page.locator('.article-ai-chat').evaluate(panel => {
+        const form = panel.querySelector('form').getBoundingClientRect(), bounds = panel.getBoundingClientRect();
+        return bounds.bottom - form.bottom;
+      });
+      assert.ok(bottom >= 19, 'composer keeps clear of the bottom edge on short screens');
+      await page.locator('.article-ai-chat').screenshot({ path: `tmp/article-ai-panel-${size.width}-${size.height}.png` });
+    }
+    await page.setViewportSize({ width, height: 900 });
+    await page.locator('.article-ai-chat .visual-chat-heading button').click();
+    assert.equal(await page.evaluate(() => document.body.classList.contains('article-ai-open')), false);
     assert.deepEqual(errors, []);
     await context.close();
     console.log(

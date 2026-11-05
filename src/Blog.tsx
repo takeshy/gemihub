@@ -6,6 +6,9 @@ import { ArticleImageChooser } from "./ArticleImages";
 import { ArticleTextEditor } from "./ArticleTextEditor";
 import type { ArticleFile } from "../server/article-files";
 import { DateInput } from "./DateInput";
+import { createPortal } from "react-dom";
+import { submitOnShortcut } from "./submit-shortcut";
+import "./BlogEditor.css";
 import React, { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { useApi } from "./api";
 import { PostContent } from "./PostContent";
@@ -66,6 +69,9 @@ export function BlogEditor({
     [files, setFiles] = useState<ArticleFile[]>([]),
     [fileError, setFileError] = useState("");
   const requestInput = useRef<HTMLTextAreaElement>(null);
+  const aiLog = useRef<HTMLDivElement>(null);
+  const aiTrigger = useRef<HTMLButtonElement>(null);
+  const preview = useRef<HTMLElement>(null);
   const base = `/api/shops/${shop.id}/posts`;
   const clean =
     !!current && JSON.stringify(content) === JSON.stringify(current.draft);
@@ -95,6 +101,20 @@ export function BlogEditor({
       active = false;
     };
   }, [base, method]);
+  useEffect(() => {
+    if (method !== "ai") return;
+    document.body.classList.add("article-ai-open");
+    preview.current?.scrollIntoView({ block: "start" });
+    requestInput.current?.focus({ preventScroll: true });
+    return () => { document.body.classList.remove("article-ai-open"); };
+  }, [method]);
+  useEffect(() => {
+    if (aiLog.current) aiLog.current.scrollTop = aiLog.current.scrollHeight;
+  }, [method, messages, busy]);
+  function closeAi() {
+    setMethod("write");
+    aiTrigger.current?.focus({ preventScroll: true });
+  }
   function choose(post?: Post) {
     setCurrent(post);
     setContent(post ? structuredClone(post.draft) : fresh());
@@ -125,13 +145,14 @@ export function BlogEditor({
     setInstruction(instruction.slice(0, start) + text + instruction.slice(end));
     setTurnId(createRequestId());
     requestAnimationFrame(() => {
-      input?.focus();
+      input?.focus({ preventScroll: true });
       input?.setSelectionRange(start + text.length, start + text.length);
+      if (input?.form) input.form.scrollTop = 0;
     });
   }
   return (
     <div className="blog-editor-layout">
-      <div className="panel post-management-list">
+      {method !== "ai" && <div className="panel post-management-list">
         <div className="section-top">
           <h2>{tr("お店のお便り")}</h2>
         </div>
@@ -155,8 +176,8 @@ export function BlogEditor({
             <small>{post.draft.date.replaceAll("-", "/")}</small>
           </button>
         ))}
-      </div>
-      <div>
+      </div>}
+      <div className="post-editor-workspace">
         <section className="panel post-editor">
           <span className="eyebrow">BLOG & NEWS</span>
           <div className="section-top">
@@ -170,7 +191,7 @@ export function BlogEditor({
             <p className="small muted">{tr("まずは自分の言葉で書いてみましょう。書いた文章はAIで清書できます。")}</p>
           </div>
           <fieldset disabled={blocked}>
-            <div className="form-grid">
+            <div className="form-grid article-metadata">
               <label className="field">
                 <span>{tr("記事の種類")}</span>
                 <select
@@ -194,12 +215,15 @@ export function BlogEditor({
               </label>
             </div>
           </fieldset>
-          {method === "ai" ? (
+          {method === "ai" && createPortal(
             <section
-              className="article-ai-chat"
+              className="visual-chat-panel article-ai-chat"
               aria-label={tr("AIと記事を作る")}
+              onKeyDown={event => { if (event.key === "Escape" && !blocked && !imageOpen) { event.preventDefault(); closeAi(); } }}
             >
-              <div role="log" aria-label={tr("記事の依頼")}>
+              <div className="visual-chat-heading"><h3>{tr("AIと記事を作る")}</h3><button type="button" disabled={blocked} aria-label={tr("閉じる")} onClick={closeAi}>×</button></div>
+              <p className="small muted">{tr("記事の下書きを整えます。保存するまで公開されません。")}</p>
+              <div className="chat-log visual-chat-log" ref={aiLog} role="log" aria-label={tr("記事の依頼")} aria-live="polite">
                 {messages.map((message, index) => (
                   <div
                     key={index}
@@ -215,7 +239,7 @@ export function BlogEditor({
                   {fileError}
                 </p>
               )}
-              <form
+              <form className="article-ai-composer"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (!instruction.trim() || blocked) return;
@@ -260,7 +284,9 @@ export function BlogEditor({
                   {tr("AIに伝える内容")}<textarea
                     ref={requestInput}
                     aria-label={tr("AIに伝える内容")}
-                    rows={4}
+                    rows={3}
+                    aria-keyshortcuts="Control+Enter Meta+Enter"
+                    onKeyDown={event => submitOnShortcut(event)}
                     maxLength={10000}
                     value={instruction}
                     disabled={blocked}
@@ -278,8 +304,8 @@ export function BlogEditor({
                     onClick={() => setImageOpen(true)}
                   >
                     {tr("📎 画像を添付")}</button>
-                  <label>
-                    {tr("資料を選ぶ")}<select
+                  <details className="article-ai-references">
+                    <summary>{tr("資料を選ぶ")}</summary><select
                       aria-label={tr("記事の参照ファイル")}
                       value=""
                       disabled={blocked}
@@ -295,16 +321,15 @@ export function BlogEditor({
                         </option>
                       ))}
                     </select>
-                  </label>
+                    <p className="small muted">{tr("[[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。")}</p>
+                  </details>
                   <button
-                    className="primary"
+                    className="primary article-ai-send"
                     disabled={blocked || !instruction.trim()}
                   >
                     {busy ? tr("AIが記事を作成しています…") : tr("送信する")}
                   </button>
                 </div>
-                <p className="small muted">
-                  {tr("[[パス]]でお店のファイルを参照できます。画像を添付すると、参照するパスが入力されます。")}</p>
               </form>
               <ArticleImageChooser
                 shopId={shop.id}
@@ -313,8 +338,8 @@ export function BlogEditor({
                 select={(image) => insertReference(image.path)}
                 onBusy={setMediaBusy}
               />
-            </section>
-          ) : (
+            </section>, document.body
+          )}
             <>
               <label className="field">
                 <span>{tr("タイトル")}</span>
@@ -359,14 +384,13 @@ export function BlogEditor({
                 </Suspense>
               )}
             </>
-          )}
           <div className="actions">
             {method === "write" ? (
-              <button type="button" disabled={blocked} onClick={() => setMethod("ai")}>
+              <button type="button" ref={aiTrigger} disabled={blocked} onClick={() => setMethod("ai")}>
                 {tr("AIで清書する")}
               </button>
             ) : (
-              <button type="button" disabled={blocked} onClick={() => setMethod("write")}>
+              <button type="button" ref={aiTrigger} disabled={blocked} onClick={() => setMethod("write")}>
                 {tr("自分で編集する")}
               </button>
             )}
@@ -459,7 +483,7 @@ export function BlogEditor({
             </div>
           )}
         </section>
-        <section className="panel post-preview" aria-label={tr("記事のプレビュー")}>
+        <section className="panel post-preview" ref={preview} aria-label={tr("記事のプレビュー")}>
           <h2>{tr("記事のプレビュー")}</h2>
           <p className="small muted">
             {tr("入力中の記事を確認できます。保存すると本番に反映されます。")}</p>
