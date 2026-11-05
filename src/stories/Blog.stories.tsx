@@ -24,4 +24,4 @@ export const WriteArticle: Story = {name:"自分で作成・テキスト入力",
 
 export const RichTextArticle: Story = {name:"リッチテキストで作成",args:{scenario:"blog-editor"},play:async({canvasElement})=>{await userEvent.click(await within(canvasElement).findByRole("button",{name:tr("リッチテキスト")}));}};
 
-export const AiArticle: Story = {name:"AIに依頼・画像とファイル参照",args:{scenario:"blog-editor"},play:async({canvasElement})=>{await userEvent.click(await within(canvasElement).findByRole("button",{name:tr("AIで清書する")}));}};
+export const AiArticle: Story = {name:"AIに依頼・画像とファイル参照",args:{scenario:"blog-editor"},play:async({canvasElement})=>{const canvas=within(canvasElement);await userEvent.type(await canvas.findByLabelText(tr("タイトル")),tr("秋の新しいデザインができました"));await userEvent.type(await canvas.findByRole("textbox",{name:tr("記事の本文")}),tr("秋の新しいデザインができました"));await userEvent.click(await canvas.findByRole("button",{name:tr("下書き保存")}));await userEvent.click(await canvas.findByRole("button",{name:tr("AIで修正")}));}};

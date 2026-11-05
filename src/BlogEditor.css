@@ -5,9 +5,11 @@
 .post-editor .section-top { flex-wrap: wrap; gap: 12px; }
 .post-editor .section-top h2 { margin: 0; }
 body.article-ai-open:has(.article-ai-chat) { --visual-chat-width: 380px; padding-right: var(--visual-chat-width); }
-.article-ai-open .blog-editor-layout { grid-template-columns: minmax(0, 1fr); }
-.article-ai-open .post-editor-workspace { display: flex; flex-direction: column; min-width: 0; }
-.article-ai-open .post-preview { order: -1; scroll-margin-top: 16px; }
+.blog-editor-layout.article-confirm-layout { grid-template-columns: minmax(0, 1fr); }
+.post-confirm { min-width: 0; scroll-margin-top: 16px; }
+.post-confirm .section-top h2 { margin: 0; }
+.post-confirm-body { scroll-margin-top: 16px; margin-top: 12px; border-top: 1px solid var(--line, #e5e5e5); padding-top: 12px; }
+.post-confirm .actions { flex-wrap: wrap; }
 .article-ai-chat { font-size: 16px; }
 .visual-chat-panel.article-ai-chat { padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 .article-ai-chat > .visual-chat-heading, .article-ai-chat > p { flex-shrink: 0; }
@@ -36,5 +38,5 @@ body.article-ai-open:has(.article-ai-chat) { --visual-chat-width: 380px; padding
   .article-ai-chat textarea { height: 84px; }
 }
 @media (max-width: 760px) {
-  .post-editor, .post-preview { padding: 20px 16px; }
+  .post-editor, .post-confirm { padding: 20px 16px; }
 }

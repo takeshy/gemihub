@@ -197,7 +197,10 @@ try {
   await capture("15-retry.jpg");
   await open("blog-editor", "お店のお便り");
   await capture("16-article-methods.jpg", ".article-writing-help");
-  await page.getByRole("button",{name:"AIで清書する",exact:true}).click();
+  await page.getByLabel("タイトル",{exact:true}).fill("秋のおすすめネイル");
+  await page.getByRole("textbox",{name:"記事の本文",exact:true}).fill("秋のおすすめネイルをご紹介します。");
+  await page.getByRole("button",{name:"下書き保存",exact:true}).click();
+  await page.getByRole("button",{name:"AIで修正",exact:true}).click();
   await page.getByRole("textbox",{name:"AIに伝える内容",exact:true}).fill("[[spec.md]]を参考に、この写真を使って秋のおすすめネイルを紹介してください。");
   await page.getByRole("button",{name:/画像を添付$/}).click();
   let articleImages=page.getByRole("dialog",{name:"記事に使う画像",exact:true});
@@ -208,6 +211,8 @@ try {
   await articlePicker.getByRole("button",{name:"この画像を使う",exact:true}).click();
   await articleImages.waitFor({state:"detached"});
   await capture("16-blog-ai.jpg", ".article-ai-chat");
+  await page.locator(".article-ai-chat .visual-chat-heading button").click();
+  await page.getByRole("button",{name:"編集に戻る",exact:true}).click();
   await page.getByRole("button", { name: /秋色ネイルで/ }).click();
   await page.getByRole("button", { name: "リッチテキスト", exact: true }).click();
   await page.locator('.article-wysimark [contenteditable="true"]').waitFor();
@@ -225,9 +230,10 @@ try {
   await articleImages.waitFor({state:"detached"});
   await page.getByRole('button',{name:'登録',exact:true}).click();
   await capture("16-blog-edit.jpg", ".post-editor");
-  await page.locator(".post-preview .article-managed-image").scrollIntoViewIfNeeded();
-  await page.locator(".post-preview img").waitFor();
-  await capture("17-blog-preview.jpg", ".post-preview");
+  await page.getByRole("button",{name:"下書き保存",exact:true}).click();
+  await page.locator(".post-confirm .article-managed-image").first().scrollIntoViewIfNeeded();
+  await page.locator(".post-confirm img").first().waitFor();
+  await capture("17-blog-preview.jpg", ".post-confirm");
   await open("blog-archive", "ブログ");
   await page.locator(".post-archive-card").first().waitFor();
   await capture("18-blog-archive.jpg", ".post-archive");

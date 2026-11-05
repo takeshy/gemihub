@@ -53,7 +53,7 @@ export function ArticleTextEditor({
         }}>
           {tr("画像を追加")}
         </button>
-        <p className="small muted">{tr("画像は何度でも追加できます。追加した画像は下のプレビューで確認できます。")}</p>
+        <p className="small muted">{tr("画像は何度でも追加できます。追加した画像は下書き保存後の画面で確認できます。")}</p>
       </div>
       <ArticleImageChooser
         shopId={shopId}
