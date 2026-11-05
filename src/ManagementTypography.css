@@ -19,6 +19,9 @@
 .dashboard .ai-mark { flex: 0 0 50px; }
 .dashboard .sidebar-label { font-size: 12px; }
 .dashboard .shop-switch strong { font-size: 15px; }
+.dashboard .sidebar-shop-url { min-width: 0; margin: -16px 0 20px; padding: 0 10px; font-size: 13px; line-height: 1.6; }
+.dashboard .sidebar-shop-url > span { display: block; margin-bottom: 4px; }
+.dashboard .sidebar-shop-url a { display: block; overflow-wrap: anywhere; text-decoration: underline; text-underline-offset: 3px; }
 .dashboard aside nav button,
 .dashboard aside nav .sidebar-settings-items button,
 .dashboard aside nav .sidebar-screen-tree button,
@@ -43,6 +46,7 @@
   .header-language-menu > .language-switcher { position: absolute; top: 100%; right: 0; z-index: 20; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: white; box-shadow: 0 4px 16px #233d2714; }
   .app-header:has(~ main .dashboard > aside) .header-language-menu { display: none; }
   .dashboard aside { padding: 10px 12px; }
+  .dashboard .sidebar-shop-url { margin: 8px 0 0; padding: 0 12px; }
   .dashboard .mobile-menu-toggle { display: flex; width: 100%; min-height: 48px; padding: 10px 12px; gap: 10px; text-align: left; background: #f4f6ef; }
   .mobile-menu-icon { flex: 0 0 22px; font-size: 24px; line-height: 1; text-align: center; }
   .mobile-menu-label { flex-shrink: 0; font-size: 14px; font-weight: 600; }

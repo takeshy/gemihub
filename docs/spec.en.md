@@ -14,6 +14,8 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 ## Initial setup, private preview, and public publication
 
+Show the shop URL as a link directly below the logo and shop name in management, opening in a new tab. Use the same custom domain, shop subdomain, or judge URL as publication settings. Keep it visible on mobile with the management menu closed, label private previews, and hide it before initial publication.
+
 - When restoring a pending settings save from browser storage, always fetch the saved settings. Automatically recover a completed save when the selected section already matches. Otherwise preserve its request ID for retry and offer to discard pending changes after fetching the latest saved configuration, without writing shop data. Keep retry state if the read fails or publication is unfinished.
 
 - In owner-enabled shops, Staff and shifts includes Owner information for the owner's name, photo, working days, hours and services. Save updates customer-facing screens. Retain the profile under staff ID `owner` without adding a second booking resource or an additional staff login; configured owner shifts and services restrict availability just like additional staff, within shop opening hours. Existing name/photo-only profiles keep automatic shop availability until working conditions are edited. Calendar access uses consent granted during owner sign-in.

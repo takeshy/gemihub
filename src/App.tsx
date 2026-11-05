@@ -436,6 +436,7 @@ function Dashboard({
     ["settings", "⚙", tr("公開の設定")],
   ];
   const currentMenuLabel = [...menuItems, ...settingItems].find(([id]) => id === view)?.[2];
+  const shopUrl = shop?.published ? new URL(shop.publicUrl, location.origin).href : undefined;
   return (
     <ShopRegionContext.Provider value={shop?.published ? regionOf(shop.published) : shop?.regionDefault || regionOf(null)}>
     <div className={`dashboard${creating || !shop ? " dashboard-creation" : ""}`}>
@@ -452,6 +453,12 @@ function Dashboard({
           <span className="shop-avatar">✳</span>
           <strong>{shop?.published?.name || tr("わたしのお店")}</strong>
         </div>
+        {shopUrl && <div className="sidebar-shop-url">
+          {shop.publication === "provisional" && <span className="muted">{tr("仮公開")}</span>}
+          <a href={shopUrl} target="_blank" rel="noreferrer" aria-label={`${tr("お店のアドレス")}: ${shopUrl}`}>
+            {shopUrl} <span aria-hidden="true">↗</span>
+          </a>
+        </div>}
         {shops.length > 1 && (
           <select
             value={shop?.id}
