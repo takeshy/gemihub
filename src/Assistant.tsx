@@ -66,12 +66,15 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
     });
   }
   const executeProposal = (proposal: PayPalProposal) => run(async () => {
-    const result = await api<{ ok: boolean; error?: string; state?: PayPalAlertState }>(`/api/shops/${shop.id}/paypal/proposals/execute`, {
-      proposalId: proposal.id, alertId: proposal.alertId, fingerprint: proposal.fingerprint,
-    });
-    if (!result.ok) {
-      await reload();
-      throw new Error(result.error || tr("状態が変わっています。最新の状態を確認してください。"));
+    try {
+      const result = await api<{ ok: boolean; error?: string; state?: PayPalAlertState }>(`/api/shops/${shop.id}/paypal/proposals/execute`, {
+        proposalId: proposal.id, alertId: proposal.alertId, fingerprint: proposal.fingerprint,
+      });
+      if (!result.ok) throw new Error(result.error || tr("状態が変わっています。最新の状態を確認してください。"));
+    } catch (error) {
+      setProposals([]);
+      await reload().catch(() => {});
+      throw error;
     }
     setProposals(items => items.filter(item => item.id !== proposal.id));
     setMessages(items => [...items, { role: "assistant", text: tr("実行しました：{0}。最新の状態を表示しています。", proposalOpText(proposal.operation)) }]);

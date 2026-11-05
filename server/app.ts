@@ -571,12 +571,7 @@ export function createApp(
     },
     sync: checkout => payments.sync(checkout),
     recordHistory: async (shopId, entry) => {
-      await store.locked(shopId, async () => {
-        const fresh = await store.shop(shopId);
-        if (!fresh || fresh.history.some(item => item.at === entry.at && item.summary === entry.summary)) return;
-        fresh.history.push(entry);
-        await store.saveShop(fresh);
-      });
+      await store.put("paypalHistory", digest(`${shopId}:${entry.at}:${entry.summary}`), { shopId, entry });
     },
     notifyOwner: async (shop, subject, body) => {
       if (shop.judge) return;
@@ -603,23 +598,26 @@ export function createApp(
     },
     appOrigin: origin,
   });
-  async function applyTransferHistory(shop: Shop) {
-    const pending = (await store.entries<{ shopId: string; entry: Shop["history"][number]; applied?: boolean }>("transferHistory", shop)).filter(row => !row.value.applied);
+  async function applyPaymentHistory(shop: Shop) {
+    type Pending = { shopId: string; entry: Shop["history"][number]; applied?: boolean };
+    const pending = (await Promise.all(["transferHistory", "paypalHistory"].map(async collection =>
+      (await store.entries<Pending>(collection, shop)).filter(row => !row.value.applied).map(row => ({ ...row, collection }))
+    ))).flat();
     if (!pending.length) return;
     await store.transaction(async () => {
       shop.history.push(...pending.map(row => row.value.entry));
       await store.saveShop(shop);
-      for (const row of pending) await store.put("transferHistory", row.id, { ...row.value, applied: true });
+      for (const row of pending) await store.put(row.collection, row.id, { ...row.value, applied: true });
     });
   }
-  const syncTransferHistory = (shopId: string) => store.locked(shopId, async () => {
+  const syncPaymentHistory = (shopId: string) => store.locked(shopId, async () => {
     const shop = await store.shop(shopId);
-    if (shop) await applyTransferHistory(shop);
+    if (shop) await applyPaymentHistory(shop);
   });
   const syncFiles = (shopId: string) => store.locked(shopId, async () => {
     const fresh = await store.shop(shopId);
     if (!fresh) return;
-    await applyTransferHistory(fresh);
+    await applyPaymentHistory(fresh);
     await flushFiles(fresh);
     // Converts old publications and refreshes releases from an older generator.
     await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
@@ -1403,7 +1401,7 @@ export function createApp(
         });
         if (action === "retry" && method === "POST") {
           await Promise.all([reconcilePayments(shop.id).then(() => flushMail(shop)), syncFiles(shop.id), flushMail(shop)]);
-          await syncTransferHistory(shop.id);
+          await syncPaymentHistory(shop.id);
           return json(res, { ok: true });
         }
         if (action === "paypal/alerts/check" && method === "POST") {
@@ -1418,6 +1416,7 @@ export function createApp(
           assertOwner(user, shop);
           const input = z.object({ proposalId: z.string().min(1).max(200), alertId: z.string().min(1).max(200), fingerprint: z.string().min(1).max(200) }).parse(await body(req, 10000));
           const result = await paypal.execute(shop, input, user!.email);
+          await syncPaymentHistory(shop.id).catch(console.error);
           return json(res, result, result.ok ? 200 : 409);
         }
         const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
@@ -3018,7 +3017,7 @@ export function createApp(
         });
         if (deliverMail) {
           await flushMail(shopRef);
-          void syncTransferHistory(shopRef.id).catch(console.error);
+          void syncPaymentHistory(shopRef.id).catch(console.error);
         }
         return json(res, result);
       }

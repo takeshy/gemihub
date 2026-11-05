@@ -169,13 +169,18 @@ export function BlogEditor({
     const fields = postContentSchema
       .omit({ slug: true, excerpt: true })
       .parse(next);
-    const saved = await api<Post>(current ? `${base}/${current.id}/draft` : `${base}/drafts`, {
-      content: fields,
-      requestId,
-      ...(current ? { version: current.version } : {}),
-    });
-    await accept(saved, false);
-    return saved;
+    try {
+      const saved = await api<Post>(current ? `${base}/${current.id}/draft` : `${base}/drafts`, {
+        content: fields,
+        requestId,
+        ...(current ? { version: current.version } : {}),
+      });
+      await accept(saved, false);
+      return saved;
+    } catch (error) {
+      await load().catch(() => {});
+      throw error;
+    }
   }
   function saveDraft() {
     void run(async () => {

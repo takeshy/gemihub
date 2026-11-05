@@ -239,6 +239,26 @@ test("PayPal adapter uses Sandbox OAuth, integer JPY, stable request IDs and red
   } finally { process.env = old; }
 });
 
+test("Transaction Search filters real PayPal payment-refund and reversal event codes", async () => {
+  const old = { ...process.env };
+  process.env.PAYPAL_CLIENT_ID = "fixture-client"; process.env.PAYPAL_CLIENT_SECRET = "fixture-secret";
+  const rows = [
+    { transaction_id: "PAY", transaction_event_code: "T0006", transaction_amount: { currency_code: "USD", value: "49.50" } },
+    { transaction_id: "REFUND", transaction_event_code: "T1107", paypal_reference_id: "PAY", paypal_reference_id_type: "TXN", transaction_amount: { currency_code: "USD", value: "-49.50" } },
+    { transaction_id: "AUTH_REFUND", transaction_event_code: "T1120", paypal_reference_id: "PAY", paypal_reference_id_type: "TXN", transaction_amount: { currency_code: "USD", value: "10.00" } },
+    { transaction_id: "REVERSAL", transaction_event_code: "T1106", paypal_reference_id: "PAY", paypal_reference_id_type: "TXN", transaction_amount: { currency_code: "USD", value: "-5.00" } },
+  ];
+  const fetcher: typeof fetch = async input => String(input).endsWith("/token")
+    ? Response.json({ access_token: "fixture-token", expires_in: 3600 })
+    : Response.json({ transaction_details: rows.map(transaction_info => ({ transaction_info })), total_pages: 1 });
+  try {
+    const gateway = paypalGateway(fetcher), period = { start: "2026-11-01T00:00:00Z", end: "2026-11-05T00:00:00Z" };
+    assert.deepEqual((await gateway.transactions!({ ...period, type: "refund" })).map(row => row.transaction_id), ["REFUND", "AUTH_REFUND", "REVERSAL"]);
+    assert.deepEqual((await gateway.transactions!({ ...period, type: "payment" })).map(row => row.transaction_id), ["PAY"]);
+    assert.equal((await gateway.transactions!({ ...period, type: "all" })).length, 4);
+  } finally { process.env = old; }
+});
+
 test("offline preview simulates payment/refund without network or external approval", async () => {
   const { config } = await setup(); const client = createPreviewClient(config, sampleFixtures(config), "preview");
   const base = "/api/public/local-preview";

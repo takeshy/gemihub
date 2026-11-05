@@ -57,8 +57,28 @@ try {
     assert.equal(post.published.body, 'Updated draft text.'); assert.equal(post.published.excerpt, '');
     const response = await context.request.get(`${origin}/s/${shop.slug}/${post.published.category}/${post.published.date}-${post.published.slug}?lang=${language}`);
     assert.equal(response.status(), 200); assert.ok((await response.text()).includes('Updated draft text.'));
+    // A second tab advances the version while the first tab keeps its edits.
+    const externalTitle = `Other tab ${language} ${width}`;
+    const external = await context.request.post(`${origin}/api/shops/${shop.id}/posts/${post.id}/draft`, {
+      headers: { Origin: origin }, data: { content: { ...post.draft, title: externalTitle }, version: post.version, requestId: randomUUID() },
+    });
+    assert.equal(external.status(), 200);
+    const body = page.getByRole('textbox', { name: label('記事の本文'), exact: true });
+    await body.fill('Keep my unsaved changes after a conflict.');
+    const conflictStart = requests.length;
+    await page.getByRole('button', { name: label('下書き保存'), exact: true }).click();
+    await expect(page.getByRole('alert').first()).toBeVisible();
+    await expect(body).toHaveValue('Keep my unsaved changes after a conflict.');
+    await expect(page.locator('.post-management-item').filter({ hasText: externalTitle })).toBeVisible();
+    assert.deepEqual(requests.slice(conflictStart), [`POST /api/shops/${shop.id}/posts/${post.id}/draft`, `GET /api/shops/${shop.id}/posts`], 'only failed saves reload the article list');
+    await page.locator('.post-management-item').filter({ hasText: externalTitle }).click();
+    await body.fill('Saved after opening the latest version.');
+    await page.getByRole('button', { name: label('下書き保存'), exact: true }).click();
+    await expect(draft).toBeVisible();
+    [post] = await store.records('post', shop);
+    assert.equal(post.draft.body, 'Saved after opening the latest version.');
     assert.equal(modelCalls, 0); assert.deepEqual(errors, []);
     await context.close();
-    console.log(`${language} ${width}px: one-request draft creation/update, local list update and separate publication passed without metadata AI.`);
+    console.log(`${language} ${width}px: one-request draft save/publication, conflict list refresh, preserved edits and successful retry passed without metadata AI.`);
   }
 } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await store.close(); }
