@@ -10,7 +10,7 @@ All PayPal transactions in the demo run in the PayPal Sandbox with Sandbox busin
 
 AI
 
-Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for the setup interview, screenshot understanding, page and theme generation, tool-based research, image generation, and drafting payment settings from plain-language instructions. A separate review pass checks AI-generated themes. Gemini is the default provider; the judge demo currently runs on the OpenAI API.
+Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for the setup interview, screenshot understanding, page and theme generation, tool-based research, image generation, and drafting payment settings from plain-language instructions. A separate review pass checks AI-generated themes. Gemini is the default provider; the judge demo currently uses Gemini 3.8 Flash.
 Gemini Live API: real-time voice conversations with the shop assistant.
 
 How they work together
@@ -24,9 +24,9 @@ Existing
 
 gemihub was inspired by hubwork, a website-building feature in a personal AI workspace I developed earlier. That workspace was previously called gemihub and continues separately as kiokuflow. I had registered the gemihub trademark, so I decided to use the name for this new product.
 
-The earlier hubwork shared the idea of creating web pages through conversation. However, building a site required reviewing a Mermaid workflow along the way.
+The earlier hubwork used conversation to create web pages, with backend behavior also driven by workflows built with AI. Building a site therefore involved reviewing Mermaid workflows.
 
-For the current gemihub, I used that idea as a starting point and developed a new product for small shops. It has no workflow to review: owners can create and update their sites through conversation and by marking up the screen.
+For the current gemihub, I redesigned the approach so beginners without programming experience could use it. Booking, payments, and access control run on fixed, deterministic backend code, removing the complexity of designing backend workflows. Owners can freely build and customize their storefront through conversation and on-screen annotations.
 
 During the submission period, I implemented PayPal prepayment at booking, automatic policy-based refunds, discounted rebooking after eligible cancellations with a larger refund when someone else books, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, a CRM, and design version history with one-click rollback.
 
@@ -51,7 +51,7 @@ Two things could be improved: (1) Sandbox accounts were confusing at first, beca
 
 In the product:
 
-Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for the setup interview, screenshot understanding, page and theme generation, tool-based research, image generation, and drafting payment settings from plain-language instructions. A separate review pass checks AI-generated themes. Gemini is the default provider; the judge demo currently runs on the OpenAI API.
+Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for the setup interview, screenshot understanding, page and theme generation, tool-based research, image generation, and drafting payment settings from plain-language instructions. A separate review pass checks AI-generated themes. Gemini is the default provider; the judge demo currently uses Gemini 3.8 Flash.
 Gemini Live API: real-time voice conversations with the shop assistant.
 
 During development:
