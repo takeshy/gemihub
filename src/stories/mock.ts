@@ -34,6 +34,7 @@ import {
 import { createRequestId } from "../request-id";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, normalizeEmail, type CustomerNote, type Inquiry } from "../../server/customers";
 import type { ApiClient } from "../api";
+import { couponDiscount, type CouponWalletItem } from "../../shared/coupons";
 import type { Plan, Session, Workspace } from "../App";
 import {
   sample,
@@ -137,6 +138,8 @@ export type Scenario =
   | "customer-choice"
   | "mypage"
   | "waitlist-mypage"
+  | "coupon-reservation"
+  | "coupon-mypage"
   | "contact"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
@@ -165,6 +168,7 @@ const publicScenarios = new Set<Scenario>([
   "customer-choice",
   "mypage",
   "waitlist-mypage",
+  "coupon-reservation", "coupon-mypage",
   "contact",
   "anonymous",
 ]);
@@ -212,7 +216,7 @@ export function scenarioProps(scenario: Scenario) {
         } as Partial<Record<Scenario, string>>
       )[scenario] || "build",
     initialPane:
-      (scenario.startsWith("transfer-") && scenario !== "transfer-offers") || ["paid-mypage", "waitlist-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
+      (scenario.startsWith("transfer-") && scenario !== "transfer-offers") || ["coupon-mypage", "paid-mypage", "waitlist-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
         ? undefined
         : scenario === "contact"
           ? "contact"
@@ -443,6 +447,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         },
   };
   const transferFixtures = createTransferFixtures(scenario, shop, session);
+  const couponItems: CouponWalletItem[] = scenario.startsWith("coupon-") ? [{ id: "c".repeat(64), shopId: shop.id, campaignId: "welcome", customer: "guest@example.com", title: tr("初回クーポン"), discount: { type: "percent", value: 10 }, currency: "JPY", issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now()+30*86400000).toISOString(), state: "available" }] : [];
   let wishes: SlotWish[] = scenario === "waitlist-mypage" ? [{ id: "story-wish", date: "2026-05-17", from: "10:00", to: "20:00", menuId: "simple", optionIds: [], discountOnly: false }, { id: "story-wish-discount", date: "2026-05-24", from: "13:00", to: "18:00", menuId: "simple", optionIds: [], discountOnly: true }] : [];
   if (scenario.startsWith("calendar-")) {
     shop.isOwner = false;
@@ -490,6 +495,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     let result: unknown;
     if (action === "/api/session") result = session;
     else if (transferFixtures.handles(action)) result = transferFixtures.request(action, data);
+    else if (action.endsWith("/coupons") && data === undefined) result = couponItems;
     else if (action.endsWith("/waitlist") && data === undefined) result = wishes;
     else if (action.endsWith("/waitlist")) { wishes.push({ ...(data as Omit<SlotWish, "id">), id: `story-wish-${wishes.length}` }); result = { ok: true }; }
     else if (/\/waitlist\/[^/]+\/remove$/.test(action)) { wishes = wishes.filter(wish => wish.id !== action.split("/").at(-2)); result = { ok: true }; }
@@ -995,6 +1001,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
             status: "active",
             createdAt: new Date().toISOString(),
           }, current);
+        const coupon = couponItems.find(c => c.id === input.couponId && c.state === "available");
+        if (coupon) { const discountAmount = couponDiscount(booking.price,coupon.discount,coupon.currency); booking.coupon = { grantId: coupon.id, campaignId: coupon.campaignId, title: coupon.title, originalPrice: booking.price, discountAmount, currency: coupon.currency }; booking.price -= discountAmount; coupon.state="used"; simulatePayment(booking,current); }
         if (!preview) shop.bookings.push(booking);
         result = { ok: true, booking };
       } else if (action.endsWith("/cancel")) {

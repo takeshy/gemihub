@@ -1,0 +1,27 @@
+---
+type: "Process"
+title: "Coupons and distribution"
+description: "Eligibility, scheduled and manual grants, and discount redemption."
+tags: ["coupons", "customers", "payments"]
+updated: "2026-11-06"
+---
+
+# Owner workflow
+
+Open Coupons to create an automatic rule by form or an AI request. Review the editable proposal before enabling distribution. AI only proposes declarative rules: all/any combinations of first visit, birthday month, visit counts (exact, multiples, minimum) and all registered members. Missing anniversary dates are asked about rather than invented. Choose a percentage or fixed shop-currency discount and validity after issue.
+
+The initial screen is the active/paused campaign list. Create a coupon and Manual distribution open separate work areas; creation offers first-visit, birthday, visit-count and anniversary templates. A successful creation closes the form, returns to the list and focuses visible completion feedback. Retries retain the same operation ID until an explicit new creation or edit. Incompatible first-visit/after-visit and conflicting visit-count conditions show field-level explanations and cannot be enabled; the server enforces the same checks.
+
+Choose registration/one eligible grant, after each qualifying visit, monthly day/hour, or once on a specified date for an anniversary. Registration rules also evaluate existing members. A visit is an active booking that ended at least 24 hours ago, which gives the owner time to record a no-show; a booking still inside that day already blocks first-visit eligibility. Cancellations/no-shows are excluded. After-visit campaigns process visits ending since campaign creation and issue once per visit number, so a no-show recorded later cannot repeat a milestone; these coupons are for a later booking and are not revoked by that later no-show. Scheduled calculations use shop time; missing month days use month end, and DST gaps use the next valid local minute. Monthly recovery covers the current month from the first scheduled time after campaign creation. Monthly and one-time recovery exclude members registered after the later of the scheduled time and campaign creation. Existing profiles without a registration timestamp remain eligible. Calculations run every minute, issue at most 100 coupons per run and continue on the next, and can also be requested with Calculate eligibility now. New members and visits may therefore wait for a run before coupons appear in My page. Campaigns can be paused without revoking previously issued coupons. Resuming skips visits and scheduled dates that fell inside the pause; registration rules still evaluate every member. A campaign whose currency no longer matches the shop stops issuing and says so in the list.
+
+For manual distribution, choose Manual distribution. Search registered members, select one or more, choose discount and validity, and submit. Selected names and email addresses remain visible in a removable recipient list beside the counted submit action, even when the search hides those members. Switching work areas preserves manual selections and retry state. Requests validate all recipients before starting. A saved operation fixes its author, payload, issue time and expiry; per-recipient stable IDs allow an interrupted batch to resume. The same request cannot be reused for different settings. Both forms of distribution place coupons in My page.
+
+# Redemption and payments
+
+Customers see only their own grants and select one available coupon in the booking summary. The server verifies shop, holder, expiry, currency, previous use and pending checkouts under the booking lock. Discount the full service/add-on total, rounding percentage discounts down to yen/cents and capping the discount at the price. Consent, PayPal order/capture validation, payment receipts and refund calculation all use the discounted cash price. A 100% coupon confirms at zero without an external payment.
+
+Available coupons appear first, with the nearest expiry first. Book with this coupon opens booking with that coupon selected; the selector includes each coupon's expiry. Used and expired coupons are grouped in a collapsed history; pending-payment coupons remain visible without a new booking action. Payment-return parameters are removed when starting a new booking while retaining the explicitly selected coupon.
+
+Pending checkouts reserve the coupon. Abandoned/expired unpaid checkouts release it; ambiguous captures continue holding it. Confirmed bookings write a durable usage record. Coupons are not restored by cancellation, and cannot be combined with cancellation-slot discounts. A transferred booking does not pass the earlier holder's coupon details or rights to the next holder; the earlier usage record is retained. Frozen grants survive campaign pause or later price changes.
+
+Campaign, grant, usage and manual-operation records are shop-scoped Firestore business records. Only the owner can manage/distribute; accepted staff cannot grant coupons. Customer routes require that shop's verified customer session. Full JSON export includes all four record types, and booking CSV includes the frozen coupon snapshot. Preview/offline pages do not modify these records.

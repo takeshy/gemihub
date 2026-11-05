@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n.ts";
+import { recordCouponUse } from "./coupons.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Booking } from "./domain.ts";
 import { refundQuote, type RefundTiers } from "./payment-domain.ts";
@@ -19,9 +20,11 @@ export type Checkout = {
   brandName?: string;
 };
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
+export function checkoutHolding(c: Checkout, now = Date.now()) {
+  return ["capturing", "captured"].includes(c.phase) || (["creating", "awaiting_approval"].includes(c.phase) && c.expires > now);
+}
 export async function paymentHolds(store: Store, shopId: string, exclude?: string) {
-  return (await store.list<Checkout>("checkout")).filter(c => c.shopId === shopId && c.id !== exclude &&
-    (["capturing", "captured"].includes(c.phase) || (["creating", "awaiting_approval"].includes(c.phase) && c.expires > Date.now()))).map(c => c.booking);
+  return (await store.list<Checkout>("checkout")).filter(c => c.shopId === shopId && c.id !== exclude && checkoutHolding(c)).map(c => c.booking);
 }
 export function checkoutView(c: Checkout) {
   return { id: c.id, phase: c.phase, expires: c.expires, approvalUrl: c.phase === "awaiting_approval" ? c.approvalUrl : undefined, review: !!c.review, start: c.booking.start, amount: c.booking.price, currency: c.currency || "JPY" };
@@ -35,7 +38,7 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
   async function sync(c: Checkout) {
     const snapshot = createHash("sha256").update(JSON.stringify(c.booking)).digest("hex");
     if (c.synced !== snapshot) {
-      await store.saveBooking(c.booking);
+      await store.transaction(async () => { await store.saveBooking(c.booking); await recordCouponUse(store, c.booking); });
       c.synced = snapshot;
     }
     if (c.phase === "captured") c.phase = "confirmed";

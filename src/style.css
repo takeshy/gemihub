@@ -2625,3 +2625,32 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .plan-progress details { min-width:0; }
 .generation-preview { max-height:36rem; overflow:auto; border:1px solid #dce3de; border-radius:12px; background:white; }
 .generation-preview .preview-surface { min-width:0; }
+.coupon-management fieldset { min-width:0; border:1px solid var(--line); border-radius:12px; padding:1.2rem; margin:1.2rem 0; }
+.coupon-management legend { padding:0 .4rem; font-weight:600; }
+.coupon-fields,.coupon-condition { display:flex; flex-wrap:wrap; gap:1rem; align-items:end; }
+.coupon-fields > .field,.coupon-condition > .field { flex:1 1 170px; min-width:0; }
+.coupon-management .field { margin-bottom:1rem; }
+.coupon-management .booking-card,.coupon-wallet .booking-card { flex-wrap:wrap; }
+.coupon-management .booking-card > div,.coupon-wallet .booking-card > div { min-width:0; overflow-wrap:anywhere; }
+.manual-coupon-members { display:flex; flex-direction:column; gap:.6rem; max-height:18rem; overflow:auto; margin:1rem 0; }
+.manual-coupon-members label { display:flex; align-items:center; gap:.6rem; overflow-wrap:anywhere; }
+.manual-coupon-members input { width:auto; flex:none; }
+.coupon-actions { display:flex; flex-wrap:wrap; gap:.6rem; margin:1.2rem 0; }
+.coupon-actions button[aria-pressed="true"] { background:var(--green); color:white; border-color:var(--green); }
+.coupon-actions button { min-height:44px; }
+.coupon-templates { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin:1rem 0; }
+.coupon-templates > span { flex-basis:100%; font-weight:600; }
+.coupon-workspace-title { scroll-margin-top:1rem; }
+.coupon-feedback:focus,.coupon-workspace-title:focus { outline:2px solid var(--green); outline-offset:4px; }
+.manual-coupon-selection { position:sticky; bottom:0; z-index:1; padding:1rem; border:1px solid var(--line); border-radius:12px; background:#f8faf5; box-shadow:0 -3px 12px #284f4310; }
+.manual-coupon-selection > p { margin:0 0 .6rem; font-weight:600; }
+.selected-recipients { max-height:10rem; overflow:auto; list-style:none; padding:0; margin:0 0 .8rem; }
+.selected-recipients li { display:flex; align-items:center; gap:.5rem; padding:.4rem 0; }
+.selected-recipients li > span { min-width:0; flex:1; overflow-wrap:anywhere; }
+.selected-recipients button { flex:none; min-height:44px; }
+.coupon-wallet-history > summary { padding:1rem 0; cursor:pointer; }
+.coupon-wallet-history .coupon-card { background:var(--cream); padding:.8rem; border-radius:8px; }
+@media (max-width:500px) {
+  .coupon-actions button { flex:1 1 120px; }
+  .manual-coupon-selection > button { width:100%; }
+}

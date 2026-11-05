@@ -8,6 +8,7 @@ import { sample, shopSchema } from '../server/domain.ts';
 import { digest } from '../server/auth.ts';
 import { exampleTheme } from '../src/stories/themes.ts';
 import { defaultAppearance } from '../shared/theme-editing.ts';
+import { draftKey } from '../src/local-preview.ts';
 
 process.env.DEMO_MODE = 'true'; delete process.env.GOOGLE_CLOUD_PROJECT;
 const catalog = JSON.parse(await readFile('shared/en.json', 'utf8'));
@@ -21,16 +22,19 @@ try {
   for (const language of ['ja', 'en']) for (const width of [1280, 390]) {
     const label = text => language === 'en' ? catalog[text] || text : text;
     const shop = await store.createShop(`theme-editor-${language}-${width}@example.com`);
-    shop.published = shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, theme: exampleTheme } });
+    shop.published = JSON.parse(JSON.stringify(shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, theme: exampleTheme } }), (_key, value) => value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).reverse()) : value));
     shop.publication = 'public'; await store.saveShop(shop);
     const token = randomUUID(); await store.put('session', digest(token), { user: { email: shop.owner, name: 'Owner', role: 'owner', shopId: shop.id }, expires: Date.now() + 600000 });
     const context = await browser.newContext({ viewport: { width, height: 950 }, locale: language === 'ja' ? 'ja-JP' : 'en-US' });
     await context.addCookies([{ name: 'gemihub_session', value: token, url: origin }]);
-    const page = await context.newPage(), errors = [];
+    const page = await context.newPage(), errors = [], writes = [];
     page.setDefaultTimeout(15000);
     page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+    const storageKey = draftKey(shop.owner, shop.id);
+    const readDraft = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
     const preview = page.locator('.local-preview-screen');
-    const treeitem = text => page.getByRole('treeitem', { name: new RegExp('^' + label(text)) });
+    const treeitem = text => page.getByRole('treeitem', { name: new RegExp('^' + label(text)), includeHidden: true });
     async function choose(text) {
       if (width <= 760) {
         const toggle = page.locator('.mobile-menu-toggle');
@@ -45,6 +49,42 @@ try {
       await page.locator('summary').filter({ hasText: label(part === 'header' ? 'ヘッダーの HTML を編集' : 'フッターの HTML を編集') }).click();
     }
     async function apply() { await page.getByRole('button', { name: label('プレビューに反映'), exact: true }).click(); }
+    async function discardHeader() {
+      const trigger = page.locator('.editor-toolbar').getByRole('button', { name: label('変更を取り消す'), exact: true });
+      const dialog = page.getByRole('dialog', { name: label('この画面の変更を取り消す'), exact: true });
+      const before = await readDraft();
+      await trigger.click();
+      await expect(dialog).toBeInViewport(); await expect(dialog.getByRole('heading')).toBeFocused();
+      await expect(dialog.getByRole('button', { name: label('この画面の変更を取り消す'), exact: true })).toBeInViewport();
+      await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0); await expect(trigger).toBeFocused();
+      assert.deepEqual((await readDraft()).config, before.config, 'cancelling does not discard edits');
+      await trigger.click(); await dialog.getByRole('button', { name: label('戻る'), exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+      await trigger.click();
+      let failRead;
+      await page.route(`**/api/shops/${shop.id}/local-editor/shared`, async route => {
+        await new Promise(resolve => { failRead = resolve; });
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary discard failure' }) });
+      }, { times: 1 });
+      await dialog.getByRole('button', { name: label('この画面の変更を取り消す'), exact: true }).click();
+      await expect.poll(() => typeof failRead).toBe('function');
+      await expect(dialog.getByRole('status')).toHaveText(label('変更を取り消しています…'));
+      await page.keyboard.press('Escape'); await expect(dialog).toBeVisible(); failRead();
+      await expect(dialog.getByRole('alert')).toHaveText('Temporary discard failure');
+      await expect(dialog.getByRole('alert')).toBeInViewport();
+      assert.deepEqual((await readDraft()).config, before.config, 'failed reads retain edits');
+      await page.screenshot({ path: `tmp/theme-editors/${language}-${width}-discard.png`, fullPage: false });
+      await dialog.getByRole('button', { name: label('この画面の変更を取り消す'), exact: true }).click();
+      await expect(dialog).toHaveCount(0); await expect(trigger).toHaveCount(0);
+      await expect(page.locator('.editor-toolbar .editor-change-badge')).toHaveCount(0);
+      await expect(treeitem('ヘッダー').locator('.sync-badge')).toHaveCount(0);
+      const after = await readDraft();
+      assert.equal(after.config.appearance.theme.headerHtml, exampleTheme.headerHtml);
+      assert.equal(after.config.appearance.theme.footerHtml, before.config.appearance.theme.footerHtml);
+      assert.equal(after.config.appearance.theme.css, before.config.appearance.theme.css);
+      assert.deepEqual(after.fixtures, before.fixtures, 'discarding a part keeps sample data');
+      assert.equal(writes.length, 0, 'discarding local changes never writes to production');
+    }
     let publication = 0;
     async function publish() {
       publication++;
@@ -85,9 +125,30 @@ try {
     }
     await page.goto(`${origin}/?tab=try&shop=${shop.id}&screen=about&lang=${language}`);
     await expect(preview).toBeVisible();
+    await expect(page.locator('.editor-toolbar .editor-change-badge')).toHaveCount(0);
+    await expect(page.locator('.screen-tree .sync-badge')).toHaveCount(0);
+    // Recover the old failed no-change attempt, including a stale baseline whose local
+    // content was already published elsewhere. Reordered keys alone are not changes.
+    await expect.poll(async () => !!await readDraft()).toBe(true);
+    const cached = await readDraft();
+    cached.source.description = 'An obsolete baseline';
+    cached.pending = { requestId: randomUUID(), config: structuredClone(cached.config), scope: { kind: 'shared' } };
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: storageKey, value: cached });
+    await page.reload();
+    await expect(preview).toBeVisible();
+    await expect.poll(async () => (await readDraft()).pending).toBe(undefined);
+    await expect.poll(async () => (await readDraft()).source.description).toBe(shop.published.description);
+    await expect(page.locator('.editor-toolbar .editor-change-badge')).toHaveCount(0);
+    await expect(page.locator('.editor-toolbar .primary')).toHaveCount(0);
+    await expect(page.locator('.screen-tree .sync-badge')).toHaveCount(0);
+    assert.equal(writes.length, 0, 'matching production does not create a publication request');
     await expect(page.getByText(label('ヘッダー・フッター・全体の枠の HTML を編集'), { exact: true })).toHaveCount(0);
     await openPart('header');
     await expect(area('ヘッダーの HTML')).toHaveValue(exampleTheme.headerHtml);
+    await apply();
+    await expect(page.locator('.editor-toolbar .editor-change-badge')).toHaveCount(0);
+    await expect(treeitem('ヘッダー').locator('.sync-badge')).toHaveCount(0);
+    await expect(page.locator('.editor-toolbar .primary')).toHaveCount(0);
     await expect(area('フッターの HTML')).toHaveCount(0);
     await expect(area('全体の CSS（ヘッダー・枠・フッター共通）')).toHaveCount(0);
     await area('ヘッダーの HTML').fill('<script>alert(1)</script>');
@@ -111,7 +172,11 @@ try {
     await expect(preview.getByRole('heading', { name: 'EDITED FRAME' })).toBeVisible();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'editor fits the viewport');
     await page.screenshot({ path: `tmp/theme-editors/${language}-${width}-frame.png`, fullPage: true });
-    await choose('ヘッダー'); await publish();
+    await choose('ヘッダー'); await discardHeader();
+    await openPart('header'); await area('ヘッダーの HTML').fill(headerHtml); await apply();
+    await expect(page.locator('.editor-toolbar .editor-change-badge')).toBeVisible();
+    await expect(treeitem('ヘッダー').locator('.sync-badge')).toHaveText(label('未反映'));
+    await publish();
     let live = (await store.shop(shop.id)).published.appearance.theme;
     assert.equal(live.headerHtml, headerHtml); assert.equal(live.footerHtml, exampleTheme.footerHtml);
     assert.equal(live.bodyHtml, exampleTheme.bodyHtml); assert.equal(live.css, exampleTheme.css);

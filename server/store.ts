@@ -75,7 +75,7 @@ export const mailLockKey = (shopId: string) => `mail:${shopId}`;
 export const postLockKey = (shopId: string) => `post-writes:${shopId}`;
 
 const chatKinds = new Set(["shopChat", "shopChatMessage"]);
-const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote", ...chatKinds]);
+const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote", "couponCampaign", "couponGrant", "couponUse", "couponManual", ...chatKinds]);
 type Entry = { kind: string; id: string; value: unknown };
 export class Store {
   readonly memory: boolean;

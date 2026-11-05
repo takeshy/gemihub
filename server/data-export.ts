@@ -3,7 +3,7 @@ import type { ShopConversation, ShopChatMessage } from "./shop-chat.ts";
 import type { ImageUpload } from "./menu-images.ts";
 
 export const exportColumns = {
-  bookings: ["id", "customer", "name", "menuId", "staffId", "start", "end", "status", "createdAt", "updatedBy", "updatedAt", "requestKey", "price", "message", "payment", "optionIds", "items"],
+  bookings: ["id", "customer", "name", "menuId", "staffId", "start", "end", "status", "createdAt", "updatedBy", "updatedAt", "requestKey", "price", "message", "payment", "optionIds", "items", "coupon"],
   customers: ["email", "name", "birthDate", "gender", "updatedBy", "updatedAt"],
   inquiries: ["id", "email", "name", "message", "reply", "status", "at"],
   members: ["email", "accepted", "status", "invitedAt", "acceptedAt", "revokedAt"],
@@ -22,11 +22,12 @@ export async function exportRows(store: Store, shop: Shop, table: ExportTable): 
 }
 
 export async function shopExport(store: Store, shop: Shop, email: string) {
-  const [bookings, customers, inquiries, members, posts, customerNotes, waitlist, chats, messages, images] = await Promise.all([
+  const [bookings, customers, inquiries, members, posts, customerNotes, waitlist, chats, messages, images, couponCampaigns, couponGrants, couponUses, couponManual] = await Promise.all([
     store.bookings(shop.id), store.records("customer", shop), store.records("inquiry", shop),
     store.records("member", shop), store.records("post", shop), store.records("customerNote", shop), store.records("slotWish", shop),
     store.records<ShopConversation>("shopChat", shop), store.records<ShopChatMessage>("shopChatMessage", shop),
     store.entries<ImageUpload>("menuImageUpload", shop),
+    store.records("couponCampaign", shop), store.records("couponGrant", shop), store.records("couponUse", shop), store.records("couponManual", shop),
   ]);
   const ownChats = chats.filter(chat => chat.email === email);
   const ownIds = new Set(ownChats.map(chat => chat.id));
@@ -35,7 +36,7 @@ export async function shopExport(store: Store, shop: Shop, email: string) {
     shop: { id: shop.id, slug: shop.slug, publication: shop.publication, revision: shop.revision,
       config: shop.published, draft: shop.draft, history: shop.history,
       driveFolderId: shop.google?.folderId },
-    records: { bookings, customers, inquiries, members, posts, customerNotes, waitlist,
+    records: { bookings, customers, inquiries, members, posts, customerNotes, waitlist, couponCampaigns, couponGrants, couponUses, couponManual,
       menus: shop.published?.menus || shop.draft?.menus || [], staff: shop.published?.staff || shop.draft?.staff || [] },
     chats: ownChats, messages: messages.filter(message => message.email === email && ownIds.has(message.conversationId)),
     files: images.filter(({ value }) => value.complete).map(({ id, value }) => ({ imageId: id, fileId: value.fileId, name: value.name, mimeType: value.mimeType, size: value.size, archived: !!value.archived })),

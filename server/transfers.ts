@@ -204,6 +204,7 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
       } satisfies BookingTransfer;
       c.booking.transfers = [...(c.booking.transfers || []), entry];
       c.booking.customer = b.customer;
+      delete c.booking.coupon;
       c.booking.name = b.name;
       c.booking.locale = b.locale || "ja";
       // Keep the previous holder's message only in the operator-visible history.

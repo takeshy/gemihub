@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { google } from "googleapis";
-import { sample, type ShopConfig } from "../server/domain.ts";
+import { sample, shopSchema, planSummary, type ShopConfig } from "../server/domain.ts";
 import { syncConfig, encrypt } from "../server/google.ts";
 import { contentHash, editorIndex } from "../server/editor-sync.ts";
 import { fingerprint, syncStatus, replaceScope } from "../src/editor-sync.ts";
 import { sampleFixtures, type LocalDraft } from "../src/local-preview.ts";
-import { pageValue, scopedSource, same, type ShopPage } from "../server/pages.ts";
+import { pageValue, scopedSource, scopedConfig, same, type ShopPage } from "../server/pages.ts";
 import { createApp } from "../server/app.ts";
 import { Store, type Shop } from "../server/store.ts";
 import { basicSchema } from "../server/live-settings.ts";
@@ -16,6 +16,23 @@ import { randomUUID } from "node:crypto";
 import { digest } from "../server/auth.ts";
 import type { AddressInfo } from "node:net";
 const page = (id: string): ShopPage => ({ id, slug: id, title: id, navigationLabel: id, body: "もとの本文", layout: "standard", imageUrl: "" });
+
+test("publication summaries and tree status agree when stored JSON keys have a different order", async () => {
+  const config = shopSchema.parse({ ...sample, pages: [page("faq")] });
+  const stored: ShopConfig = JSON.parse(JSON.stringify(config, (_key, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).reverse()) : value));
+  const draft: LocalDraft = { config, source: stored, base: 0, fixtures: sampleFixtures(config) };
+  assert.deepEqual(planSummary(stored, config), []);
+  for (const scope of [{ kind: "shared" }, { kind: "part", part: "header" }, { kind: "part", part: "footer" }, { kind: "page", pageId: "faq" }] as const) {
+    assert.equal(await syncStatus(draft, editorIndex(stored, 0), scope), "synced");
+    assert.deepEqual(planSummary(stored, scopedConfig(stored, config, scope)), []);
+  }
+  const changed = structuredClone(config); changed.pages[0].body = "Changed page HTML";
+  const scope = { kind: "page" as const, pageId: "faq" };
+  assert.equal(await syncStatus({ ...draft, config: changed }, editorIndex(stored, 0), scope), "local");
+  assert.equal(planSummary(stored, scopedConfig(stored, changed, scope)).length, 1, "real content changes still appear");
+  const reordered = { ...config, menus: [...config.menus].reverse() };
+  assert.ok(planSummary(config, reordered).length, "array order remains meaningful");
+});
 
 test("editor fingerprints match server SHA-256 and sync still detects conflicts without Web Crypto", async () => {
   const previous = Object.getOwnPropertyDescriptor(globalThis.crypto, "subtle");

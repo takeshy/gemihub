@@ -6,6 +6,7 @@ import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } 
 import { regionSchema, regionOf, currencyOf, validPrice, toMinor, fromMinor, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
 import { themeSchema, compilePresentation } from "../shared/presentation.ts";
 import { screensSchema } from "../shared/screens.ts";
+import { stableJson } from "../shared/stable-json.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 export const shopSchema = z
   .object({
@@ -159,6 +160,7 @@ export const bookingMenuName = (config: ShopConfig | null | undefined, booking: 
 export const bookingTransferable = (config: Pick<ShopConfig, "menus">, booking: Pick<Booking, "menuId" | "optionIds">) =>
   [booking.menuId, ...(booking.optionIds || [])].every(id => { const menu = config.menus.find(menu => menu.id === id); return !!menu && menu.transferable !== false; });
 export type Booking = {
+  coupon?: import("../shared/coupons.ts").BookingCoupon;
   id: string;
   requestKey?: string;
   shopId: string;
@@ -353,7 +355,7 @@ export function planSummary(before: ShopConfig | null, next: ShopConfig) {
       tr("予約確定とキャンセルのメール通知"),
     ];
   return ([...new Set([...Object.keys(before), ...Object.keys(next)])] as (keyof ShopConfig)[])
-    .filter((k) => JSON.stringify(before[k]) !== JSON.stringify(next[k]))
+    .filter((k) => stableJson(before[k]) !== stableJson(next[k]))
     .map(
       (k) =>
         tr("{0}を更新", { name: tr("店名"), industry: tr("業種"), description: tr("お店の紹介"), address: tr("アクセス"), appearance: tr("ページの色・画像・配置"), notificationEmail: tr("通知先"), map: tr("地図"), screens: tr("画面のデザイン"), region: tr("国・タイムゾーン"), ownerBooking: tr("店主の予約受付"), pages: tr("追加ページ"), header: tr("共通ヘッダー"), footer: tr("共通フッター"), menus: tr("メニュー"), staff: tr("スタッフ・勤務"), hours: tr("営業時間・休業日"), rules: tr("予約ルール") }[k]),

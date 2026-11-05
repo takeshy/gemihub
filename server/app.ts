@@ -21,6 +21,9 @@ import { conversations, createConversation, readConversation, searchConversation
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
 import { emailLogin, type LoginMailer } from "./email-login.ts";
+import { issueCoupons, hasActiveCoupons, campaignEnabled, couponWallet, applyCoupon, recordCouponUse, validateCouponRule, grantManualCoupons } from "./coupons.ts";
+import { proposeCoupon } from "./coupon-ai.ts";
+import { couponRuleSchema, type CouponCampaign, type CouponGrant } from "../shared/coupons.ts";
 import { listedBookingIds, queueBookingReminders, reminderCurrent, type BookingReminder } from "./booking-reminders.ts";
 import {
   createServer,
@@ -1450,6 +1453,42 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (/^coupons(?:\/|$)/.test(action)) {
+          assertOwner(user, shop);
+          if (action === "coupons/propose" && method === "POST") {
+            const input = z.object({ request: z.string().trim().min(1).max(4000) }).parse(await body(req));
+            const proposal = await proposeCoupon(shop, input.request);
+            if (proposal.rule) validateCouponRule(proposal.rule, shop);
+            return json(res, proposal);
+          }
+          return await store.locked(bookingLockKey(shop.id), async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            if (action === "coupons" && method === "GET") {
+              const grants = await store.records<CouponGrant>("couponGrant", fresh);
+              const customers = (await store.records<{ email: string; name: string }>("customer", fresh)).filter(record => memberProfile(record)).map(({ email, name }) => ({ email, name }));
+              return json(res, { campaigns: await store.records<CouponCampaign>("couponCampaign", fresh), issued: grants.length, customers });
+            }
+            if (action === "coupons/manual" && method === "POST") return json(res, await grantManualCoupons(store, fresh, user!.email, await body(req)));
+            if (action === "coupons" && method === "POST") {
+              const input = z.object({ requestId: z.uuid(), rule: couponRuleSchema }).parse(await body(req));
+              validateCouponRule(input.rule, fresh);
+              const id = digest(`${shop.id}:${input.requestId}`), existing = await store.get<CouponCampaign>("couponCampaign", id);
+              if (existing && JSON.stringify(couponRuleSchema.parse(existing)) !== JSON.stringify(input.rule)) fail(409, tr("クーポンの内容が変わっています。新しい操作として保存してください。"));
+              if (!existing) await store.put("couponCampaign", id, { ...input.rule, id, shopId: shop.id, enabled: true, currency: currencyOf(regionOf(fresh.published)), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } satisfies CouponCampaign);
+              return json(res, { ok: true });
+            }
+            if (action === "coupons/calculate" && method === "POST") { await issueCoupons(store, fresh); return json(res, { ok: true }); }
+            const toggle = action.match(/^coupons\/([a-f0-9]{64})\/enabled$/);
+            if (toggle && method === "POST") {
+              const input = z.object({ enabled: z.boolean() }).parse(await body(req));
+              const campaign = await store.get<CouponCampaign>("couponCampaign", toggle[1]);
+              if (!campaign || campaign.shopId !== shop.id) fail(404, tr("クーポンがありません"));
+              await store.put("couponCampaign", campaign!.id, campaignEnabled(campaign!, input.enabled, new Date().toISOString()));
+              return json(res, { ok: true });
+            }
+            fail(404, tr("見つかりません"));
+          });
+        }
         if (action === "operations" && method === "GET") return json(res, {
           bookings: await store.bookings(shop.id),
           paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
@@ -2786,6 +2825,9 @@ export function createApp(
           const existingPayment = action === "checkouts" || action.startsWith("checkouts/") || (action === "bookings" && method === "GET") || action === "transfers" || action === "transfers/mine" || /^transfers\/[a-f0-9]{64}\/(capture|abandon|resume|withdraw)$/.test(action) || /^waitlist(?:\/|$)/.test(action);
           const config = existingPayment ? shop.published! : await effective(shop);
           const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
+          if (action === "coupons" && method === "GET") {
+            return await couponWallet(store, shop, customer().email);
+          }
           if (action === "profile" && method === "GET") {
             const u = customer();
             return ({ email: u.email, profile: await ownProfile(), suggestedName: u.name });
@@ -2795,7 +2837,7 @@ export function createApp(
             const profile = customerProfileSchema.parse(await body(req));
             const key = `${shop.id}:${u.email}`;
             const previous = await store.get<Record<string, unknown>>("customer", key);
-            await store.put("customer", key, { ...previous, ...profile, shopId: shop.id, email: u.email, updatedBy: u.email, updatedAt: new Date().toISOString() });
+            await store.put("customer", key, { ...previous, ...profile, shopId: shop.id, email: u.email, createdAt: previous?.createdAt || (memberProfile(previous) ? previous?.updatedAt : undefined) || new Date().toISOString(), updatedBy: u.email, updatedAt: new Date().toISOString() });
             return ({ profile });
           }
           if (!action && method === "GET") {
@@ -2985,6 +3027,7 @@ export function createApp(
                 paymentConsent: z.object({ amount: z.number().min(0), policy: refundTiersSchema }).optional(),
                 expectedPrice: z.number().min(0).optional(),
                 expectedDuration: z.number().int().min(15).optional(),
+                couponId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
               })
               .parse(await body(req));
             const requestKey = input.requestId
@@ -2997,18 +3040,21 @@ export function createApp(
               : undefined;
             const pending = requestKey ? await store.get<Checkout>("checkout", digest(requestKey)) : undefined;
             if (pending) {
+              if ((pending.booking.coupon?.grantId || "") !== (input.couponId || "")) fail(409, tr("クーポンの選択が変更されています。予約をやり直してください。"));
               if (pending.customer !== u.email || pending.shopId !== shop.id || pending.booking.name !== input.name || pending.booking.message !== input.message || pending.booking.start !== input.start || pending.booking.menuId !== input.menuId || JSON.stringify([...(pending.booking.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort()) || (input.staffId && pending.booking.staffId !== input.staffId)) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
               await payments.create(pending);
               return ({ ok: pending.phase === "confirmed", booking: pending.phase === "confirmed" ? customerBooking(pending.booking) : undefined, checkout: checkoutView(pending) });
             }
             if (previous) {
+              if ((previous.coupon?.grantId || "") !== (input.couponId || "")) fail(409, tr("クーポンの選択が変更されています。予約をやり直してください。"));
               if (JSON.stringify([...(previous.optionIds || [])].sort()) !== JSON.stringify([...input.optionIds].sort())) fail(409, tr("予約内容が変更されています。空き枠から選び直してください。"));
               return ({ ok: true, booking: customerBooking(previous) });
             }
             const selection = menuSelection(config, input.menuId, input.optionIds);
             if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
-            const menuPrice = selection.price;
-            if (input.expectedPrice !== undefined && input.expectedPrice !== selection.price || input.expectedDuration !== undefined && input.expectedDuration !== selection.duration) fail(409, tr("料金や所要時間が変わりました。メニューと空き時間を確認し直してください。"));
+            const discounted = await applyCoupon(store, shop, u.email, selection.price, input.couponId);
+            const menuPrice = discounted.price;
+            if (input.expectedPrice !== undefined && input.expectedPrice !== menuPrice || input.expectedDuration !== undefined && input.expectedDuration !== selection.duration) fail(409, tr("料金や所要時間が変わりました。メニューと空き時間を確認し直してください。"));
             if (config.rules.payment?.enabled && menuPrice && (!input.requestId || !input.paymentConsent || input.paymentConsent.amount !== menuPrice || JSON.stringify(input.paymentConsent.policy) !== JSON.stringify(config.rules.payment.refundTiers))) fail(409, tr("料金と返金条件を読み直し、同意してからPayPalへ進んでください。"));
             const date = dateIn(input.start, regionOf(config).timeZone);
             const slot = (await availableSlots(store, shop, config, date, input.menuId, input.staffId, calendar, undefined, input.optionIds)).find((s) => s.start === input.start);
@@ -3022,7 +3068,8 @@ export function createApp(
               name: input.name,
               message: input.message,
               menuId: input.menuId,
-              price: selection.price,
+              price: menuPrice,
+              ...(discounted.coupon ? { coupon: discounted.coupon } : {}),
               ...(selection.optionIds.length ? { optionIds: selection.optionIds, items: selection.items } : {}),
               ...slot,
               status: "active",
@@ -3042,6 +3089,7 @@ export function createApp(
             }
             await store.transaction(async () => {
               await store.saveBooking(b);
+              await recordCouponUse(store, b);
               if (requestKey)
                 await store.put("request", requestKey, {
                   bookingId: b.id,
@@ -3337,6 +3385,10 @@ export function createApp(
         void syncFiles(shop.id).catch(console.error);
         void flushMail(shop, true).catch(console.error);
         void paypal.check(shop, { notify: true }).catch(console.error);
+        void hasActiveCoupons(store, shop).then(active => active ? store.locked(bookingLockKey(shop.id), async () => {
+          const fresh = await store.shop(shop.id);
+          if (fresh) await issueCoupons(store, fresh);
+        }) : undefined).catch(console.error);
       }
     })().catch(console.error);
   }, 60000);

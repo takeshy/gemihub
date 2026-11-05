@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export const dashboardTabs = ["build", "assistant", "try", "basic", "menus", "staff", "images", "settings", "bookings", "customers", "inquiries", "blog", "manual"] as const;
+export const dashboardTabs = ["build", "assistant", "try", "basic", "menus", "staff", "images", "settings", "bookings", "customers", "coupons", "inquiries", "blog", "manual"] as const;
 export type DashboardTab = typeof dashboardTabs[number];
 export function dashboardTab(value: string | null | undefined, fallback: DashboardTab = "try"): DashboardTab {
   if (value === "team") return "staff";

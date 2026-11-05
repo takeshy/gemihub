@@ -6,6 +6,8 @@ import { PaymentDetails } from "./PaymentDetails";
 import { WaitlistRequest, WaitlistWishes, type SlotWish } from "./Waitlist";
 import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers, type CancellationQuote, type MyTransfers, type TransferCheckout, type TransferListing } from "./Transfers";
 import { BookingComplete } from "./BookingComplete";
+import { Coupons, CouponWallet } from "./Coupons";
+import { couponDiscount, couponDiscountLabel, type CouponWalletItem } from "../shared/coupons";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
 import { Inquiries } from "./Inquiries";
@@ -385,7 +387,7 @@ function Dashboard({
   const shop = shops.find((s) => s.id === chosen) || shops[0];
   const creating = !!shop?.isOwner && !shop.published;
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
-  const activeTab = !publiclyPublished && ["bookings", "customers"].includes(tab)
+  const activeTab = !publiclyPublished && ["bookings", "customers", "coupons"].includes(tab)
     ? (shop?.isOwner ? "try" : "staff") : tab;
   const view = creating ? "build" : activeTab;
   function closeMobileMenu() {
@@ -399,7 +401,7 @@ function Dashboard({
   }
   useEffect(() => {
     if (!shop) return;
-    const allowed = !shop.isOwner && ["try", "images", "basic", "menus"].includes(tab) ? (publiclyPublished ? "bookings" : "staff") : view;
+    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons"].includes(tab) ? (publiclyPublished ? "bookings" : "staff") : view;
     if (allowed !== tab) navigation.visit(allowed, shop.id, undefined, undefined, true);
   }, [shop?.id, shop?.isOwner, view, tab, publiclyPublished]);
   useEffect(() => {
@@ -427,6 +429,7 @@ function Dashboard({
     ["configuration", "⚙", tr("設定")],
     ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
     ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")]] : []),
+    ...(publiclyPublished && shop?.isOwner ? [["coupons", "◇", tr("クーポン")]] : []),
     ["inquiries", "✉", tr("お問い合わせ")],
     ...(articleKinds(shop?.published).length ? [["blog", "✎", articleKinds(shop?.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop?.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
     ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
@@ -573,6 +576,7 @@ function Dashboard({
                 {view === "assistant" && shop.published && <Assistant key={`${shop.id}:${session.user?.email}`} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} reload={load} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
+                {view === "coupons" && shop.isOwner && shop.published && <Coupons key={shop.id} shopId={shop.id} config={shop.published}/>}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop} onSaved={load}/></>}{!shop.isOwner && <><StaffCalendar key={shop.id} shop={shop} onSaved={load}/><StaffPhoto shop={shop} reload={load}/></>}</>}
                 {view === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
@@ -1135,6 +1139,7 @@ function Reservations({
                   return listing && <p className="transfer-status" role="status"><span className="status transfer">{tr("お得な空き枠")}</span> {tr("{0}（{1}%引き）・{2}まで", paid(listing.price, listing.currency), listing.discountPercent, when(listing.deadline))}{listing.review ? tr("・PayPalの決済結果を照合してください") : listing.buying ? tr("・代わりの方が支払い手続き中") : ""}</p>;
                 })()}
                 <PaymentDetails booking={b} operator />
+                {b.coupon && <p>{b.coupon.title} · {tr("クーポン割引：{0}", yen(b.coupon.discountAmount,b.coupon.currency))}</p>}
                 {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
               </div>
               {b.status === "active" && (
@@ -1296,7 +1301,7 @@ export function PublicShop({
     registrationRequired?: boolean;
     paymentSimulation?: boolean;
   }>();
-  const { money: yen, when, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
+  const { money: yen, when, shopTime, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
   const [emailLoginOpen, setEmailLoginOpen] = useState(false);
   const [optionIds, setOptionIds] = useState<string[]>([]);
@@ -1319,9 +1324,12 @@ export function PublicShop({
   const [listings, setListings] = useState<TransferListing[]>([]);
   const [myTransfers, setMyTransfers] = useState<MyTransfers>({ selling: [], buying: [] });
   const [wishes, setWishes] = useState<SlotWish[]>([]);
+  const [coupons, setCoupons] = useState<CouponWalletItem[]>([]);
+  const [couponId, setCouponId] = useState(() => new URLSearchParams(search).get("coupon") || "");
+  const couponBookingHeading = useRef<HTMLHeadingElement>(null), focusCouponBooking = useRef(!!new URLSearchParams(search).get("coupon"));
   const [paymentConsent, setPaymentConsent] = useState(false);
   const processedReturn = useRef("");
-  useEffect(() => { setPaymentConsent(false); }, [menu, optionIds, data?.config.rules.payment, selected]);
+  useEffect(() => { setPaymentConsent(false); }, [menu, optionIds, data?.config.rules.payment, selected, couponId, coupons]);
 
   const [message, setMessage] = useState("");
   const [bookingMessage, setBookingMessage] = useState("");
@@ -1331,18 +1339,28 @@ export function PublicShop({
   const isCustomer =
     session.user?.role === "customer" && session.user.shopId === data?.shopId;
   const confirmed = completedBooking && isCustomer && completedBooking.customer === session.user?.email && completedBooking.shopId === data?.shopId ? completedBooking : undefined;
-  const leavePaymentReturn = (nextPane: string) => {
+  const leavePaymentReturn = (nextPane: string, coupon?: string) => {
     const query = new URLSearchParams(search);
     if (onPaneChange) return false;
     if (!query.has("transfer") && !query.has("checkout")) return false;
-    for (const key of ["checkout","transfer","paypal","token","PayerID"]) query.delete(key);
+    for (const key of ["checkout","transfer","paypal","token","PayerID","coupon"]) query.delete(key);
+    if (coupon) query.set("coupon",coupon);
     query.set("pane",nextPane); navigate(`${basePath || "/"}?${query}`);
     return true;
   };
+  useEffect(() => {
+    if (pane === "reserve" && !confirmed && focusCouponBooking.current && couponBookingHeading.current) {
+      focusCouponBooking.current = false;
+      couponBookingHeading.current.focus();
+      couponBookingHeading.current.scrollIntoView({block:"start"});
+    }
+  }, [pane, confirmed, data?.shopId]);
   const loadMine = async () => {
     if (isCustomer) {
-      const [bookings, pending, transfers, waitlist] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`), api<MyTransfers>(`${base}/transfers/mine`), api<SlotWish[]>(`${base}/waitlist`)]);
+      const [bookings, pending, transfers, waitlist, wallet] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`), api<MyTransfers>(`${base}/transfers/mine`), api<SlotWish[]>(`${base}/waitlist`), api<CouponWalletItem[]>(`${base}/coupons`)]);
       setMine(bookings); setCheckouts(pending); setMyTransfers(transfers); setWishes(waitlist);
+      setCoupons(wallet);
+      setCouponId(current => wallet.some(coupon => coupon.id === current && coupon.state === "available") ? current : "");
       setCompletedBooking(current => {
         const saved = current && bookings.find(booking => booking.id === current.id);
         return saved ? saved.status === "active" && !transfers.selling.some(listing => listing.bookingId === saved.id && listing.phase === "listed") ? saved : undefined : current;
@@ -1466,7 +1484,10 @@ export function PublicShop({
     return <div className="loading">{tr("お店のページを準備しています…")}</div>;
   const c = data.config;
   const selection = menuSelection(c, menu, optionIds);
-  const totalPrice = selection?.price || 0;
+  const selectableCoupons = coupons.filter(coupon => coupon.state === "available" && coupon.currency === currencyOf(regionOf(c)) && couponDiscount(selection?.price || 0, coupon.discount, coupon.currency) > 0);
+  const selectedCoupon = selectableCoupons.find(coupon => coupon.id === couponId);
+  const discountAmount = selectedCoupon ? couponDiscount(selection?.price || 0, selectedCoupon.discount, selectedCoupon.currency) : 0;
+  const totalPrice = Math.round(((selection?.price || 0) - discountAmount) * 100) / 100;
   const allowedOptions = c.menus.filter(option => option.active && option.optionFor?.includes(menu));
   // Built-in screens may be laid out in the owner's checked HTML; the working parts below are inserted
   // through slots, so booking, sign-in, payment and inquiries keep their behavior either way.
@@ -1521,6 +1542,7 @@ export function PublicShop({
                       {b.transferredIn && <p className="small muted">{tr("お得な空き枠からご予約いただきました。")}</p>}
                       {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
                       <PaymentDetails booking={b} />
+                      {b.coupon && <p>{b.coupon.title} · {tr("クーポン割引：{0}", yen(b.coupon.discountAmount,b.coupon.currency))}</p>}
                       <BookingTransferControl base={base} listing={myTransfers.selling.find(listing => listing.bookingId === b.id && listing.phase === "listed")} busy={busy} run={run} reload={loadMine} notify={notify} />
                     </div>
                     {((b.status === "active" && !myTransfers.selling.some(listing => listing.bookingId === b.id && listing.phase === "listed")) || b.payment?.cancellation && ["retrying", "pending", "awaiting_funds"].includes(b.payment.cancellation.status)) && (
@@ -1550,6 +1572,17 @@ export function PublicShop({
               )}
               <TransferHistory selling={myTransfers.selling} />
               <WaitlistWishes base={base} config={c} wishes={wishes} busy={busy} run={run} reload={loadMine} />
+              <CouponWallet items={coupons} config={c} onUse={id => {
+                setCouponId(id); setPaymentConsent(false); setRequestId(createRequestId()); setCompletedBooking(undefined);
+                if (leavePaymentReturn("reserve",id)) return;
+                if (!onPaneChange) {
+                  const query = new URLSearchParams(search); query.set("pane","reserve"); query.set("coupon",id);
+                  navigate(`${basePath || "/"}?${query}`); return;
+                }
+                focusCouponBooking.current = true;
+                setPane("reserve");
+                if (onPaneChange) onPaneChange("reserve");
+              }}/>
             </div>
   );
   const bookingSection = () => confirmed ? <BookingComplete booking={confirmed} config={c} simulation={data.paymentSimulation} onMine={() => {
@@ -1564,7 +1597,7 @@ export function PublicShop({
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
                 <h2>{tr("自分のための、ひとときを。")}</h2>
-                <h3>{tr("01 メニューを選ぶ")}</h3>
+                <h3 ref={couponBookingHeading} tabIndex={-1}>{tr("01 メニューを選ぶ")}</h3>
                 <div className="menu-options">
                   {c.menus
                     .filter((m) => m.active && !m.optionFor)
@@ -1653,6 +1686,8 @@ export function PublicShop({
                 <Field label={tr("お店へのメッセージ（任意）")}>
                   <textarea maxLength={2000} rows={3} value={bookingMessage} onChange={event => { setBookingMessage(event.target.value); setRequestId(createRequestId()); }} placeholder={tr("ご希望や事前に伝えたいことがあればご記入ください")} />
                 </Field>
+                {!!selectableCoupons.length && <label className="field"><span>{tr("クーポンを選ぶ")}</span><select aria-label={tr("クーポンを選ぶ")} value={couponId} onChange={e => { setCouponId(e.target.value); setRequestId(createRequestId()); }}><option value="">{tr("利用しない")}</option>{selectableCoupons.map(coupon => <option key={coupon.id} value={coupon.id}>{coupon.title} · {couponDiscountLabel(coupon.discount,coupon.currency)} · {tr("有効期限：{0}", when(coupon.expiresAt))}</option>)}</select></label>}
+                {selectedCoupon && <div><p>{tr("クーポン割引：{0}", yen(discountAmount))}</p><p className="small coupon-selection-expiry">{tr("有効期限：{0}", shopTime(selectedCoupon.expiresAt,{year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short"}))}</p></div>}
                 {c.rules.payment?.enabled && totalPrice > 0 ? <div className="payment-policy">
                   <h4>{tr("予約時のお支払いと返金条件")}</h4>
                   <p>{tr("PayPalで{0}をお支払い後、予約が確定します。決済中の枠は10分間確保します。", yen(totalPrice))}</p>
@@ -1679,6 +1714,7 @@ export function PublicShop({
                         menuId: menu,
                         ...(optionIds.length ? {optionIds} : {}),
                         expectedPrice: totalPrice,
+                        ...(selectedCoupon ? { couponId: selectedCoupon.id } : {}),
                         expectedDuration: selection?.duration,
                         staffId: staff,
                         start: selected,

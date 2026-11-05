@@ -90,6 +90,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     // Transfers need a second customer and real payments, so the offline preview shows none.
     else if (action === `${base}/transfers`) result = [];
     else if (action === `${base}/transfers/mine`) result = { selling: [], buying: [] };
+    else if (action === `${base}/coupons`) result = [];
     else if (action === `${base}/waitlist` && data === undefined) result = wishes;
     else if (action === `${base}/waitlist`) { wishes.push({ ...(data as Omit<SlotWish, "id">), id: `practice-${wishes.length}-${Date.now()}` }); result = { ok: true }; }
     else if (action.startsWith(`${base}/waitlist/`)) { wishes = wishes.filter(wish => wish.id !== action.split("/").at(-2)); result = { ok: true }; }

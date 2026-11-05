@@ -74,6 +74,15 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     } else if (!review && dialog?.open) dialog.close();
   }, [review, !!draft]);
   const [pullReview, setPullReview] = useState(false);
+  const discardReview = useRef<HTMLDialogElement>(null);
+  const discardHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const dialog = discardReview.current;
+    if (pullReview && dialog && !dialog.open) {
+      dialog.showModal();
+      discardHeading.current?.focus();
+    } else if (!pullReview && dialog?.open) dialog.close();
+  }, [pullReview, !!draft]);
   // Side-by-side preview of this screen as published and as edited here, to see what "変更あり" means.
   const [comparing, setComparing] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -168,6 +177,25 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   const selectedPage = draft && scope.kind === "page" ? pageValue(draft.config, scope.pageId) : undefined;
   const allPages = draft ? [...draft.config.pages, ...(index?.pages || []).filter(p => !draft.config.pages.some(local => local.id === p.id)), ...(draft.source?.pages || []).filter(p => !draft.config.pages.some(local => local.id === p.id) && !index?.pages.some(remote => remote.id === p.id))] : [];
   const status = statuses[scope.kind === "page" ? scope.pageId : scope.kind === "part" ? `part:${scope.part}` : "shared"];
+  // Use the tree's comparison with production, not the order of keys in a cached snapshot.
+  const hasChanges = (status === "local" || status === "conflict") && summary.length > 0;
+  useEffect(() => {
+    if (!draft || !index || busy || conflict || draft.pending?.planId) return;
+    const local = scopedSource(draft.config, scope);
+    if (draft.pending && !same(scopedSource(draft.pending.config, scope), local)) return;
+    if (!draft.pending && same(scopedSource(draft.source, scope), local)) return;
+    let active = true;
+    // Recompute for this exact draft/index: the status displayed during an edit can
+    // still belong to the previous render. Never acknowledge an unverified edit.
+    void syncStatus(draft, index, scope).then(current => {
+      if (!active || current !== "synced" || latestDraft.current !== draft) return;
+      const source = replaceScope(draft.source || draft.config, scope, local);
+      const { pending, ...editable } = draft;
+      save({ ...editable, source, base: index.base, index });
+      if (pending) { setError(""); setNotice(tr("本番と同じ内容のため、反映する変更はありません。")); }
+    }).catch(() => { if (active) setError(tr("状態の比較に失敗しました。ページを再読み込みしてください。")); });
+    return () => { active = false; };
+  }, [draft, index, busy, !!conflict, screen]);
   const selectedRemote = scope.kind === "page" ? index?.pages.find(p => p.id === scope.pageId) : undefined;
   function editPage(page: ShopPage) {
     if (!draft) return;
@@ -315,12 +343,13 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   }
   async function release() {
     if (!draft || !saved || invalid) return;
+    if (!draft.pending && !hasChanges) { setReview(false); return; }
     if (status === "conflict" || status === "remote" || status === "unfetched") throw new Error(tr("先にこの画面のリモート更新を取得するか、競合を解決してください"));
     let next = draft;
     if (!next.pending) {
       next = { ...next, pending: { requestId: createRequestId(), config: structuredClone(next.config), scope } };
       // Save the action identity before the first request so retries remain safe.
-      writeDraft(localStorage, key, next); setDraft(next);
+      writeDraft(localStorage, key, next); latestDraft.current = next; setDraft(next);
     }
     const pending = next.pending!;
     if (!pending.planId) {
@@ -329,7 +358,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         local: { base: next.base, source: next.source, requestId: pending.requestId, scope: pending.scope },
       });
       next = { ...next, pending: { ...pending, planId: plan.id } };
-      writeDraft(localStorage, key, next); setDraft(next);
+      writeDraft(localStorage, key, next); latestDraft.current = next; setDraft(next);
     }
     const id = next.pending!.planId!;
     await api(`/api/shops/${shop.id}/plans/${id}/approve`, {});
@@ -365,7 +394,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   return <div className="local-preview preview-first">
     {sidebar ? createPortal(tree, sidebar) : tree}
     <div className="editor-toolbar">
-      <div><strong>{screenLabel}</strong>{summary.length > 0 && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? tr("変更あり") : tr("未保存")}</span>}</div>
+      <div><strong>{screenLabel}</strong>{hasChanges && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? tr("変更あり") : tr("未保存")}</span>}</div>
       <div className="editor-tools"><span ref={setPenHost} />
         {scope.kind !== "part" && <details ref={displayMenu} className="preview-display-menu"><summary><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 16h18" /></svg>{tr("表示")}</summary><div>
           <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.header !== true : visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />{tr("ヘッダーを表示")}</label>
@@ -374,7 +403,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         </div></details>}
         <span ref={setHistoryHost} />
       </div>
-      {draft && (summary.length > 0 || draft.pending) && <div className="actions">
+      {draft && (hasChanges || draft.pending) && <div className="actions">
         <button className="primary" disabled={busy || !saved || !!invalid || !releaseConfig || !index || !status || status === "conflict" || status === "remote" || status === "unfetched" || !!conflict} onClick={() => setReview(true)}>{draft.pending ? tr("反映を再試行") : tr("反映する")}</button>
         {!draft.pending && status === "local" && <button disabled={busy || !!conflict} aria-pressed={comparing} onClick={() => setComparing(value => !value)}>{tr("変更を比較")}</button>}
         <button disabled={busy || !!draft.pending || !!conflict} onClick={() => setPullReview(true)}>{tr("変更を取り消す")}</button>
@@ -391,7 +420,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       }
       setError("");
     }} />}
-    {error && !review && <p className="alert" role="alert">{error}</p>}
+    {error && !review && !pullReview && <p className="alert" role="alert">{error}</p>}
     {notice && <p className="notice small" role="status">{notice}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
     {invalid && <p className="alert" role="alert">{invalid}{tr("（編集欄で確認してください）")}</p>}
     {!draft && <p className="panel">{busy ? tr("画面を開いています…") : tr("画面を読み込めませんでした。ページを再読み込みしてください。")}</p>}
@@ -481,11 +510,17 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         })}>{tr("この時点のローカルを復元")}</button></p>)}</details>}
       <details><summary>{tr("保存と同期について")}</summary><p>{tr("編集はこのブラウザだけに保存され、サイトデータを消すと失われます。画面は開くと必要な内容を自動で読み込みます。変更がある画面だけツリーに印を付けます。両側に変更があればプレビューを比較して解決してください。料金・勤務などの本番データは各管理メニューの保存で反映します。練習用の予約や問い合わせは本番には保存せず、Google Calendar にも接続しません。")}</p></details>
     </div>}
-    {pullReview && draft && <div className="panel" role="dialog" aria-modal="true" aria-label={tr("この画面の変更を取り消す")}>
+    {draft && createPortal(<dialog ref={discardReview} className="editor-release-dialog" aria-label={tr("この画面の変更を取り消す")} onClose={() => setPullReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
+      <h3 ref={discardHeading} tabIndex={-1}>{tr("この画面の変更を取り消す")}</h3>
+      <p><strong>{screenLabel}</strong></p>
       <p>{tr("この画面のローカル変更を取り消します。他の画面の編集とサンプルデータは保持します。")}</p>
+      {error && <p className="alert" role="alert">{error}</p>}
+      {busy && <p className="notice" role="status">{tr("変更を取り消しています…")}</p>}
+      <div className="actions editor-release-actions">
       <button disabled={busy} onClick={() => void run(async () => { const latest = await remoteValue(scope); await adopt(scope, latest, latest, true); setPullReview(false); setNotice(tr("この画面の変更を取り消しました。")); })}>{tr("この画面の変更を取り消す")}</button>
       <button disabled={busy} onClick={() => setPullReview(false)}>{tr("戻る")}</button>
-    </div>}
+      </div>
+    </dialog>, document.body)}
     {draft && createPortal(<dialog ref={releaseReview} className="editor-release-dialog" aria-label={tr("本番への反映内容")} onClose={() => setReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
       <h3 ref={releaseHeading} tabIndex={-1}>{tr("本番への反映内容：")}{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || tr("ページ削除") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("全体の枠") : tr("お店の共通設定")}</h3><ul>{summary.map(s => <li key={s}>{s}</li>)}</ul>
       <details><summary>{tr("設定の変更前と変更後")}</summary><div className="local-diff"><pre>{JSON.stringify(draft.source, null, 2)}</pre><pre>{JSON.stringify(draft.config, null, 2)}</pre></div></details>
@@ -493,7 +528,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       {error && <p className="alert" role="alert">{error}</p>}
       {busy && <p className="notice" role="status">{tr("本番に反映しています…このままお待ちください。")}</p>}
       <div className="actions editor-release-actions">
-      <button className="primary" disabled={busy || !saved} onClick={() => void run(release)}>{tr("この内容を本番に反映")}</button>
+      <button className="primary" disabled={busy || !saved || (!draft.pending && !hasChanges)} onClick={() => void run(release)}>{tr("この内容を本番に反映")}</button>
       <button disabled={busy} onClick={() => setReview(false)}>{tr("戻る")}</button>
       </div>
     </dialog>, document.body)}
