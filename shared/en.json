@@ -1,4 +1,12 @@
 {
+  "音声で相談する場合は「AIと話す」に切り替え、「🎙 音声で話す」を押します。入力欄は表示されず、AIが声で答えます。「チャットで質問」に戻ると音声を終了し、会話履歴と書きかけの文章は残ります。声で「お願いします」と言っても承認にはならず、承認は必ず画面で行います。": "For a voice conversation, switch to Talk to AI and press 🎙 Talk by voice. The text input is hidden and AI replies aloud. Returning to Chat ends the voice session and preserves the conversation and your unsent text. Saying yes is never approval; approval always happens on screen.",
+  "相談の方法": "Conversation mode",
+  "チャットで質問": "Chat",
+  "AIと話す": "Talk to AI",
+  "開始ボタンを押して、AIに話しかけてください。": "Press the button to start talking to AI.",
+  "お話しください。AIが声で答えます。": "Go ahead. AI will reply by voice.",
+  "管理メニュー": "Navigation",
+  "メニューを閉じる": "Close menu",
   "まずは自分の言葉で書いてみましょう。書いた文章はAIで清書できます。": "Start writing in your own words. AI can help polish your draft.",
   "AIで清書する": "Polish with AI",
   "本文の入力方法": "Body input mode",

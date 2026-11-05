@@ -26,10 +26,30 @@
 .dashboard .chat-message:not(:where(.public-shop *)) { font-size: 16px; }
 .dashboard .chat-composer > textarea { font-size: 16px; }
 .dashboard .chat-composer-toolbar button { font-size: 14px; min-height: 40px; }
+.mobile-menu-toggle { display: none; }
 
 @media (max-width: 760px) {
   .app-header { min-height: 68px; padding: 12px 20px; }
+  .dashboard aside { padding: 10px 12px; }
+  .dashboard .mobile-menu-toggle { display: flex; width: 100%; min-height: 48px; padding: 10px 12px; gap: 10px; text-align: left; background: #f4f6ef; }
+  .mobile-menu-icon { flex: 0 0 22px; font-size: 24px; line-height: 1; text-align: center; }
+  .mobile-menu-label { flex-shrink: 0; font-size: 14px; font-weight: 600; }
+  .mobile-menu-current { min-width: 0; margin-left: auto; padding-left: 12px; border-left: 1px solid #cbd6c6; font-size: 12px; overflow-wrap: anywhere; }
+  .dashboard aside:not(.mobile-menu-open) > :is(nav, select) { display: none; }
+  .dashboard aside > select { margin-top: 12px; }
+  .dashboard aside nav { flex-direction: column; flex-wrap: nowrap; overflow: visible; gap: 4px; margin-top: 12px; }
   .dashboard aside nav button { white-space: normal; }
+  .dashboard aside nav > button { width: 100%; padding: 12px; }
+  .dashboard aside nav > button.active { box-shadow: inset 3px 0 var(--green); }
+  .dashboard .sidebar-settings { flex: none; }
+  .dashboard .sidebar-settings summary { min-height: 44px; padding: 12px; }
+  .dashboard .sidebar-settings-items { flex-direction: column; flex-wrap: nowrap; margin: 0 0 8px 22px; padding: 4px 0 4px 12px; }
+  .dashboard aside nav .sidebar-settings-items button { width: 100%; padding: 10px 12px; }
+  .dashboard .sidebar-editor-tree { flex: none; order: initial; width: 100%; }
+  .dashboard .sidebar-screen-tree { max-height: none; overflow: visible; margin: 0 0 8px 22px; padding: 4px 0 4px 12px; }
+  .dashboard .sidebar-screen-tree [role=group] { margin-block: 0 8px; }
+  .dashboard aside nav .sidebar-screen-tree button { padding: 10px 12px; }
+  .dashboard aside nav .sidebar-screen-tree summary { min-height: 44px; padding: 10px 12px; }
   .dashboard .section-top:has(.ai-mark) { display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 10px 14px; }
   .dashboard .section-top:has(.ai-mark) > div { display: contents; }
   .dashboard .section-top:has(.ai-mark) p { grid-column: 1 / -1; }

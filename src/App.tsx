@@ -27,7 +27,7 @@ import { MenuImage, MenuImageEditor } from "./MenuImage";
 import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useId } from "react";
 import { useApi } from "./api";
 import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
@@ -354,6 +354,9 @@ function Dashboard({
   // Until the first workspace response, an empty list means "loading", not "no shops".
   const [loaded, setLoaded] = useState(false);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuToggle = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const buildReview = useRef<HTMLDivElement>(null);
   const [plan, setPlan] = useState<Plan>();
   async function load() {
@@ -373,7 +376,12 @@ function Dashboard({
   const activeTab = !publiclyPublished && ["bookings", "customers"].includes(tab)
     ? (shop?.isOwner ? "try" : "staff") : tab;
   const view = creating ? "build" : activeTab;
+  function closeMobileMenu() {
+    setMobileMenuOpen(false);
+    if (mobileMenuOpen && window.matchMedia("(max-width: 760px)").matches) menuToggle.current?.focus();
+  }
   function setTab(value: string) {
+    closeMobileMenu();
     const next = dashboardTab(value);
     navigation.visit(next, shop?.id || chosen, next === "try" ? editorSelection.current.screen : undefined, next === "try" ? editorSelection.current.article : undefined);
   }
@@ -401,10 +409,33 @@ function Dashboard({
     if (!shop.published) setTab("try");
     notify(publication === "provisional" ? tr("仮公開しました。あなたのログインでだけページを表示できます。") : tr("変更を反映しました。"));
   };
+  const menuItems = [
+    ["build", "✧", tr("AIとお店をつくる")],
+    ["assistant", "✳", tr("相談・質問")],
+    ["configuration", "⚙", tr("設定")],
+    ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
+    ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")]] : []),
+    ["inquiries", "✉", tr("お問い合わせ")],
+    ...(articleKinds(shop?.published).length ? [["blog", "✎", articleKinds(shop?.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop?.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
+    ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
+    ["manual", "?", tr("使い方")],
+  ];
+  const settingItems = [
+    ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")], ["images", "▧", tr("画像管理")]] : []),
+    ["settings", "⚙", tr("公開の設定")],
+  ];
+  const currentMenuLabel = [...menuItems, ...settingItems].find(([id]) => id === view)?.[2];
   return (
     <ShopRegionContext.Provider value={shop?.published ? regionOf(shop.published) : shop?.regionDefault || regionOf(null)}>
     <div className={`dashboard${creating || !shop ? " dashboard-creation" : ""}`}>
-      {shop && !creating && <aside>
+      {shop && !creating && <aside className={mobileMenuOpen ? "mobile-menu-open" : ""} onKeyDown={event => {
+        if (event.key === "Escape" && mobileMenuOpen) { event.preventDefault(); closeMobileMenu(); }
+      }}>
+        <button type="button" className="mobile-menu-toggle" ref={menuToggle} aria-expanded={mobileMenuOpen} aria-controls={menuId} onClick={() => setMobileMenuOpen(open => !open)}>
+          <span className="mobile-menu-icon" aria-hidden="true">{mobileMenuOpen ? "×" : "☰"}</span>
+          <span className="mobile-menu-label">{mobileMenuOpen ? tr("メニューを閉じる") : tr("管理メニュー")}</span>
+          <span className="mobile-menu-current">{currentMenuLabel}</span>
+        </button>
         <div className="sidebar-label">MY SHOP</div>
         <div className="shop-switch">
           <span className="shop-avatar">✳</span>
@@ -414,6 +445,7 @@ function Dashboard({
           <select
             value={shop?.id}
             onChange={(e) => {
+              closeMobileMenu();
               editorSelection.current = { screen: "reserve", article: undefined };
               navigation.visit(tab, e.target.value, tab === "try" ? "reserve" : undefined);
               setPlan(undefined);
@@ -426,31 +458,19 @@ function Dashboard({
             ))}
           </select>
         )}
-        <nav>
-          {[
-            ["build", "✧", tr("AIとお店をつくる")],
-            ["assistant", "✳", tr("相談・質問")],
-            ["configuration", "⚙", tr("設定")],
-            ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
-            ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")]] : []),
-            ["inquiries", "✉", tr("お問い合わせ")],
-            ...(articleKinds(shop.published).length ? [["blog", "✎", articleKinds(shop.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
-            ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
-            ["manual", "?", tr("使い方")],
-          ].map(([id, icon, label]) => (
+        <nav id={menuId} aria-label={tr("管理メニュー")}>
+          {menuItems.map(([id, icon, label]) => (
             id === "configuration" ? <details className="sidebar-settings" key={id} open>
               <summary><span aria-hidden="true">{icon}</span>{label}</summary>
               <div className="sidebar-settings-items" role="group" aria-label={label}>
-                {[
-                  ...(shop.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")], ["images", "▧", tr("画像管理")]] : []),
-                  ["settings", "⚙", tr("公開の設定")],
-                ].map(([setting, settingIcon, settingLabel]) => <button key={setting} className={view === setting ? "active" : ""} onClick={() => setTab(setting)}><span aria-hidden="true">{settingIcon}</span>{settingLabel}</button>)}
+                {settingItems.map(([setting, settingIcon, settingLabel]) => <button key={setting} className={view === setting ? "active" : ""} aria-current={view === setting ? "page" : undefined} onClick={() => setTab(setting)}><span aria-hidden="true">{settingIcon}</span>{settingLabel}</button>)}
               </div>
             </details> : <React.Fragment key={id}><button
               className={view === id ? "active" : ""}
+              aria-current={view === id ? "page" : undefined}
               onClick={() => setTab(id)}
             >
-              <span>{icon}</span>
+              <span aria-hidden="true">{icon}</span>
               {label}
             </button>{id === "try" && <div className="sidebar-editor-tree" ref={setTreeHost} />}</React.Fragment>
           ))}
@@ -548,7 +568,7 @@ function Dashboard({
             )}
           </>
         )}
-        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} active={view === "try"} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
+        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} active={view === "try"} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { closeMobileMenu(); editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
       </section>
     </div>
     </ShopRegionContext.Provider>

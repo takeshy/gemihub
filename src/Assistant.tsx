@@ -4,6 +4,7 @@ import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
 import { ConfigSummary, type Plan, type Workspace } from "./App";
 import { AssistantAnswer } from "./AssistantAnswer";
+import "./Assistant.css";
 import { z } from "zod";
 
 type Source = { path: string; title: string };
@@ -25,6 +26,8 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
   const [saved] = useState(() => { try { return savedAssistantSchema.parse(JSON.parse(localStorage.getItem(storageKey) || "null")); } catch { return undefined; } });
   const [messages, setMessages] = useState<Message[]>(saved?.messages || []);
   const [text, setText] = useState(saved?.text || "");
+  const [mode, setMode] = useState<"chat" | "voice">("chat");
+  const voiceMode = voice && mode === "voice";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<string|undefined>(saved?.draft);
@@ -64,6 +67,10 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
       <h2 id="assistant-title">{tr("相談・質問")}</h2>
       <p className="small muted">{tr("お店の仕様（spec.md）と変更履歴（history.md）、gemihub の仕組みの説明をもとに答えます。変更を頼むと依頼文の下書きを作り、承認するまで何も反映しません。")}</p>
     </div></div>
+    {voice && <div className="assistant-modes" role="group" aria-label={tr("相談の方法")}>
+      <button type="button" aria-pressed={!voiceMode} onClick={() => setMode("chat")}>{tr("チャットで質問")}</button>
+      <button type="button" aria-pressed={voiceMode} onClick={() => setMode("voice")}>{tr("AIと話す")}</button>
+    </div>}
     <div ref={log} className="chat-log assistant-log" role="log" aria-label={tr("アシスタントとの会話")} aria-live="polite">
       {!messages.length && <p className="muted">{tr("例：「キャンセルしたら返金はどうなる？」「なぜ水曜が定休日なの？」「来月から水曜を定休日にして」")}</p>}
       {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}>
@@ -92,13 +99,12 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
         <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => { await acceptPlan(plan); if (alive.current) { setPlan(undefined); setMessages(items => [...items, { role: "assistant", text: tr("変更を反映しました。変更履歴に依頼文とあわせて記録しました。") }]); } })}>{tr("この内容で反映する")}</button>
       </div>
     </section>}
-    <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
-      <textarea aria-label={tr("アシスタントへの質問")} aria-keyshortcuts="Control+Enter Meta+Enter" rows={3} required maxLength={4000} disabled={busy} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => submitOnShortcut(event)} />
+    {voiceMode ? <LiveVoice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])])} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} /> : <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
+      <textarea aria-label={tr("アシスタントへの質問")} aria-keyshortcuts="Control+Enter Meta+Enter" rows={2} required maxLength={4000} disabled={busy} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => submitOnShortcut(event)} />
       <div className="chat-composer-toolbar">
-        {voice && <LiveVoice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])])} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} />}
         <button type="submit" className="primary chat-send" disabled={busy || !text.trim()}>{tr("送信")}</button>
       </div>
-    </form>
+    </form>}
   </section>;
 }
 
@@ -107,6 +113,7 @@ function LiveVoice({ shopId, disabled, context, onTurn, onDraft, onError }: { sh
   const [state, setState] = useState<"off" | "connecting" | "on">("off");
   const [caption, setCaption] = useState("");
   const socket = useRef<WebSocket | undefined>(undefined);
+  const connectionVersion = useRef(0);
   const stream = useRef<MediaStream | undefined>(undefined);
   const input = useRef<AudioContext | undefined>(undefined);
   const output = useRef<AudioContext | undefined>(undefined);
@@ -117,25 +124,32 @@ function LiveVoice({ shopId, disabled, context, onTurn, onDraft, onError }: { sh
   callbacks.current = { onTurn, onDraft, onError, context };
   function silence() { for (const source of sources.current) source.stop(); sources.current.clear(); playAt.current = 0; }
   function stop() {
+    connectionVersion.current++;
     socket.current?.close(); socket.current = undefined;
     stream.current?.getTracks().forEach(track => track.stop()); stream.current = undefined;
     void input.current?.close(); input.current = undefined;
     silence(); void output.current?.close(); output.current = undefined;
+    turnSources.current = [];
     setState("off"); setCaption("");
   }
   useEffect(() => stop, []);
-  useEffect(() => { if (disabled && state === "on") stop(); }, [disabled]);
+  useEffect(() => { if (disabled && state !== "off") stop(); }, [disabled]);
   async function start() {
+    const version = ++connectionVersion.current;
     setState("connecting");
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error(tr("この環境ではマイクを使えません。文字で質問してください。"));
       // Create playback inside the click so browsers allow audio.
       output.current = new AudioContext({ sampleRate: 24000 });
       await output.current.resume();
-      stream.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
+      if (version !== connectionVersion.current) return;
+      const microphone = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true }, video: false });
+      if (version !== connectionVersion.current) { microphone.getTracks().forEach(track => track.stop()); return; }
+      stream.current = microphone;
       const context = new AudioContext({ sampleRate: 16000 });
       input.current = context;
       await context.audioWorklet.addModule("/live-audio.js");
+      if (version !== connectionVersion.current) return;
       const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/shops/${shopId}/assistant/live`);
       socket.current = ws;
       const node = new AudioWorkletNode(context, "microphone");
@@ -152,6 +166,7 @@ function LiveVoice({ shopId, disabled, context, onTurn, onDraft, onError }: { sh
         ws.send(JSON.stringify({ type: "audio", data: btoa(binary) }));
       };
       ws.onmessage = event => {
+        if (socket.current !== ws) return;
         const message = JSON.parse(event.data);
         if (message.type === "ready") {
           ready = true; setState("on"); setCaption(tr("質問をお話しください。"));
@@ -181,14 +196,15 @@ function LiveVoice({ shopId, disabled, context, onTurn, onDraft, onError }: { sh
       };
       ws.onclose = event => { if (socket.current === ws) { stop(); if (event.code !== 1000 || event.reason) callbacks.current.onError(event.reason || tr("音声会話に接続できません。文字で質問してください。")); } };
     } catch (e) {
+      if (version !== connectionVersion.current) return;
       stop();
       callbacks.current.onError(e instanceof Error ? e.message : String(e));
     }
   }
   return <div className="assistant-voice">
+    <p className={`small muted assistant-voice-status${caption ? " assistant-caption" : ""}`} aria-live="polite">{caption || (state === "off" ? tr("開始ボタンを押して、AIに話しかけてください。") : state === "connecting" ? tr("接続しています…") : tr("お話しください。AIが声で答えます。"))}</p>
     <button type="button" className={state === "on" ? "primary" : ""} aria-pressed={state === "on"} disabled={disabled && state === "off"} onClick={() => state === "off" ? void start() : stop()}>
       {state === "off" ? tr("🎙 音声で話す") : state === "connecting" ? tr("接続しています…") : tr("■ 音声を終了")}
     </button>
-    {caption && <span className="small muted assistant-caption" aria-live="polite">{caption}</span>}
   </div>;
 }
