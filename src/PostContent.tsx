@@ -15,7 +15,6 @@ export function PostContent({ post, imageBase, inlineImages, imageSources }: { p
         <time dateTime={post.date}>{post.date.replaceAll("-", ".")}</time>
       </div>
       <h1>{post.title}</h1>
-      {post.excerpt && <p className="post-lead">{post.excerpt}</p>}
       <div className="post-markdown">
         <Markdown
           skipHtml

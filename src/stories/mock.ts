@@ -660,6 +660,18 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const selected=wikiPaths(String(input.instruction)).map(path=>[...imageMetadata.values()].find(image=>articleImagePath(image.id,image.name)===path)).filter(Boolean);
       result={title:String(input.title||tr("季節のお店のお便り")),excerpt:"",body:[String(input.source||input.instruction),...selected.map(image=>`![${image!.name}](shop-image:${image!.id})`)].join("\n\n"),conversationId:"c".repeat(64)};
     }
+    else if (action === `/api/shops/${shop.id}/posts/drafts` || /\/posts\/[^/]+\/draft$/.test(action)) {
+      const existing = action.endsWith("/draft") ? posts.find(post => post.id === action.split("/").at(-2)) : undefined;
+      if (action.endsWith("/draft") && !existing) throw new Error(tr("記事がありません"));
+      if (existing && existing.version !== input.version) throw new Error(tr("記事が更新されています。一覧を更新してください"));
+      const id = existing?.id || String(input.requestId), at = new Date().toISOString();
+      const content = postContentSchema.parse({ ...(input.content as object), slug: existing?.draft.slug || `article-${id}`, excerpt: "" });
+      const saved: Post = existing ? { ...existing, draft: content, version: existing.version + 1, updatedAt: at }
+        : { id, shopId: shop.id, draft: content, published: null, version: 1, createdAt: at, updatedAt: at, updatedBy: "owner@example.com" };
+      validatePostAddress(saved, content, posts);
+      if (existing) posts.splice(posts.indexOf(existing), 1, saved); else posts.unshift(saved);
+      result = saved;
+    }
     else if (action === `/api/shops/${shop.id}/posts`) {
       if (data === undefined) result = posts;
       else {

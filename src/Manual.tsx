@@ -390,7 +390,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
         image: "16-blog-edit.jpg",
         extra: [{image:"16-article-methods.jpg",get caption(){return tr("テキストですぐに書き始められます。下書き保存すると、AIに修正を指示できます。");}},{image:"16-blog-ai.jpg",get caption(){return tr("AIに文章・画像・[[パス]]で資料を伝えます。");}},{image:"16-blog-image-methods.jpg",get caption(){return tr("画像はアップロードと既存画像の選択画面から選びます。");}}],
         get caption() { return tr("ブログとお知らせの編集画面。公開中の記事と下書きを分けて管理できます。"); },
-        get tip() { return tr("画像はアップロードと既存画像の選択画面から選べます。紹介文とアドレスは下書き保存時にAIが作ります。AIの修正は下書きに保存され、「公開する」を押すまで公開されません。"); },
+        get tip() { return tr("画像はアップロードと既存画像の選択画面から選べます。下書き保存ではAIを使わず、紹介文も作りません。AIの修正は下書きに保存され、「公開する」を押すまで公開されません。"); },
       },
       {
         id: "post-publish",
@@ -398,7 +398,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
         get lead() { return tr("記事の公開も、内容を確認してから行います。先にお店の予約ページを公開しておいてください。"); },
         get instructions() { return [
           tr("編集欄の「下書き保存」を押して、下書きの画面を開きます。"),
-          tr("見出し、本文、写真、日付を確認します。直したいときは「編集に戻る」か「AIで修正」を使います。紹介文は下書き保存時に生成されます。"),
+          tr("見出し、本文、写真、日付を確認します。直したいときは「編集に戻る」か「AIで修正」を使います。"),
           tr("下書きの画面で「公開する」を押すと記事の一覧と、マイページの新着5件にも反映されます。"),
         ]; },
         image: "17-blog-preview.jpg",

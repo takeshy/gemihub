@@ -56,6 +56,10 @@ async function receipt(store: Store, shop: Shop, imageId: string) {
   const upload = await store.get<ImageUpload>("menuImageUpload", imageId);
   return upload?.complete && !upload.archived && upload.shopId === shop.id ? upload : fail(404, tr("画像がありません"));
 }
+/** Draft saves validate ownership in the database without downloading image bytes from Drive. */
+export async function validateImageIds(store: Store, shop: Shop, ids: string[]) {
+  await Promise.all(ids.map(id => receipt(store, shop, id)));
+}
 export async function validateMenuImages(store: Store, shop: Shop, config: ShopConfig) {
   for (const menu of config.menus) if (menu.imageId) await receipt(store, shop, menu.imageId);
   for (const id of managedImageIds(config)) await receipt(store, shop, id);

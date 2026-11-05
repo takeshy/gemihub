@@ -2,14 +2,14 @@ import { tr } from "../shared/i18n.ts";
 import { regionOf, type Region } from "../shared/region.ts";
 import type { Session } from "./auth.ts";
 import { trashFile } from "./google.ts";
-import { bookingLockKey, mailLockKey, isArchivedShop, type Shop, type Store, type User } from "./store.ts";
+import { bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type Shop, type Store, type User } from "./store.ts";
 
 type Reset = { email: string; previousShopId: string; at: string; region: Region; shopId?: string };
 function reject(status: number, message: string): never { throw Object.assign(new Error(message), { status }); }
 
 /** One reset per old shop, including retries from another tab or after a lost response. */
 export async function resetShop(store: Store, email: string, shopId: string, trash = trashFile) {
-  return store.locked(`shop-reset:${email}`, () => store.locked(shopId, () => store.locked(bookingLockKey(shopId), () => store.locked(mailLockKey(shopId), async () => {
+  return store.locked(`shop-reset:${email}`, () => store.locked(shopId, () => store.locked(bookingLockKey(shopId), () => store.locked(mailLockKey(shopId), () => store.locked(postLockKey(shopId), async () => {
     const saved = await store.get<User>("user", email);
     if (!saved || saved.role !== "owner" || saved.judge || saved.legacyNotes || saved.accessPending)
       reject(403, tr("店主のみ利用できます"));
@@ -48,5 +48,5 @@ export async function resetShop(store: Store, email: string, shopId: string, tra
       }
     }
     return { ok: true, shopId: reset.shopId };
-  }))));
+  })))));
 }
