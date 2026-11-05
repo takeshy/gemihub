@@ -69,6 +69,33 @@ test("research is one call over the material the caller chose, without tools, an
   assert.deepEqual(usage.sources.map(source => source.path), ["system/booking.md"]);
 });
 
+test("research reads PayPal through read-only tools and cites the record", async () => {
+  const data = shopData();
+  const invoked: string[] = [];
+  data.paypal = {
+    tools: [
+      { name: "paypal_get_refund", description: "read refund", parametersJsonSchema: { type: "object", properties: { refundId: { type: "string" } }, required: ["refundId"] } },
+      { name: "ledger_find_booking_payments", description: "read ledger", parametersJsonSchema: { type: "object", properties: { bookingId: { type: "string" } } } },
+    ],
+    async invoke(name) {
+      invoked.push(name);
+      return { result: { id: "REF1", status: "COMPLETED", amount: { amount: 49.5, currency: "USD" } }, source: { path: "paypal:refund:REF1", title: "PayPal refund REF1" } };
+    },
+  };
+  const seen = scripted([], [
+    call("paypal_get_refund", { refundId: "REF1" }),
+    say(JSON.stringify({ answer: "The $49.50 refund completed (PayPal REF1).", sources: ["paypal:refund:REF1"] })),
+  ]);
+  const result = await research("Did the $49.50 refund go through?", data);
+  assert.match(result.answer, /completed/);
+  assert.deepEqual(result.sources.map(source => source.path), ["paypal:refund:REF1"]);
+  assert.deepEqual(invoked, ["paypal_get_refund"]);
+  const researchCall = seen.find(body => /調査担当|research layer/.test(body.instructions || ""))!;
+  const names = (researchCall.tools as { name: string }[]).map(tool => tool.name);
+  assert.deepEqual(names.sort(), ["ledger_find_booking_payments", "paypal_get_refund"]);
+  assert.ok(names.every(name => /^(paypal_get_|ledger_find_)/.test(name)), "no write tool is exposed");
+});
+
 test("the conversation layer researches facts and turns change requests into a draft without applying anything", async () => {
   const data = shopData();
   let seen = scripted([call("investigate", { question: "キャンセル時の返金ルール" }), say("開始72時間前までなら全額返金です。")], [

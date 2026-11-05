@@ -4,11 +4,13 @@ import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
 import { ConfigSummary, type Plan, type Workspace } from "./App";
 import { AssistantAnswer } from "./AssistantAnswer";
+import { paid } from "./money";
+import type { PayPalAlertItem, PayPalAlertState, PayPalProposal, PayPalProposalOperation, PayPalSeverity, PayPalAlertKind } from "../server/paypal-ops";
 import "./Assistant.css";
 import { z } from "zod";
 
 type Source = { path: string; title: string };
-type Reply = { answer: string; sources: Source[]; request?: string };
+type Reply = { answer: string; sources: Source[]; request?: string; paypalProposals?: PayPalProposal[] };
 type Message = { role: "user" | "assistant"; text: string; sources?: Source[]; voice?: boolean };
 const savedAssistantSchema = z.object({
   messages: z.array(z.object({role:z.enum(["user","assistant"]),text:z.string().max(20000),sources:z.array(z.object({path:z.string(),title:z.string()})).optional(),voice:z.boolean().optional()})).max(100),
@@ -20,7 +22,7 @@ const savedAssistantSchema = z.object({
  * A change request becomes an editable draft; approving it creates an ordinary change plan,
  * which is reviewed and applied exactly like other plans.
  */
-export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Workspace; voice: boolean; userEmail: string; acceptPlan: (plan: Plan) => Promise<void> }) {
+export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop: Workspace; voice: boolean; userEmail: string; acceptPlan: (plan: Plan) => Promise<void>; reload: () => Promise<unknown> }) {
   const api = useApi();
   const storageKey = `gemihub:assistant:${shop.id}:${userEmail}`;
   const [saved] = useState(() => { try { return savedAssistantSchema.parse(JSON.parse(localStorage.getItem(storageKey) || "null")); } catch { return undefined; } });
@@ -32,6 +34,11 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<string|undefined>(saved?.draft);
   const [plan, setPlan] = useState<Plan|undefined>(()=>shop.plans.find(plan=>plan.id===saved?.planId&&plan.base===shop.revision&&!plan.approved));
+  const [proposals, setProposals] = useState<PayPalProposal[]>([]);
+  const [checking, setChecking] = useState(false);
+  const [notifySetting, setNotifySetting] = useState(shop.paypalSettings?.enabled !== false);
+  const [digestHour, setDigestHour] = useState(shop.paypalSettings?.digestHour ?? 9);
+  const alerts = shop.paypalAlerts;
   const log = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
@@ -53,10 +60,32 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
         const reply = await api<Reply>(`/api/shops/${shop.id}/assistant`, { question: value, messages: earlier });
         if (!alive.current) return;
         setMessages(items => [...items, { role: "assistant", text: reply.answer, sources: reply.sources }]);
+        setProposals(reply.paypalProposals || []);
         if (reply.request) { setDraft(reply.request); setPlan(undefined); }
       } catch (e) { setText(value); throw e; }
     });
   }
+  const executeProposal = (proposal: PayPalProposal) => run(async () => {
+    const result = await api<{ ok: boolean; error?: string; state?: PayPalAlertState }>(`/api/shops/${shop.id}/paypal/proposals/execute`, {
+      proposalId: proposal.id, alertId: proposal.alertId, fingerprint: proposal.fingerprint,
+    });
+    if (!result.ok) {
+      await reload();
+      throw new Error(result.error || tr("状態が変わっています。最新の状態を確認してください。"));
+    }
+    setProposals(items => items.filter(item => item.id !== proposal.id));
+    setMessages(items => [...items, { role: "assistant", text: tr("実行しました：{0}。最新の状態を表示しています。", proposalOpText(proposal.operation)) }]);
+    await reload();
+  });
+  const checkNow = () => run(async () => {
+    setChecking(true);
+    try { await api(`/api/shops/${shop.id}/paypal/alerts/check`, {}); await reload(); }
+    finally { setChecking(false); }
+  });
+  const saveAlertSettings = () => run(async () => {
+    await api(`/api/shops/${shop.id}/paypal/alerts/settings`, { notify: notifySetting, digestHour });
+    await reload();
+  });
   const approveDraft = () => run(async () => {
     const next = await api<Plan>(`/api/shops/${shop.id}/plan`, { text: draft, intent: "modify" });
     if (!alive.current) return;
@@ -67,6 +96,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
       <h2 id="assistant-title">{tr("相談・質問")}</h2>
       <p className="small muted">{tr("お店の仕様（spec.md）と変更履歴（history.md）、gemihub の仕組みの説明をもとに答えます。変更を頼むと依頼文の下書きを作り、承認するまで何も反映しません。")}</p>
     </div></div>
+    {shop.isOwner && <AlertPanel alerts={alerts} checking={checking} busy={busy} notify={notifySetting} digestHour={digestHour} onNotify={setNotifySetting} onDigestHour={setDigestHour} onSaveSettings={() => void saveAlertSettings()} onCheck={() => void checkNow()} onAsk={question => ask(question)} onExecute={proposal => void executeProposal(proposal)} />}
     {voice && <div className="assistant-modes" role="group" aria-label={tr("相談の方法")}>
       <button type="button" aria-pressed={!voiceMode} onClick={() => setMode("chat")}>{tr("チャットで質問")}</button>
       <button type="button" aria-pressed={voiceMode} onClick={() => setMode("voice")}>{tr("AIと話す")}</button>
@@ -80,6 +110,11 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
       </article>)}
       {busy && <p role="status">{tr("AIが考えています…")}</p>}
     </div>
+    {!!proposals.length && <section className="paypal-proposals" aria-label={tr("PayPalの提案")}>
+      <h3>{tr("PayPalの提案")}</h3>
+      <p className="small muted">{tr("内容を確認し、実行してよいものだけ承認してください。サーバーが実行前に状態を再確認します。")}</p>
+      {proposals.map(proposal => <ProposalCard key={proposal.id} proposal={proposal} busy={busy} owner={shop.isOwner} onExecute={() => void executeProposal(proposal)} />)}
+    </section>}
     {error && <p className="alert" role="alert">{error}</p>}
     {draft !== undefined && <section className="assistant-draft" aria-label={tr("依頼文の下書き")}>
       <h3>{tr("依頼文の下書き")}</h3>
@@ -105,6 +140,51 @@ export function Assistant({ shop, voice, userEmail, acceptPlan }: { shop: Worksp
         <button type="submit" className="primary chat-send" disabled={busy || !text.trim()}>{tr("送信")}</button>
       </div>
     </form>}
+  </section>;
+}
+
+const severityText = (value: PayPalSeverity) => ({ high: tr("緊急"), medium: tr("注意"), low: tr("確認") } satisfies Record<PayPalSeverity, string>)[value];
+const kindText = (value: PayPalAlertKind) => ({
+  refund_stalled: tr("返金の停滞"), awaiting_funds: tr("返金用残高の不足"), manual_review: tr("手動確認が必要"),
+  capture_stalled: tr("決済が未確定"), state_mismatch: tr("台帳とPayPalの状態不一致"), unsold_slot: tr("割引枠の売れ残り"), awaiting_approval: tr("支払い手続きの放置"),
+} satisfies Record<PayPalAlertKind, string>)[value];
+const proposalOpText = (value: PayPalProposalOperation) => ({
+  retry_refund: tr("返金の再試行"), resync: tr("状態の再同期"), complete_manual_review: tr("手動確認を完了にする"), close_transfer: tr("割引枠の再販を終了"),
+} satisfies Record<PayPalProposalOperation, string>)[value];
+
+function ProposalCard({ proposal, busy, owner, onExecute }: { proposal: PayPalProposal; busy: boolean; owner: boolean; onExecute: () => void }) {
+  return <div className="paypal-proposal">
+    <div><b>{proposalOpText(proposal.operation)}</b> <span>{proposal.target}</span></div>
+    {proposal.amount !== undefined && proposal.currency && <p className="small">{tr("サーバーが計算した金額：{0}", paid(proposal.amount, proposal.currency))}</p>}
+    <p className="small muted">{proposal.expected}</p>
+    {owner && <button type="button" className="primary" disabled={busy} onClick={onExecute}>{tr("承認して実行")}</button>}
+  </div>;
+}
+
+function AlertPanel({ alerts, checking, busy, notify, digestHour, onNotify, onDigestHour, onSaveSettings, onCheck, onAsk, onExecute }: {
+  alerts?: PayPalAlertState; checking: boolean; busy: boolean; notify: boolean; digestHour: number;
+  onNotify: (value: boolean) => void; onDigestHour: (value: number) => void; onSaveSettings: () => void;
+  onCheck: () => void; onAsk: (question: string) => void; onExecute: (proposal: PayPalProposal) => void;
+}) {
+  const items: PayPalAlertItem[] = alerts?.items || [];
+  return <section className="paypal-alerts" aria-label={tr("PayPalの要対応")}>
+    <div className="paypal-alerts-head">
+      <h3>{tr("要対応")}{!!items.length && <span className="alert-badge">{items.length}</span>}</h3>
+      <button type="button" disabled={checking || busy} onClick={onCheck}>{checking ? tr("確認しています…") : tr("今すぐチェック")}</button>
+    </div>
+    <p className="small muted">{alerts?.summary || tr("対応が必要な項目はありません。")}</p>
+    {!!items.length && <ul className="paypal-alert-list">{items.map(item => <li key={item.id}>
+      <div className="paypal-alert-row"><span className={`status ${item.severity}`}>{severityText(item.severity)}</span><b>{kindText(item.kind)}</b><span>{item.target}</span></div>
+      <p className="small muted">{[item.bookingLabel, item.amount !== undefined && item.currency ? paid(item.amount, item.currency) : "", item.paypalId ? tr("PayPal ID: {0}", item.paypalId) : "", item.elapsedHours !== undefined ? tr("{0}時間経過", Math.round(item.elapsedHours * 10) / 10) : ""].filter(Boolean).join(" ・ ")}</p>
+      <div className="actions"><button type="button" onClick={() => onAsk(tr("この記録について説明してください。予約ID: {0}、PayPal ID: {1}、種類: {2}", item.bookingId || tr("なし"), item.paypalId || tr("なし"), kindText(item.kind)))}>{tr("相談する")}</button></div>
+      {item.proposal && <ProposalCard proposal={item.proposal} busy={busy} owner onExecute={() => onExecute(item.proposal!)} />}
+    </li>)}</ul>}
+    <details className="paypal-alert-settings">
+      <summary>{tr("通知の設定")}</summary>
+      <label><input type="checkbox" checked={notify} onChange={event => onNotify(event.target.checked)} /> {tr("メールで通知する")}</label>
+      <label>{tr("ダイジェストの時刻")} <select value={digestHour} onChange={event => onDigestHour(Number(event.target.value))}>{Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{tr("{0}時", hour)}</option>)}</select></label>
+      <button type="button" disabled={busy} onClick={onSaveSettings}>{tr("通知設定を保存")}</button>
+    </details>
   </section>;
 }
 

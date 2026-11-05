@@ -40,6 +40,7 @@ import { ImageLibrary } from "./ImageLibrary";
 import { articleKinds } from "../shared/article-features";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
+import type { PayPalAlertState } from "../server/paypal-ops";
 import { ShopAbout } from "./ShopAbout";
 import { Presentation } from "./Presentation";
 import type { ScreenId } from "../shared/screens";
@@ -70,6 +71,8 @@ export type Workspace = Shop & {
   bookings: Booking[];
   paymentCheckouts?: { id: string; start: string; amount: number; currency?: Currency; phase: string; review: boolean; customer: string; name: string }[];
   transferListings?: { id: string; bookingId: string; price: number; currency: Currency; discountPercent: number; deadline: string; buying: boolean; review: boolean }[];
+  paypalAlerts?: PayPalAlertState;
+  paypalSettings?: { enabled: boolean; digestHour: number };
   inquiries: Inquiry[];
   members: { email: string; accepted: boolean; status?: string }[];
   jobs: { type: string; error?: string }[];
@@ -485,6 +488,7 @@ function Dashboard({
             >
               <span aria-hidden="true">{icon}</span>
               {label}
+              {id === "assistant" && !!shop?.paypalAlerts?.items.length && <span className="alert-badge" aria-label={tr("要対応 {0}件", shop.paypalAlerts.items.length)}>{shop.paypalAlerts.items.length}</span>}
             </button>
           ))}
           <div className="sidebar-language">
@@ -558,7 +562,7 @@ function Dashboard({
                     </div>
                   </>
                 )}
-                {view === "assistant" && shop.published && <Assistant key={`${shop.id}:${session.user?.email}`} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} />}
+                {view === "assistant" && shop.published && <Assistant key={`${shop.id}:${session.user?.email}`} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} reload={load} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop} onSaved={load}/></>}{!shop.isOwner && <><StaffCalendar key={shop.id} shop={shop} onSaved={load}/><StaffPhoto shop={shop} reload={load}/></>}</>}

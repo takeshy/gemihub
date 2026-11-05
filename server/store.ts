@@ -47,6 +47,10 @@ export type Shop = {
   judge?: { createdAt: string; folderId?: string; archivedAt?: string };
   /** Region chosen from the owner's first visit, used for the first proposal. */
   regionDefault?: import("../shared/region.ts").Region;
+  /** Last language the owner used; scheduled notifications and AI summaries follow it. */
+  locale?: "ja" | "en";
+  /** Owner settings for PayPal operations alerts. Absent means daily digest at 09:00, enabled. */
+  paypalOps?: { notify: boolean; digestHour: number };
 };
 export type User = {
   email: string;

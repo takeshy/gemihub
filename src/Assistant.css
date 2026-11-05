@@ -21,3 +21,18 @@
   .assistant { padding: 20px 16px; }
   .assistant .assistant-log { padding: 10px; }
 }
+.paypal-alerts { margin: 0 0 16px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: #fbfaf4; }
+.paypal-alerts-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.paypal-alerts-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.paypal-alert-list { display: grid; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+.paypal-alert-list > li { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.paypal-alert-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.paypal-alert-list .actions { margin-top: 8px; }
+.paypal-proposal { margin-top: 10px; padding: 12px; border: 1px dashed #c9a227; border-radius: 12px; background: #fffbeb; }
+.paypal-proposal > div { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.paypal-proposal p { margin: 6px 0; }
+.paypal-proposals { margin: 12px 0; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: #fffbeb; }
+.paypal-proposals h3 { margin-top: 0; }
+.paypal-alert-settings { margin-top: 12px; }
+.paypal-alert-settings label { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.alert-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: #b4412b; color: white; font-size: 12px; line-height: 1; }

@@ -267,5 +267,11 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
       catch { /* Retried next minute. */ }
     }
   }
-  return { quote, list, withdraw, release, begin, createOrder, capture, reconcile, active, forShop };
+  /** Owner-approved early finish: settle now with the cancellation terms shown when listing began. */
+  async function close(t: Transfer) {
+    if (t.phase !== "listed") fail(409, tr("この空き枠の受付は終了しています"));
+    if (buyerBusy(t)) fail(409, tr("代わりに利用する方がお支払い手続き中です。完了または期限切れの後に操作してください。"));
+    await settle(t);
+  }
+  return { quote, list, withdraw, release, begin, createOrder, capture, reconcile, active, forShop, close };
 }

@@ -12,8 +12,33 @@ export const orderSchema = z.object({
   links: z.array(z.object({ rel: z.string(), href: z.string() })).optional(),
 });
 export type PayPalOrder = z.infer<typeof orderSchema>;
-export const refundSchema = z.object({ id: z.string(), status: z.string(), amount: money.optional() });
+export const refundSchema = z.object({ id: z.string(), status: z.string(), amount: money.optional(), note_to_payer: z.string().optional() });
 export type PayPalRefund = z.infer<typeof refundSchema>;
+/** A captured payment read back from PayPal; refund totals are optional in older responses. */
+export const captureSchema = z.object({
+  id: z.string(), status: z.string(), amount: money,
+  custom_id: z.string().optional(), invoice_id: z.string().optional(),
+  seller_receivable_breakdown: z.object({ total_refunded_amount: money.optional() }).optional(),
+  create_time: z.string().optional(), update_time: z.string().optional(),
+});
+export type PayPalCapture = z.infer<typeof captureSchema>;
+const transactionInfoSchema = z.object({
+  transaction_id: z.string(),
+  transaction_event_code: z.string().optional(),
+  transaction_status: z.string().optional(),
+  transaction_initiation_date: z.string().optional(),
+  transaction_amount: money.optional(),
+  paypal_reference_id: z.string().optional(),
+  paypal_reference_id_type: z.string().optional(),
+  transaction_subject: z.string().optional(),
+});
+const transactionSearchSchema = z.object({
+  transaction_details: z.array(z.object({ transaction_info: transactionInfoSchema })).optional(),
+  total_pages: z.number().int().optional(),
+});
+/** One payment event, reduced to fields that are useful to the shop owner. */
+export type PayPalTransaction = z.infer<typeof transactionInfoSchema>;
+export interface PayPalTransactionQuery { start: string; end: string; type?: "all" | "payment" | "refund" }
 export interface PaymentGateway {
   environment: PayPalEnvironment;
   ready(): Promise<void>;
@@ -23,6 +48,10 @@ export interface PaymentGateway {
   capture(id: string, requestId: string): Promise<PayPalOrder>;
   refund(captureId: string, amount: number, requestId: string, currency?: Currency): Promise<PayPalRefund>;
   refundStatus(id: string): Promise<PayPalRefund>;
+  /** Read-only lookup used by the assistant and alert checks. Optional for small test gateways. */
+  captureStatus?(id: string): Promise<PayPalCapture>;
+  /** Read-only Transaction Search, capped by the caller. Optional for small test gateways. */
+  transactions?(query: PayPalTransactionQuery): Promise<PayPalTransaction[]>;
 }
 export class PayPalError extends Error {
   status = 503;
@@ -76,6 +105,22 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
     async capture(id, requestId) { return orderSchema.parse(await request(`/v2/checkout/orders/${encodeURIComponent(id)}/capture`, {}, requestId)); },
     async refund(id, amount, requestId, currency = "JPY") { return refundSchema.parse(await request(`/v2/payments/captures/${encodeURIComponent(id)}/refund`, { amount: { currency_code: currency, value: paypalValue(amount, currency) } }, requestId)); },
     async refundStatus(id) { return refundSchema.parse(await request(`/v2/payments/refunds/${encodeURIComponent(id)}`)); },
+    async captureStatus(id) { return captureSchema.parse(await request(`/v2/payments/captures/${encodeURIComponent(id)}`)); },
+    async transactions({ start, end, type = "all" }) {
+      const rows: PayPalTransaction[] = [];
+      // Transaction Search requires both bounds and returns at most 31 days. The caller clamps them.
+      for (let page = 1; page <= 5; page++) {
+        const query = new URLSearchParams({ start_date: start, end_date: end, fields: "transaction_info", page_size: "100", page: String(page) });
+        const result = transactionSearchSchema.parse(await request(`/v1/reporting/transactions?${query}`));
+        rows.push(...(result.transaction_details || []).map(row => row.transaction_info));
+        if (!result.total_pages || page >= result.total_pages) break;
+      }
+      if (type === "all") return rows;
+      return rows.filter(row => {
+        const refund = row.paypal_reference_id_type?.toUpperCase() === "REFUND" || /REFUND|REVERSAL/.test(row.transaction_event_code || "");
+        return type === "refund" ? refund : !refund;
+      });
+    },
   };
 }
 export function approvalUrl(order: PayPalOrder, environment: PayPalEnvironment) {

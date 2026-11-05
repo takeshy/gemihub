@@ -73,8 +73,9 @@ import { regionOf, currencyOf, dateIn, formatMinor } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
+import { paypalOps } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
-import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, type AiProvider } from "./llm.ts";
+import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, type AiProvider } from "./llm.ts";
 import {
   session,
   login,
@@ -301,9 +302,11 @@ export function createApp(
   async function shopData(shop: Shop): Promise<ShopData> {
     const config = await effective(shop);
     const now = new Date();
+    const paypalTools = await paypal.toolsFor(shop);
     return {
       documents: await shopDocuments(shop),
       today: dateIn(now, regionOf(config).timeZone),
+      ...(paypalTools ? { paypal: paypalTools } : {}),
       records: async kind => {
         if (kind === "bookings") return (await store.bookings(shop.id)).map(booking => ({
           id: booking.id, start: booking.start, end: booking.end, status: booking.status,
@@ -551,6 +554,52 @@ export function createApp(
   }
   const reconcilePayments = (shopId: string) => store.locked(bookingLockKey(shopId), async () => {
     if (await store.shop(shopId)) { await payments.reconcile(shopId); await transfers.reconcile(shopId); }
+  });
+  const paypal = paypalOps({
+    store,
+    gateway: paymentGateway,
+    reconcile: async shopId => {
+      if (!await store.shop(shopId)) return;
+      await payments.reconcile(shopId);
+      await transfers.reconcile(shopId);
+    },
+    closeTransfer: async (shopId, transferId) => {
+      const transfer = (await transfers.forShop(shopId)).find(item => item.id === transferId);
+      if (!transfer) fail(404, tr("この空き枠の受付は終了しています"));
+      await transfers.close(transfer);
+    },
+    recordHistory: async (shopId, entry) => {
+      await store.locked(shopId, async () => {
+        const fresh = await store.shop(shopId);
+        if (!fresh || fresh.history.some(item => item.at === entry.at && item.summary === entry.summary)) return;
+        fresh.history.push(entry);
+        await store.saveShop(fresh);
+      });
+    },
+    notifyOwner: async (shop, subject, body) => {
+      if (shop.judge) return;
+      if (!shop.google) throw new Error(tr("店主の Google 再接続が必要です"));
+      const config = shop.published;
+      const cc = config?.notificationEmail && config.notificationEmail.toLowerCase() !== shop.owner.toLowerCase() ? [config.notificationEmail] : undefined;
+      await enqueue(shop, "mail", { to: shop.owner, ...(cc ? { cc } : {}), subject, body });
+    },
+    summarize: async (items, locale) => {
+      const payload = items.map(item => ({
+        kind: item.kind, severity: item.severity, target: item.target, amount: item.amount, currency: item.currency,
+        paypalId: item.paypalId, elapsedHours: item.elapsedHours, since: item.since,
+      }));
+      try {
+        const raw = await generateJson({
+          system: tr("お店のPayPal対応アラートを、店主向けに2〜4文で簡潔に要約してください。対象の選定・金額・操作の可否は変えず、渡された項目だけを説明する。実行は提案せず、必要な確認を短く伝える。回答はJSONのみ。"),
+          contents: [{ role: "user", parts: [{ text: JSON.stringify(payload) }] }],
+          schema: { type: "object", properties: { text: { type: "string", maxLength: 1200 } }, required: ["text"] },
+          timeoutMs: 15000,
+        });
+        const text = JSON.parse(raw).text;
+        return typeof text === "string" ? text : undefined;
+      } catch { return undefined; }
+    },
+    appOrigin: origin,
   });
   async function applyTransferHistory(shop: Shop) {
     const pending = (await store.entries<{ shopId: string; entry: Shop["history"][number]; applied?: boolean }>("transferHistory", shop)).filter(row => !row.value.applied);
@@ -1252,6 +1301,10 @@ export function createApp(
         const shops = [];
         for (const shop of allShops)
           if (await operator(user, shop)) shops.push(shop);
+        for (const shop of shops) if (user.email === shop.owner) {
+          const locale = await store.get<{ locale: "ja" | "en" }>("shopLocale", shop.id);
+          if (locale?.locale !== getLocale()) await store.put("shopLocale", shop.id, { locale: getLocale() });
+        }
         return json(res, {
           shops: await Promise.all(
             shops.map(async (shop) => ({
@@ -1260,6 +1313,8 @@ export function createApp(
               bookings: await store.bookings(shop.id),
               paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
               transferListings: await operatorTransfers(shop.id),
+              paypalAlerts: await paypal.state(shop.id),
+              paypalSettings: paypal.settings(shop),
               inquiries: await inquiries(shop),
               plans: await Promise.all((await store.list<Plan>("plan"))
                 .filter((p) => p.shopId === shop.id)
@@ -1348,6 +1403,20 @@ export function createApp(
           await Promise.all([reconcilePayments(shop.id).then(() => flushMail(shop)), syncFiles(shop.id), flushMail(shop)]);
           await syncTransferHistory(shop.id);
           return json(res, { ok: true });
+        }
+        if (action === "paypal/alerts/check" && method === "POST") {
+          assertOwner(user, shop);
+          return json(res, await paypal.check({ ...shop, locale: getLocale() }, { notify: true, forceDigest: true, force: true }));
+        }
+        if (action === "paypal/alerts/settings" && method === "POST") {
+          assertOwner(user, shop);
+          return json(res, { ok: true, settings: await paypal.updateSettings(shop, await body(req, 10000)) });
+        }
+        if (action === "paypal/proposals/execute" && method === "POST") {
+          assertOwner(user, shop);
+          const input = z.object({ proposalId: z.string().min(1).max(200), alertId: z.string().min(1).max(200), fingerprint: z.string().min(1).max(200) }).parse(await body(req, 10000));
+          const result = await paypal.execute(shop, input, user!.email);
+          return json(res, result, result.ok ? 200 : 409);
         }
         const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
         if (cancellation && method === "POST") {
@@ -1470,7 +1539,12 @@ export function createApp(
             messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(4000) })).max(12).default([]),
           }).parse(await body(req, 100000));
           const reply = await (intelligence.assistant || converse)({ question: input.question, messages: input.messages, data: await shopData(shop), demo: demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT });
-          return json(res, { answer: reply.answer, sources: reply.sources, ...(reply.draft ? { draft: reply.draft, request: draftText(reply.draft) } : {}) });
+          const paymentQuestion = reply.sources.some(source => source.path.startsWith("paypal:") || source.path === "sheet:paypal") || /paypal|refund|payment|stuck|alert|返金|支払|止ま|要対応/i.test(input.question);
+          const alerts = paymentQuestion
+            ? await paypal.check({ ...shop, locale: getLocale() }, { notify: false, force: true })
+            : await paypal.state(shop.id);
+          const proposals = paymentQuestion ? [...new Map((alerts?.items || []).flatMap(item => item.proposal ? [[item.proposal.id, item.proposal] as const] : [])).values()].slice(0, 5) : [];
+          return json(res, { answer: reply.answer, sources: reply.sources, ...(reply.draft ? { draft: reply.draft, request: draftText(reply.draft) } : {}), ...(proposals.length ? { paypalProposals: proposals } : {}) });
         }
         if (action === "images/generate" && method === "POST") {
           assertOwner(user, shop);
@@ -3111,6 +3185,7 @@ export function createApp(
         void reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)).catch(console.error);
         void syncFiles(shop.id).catch(console.error);
         void flushMail(shop).catch(console.error);
+        void paypal.check(shop, { notify: true }).catch(console.error);
       }
     })().catch(console.error);
   }, 60000);
