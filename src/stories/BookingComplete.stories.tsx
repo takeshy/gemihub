@@ -17,14 +17,16 @@ function example(paid=false,usd=false,addons=false) {
   return {config,booking:simulatePayment(booking,config),simulation:true,onMine:()=>{},onNew:()=>{}};
 }
 // The sample shop's names are translated when read, so examples are built while rendering (not at import).
-function BookingCompleteStory({paid=false,usd=false,addons=false}:{paid?:boolean;usd?:boolean;addons?:boolean}) {
+function BookingCompleteStory({paid=false,usd=false,addons=false,reminder=false}:{paid?:boolean;usd?:boolean;addons?:boolean;reminder?:boolean}) {
   const args=example(paid,usd,addons);
+  if(reminder) args.simulation=false;
   return <ShopRegionContext.Provider value={regionOf(args.config)}><main className="public-shop"><BookingComplete {...args}/></main></ShopRegionContext.Provider>;
 }
 const meta={title: "お客様の画面/予約完了",component:BookingCompleteStory,parameters:{layout:"fullscreen"}} satisfies Meta<typeof BookingCompleteStory>;
 export default meta;
 type Story=StoryObj<typeof meta>;
 export const Standard:Story={name:"予約完了",args:{}};
+export const Reminder:Story={name:"来店前リマインダー",args:{reminder:true}};
 export const Paid:Story={name:"支払い済みの予約完了",args:{paid:true}};
 export const Addons:Story={name:"追加メニューを含む予約完了",args:{addons:true}};
 export const Dollars:Story={name:"米国・ドルでの予約完了",args:{paid:true,usd:true}};

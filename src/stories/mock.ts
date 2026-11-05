@@ -19,6 +19,7 @@ import type { LibraryImage } from "../../server/image-library-domain";
 import { scopedSource, scopedConfig, type ReleaseScope } from "../../server/pages";
 import { shopSystem, systemSvg } from "../../server/shop-system";
 import { storyPosts } from "./posts";
+import type { SlotWish } from "../Waitlist";
 import { createTransferFixtures, customerBooking, customerTransferScenarios, type TransferScenario } from "./transfer-fixtures";
 import {
   publicPosts,
@@ -135,6 +136,7 @@ export type Scenario =
   | "any-reservation"
   | "customer-choice"
   | "mypage"
+  | "waitlist-mypage"
   | "contact"
   | "anonymous";
 const publicScenarios = new Set<Scenario>([
@@ -162,6 +164,7 @@ const publicScenarios = new Set<Scenario>([
   "any-reservation",
   "customer-choice",
   "mypage",
+  "waitlist-mypage",
   "contact",
   "anonymous",
 ]);
@@ -209,7 +212,7 @@ export function scenarioProps(scenario: Scenario) {
         } as Partial<Record<Scenario, string>>
       )[scenario] || "build",
     initialPane:
-      (scenario.startsWith("transfer-") && scenario !== "transfer-offers") || ["paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
+      (scenario.startsWith("transfer-") && scenario !== "transfer-offers") || ["paid-mypage", "waitlist-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund"].includes(scenario) ? "mine" : scenario === "mypage" || scenario === "anonymous"
         ? undefined
         : scenario === "contact"
           ? "contact"
@@ -440,6 +443,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         },
   };
   const transferFixtures = createTransferFixtures(scenario, shop, session);
+  let wishes: SlotWish[] = scenario === "waitlist-mypage" ? [{ id: "story-wish", date: "2026-05-17", from: "10:00", to: "20:00", menuId: "simple", optionIds: [], discountOnly: false }, { id: "story-wish-discount", date: "2026-05-24", from: "13:00", to: "18:00", menuId: "simple", optionIds: [], discountOnly: true }] : [];
   if (scenario.startsWith("calendar-")) {
     shop.isOwner = false;
     session.user = { email: "haru@example.com", name: tr("はる"), role: "customer", shopId: shop.id };
@@ -486,6 +490,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
     let result: unknown;
     if (action === "/api/session") result = session;
     else if (transferFixtures.handles(action)) result = transferFixtures.request(action, data);
+    else if (action.endsWith("/waitlist") && data === undefined) result = wishes;
+    else if (action.endsWith("/waitlist")) { wishes.push({ ...(data as Omit<SlotWish, "id">), id: `story-wish-${wishes.length}` }); result = { ok: true }; }
+    else if (/\/waitlist\/[^/]+\/remove$/.test(action)) { wishes = wishes.filter(wish => wish.id !== action.split("/").at(-2)); result = { ok: true }; }
     else if (action === "/api/workspace") result = { shops: [shop] };
     else if (action === "/api/invitations") result = [];
     else if (action === `/api/shops/${shop.id}/export`) {

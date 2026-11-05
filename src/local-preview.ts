@@ -1,3 +1,4 @@
+import type { SlotWish } from "./Waitlist";
 import { tr } from "../shared/i18n";
 import { articleKinds } from "../shared/article-features";
 import { dateIn, regionOf, zonedDate } from "../shared/region";
@@ -68,6 +69,7 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
   const bookings: Booking[] = fixtures.bookings.map(b => { const selected = menuSelection(config,b.menuId,b.optionIds);return simulatePayment({ ...b, ...(selected?.optionIds.length ? {optionIds:selected.optionIds,items:selected.items}:{}), shopId, price: selected?.price ?? 0, message: "", customer: customerEmail, createdAt: new Date().toISOString() }, config); });
   const posts: PublicPost[] = fixtures.posts.filter(post => articleKinds(config).includes(post.category)).map((p, i) => ({ ...p, id: `sample-${i}`, publishedAt: `${p.date}T00:00:00Z` }));
   const base = "/api/public/local-preview";
+  let wishes: SlotWish[] = [];
   let profile: MemberProfile = { name: fixtures.customerName, birthDate: "1990-01-01", gender: "not_specified" };
   return async <T>(path: string, data?: unknown): Promise<T> => {
     const url = new URL(path, "https://preview.invalid");
@@ -88,6 +90,9 @@ export function createPreviewClient(config: ShopConfig, fixtures: Fixtures, shop
     // Transfers need a second customer and real payments, so the offline preview shows none.
     else if (action === `${base}/transfers`) result = [];
     else if (action === `${base}/transfers/mine`) result = { selling: [], buying: [] };
+    else if (action === `${base}/waitlist` && data === undefined) result = wishes;
+    else if (action === `${base}/waitlist`) { wishes.push({ ...(data as Omit<SlotWish, "id">), id: `practice-${wishes.length}-${Date.now()}` }); result = { ok: true }; }
+    else if (action.startsWith(`${base}/waitlist/`)) { wishes = wishes.filter(wish => wish.id !== action.split("/").at(-2)); result = { ok: true }; }
     else if (action.startsWith(`${base}/bookings/`) && action.endsWith("/transfer-quote")) result = { eligible: false, reason: tr("譲渡は公開中の予約ページで利用できます。") };
     else if (action === `${base}/bookings` && data === undefined) result = bookings;
     else if (action === `${base}/bookings`) {

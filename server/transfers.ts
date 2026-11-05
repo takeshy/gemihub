@@ -1,4 +1,4 @@
-import { tr } from "../shared/i18n.ts";
+import { tr, getLocale } from "../shared/i18n.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Booking } from "./domain.ts";
 import type { RefundTiers } from "./payment-domain.ts";
@@ -15,6 +15,7 @@ export type TransferBuyer = {
   expires: number; createdAt: number; captureAttemptedAt?: number;
   orderId?: string; approvalUrl?: string; captureId?: string; review?: boolean;
   returnUrl: string; cancelUrl: string; brandName?: string;
+  locale?: "ja" | "en";
 };
 export type Transfer = {
   id: string; shopId: string; bookingId: string;
@@ -121,7 +122,7 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
     if (buyer.customer === t.seller) fail(409, tr("ご自身がキャンセルした枠は予約できません。"));
     if (buyerBusy(t)) fail(409, tr("ほかの方がお支払い手続き中です。少し時間をおいてご確認ください。"));
     t.attempts++;
-    t.buyer = { id: createHash("sha256").update(`${t.id}:${t.attempts}`).digest("hex"), ...buyer, phase: "creating", createdAt: Date.now(), expires: Date.now() + holdMinutes * 60000, returnUrl, cancelUrl, ...(brandName ? { brandName } : {}) };
+    t.buyer = { id: createHash("sha256").update(`${t.id}:${t.attempts}`).digest("hex"), ...buyer, locale: getLocale(), phase: "creating", createdAt: Date.now(), expires: Date.now() + holdMinutes * 60000, returnUrl, cancelUrl, ...(brandName ? { brandName } : {}) };
     await save(t);
     return createOrder(t);
   }
@@ -204,6 +205,7 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
       c.booking.transfers = [...(c.booking.transfers || []), entry];
       c.booking.customer = b.customer;
       c.booking.name = b.name;
+      c.booking.locale = b.locale || "ja";
       // Keep the previous holder's message only in the operator-visible history.
       c.booking.message = "";
       c.booking.payment = { provider: "paypal", environment: t.environment, orderId: b.orderId!, captureId: b.captureId!, amount: t.price, currency: t.currency, policy: structuredClone(p.policy) };

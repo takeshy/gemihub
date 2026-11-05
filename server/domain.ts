@@ -152,6 +152,8 @@ export function menuSelection(config: ShopConfig, menuId: string, optionIds: rea
   const items = [base, ...selected].map(({id,name,price,duration}) => ({menuId:id,name,price,duration}));
   return { base, options: selected, optionIds: selected.map(option => option.id), items, duration: items.reduce((total,item)=>total+item.duration,0), price: fromMinor(items.reduce((total,item)=>total+toMinor(item.price,currency),0),currency) };
 }
+/** When the current holder took this booking: a transfer keeps the original `createdAt`. */
+export const bookingHeldSince = (booking: Pick<Booking, "createdAt" | "transfers">) => booking.transfers?.at(-1)?.at || booking.createdAt;
 export const bookingMenuName = (config: ShopConfig | null | undefined, booking: Pick<Booking, "menuId" | "items">) => booking.items?.length ? booking.items.map(item=>item.name).join(" + ") : config?.menus.find(menu=>menu.id===booking.menuId)?.name || booking.menuId;
 /** Every menu in the booking (base and add-ons) must exist and allow transfer. */
 export const bookingTransferable = (config: Pick<ShopConfig, "menus">, booking: Pick<Booking, "menuId" | "optionIds">) =>
@@ -172,6 +174,8 @@ export type Booking = {
   end: string;
   status: "active" | "cancelled" | "no_show";
   createdAt: string;
+  /** Customer's booking language, also used for scheduled reminders. */
+  locale?: "ja" | "en";
   payment?: BookingPayment;
   /** Holder changes through transfer listings, oldest first; `payment` is always the current holder's. */
   transfers?: BookingTransfer[];

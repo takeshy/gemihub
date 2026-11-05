@@ -15,3 +15,8 @@ export const MyPage: Story = {
   name: "マイページ",
   args: { scenario: "mypage" },
 };
+
+export const OpeningAlerts: Story = {
+  name: "空き通知",
+  args: { scenario: "waitlist-mypage" },
+};

@@ -3,7 +3,7 @@ type: "Process"
 title: "Booking and availability"
 description: "How customers book and how gemihub decides which time slots are open."
 tags: ["booking", "availability", "staff", "calendar"]
-updated: "2026-11-04"
+updated: "2026-11-06"
 ---
 
 How customers book and how gemihub decides which time slots are open.
@@ -17,6 +17,14 @@ How customers book and how gemihub decides which time slots are open.
 5. A confirmed booking response replaces the form with the completion screen. It uses the returned record's assigned person, snapshotted services/add-ons, price, dates, duration, booking number and message, with links to My page and another booking. Pending or failed payments stay on My page; missing or foreign booking data never produces a completion receipt. PayPal-return reloads recheck the existing checkout idempotently. Leaving the receipt clears PayPal-return parameters so a subsequent visit does not reopen that flow.
 
 Customers see and cancel their own bookings on My page.
+
+# Pre-visit reminders
+
+Every minute, the mail worker queues one reminder per confirmed booking, start time and current customer. It normally runs 24 hours before the appointment. Unpaid bookings use one hour before the existing cancellation cutoff if that is earlier (25 hours before for a 24-hour cutoff), giving customers time to cancel. Bookings created or bought as a discounted appointment after their reminder time receive only their normal confirmation. A booking awaiting a replacement gets no reminder unless its cancellation is withdrawn. Following downtime, overdue reminders are queued while the appointment is still in the future.
+
+The customer receives the appointment's start and end in the shop's time zone, snapshotted services/add-ons, assigned staff, address, and a language-preserving link to My page for review and cancellation. The link requires normal authentication and does not contain a login credential. The completion screen explains the timing and encourages early cancellation. Refund and cancellation rules still apply.
+
+The reminder marker and existing mail outbox are committed together under the mail lock. Delivery failures retry from the outbox; workers recheck the current holder, start, active status and any replacement listing before sending, discarding cancelled, no-show, started, or superseded reminders. Draft-only and archived shops and unconfirmed payments are excluded. Booking language is saved for Japanese/English delivery; older bookings use the shop language, then Japanese. Judge shops record mail without sending, and preview/offline screens do not queue mail. As with other Gmail outbox messages, a process failure after Gmail accepts a message but before queue deletion can cause a retry; Gmail does not provide an exactly-once transaction with Firestore.
 
 # How open slots are calculated
 
@@ -39,6 +47,14 @@ Dates, weekdays, holidays, opening hours and staff shifts use the shop's `region
 In owner-enabled shops, Staff and shifts includes an Owner information card for the owner's name, photo, working days, hours and services. Saving it retains a `staff` row with the reserved ID `owner`; it is a profile for the existing owner booking resource, so it never adds a second booking resource or a staff login. Owner rows with `customAvailability: true` use their stored `weekdays`, `start`, `end` and `menuIds` just like other staff, intersected with shop opening hours and closures. Earlier name/photo-only profiles omit this marker and keep all services and all opening hours, including weekday overrides. Editing working conditions, either manually or through settings AI, opts into configured availability. Name/photo changes alone preserve the previous availability mode. Customer-facing names and photos use the saved profile. The owner's Google sign-in supplies Calendar consent; no separate staff-account or Calendar setup is required.
 
 A menu with `optionFor` is an add-on and cannot be booked alone. It lists the standalone menu IDs that accept it. Only one selected add-on per nonempty `optionGroup` is allowed. Availability covers the combined duration and requires a staff member qualified for the base service and every selected add-on. Prices are summed in integer currency units before conversion back to shop currency. Booking records retain `optionIds`, a frozen `items` list, the combined price, and the full start/end interval. PayPal consent, holds, capture, and refunds use that combined snapshot. Preview and offline exports follow the same rules.
+
+# Opening alerts
+
+A signed-in customer with a profile can ask to be told when a time opens. Under the time list, Tell me when a time opens up takes a date and a from–to range; the service, add-ons and staff come from the form. Dates must be in the booking window, and each customer keeps at most 10 alerts. With PayPal enabled they can choose only discounted appointments.
+
+gemihub checks each alert every minute, using the same availability rules as booking. It also matches open discounted appointments for the same base service and staff choice that fit the whole range and that nobody is paying for. It emails only openings that appear after registration, only to that customer, and holds nothing: first to book gets it. A time that fills and reopens is mailed again, at most one ordinary-opening mail an hour per alert. New discounted appointments skip that wait. If a connected Calendar cannot be read, the alert waits for the next check.
+
+My page lists alerts with Stop alert. An alert is removed once the customer books inside its range after registering or the range has passed. A booking they already held does not count, so they can ask to move it. If the shop stops offering the service or add-on, the alert is removed and the customer is told by email.
 
 # Nominated and unassigned staff
 

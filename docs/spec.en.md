@@ -79,6 +79,8 @@ Acceptance includes practice actions, reload restoration, pen target identificat
 
 ## Customer bookings
 
+Send customers a pre-visit email with appointment times in the shop time zone, services/add-ons, staff, address and a normal authenticated My page link for review/cancellation. Normally send 24 hours before; for unpaid bookings use one hour before the existing cancellation cutoff if earlier. Explain the timing on the receipt and encourage early cancellation. Exclude bookings created or bought by transfer after their reminder time, bookings awaiting a replacement, unconfirmed payments, cancelled/no-show/started bookings and archived shops. Run every minute and catch up after downtime only before the appointment starts. Commit a durable deduplication marker and outbox job together under the mail lock, retry failures, and recheck the current holder/start/status before delivery. Save the booking language (Japanese/English), falling back to the shop language for old records. Judge shops record messages without delivery; practice and offline screens do not send mail.
+
 Signed-out visitors, owner accounts, and customers of another shop see a sign-in prompt instead of booking inputs, slots, or payment actions. Show the form and fetch slots only after signing in as this shop’s customer and completing member registration.
 
 After receiving the confirmed booking record, replace the input form with a dedicated completion screen showing the saved date/time, customer, actual assigned person, services and add-ons, total, duration, booking number and message. Offer My page and another booking. Use the same screen after confirmed PayPal payment; never show completion for pending/failed payment, missing booking data or another customer's booking. Rechecks and payment-return reloads must not create duplicate charges or bookings. Previews and offline Drive storefronts use the same completion screen.
@@ -106,6 +108,16 @@ New customers see **Discounted appointments** and **Book this appointment**, wit
 Notify the cancelling customer on receipt, replacement booking and deadline settlement; notify the new customer of confirmation and the shop of the replacement. Operators see pending cancellations, holder history and refunds, and sales are recorded in history.md. Event notifications, a history intent and acknowledgements commit together and retry every minute after failure, even after a sale or another holder change. Shop-history updates and their acknowledgements commit separately under the configuration lock; booking/payment operations never wait for Drive or overwrite concurrently published shop data. Durable payment journals recover lost captures/refunds without duplicate charges or refunds.
 
 Storybook includes 12 customer and 3 operator states with interactive cancellation, undo, discounted bookings and refund retry. Payments are simulated without external navigation. Offline previews retain normal cancellation without replacement offers. Waitlist notification, cross-shop listings, negotiated prices and partial transfers remain out of scope.
+
+## Opening alerts
+
+Signed-in registered customers can save a date and time range (for example 5/17 10:00–20:00) from **Tell me when a time opens up** under the time list. The service, add-ons and staff come from the booking form. Dates must be in the booking window, each customer may keep 10 alerts, and identical alerts are not duplicated. Shops with PayPal also offer **Only discounted appointments**.
+
+Ordinary openings use the same availability check as booking, including payment holds, Calendar and hours, so changed shifts count as well as cancellations. A discounted appointment matches on the base service (add-ons are ignored), any requested staff member and the whole appointment fitting the range. Listings someone is paying for and the customer's own cancelled booking are excluded.
+
+Checks run every minute, reading Calendar outside the mail lock. What was open at registration is not mailed; only openings that appear later are. Alerts go to the customer alone, are first come, first served, and hold nothing. A time that fills and reopens is mailed again. Ordinary openings are limited to one mail an hour, because payment holds make them flap; a new discounted appointment is mailed without waiting. A discounted appointment already mailed is not mailed again when someone else's payment lapses. While a Calendar is unreadable nothing is decided, and the next check retries. Notices never reveal the previous customer, use the language chosen at registration, and link to booking and My page.
+
+My page lists alerts with **Stop alert**. An alert is removed when the customer books inside its range after registering (a booking they already held, or one awaiting a replacement, does not count) or when the range has passed. If the shop stops offering the service or add-on, the alert is removed and the customer is told by email. Data exports include alerts. Offline previews can practice saving and stopping one but send no mail.
 
 ## Customer membership and CRM
 

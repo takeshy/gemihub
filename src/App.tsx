@@ -3,6 +3,7 @@ import { Brand } from "./Brand";
 import { tr, intlLocale, listSeparator } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
+import { WaitlistRequest, WaitlistWishes, type SlotWish } from "./Waitlist";
 import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers, type CancellationQuote, type MyTransfers, type TransferCheckout, type TransferListing } from "./Transfers";
 import { BookingComplete } from "./BookingComplete";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
@@ -1317,6 +1318,7 @@ export function PublicShop({
   const [checkouts, setCheckouts] = useState<PendingCheckout[]>([]);
   const [listings, setListings] = useState<TransferListing[]>([]);
   const [myTransfers, setMyTransfers] = useState<MyTransfers>({ selling: [], buying: [] });
+  const [wishes, setWishes] = useState<SlotWish[]>([]);
   const [paymentConsent, setPaymentConsent] = useState(false);
   const processedReturn = useRef("");
   useEffect(() => { setPaymentConsent(false); }, [menu, optionIds, data?.config.rules.payment, selected]);
@@ -1339,8 +1341,8 @@ export function PublicShop({
   };
   const loadMine = async () => {
     if (isCustomer) {
-      const [bookings, pending, transfers] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`), api<MyTransfers>(`${base}/transfers/mine`)]);
-      setMine(bookings); setCheckouts(pending); setMyTransfers(transfers);
+      const [bookings, pending, transfers, waitlist] = await Promise.all([api<Booking[]>(`${base}/bookings`), api<PendingCheckout[]>(`${base}/checkouts`), api<MyTransfers>(`${base}/transfers/mine`), api<SlotWish[]>(`${base}/waitlist`)]);
+      setMine(bookings); setCheckouts(pending); setMyTransfers(transfers); setWishes(waitlist);
       setCompletedBooking(current => {
         const saved = current && bookings.find(booking => booking.id === current.id);
         return saved ? saved.status === "active" && !transfers.selling.some(listing => listing.bookingId === saved.id && listing.phase === "listed") ? saved : undefined : current;
@@ -1547,6 +1549,7 @@ export function PublicShop({
                 ))
               )}
               <TransferHistory selling={myTransfers.selling} />
+              <WaitlistWishes base={base} config={c} wishes={wishes} busy={busy} run={run} reload={loadMine} />
             </div>
   );
   const bookingSection = () => confirmed ? <BookingComplete booking={confirmed} config={c} simulation={data.paymentSimulation} onMine={() => {
@@ -1637,6 +1640,7 @@ export function PublicShop({
                   <p className="empty-slots">
                     {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}{" "}<button type="button" onClick={()=>setAutomaticDate(true)}>{tr("予約できる最初の日を探す")}</button></p>
                 )}
+                {isCustomer && !!selection && <WaitlistRequest base={base} config={c} date={date} menuId={menu} optionIds={optionIds} staffId={staff} busy={busy} run={run} notify={notify} reload={loadMine} />}
                 <h3>{tr("03 予約内容を確認")}</h3>
                 {selection && <div className="booking-mobile-summary"><p>{selection.base.name}</p>{!!selection.options.length && <ul>{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)}</li>)}</ul>}<p><b className="price">{yen(totalPrice)}</b> · {tr("合計 {0}分", selection.duration)}</p><p>{selected ? when(selected) : tr("日時をお選びください")}</p></div>}
                 <Field label={tr("お名前")}>

@@ -281,7 +281,7 @@ export class Store {
     if (!s) return [];
     const bookings = await this.records<Booking>("booking", s);
     // Captured amounts, consent and cancellation intent come from the payment journal.
-    for (const c of (await this.list<Checkout>("checkout")).filter(c => c.shopId === shop && c.phase === "confirmed")) {
+    for (const c of (await this.records<Checkout>("checkout", s)).filter(c => c.phase === "confirmed")) {
       const index = bookings.findIndex(b => b.id === c.booking.id);
       if (index < 0) bookings.push(c.booking); else bookings[index] = c.booking;
     }

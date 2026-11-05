@@ -4,6 +4,7 @@ import {regionOf} from "../shared/region";
 import {bookingMenuName,bookingStaffName,type Booking,type ShopConfig} from "../server/domain";
 import {useShopDisplay} from "./money";
 import {PaymentDetails} from "./PaymentDetails";
+import {bookingReminderDue,bookingReminderHours} from "../shared/booking-reminders";
 
 export function BookingComplete({booking,config,simulation,onMine,onNew}: {booking:Booking;config:ShopConfig;simulation?:boolean;onMine:()=>void;onNew:()=>void}) {
   const heading=useRef<HTMLHeadingElement>(null);
@@ -14,6 +15,7 @@ export function BookingComplete({booking,config,simulation,onMine,onNew}: {booki
     <h2 id="booking-complete-title" ref={heading} tabIndex={-1}>{tr("予約が完了しました")}</h2>
     <p role="status">{tr("ご予約を承りました。マイページからご確認いただけます。")}</p>
     {simulation && <p className="notice">{tr("プレビューの練習です。実際の予約・支払いは行われません。")}</p>}
+    {!simulation && Date.parse(booking.createdAt) <= bookingReminderDue(config,booking) && <p className="notice">{tr("開始{0}時間前を目安に、予約日時と確認・キャンセル用リンクをメールでお知らせします。ご来店が難しい場合は、早めにマイページからキャンセルをお願いします。",bookingReminderHours(config,booking))}</p>}
     <dl className="booking-complete-details">
       <div><dt>{tr("日時")}</dt><dd>{when(booking.start)} – {when(booking.end)}</dd></div>
       <div><dt>{tr("お名前")}</dt><dd>{booking.name}{tr(" 様")}</dd></div>

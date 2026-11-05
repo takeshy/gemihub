@@ -3,7 +3,7 @@ type: "Process"
 title: "Customers, inquiries, staff and notifications"
 description: "Customer records, inquiries, staff accounts and Calendar connection, and email notifications."
 tags: ["customers", "inquiries", "staff", "notifications", "email"]
-updated: "2026-11-03"
+updated: "2026-11-06"
 ---
 
 Customer records, inquiries, staff accounts and Calendar connection, and email notifications.
@@ -24,4 +24,4 @@ The owner grants Calendar FreeBusy access during normal owner sign-in, alongside
 
 # Notifications
 
-gemihub sends email from the owner's Gmail for: booking confirmation, payment confirmation, cancellation and refund results, inquiry replies and staff invitations. The shop's `notificationEmail` receives a copy of booking-related mail. Delivery is at least once; a lost response can cause a duplicate email, never a duplicate booking.
+gemihub sends email from the owner's Gmail for: booking confirmation, payment confirmation, cancellation and refund results, opening alerts, inquiry replies and staff invitations. The shop's `notificationEmail` receives a copy of booking-related mail, except opening alerts, which go to the customer alone. Delivery is at least once; a lost response can cause a duplicate email, never a duplicate booking.

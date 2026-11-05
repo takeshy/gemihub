@@ -22,9 +22,9 @@ export async function exportRows(store: Store, shop: Shop, table: ExportTable): 
 }
 
 export async function shopExport(store: Store, shop: Shop, email: string) {
-  const [bookings, customers, inquiries, members, posts, customerNotes, chats, messages, images] = await Promise.all([
+  const [bookings, customers, inquiries, members, posts, customerNotes, waitlist, chats, messages, images] = await Promise.all([
     store.bookings(shop.id), store.records("customer", shop), store.records("inquiry", shop),
-    store.records("member", shop), store.records("post", shop), store.records("customerNote", shop),
+    store.records("member", shop), store.records("post", shop), store.records("customerNote", shop), store.records("slotWish", shop),
     store.records<ShopConversation>("shopChat", shop), store.records<ShopChatMessage>("shopChatMessage", shop),
     store.entries<ImageUpload>("menuImageUpload", shop),
   ]);
@@ -35,7 +35,7 @@ export async function shopExport(store: Store, shop: Shop, email: string) {
     shop: { id: shop.id, slug: shop.slug, publication: shop.publication, revision: shop.revision,
       config: shop.published, draft: shop.draft, history: shop.history,
       driveFolderId: shop.google?.folderId },
-    records: { bookings, customers, inquiries, members, posts, customerNotes,
+    records: { bookings, customers, inquiries, members, posts, customerNotes, waitlist,
       menus: shop.published?.menus || shop.draft?.menus || [], staff: shop.published?.staff || shop.draft?.staff || [] },
     chats: ownChats, messages: messages.filter(message => message.email === email && ownIds.has(message.conversationId)),
     files: images.filter(({ value }) => value.complete).map(({ id, value }) => ({ imageId: id, fileId: value.fileId, name: value.name, mimeType: value.mimeType, size: value.size, archived: !!value.archived })),

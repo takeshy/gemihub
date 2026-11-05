@@ -41,6 +41,13 @@ export function storefrontFile(path: string, hosted: boolean, locale: string) {
 export function canonicalBase(shop: Pick<Shop, "slug" | "domain" | "domainVerified">, origin: string) {
   return shop.domainVerified && shop.domain ? `https://${shop.domain}` : process.env.SITE_DOMAIN ? `https://${shop.slug}.${process.env.SITE_DOMAIN}` : `${origin}/s/${shop.slug}`;
 }
+/** A customer-facing link for mail, on the host where the customer's session lives. */
+export function customerPaneUrl(shop: Pick<Shop, "slug" | "domain" | "domainVerified">, origin: string, pane: string, lang: string) {
+  const url = new URL(canonicalBase(shop, origin));
+  url.searchParams.set("pane", pane);
+  url.searchParams.set("lang", lang);
+  return url.href;
+}
 const plainText = (value: string) => value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
 
 /** The built app CSS is captured with the release, so future app deployments cannot change an older published page. */

@@ -10,6 +10,7 @@ import { localeForRequest, requestLocale, regionForRequest } from "./i18n.ts";
 import { paypalGateway, type PaymentGateway } from "./paypal.ts";
 import { paymentService, checkoutView, type Checkout } from "./payments.ts";
 import { transferService, buyerBusy, type Transfer, type TransferEvent } from "./transfers.ts";
+import { maxWishesPerCustomer, queueWaitlistNotices, readWaitlistOpenings, slotWishInputSchema, waitlistBaseline, wishError, type SlotWish, type WaitlistListing } from "./waitlist.ts";
 import { refundTiersSchema, policyText, refundQuote } from "./payment-domain.ts";
 import { articleFiles, articleToolContext } from "./article-files.ts";
 import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts";
@@ -20,6 +21,7 @@ import { conversations, createConversation, readConversation, searchConversation
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
 import { emailLogin, type LoginMailer } from "./email-login.ts";
+import { listedBookingIds, queueBookingReminders, reminderCurrent, type BookingReminder } from "./booking-reminders.ts";
 import {
   createServer,
   type IncomingMessage,
@@ -49,6 +51,8 @@ import {
   sample,
   documents,
   planSummary,
+  bookingDates,
+  bookingStaff,
   bookingStaffName,
   bookingTransferable,
   menuSelection,
@@ -175,6 +179,8 @@ type Job = {
   error?: string;
   attempts: number;
   locale?: "ja" | "en";
+  reminder?: BookingReminder;
+  wishId?: string;
 };
 async function body(req: IncomingMessage, limit = 65536) {
   const chunks: Buffer[] = [];
@@ -442,12 +448,27 @@ export function createApp(
     if (!shop.google) return;
     const token = await ownerToken(shop);
     if (!token) return;
+    let reminderState: Promise<[Booking[], Set<string>]> | undefined;
     for (const job of (await store.list<Job>("job")).filter(
       // Post pages wait for an in-flight publish/restore; mail is never held back by it.
       (j) => j.shopId === shop.id && j.type === type && !(shop.publishingPlanId && j.type === "posts"),
     )) {
       await requestLocale.run(job.locale || "ja", async () => {
         try {
+          if (job.wishId) {
+            const wish = await store.get<SlotWish>("slotWish", job.wishId);
+            if (!wish || wish.shopId !== shop.id || wish.customer !== job.to) {
+              await store.delete("job", job.id);
+              return;
+            }
+          }
+          if (job.reminder) {
+            const [bookings, listed] = await (reminderState ??= Promise.all([store.bookings(shop.id), listedBookingIds(store, shop)]));
+            if (!shop.published || !reminderCurrent(bookings.find(b => b.id === job.reminder!.bookingId), job.reminder, listed)) {
+              await store.delete("job", job.id);
+              return;
+            }
+          }
           if (job.type === "posts") {
             const posts=await postsFor(shop);
             await syncPostFiles(shop,posts,token,async()=>await store.saveShop(shop),config=>menuImageSnapshot(store,shop,config,crmFiles,token,publishedPostImageIds(posts)),job.postId);
@@ -464,10 +485,19 @@ export function createApp(
   // File exports mutate Drive IDs also used by publication, so their callers
   // retain the configuration lock. Delivery never runs file-export jobs.
   const flushFiles = (shop: Shop) => flushJobs(shop, "posts");
-  const flushMail = (shop: Shop) => store.locked(mailLockKey(shop.id), async () => {
-    const fresh = await store.shop(shop.id);
-    if (fresh) await flushJobs(fresh, "mail");
-  });
+  /** Scheduled runs also queue reminders and opening alerts. Failing to queue them must never hold back mail already waiting. */
+  const flushMail = async (shop: Shop, scheduled = false) => {
+    const latest = scheduled ? await store.shop(shop.id) : undefined;
+    const openings = latest ? await readWaitlistOpenings(store, latest, wish => availableSlots(store, latest, latest.published!, wish.date, wish.menuId, wish.staffId, calendar, undefined, wish.optionIds)).catch(error => { console.error(error); }) : undefined;
+    await store.locked(mailLockKey(shop.id), async () => {
+      const fresh = await store.shop(shop.id);
+      if (!fresh) return;
+      const queueMail = (id: string, mail: Partial<Job>) => enqueue(fresh, "mail", mail, id);
+      if (scheduled) await queueBookingReminders(store, fresh, queueMail).catch(error => { console.error(error); });
+      if (openings) await queueWaitlistNotices(store, fresh, { openings, listings: () => waitlistListings(fresh), enqueue: queueMail }).catch(error => { console.error(error); });
+      await flushJobs(fresh, "mail");
+    });
+  };
   async function notify(
     shop: Shop,
     config: ShopConfig,
@@ -535,6 +565,15 @@ export function createApp(
     });
   }
   const transfers = transferService(store, paymentGateway, payments, transferNotice);
+  /** Open discounted listings for matching wishes; the seller's identity never reaches a notice. */
+  async function waitlistListings(shop: Shop) {
+    const config = shop.published!, now = Date.now(), listings: WaitlistListing[] = [];
+    for (const t of await transfers.forShop(shop.id)) {
+      const booking = t.phase === "listed" && Date.parse(t.deadline) > now ? (await store.get<Checkout>("checkout", t.bookingId))?.booking : undefined;
+      if (booking?.status === "active") listings.push({ id: t.id, bookingId: t.bookingId, seller: t.seller, start: booking.start, end: booking.end, menuId: booking.menuId, staffId: booking.staffId, menu: bookingMenuName(config, booking), price: t.price, currency: t.currency, discountPercent: t.discountPercent, deadline: t.deadline, busy: buyerBusy(t, now) });
+    }
+    return listings;
+  }
   /** Customers never see earlier holders' identities or payment IDs. */
   const customerBooking = (booking: Booking): Booking => {
     const { transfers: history, requestKey: _requestKey, ...rest } = booking;
@@ -2669,7 +2708,7 @@ export function createApp(
           if (!ids.includes(imageRead[2]) && !(imageRead[1] === "images" && publishedPostImageIds(await postsFor(shop)).includes(imageRead[2]))) fail(404, tr("画像がありません"));
           return await imageResponse(req, res, shop, imageRead[2], url);
         }
-        const bookingAction = /^(?:bookings|checkouts|slots|transfers)(?:\/|$)/.test(action);
+        const bookingAction = /^(?:bookings|checkouts|slots|transfers|waitlist)(?:\/|$)/.test(action);
         let deliverMail = false;
         const result = await store.locked(bookingAction ? bookingLockKey(shopRef.id) : shopRef.id, async () => {
           const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
@@ -2744,7 +2783,7 @@ export function createApp(
               ) || fail(404, tr("記事がありません"));
             return (post);
           }
-          const existingPayment = action === "checkouts" || action.startsWith("checkouts/") || (action === "bookings" && method === "GET") || action === "transfers" || action === "transfers/mine" || /^transfers\/[a-f0-9]{64}\/(capture|abandon|resume|withdraw)$/.test(action);
+          const existingPayment = action === "checkouts" || action.startsWith("checkouts/") || (action === "bookings" && method === "GET") || action === "transfers" || action === "transfers/mine" || /^transfers\/[a-f0-9]{64}\/(capture|abandon|resume|withdraw)$/.test(action) || /^waitlist(?:\/|$)/.test(action);
           const config = existingPayment ? shop.published! : await effective(shop);
           const ownProfile = async () => memberProfile(await store.get("customer", `${shop.id}:${customer().email}`));
           if (action === "profile" && method === "GET") {
@@ -2785,6 +2824,45 @@ export function createApp(
                 url.searchParams.get("date") || "",
                 url.searchParams.get("menu") || "",
                 url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")));
+          if (action === "waitlist" && method === "GET") {
+            const u = customer();
+            return ((await store.records<SlotWish>("slotWish", shop)).filter(wish => wish.customer === u.email).sort((a, b) => a.date.localeCompare(b.date) || a.from.localeCompare(b.from)).map(({ id, date, from, to, menuId, optionIds, staffId, discountOnly }) => ({ id, date, from, to, menuId, optionIds, staffId, discountOnly })));
+          }
+          if (action === "waitlist" && method === "POST") {
+            const u = customer();
+            const profile = await ownProfile();
+            if (!profile) fail(428, tr("先に会員情報を登録してください"));
+            const { staffId, ...input } = slotWishInputSchema.parse(await body(req));
+            const wish = { ...input, ...(staffId ? { staffId } : {}) };
+            const invalid = wishError(config, wish, bookingDates(config));
+            if (invalid) fail(400, invalid);
+            if (staffId && !bookingStaff(config).some(person => person.id === staffId)) fail(400, tr("担当者を選び直してください"));
+            const registration: SlotWish = { ...wish, id: randomUUID(), shopId: shop.id, customer: u.email, name: profile!.name, locale: getLocale(), createdAt: new Date().toISOString() };
+            // Calendar I/O stays outside the mail lock. The enclosing booking lock keeps local availability stable.
+            const [slots, listings] = await Promise.all([
+              wish.discountOnly ? [] : availableSlots(store, shop, config, wish.date, wish.menuId, wish.staffId, calendar, undefined, wish.optionIds),
+              waitlistListings(shop),
+            ]);
+            registration.seen = waitlistBaseline(config, registration, slots, listings);
+            // The mail lock keeps a notice's update from restoring a wish removed at the same moment.
+            return (await store.locked(mailLockKey(shop.id), async () => {
+              const own = (await store.records<SlotWish>("slotWish", shop)).filter(item => item.customer === u.email);
+              const same = own.find(item => JSON.stringify([item.date, item.from, item.to, item.menuId, [...item.optionIds].sort(), item.staffId, item.discountOnly]) === JSON.stringify([wish.date, wish.from, wish.to, wish.menuId, wish.optionIds, wish.staffId, wish.discountOnly]));
+              if (same) return { ok: true, id: same.id };
+              if (own.length >= maxWishesPerCustomer) fail(409, tr("空き通知は{0}件まで登録できます。不要な通知を止めてからお試しください。", maxWishesPerCustomer));
+              await store.put("slotWish", registration.id, registration);
+              return { ok: true, id: registration.id };
+            }));
+          }
+          const wishAction = action.match(/^waitlist\/([a-f0-9-]{36})\/remove$/);
+          if (wishAction && method === "POST") {
+            const u = customer();
+            await store.locked(mailLockKey(shop.id), async () => {
+              const wish = await store.get<SlotWish>("slotWish", wishAction[1]);
+              if (wish?.shopId === shop.id && wish.customer === u.email) await store.delete("slotWish", wish.id);
+            });
+            return ({ ok: true });
+          }
           if (action === "checkouts" && method === "GET") {
             const u = customer();
             return ((await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && c.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(checkoutView));
@@ -2949,6 +3027,7 @@ export function createApp(
               ...slot,
               status: "active",
               createdAt: new Date().toISOString(),
+              locale: getLocale(),
             };
             if (config.rules.payment?.enabled && b.price > 0) {
               // Return only to this storefront's verified host or the configured app origin.
@@ -3256,7 +3335,7 @@ export function createApp(
       )) {
         void reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)).catch(console.error);
         void syncFiles(shop.id).catch(console.error);
-        void flushMail(shop).catch(console.error);
+        void flushMail(shop, true).catch(console.error);
         void paypal.check(shop, { notify: true }).catch(console.error);
       }
     })().catch(console.error);

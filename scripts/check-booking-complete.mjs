@@ -9,6 +9,7 @@ import {shopDate} from '../server/domain.ts';
 import {defaultRefundTiers} from '../server/payment-domain.ts';
 import {paypalValue} from '../shared/region.ts';
 import {optionShop} from '../tests/fixtures/option-shop.ts';
+import {bookingReminderHours} from '../shared/booking-reminders.ts';
 process.env.DEMO_MODE='true';
 const catalog=JSON.parse(await readFile('shared/en.json','utf8'));
 const store=new Store(':memory:'),orders=new Map(),returnUrls=new Map();let captures=0,creates=0;
@@ -46,6 +47,8 @@ try{
    await expect(complete.getByRole('heading',{name:label('予約が完了しました'),exact:true})).toBeVisible();const booking=(await store.bookings(shop.id))[0];assert.equal((await store.bookings(shop.id)).length,1);
    for(const text of ['Receipt Customer','Foot','Foot care','Other removal','Please use soft colors.',usd?'85.06':'10,500'])await expect(complete).toContainText(text);
    await expect(complete).not.toContainText(booking.id);
+   assert.equal(booking.locale,language,'scheduled reminders retain the customer booking language');
+   await expect(complete).toContainText(label('開始{0}時間前を目安に、予約日時と確認・キャンセル用リンクをメールでお知らせします。ご来店が難しい場合は、早めにマイページからキャンセルをお願いします。').replace('{0}',String(bookingReminderHours(config,booking))));
    assert.equal(Date.parse(booking.end)-Date.parse(booking.start),130*60000);assert.equal(booking.price,usd?85.06:10500);assert.equal(await page.evaluate(()=>document.activeElement?.id),'booking-complete-title');await expect(page.locator('.reservation-layout')).toHaveCount(0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
    const returnHref=page.url();
    if(paid){await expect(complete.locator('.payment-details')).toBeVisible();assert.equal(captures,capturesBefore+1);await page.reload();await expect(complete).toContainText('Receipt Customer');await expect(complete).not.toContainText(booking.id);assert.equal(captures,capturesBefore+1,'refreshing a payment return must not charge twice');}
