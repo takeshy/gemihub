@@ -31,7 +31,7 @@ function Navigation({ config: c, base }: { config: ShopConfig; base: string }) {
   </nav>;
 }
 function PostList({ posts, base }: { posts: PublicPost[]; base: string }) {
-  return <ul>{posts.map(post => <li key={post.id}><time dateTime={post.date}>{post.date}</time> <a href={link(postPath(base, post))}>{post.title}</a><p>{post.excerpt}</p></li>)}</ul>;
+  return <ul>{posts.map(post => <li key={post.id}><time dateTime={post.date}>{post.date}</time> <a href={link(postPath(base, post))}>{post.title}</a></li>)}</ul>;
 }
 /** The same public markup is generated at publication and shown in Storybook; no effects or API calls. */
 export function StaticStorefront({ config: c, view, base, provisional = false, imageSources = {} }: { config: ShopConfig; view: StaticStorefrontView; base: string; provisional?: boolean; imageSources?: Record<string, string> }) {

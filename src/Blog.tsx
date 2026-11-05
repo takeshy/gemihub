@@ -141,12 +141,12 @@ export function BlogEditor({
     setContent((current) => ({ ...current, [key]: value }));
     setSaveId(createRequestId());
   };
-  async function accept(post: Post) {
+  async function accept(post: Post, refresh = true) {
     setCurrent(post);
     setContent(structuredClone(post.draft));
     setSaveId(createRequestId());
-    await load();
-    await reload();
+    setPosts(values => values.some(value => value.id === post.id) ? values.map(value => value.id === post.id ? post : value) : [post, ...values]);
+    if (refresh) { await load(); await reload(); }
   }
   function insertReference(path: string) {
     const input = requestInput.current;
@@ -166,36 +166,16 @@ export function BlogEditor({
     !!content.body.trim() &&
     !!content.date;
   async function storeDraft(next: Content, requestId: string) {
-    try {
-      const fields = postContentSchema
-        .omit({ slug: true, excerpt: true })
-        .parse(next);
-      const metadata = await api<{
-        slug: string;
-        excerpt: string;
-      }>(`${base}/metadata`, {
-        content: fields,
-        requestId,
-        ...(current
-          ? { postId: current.id, version: current.version }
-          : {}),
-      });
-      const parsed = postContentSchema.parse({
-        ...fields,
-        ...metadata,
-      });
-      const saved = await api<Post>(
-        current ? `${base}/${current.id}/save` : base,
-        current
-          ? { version: current.version, content: parsed }
-          : { content: parsed, requestId, autoMetadata: true },
-      );
-      await accept(saved);
-      return saved;
-    } catch (error) {
-      await load().catch(() => {});
-      throw error;
-    }
+    const fields = postContentSchema
+      .omit({ slug: true, excerpt: true })
+      .parse(next);
+    const saved = await api<Post>(current ? `${base}/${current.id}/draft` : `${base}/drafts`, {
+      content: fields,
+      requestId,
+      ...(current ? { version: current.version } : {}),
+    });
+    await accept(saved, false);
+    return saved;
   }
   function saveDraft() {
     void run(async () => {
@@ -703,7 +683,6 @@ export function PublicBlog({
                   <span className="pill">{postLabel(p.category)}</span>
                 </span>
                 <h3>{p.title}</h3>
-                <p>{p.excerpt}</p>
                 <span className="small">{tr("続きを読む →")}</span>
               </a>
             ))}

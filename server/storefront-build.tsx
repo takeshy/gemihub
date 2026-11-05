@@ -18,7 +18,7 @@ import type { StorefrontFiles } from "./storefront-files.ts";
  * Bump when the generated markup changes in a way existing shops should receive.
  * Releases from an older generator keep being served until they are rebuilt in the background.
  */
-export const storefrontRenderer = 2;
+export const storefrontRenderer = 3;
 /** `assets` are shop-level files (`shops/{id}/assets/{name}`) the pages refer to; absent on releases before renderer 2. */
 export type StorefrontRelease = { id: string; paths: string[]; assets?: string[]; renderer?: number };
 export type StorefrontAsset = { body: Buffer; contentType: string };

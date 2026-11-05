@@ -72,6 +72,7 @@ export type User = {
 export const isArchivedShop = (shop: Shop) => !!(shop.archivedAt || shop.judge?.archivedAt);
 export const bookingLockKey = (shopId: string) => `bookings:${shopId}`;
 export const mailLockKey = (shopId: string) => `mail:${shopId}`;
+export const postLockKey = (shopId: string) => `post-writes:${shopId}`;
 
 const chatKinds = new Set(["shopChat", "shopChatMessage"]);
 const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote", ...chatKinds]);

@@ -30,13 +30,13 @@ import { resolveTxt } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
 import { z } from "zod";
-import { Store, bookingLockKey, mailLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
+import { Store, bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
 import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
-import { uploadMenuImage, readMenuImage, menuImageResource, validateMenuImages, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
+import { uploadMenuImage, readMenuImage, menuImageResource, validateMenuImages, validateImageIds, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
 import { managedImageIds } from "./image-references.ts";
@@ -167,6 +167,7 @@ type Job = {
   id: string;
   shopId: string;
   type: "mail" | "posts";
+  postId?: string;
   to?: string;
   cc?: string[];
   subject?: string;
@@ -449,7 +450,7 @@ export function createApp(
         try {
           if (job.type === "posts") {
             const posts=await postsFor(shop);
-            await syncPostFiles(shop,posts,token,async()=>await store.saveShop(shop),config=>menuImageSnapshot(store,shop,config,crmFiles,token,publishedPostImageIds(posts)));
+            await syncPostFiles(shop,posts,token,async()=>await store.saveShop(shop),config=>menuImageSnapshot(store,shop,config,crmFiles,token,publishedPostImageIds(posts)),job.postId);
           } else await sendMail(token, job.to!, job.subject!, job.body!, job.cc);
           await store.delete("job", job.id);
         } catch (err) {
@@ -1596,6 +1597,43 @@ export function createApp(
             return json(res,{...parsed,conversationId:prepared.chat.id});
           });
         }
+        const draftPostId = action.match(/^posts\/([^/]+)\/draft$/)?.[1];
+        if ((action === "posts/drafts" || draftPostId) && method === "POST") {
+          assertOwner(user, shop);
+          const input = z.object({ content: articleInputSchema, requestId: z.uuid(), version: z.number().int().positive().optional() }).parse(await body(req));
+          // Drive export holds the configuration lock; private drafts have a separate, short write lock.
+          return await store.locked(postLockKey(shop.id), async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            assertOwner(user, fresh);
+            const posts = await postsFor(fresh);
+            const requestId = digest(`${fresh.id}:${user!.email}:post-draft:${input.requestId}`);
+            const hash = digest(JSON.stringify({ postId: draftPostId, ...input }));
+            const receipt = await store.get<{ hash: string; postId: string; version: number }>("postDraftSave", requestId);
+            if (receipt) {
+              if (receipt.hash !== hash) fail(409, tr("保存する記事の内容が変わっています"));
+              const saved = posts.find(post => post.id === receipt.postId) || fail(404, tr("記事がありません"));
+              if (saved.version !== receipt.version) fail(409, tr("別の画面で記事が更新されました。一覧から記事を開き直してください"));
+              return json(res, saved);
+            }
+            const existing = draftPostId ? posts.find(post => post.id === draftPostId) || fail(404, tr("記事がありません")) : undefined;
+            if (existing && existing.version !== input.version) fail(409, tr("別の画面で記事が更新されました。一覧から記事を開き直してください"));
+            const id = existing?.id || requestId;
+            const content = postContentSchema.parse({ ...input.content, slug: existing?.draft.slug || `article-${id.slice(0, 24)}`, excerpt: "" });
+            await validateImageIds(store, fresh, postImageIds(content.body));
+            const at = new Date().toISOString();
+            const post: Post = existing ? { ...existing, draft: content, version: existing.version + 1, updatedAt: at, updatedBy: user!.email }
+              : { id, shopId: fresh.id, draft: content, published: null, version: 1, createdAt: at, updatedAt: at, updatedBy: user!.email };
+            validatePostAddress(post, content, posts);
+            await store.transaction(async () => {
+              await store.put("post", post.id, post);
+              await store.put("postDraftSave", requestId, { hash, postId: post.id, version: post.version });
+              await enqueue(fresh, "posts", { postId: post.id });
+            });
+            // The existing durable worker retries this job; neither AI nor Drive is on the save path.
+            return json(res, post);
+          });
+        }
+        if (action === "posts" && method === "GET") { await assertOperator(user, shop); return json(res, await postsFor(shop)); }
         if (action === "posts/metadata" && method === "POST") {
           assertOwner(user,shop);
           const input = z.object({content:articleInputSchema,requestId:z.uuid(),postId:z.string().optional(),version:z.number().int().positive().optional()}).parse(await body(req));
@@ -1764,7 +1802,7 @@ export function createApp(
             }
             if (libraryRoute[1] && method === "POST" && libraryRoute[2]) {
               if (libraryRoute[2] === "rename") await updateImage(store, fresh, libraryRoute[1], await body(req, 2000), crmFiles, token);
-              else await archiveImage(store, fresh, libraryRoute[1], fresh.published ? await effective(fresh) : fresh.draft);
+              else await store.locked(postLockKey(fresh.id), async () => archiveImage(store, fresh, libraryRoute[1], fresh.published ? await effective(fresh) : fresh.draft));
               return json(res, { ok: true });
             }
           }
@@ -2104,6 +2142,7 @@ export function createApp(
           if (action === "posts" && method === "GET")
             return json(res, await postsFor(fresh));
           if (action === "posts" && method === "POST") {
+            return await store.locked(postLockKey(fresh.id), async () => {
             assertOwner(user, fresh);
             const { content, publish, requestId, autoMetadata } = z
               .object({ content: postContentSchema, publish: z.boolean().optional(), requestId:z.uuid().optional(), autoMetadata:z.boolean().optional() })
@@ -2125,7 +2164,7 @@ export function createApp(
               updatedAt: at,
               updatedBy: user!.email,
             };
-            for(const imageId of postImageIds(content.body))await readMenuImage(store,fresh,imageId,crmFiles,store.memory?"":await ownerToken(fresh)||fail(503,tr("店主のGoogle再接続が必要です")));
+            await validateImageIds(store, fresh, postImageIds(content.body));
             validatePostAddress(post, content, await postsFor(fresh));
             if (publish) {
               post.published = structuredClone(content); post.publishedAt = at; post.address = postAddress(content);
@@ -2135,15 +2174,16 @@ export function createApp(
               await store.put("post", post.id, post);
               if(requestId)await store.put("postCreation",creationId,{hash:creationHash,postId:post.id});
               if (publish) await savePublicShop(fresh);
-              await enqueue(fresh, "posts");
+              await enqueue(fresh, "posts", publish ? {} : { postId: post.id });
             });
-            await flushFiles(fresh);
             return json(res, post);
+            });
           }
           const postAction = action.match(
             /^posts\/([^/]+)\/(save|publish|unpublish)$/,
           );
           if (postAction && method === "POST") {
+            return await store.locked(postLockKey(fresh.id), async () => {
             assertOwner(user, fresh);
             const post = (await postsFor(fresh)).find(
               (p) => p.id === postAction[1],
@@ -2151,6 +2191,7 @@ export function createApp(
             if (!post || post.shopId !== fresh.id)
               fail(404, tr("記事がありません"));
             const raw = await body(req);
+            const changesPublication = postAction[2] !== "save" || (raw as { publish?: boolean }).publish === true;
             const { version } = z
               .object({ version: z.number().int().positive() })
               .parse(raw);
@@ -2165,7 +2206,7 @@ export function createApp(
                 .object({ content: postContentSchema, publish: z.boolean().optional() })
                 .parse(raw);
               if (publish && (!fresh.published || fresh.publishingPlanId)) fail(409, tr("先にお店の反映処理を完了してください"));
-              for(const imageId of postImageIds(content.body))await readMenuImage(store,fresh,imageId,crmFiles,store.memory?"":await ownerToken(fresh)||fail(503,tr("店主のGoogle再接続が必要です")));
+              await validateImageIds(store, fresh, postImageIds(content.body));
             validatePostAddress(post, content, await postsFor(fresh));
               post.draft = content;
               if (publish) {
@@ -2200,11 +2241,11 @@ export function createApp(
             post.updatedBy = user!.email;
             await store.transaction(async () => {
               await store.put("post", post.id, post);
-              await savePublicShop(fresh);
-              await enqueue(fresh, "posts");
+              if (changesPublication) await savePublicShop(fresh);
+              await enqueue(fresh, "posts", changesPublication ? {} : { postId: post.id });
             });
-            await flushFiles(fresh);
             return json(res, post);
+            });
           }
           if (action === "plan" && method === "POST") {
             assertOwner(user, fresh);

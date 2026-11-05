@@ -31,6 +31,7 @@
     "check:storybook": "node scripts/check-storybook.mjs",
     "check:storybook:transfers": "node scripts/check-storybook-transfers.mjs",
     "check:articles": "node scripts/check-article-authoring.mjs",
+    "check:draft-save": "node --import tsx scripts/check-draft-save.mjs",
     "check:staff-images": "node scripts/check-staff-images.mjs",
     "check:owner-booking": "node --import tsx scripts/check-owner-booking.mjs",
     "check:settings-recovery": "node --import tsx scripts/check-settings-recovery.mjs",

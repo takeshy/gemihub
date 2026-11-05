@@ -215,12 +215,17 @@ export async function syncPostFiles(
   token: string,
   onProgress: () => void | Promise<void>,
   readMenuImages?: (config: ShopConfig) => Promise<Record<string, import("./menu-image-domain.ts").MenuImageData>>,
+  draftId?: string,
 ) {
   if (!shop.google || !shop.published) return;
-  const { postArtifacts } = await import("./post-renderer.tsx");
   const { drive } = clients(token);
   const config = shop.published;
-  const files = postArtifacts(
+  const draft = draftId ? posts.find(post => post.id === draftId) : undefined;
+  if (draftId && !draft) return;
+  const files: Record<string, string> = draft ? {
+    "admin/posts/posts.json": JSON.stringify(posts, null, 2),
+    [`admin/posts/${draft.id}.md`]: `# ${draft.draft.title}\n\n${draft.draft.body}\n`,
+  } : (await import("./post-renderer.tsx")).postArtifacts(
     config,
     posts,
     await readFile("dist/index.html", "utf8"),
@@ -290,6 +295,7 @@ export async function syncPostFiles(
       await onProgress();
     }
   }
+  if (draftId) { await onProgress(); return; }
   for (const [path, fileId] of Object.entries(connection.artifactIds))
     if (
       /^web\/(blogs|announcements)\/\d{4}-\d{2}-\d{2}-.+\.html$/.test(path) &&
