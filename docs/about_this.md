@@ -17,7 +17,7 @@ I've been on the other side, too. I once forgot an appointment, offered to pay f
 ### For the owner
 - **Set up by conversation**: Describe your business by text or voice, or paste existing notes and URLs. The AI asks follow-up questions, fills in services, staff, hours, and rules, and generates a custom HTML/CSS theme from your logo and reference photos.
 - **Point and ask (Red-Pen editing)**: Circle any part of a preview screen with a red pen and say *"make this bigger"* or *"change this wording."* The AI updates only that section and shows a diff preview before anything goes live.
-- **Plain-language payment rules**: Say *"full refund up to 3 days before, half the day before, nothing after."* The AI converts this into a structured policy (`72h → 100%`, `24h → 50%`, `0h → 0%`) and clarifies ambiguity (*"the day before" = 24 hours prior*).
+- **Plain-language payment rules**: Say *"No cancellation fee at least 24 hours before; 30% within 24 hours, 60% within 12 hours, and 100% within one hour."* The AI proposes a structured refund policy (`24h → 100%`, `12h → 70%`, `1h → 40%`, `0h → 0%`) for the owner to review and approve before it applies to new bookings.
 - **Consult & ask**: Ask questions like *"What is our current refund policy?"* via chat or live voice (**Gemini Live**). A research AI answers with citations from the shop's spec, change history, and live bookings—and admits when something isn't defined instead of guessing.
 
 ### PayPal at the core of every booking
@@ -26,7 +26,7 @@ AI turns the owner's plain-language cancellation rules into a structured policy 
 - **Prepayment at booking**: Powered by **PayPal Orders v2** (`create → buyer approval → capture`). Time slots are held during checkout, and the server verifies order ID, currency, and amount before confirming.
 - **Automatic, policy-based refunds**: Uses the **PayPal Refunds API**. The refund policy is snapshotted at booking time so later rule changes never affect paid bookings. Shop-initiated cancellations always refund 100%.
 - **Built for real money**: Every state transition is persisted before calling PayPal, using `PayPal-Request-Id` idempotency keys and a background reconciler to recover interrupted captures or pending refunds without double-charging.
-- **Prepayment for no-shows**: When prepayment is enabled, customers pay the full booking amount upfront. Recording a no-show does not trigger a refund or an additional charge.
+- **No-shows are covered**: When prepayment is enabled, customers pay the full booking amount upfront. Recording a no-show does not trigger a refund or an additional charge.
 
 ### Cancel, and recover more
 
@@ -100,7 +100,7 @@ Building a system that non-technical salon owners can configure purely through c
 
 We quickly realized shop owners face the exact same risk when redesigning their site with AI—so we built the same safety net directly into the product:
 - **Storefront screen catalog**: All pages (Booking, About, My Page, Contact, blog, custom pages, shared header/footer) appear side-by-side as live thumbnails so owners can spot layout issues at a glance.
-- **Visual version history**: Owners can step back and forward through previous design versions to see exactly what changed, and return to an earlier one if needed.
+- **Visual version history**: Owners can restore the whole design or just a single screen, page, header or footer. The current design is saved before a restore, so they can undo it from version history. The 10 most recent archived versions are retained.
 
 **The takeaway**: When AI does the building, making results easy to see and verify matters just as much as generation quality.
 
