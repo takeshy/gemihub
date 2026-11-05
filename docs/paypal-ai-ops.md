@@ -51,6 +51,65 @@ PayPal Orders / Payments / Transaction Search の読み取りREST呼び出しを
 - 「この予約、PayPalではどうなってる？」
 - 「止まっている返金はある？」
 
+### 1.5 相談時の処理の流れ（実装）
+
+AIは2段階。PayPalを読むのは2段目の調査担当だけで、提案の選択と実行はサーバーのコードが行う。
+
+```
+店主の質問
+  │
+  ▼
+① 会話AI（converse）……ツールは investigate / draft_request の2つだけ
+  │  investigate(question, paypal: true)
+  ▼
+② 調査担当AI（research）……PayPal読み取りツール5つ（最大4往復）
+  │  ツール呼び出し → サーバーが台帳でIDを確認 → PayPalにGET → 必要項目だけ返す
+  ▼
+  回答 + 出典（paypal:refund:ID など）
+  │
+  ▼
+③ サーバー：アラート判定（台帳ルールのみ）と関係する提案の選択（AIは関与しない）
+  │
+  ▼
+画面：回答 + 出典 + 提案カード
+  │ 店主が「実行」
+  ▼
+④ サーバー：状態を確認し直してから既存処理を実行
+```
+
+**① 会話AI（`server/assistant.ts` の `converse()`）**
+- 使えるのは `investigate`（事実の調査）と `draft_request`（設定変更の下書き）だけ。PayPalツールは見えない。
+- 支払い・返金の質問だと判断したら、`investigate` に `paypal: true` を付けて呼ぶ。付けない質問は、従来どおりツールなしの1回呼び出しで答える。
+
+**② 調査担当AI（`research()`、ツールは `server/paypal-ops.ts` の `toolProvider`）**
+- ツールは相談のたびに、その店の台帳から作り直す。
+- `ledger_find_booking_payments` は台帳だけを見る（PayPalには問い合わせない）。`paypal_get_order` / `paypal_get_capture` / `paypal_get_refund` はIDを指定してPayPalにGET、`paypal_list_transactions` は期間（最大31日）で取引を検索する。
+- 例:「Did the $49.50 refund go through?」
+  1. 台帳ツールで $49.50 の返金を探す → 予約 b1、返金ID、台帳上の状態 `retrying`
+  2. `paypal_get_refund` でPayPal上の状態を読む → `COMPLETED`
+  3. 「PayPalでは完了、台帳では再試行待ち」と差を明示して答え、出典に `paypal:refund:ID` を入れる
+- ツール呼び出しごとにサーバーが守ること:
+  - IDがこの店の台帳になければ、PayPalに問い合わせる前に拒否する。
+  - 動くのはGETだけ。返金・決済のAPIにはAIから届かない。
+  - 状態・金額・ID・日時だけを返す。お客様のメールアドレスは返さず、金額は通常の単位（$49.50 → 49.5）にそろえる。
+  - 取得に失敗したら「取得できませんでした」とだけ返し、AIは推測しない。
+
+**③ 提案カードの選択（`server/app.ts` の相談API）**
+- 支払いの質問なら、台帳ルールだけでアラートを判定し直す（PayPalには問い合わせない。前回の毎時チェックで見つかった不一致は引き継ぐ）。
+- `relevantProposals` が、質問・回答・出典に出た予約IDやPayPal IDに関係する提案だけを選ぶ。名指しがなければ、緊急度の高い順に最大5件。
+- 提案の金額・操作はサーバーのルールが決めたもので、AIは関与しない。
+
+**④ 実行（`paypal/proposals/execute`、オーナーのみ）**
+1. 予約ロックを取り、毎分の自動処理と同時に動かないようにする。
+2. 対象の予約だけをPayPalで確認し直し、提案時の状態（指紋）と比べる。ずれていれば実行せず最新の状態を返す。
+3. 一致したら既存処理を呼ぶ。
+   - 返金の再試行: リコンサイラが同じ `requestId` でやり直す（二重返金なし）。
+   - 状態の再同期 / 手動確認の完了: PayPalから読み直し、`payments.sync` を通して台帳を更新する。
+   - 割引枠の再販を終了: `transfers.close`。
+4. 結果を history.md と操作ログに記録し、画面に返す。
+
+**注意**: デモモード（`DEMO_MODE` があり、GCPの設定がない状態）では、相談は決まった応答（`demoReply`）を返すだけで、AIもこの流れも通らない。
+
 ---
 
 ## 2. 機能B: 滞留アラート（定期チェック + 通知）
