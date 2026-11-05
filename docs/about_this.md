@@ -1,5 +1,3 @@
-Build and run your own booking site by talking to AI. Customers prepay with PayPal, cancellations are refunded automatically, and cancelled slots are offered again so customers can get more back.
-
 ## Inspiration
 
 A friend of mine is a nail artist, and the hair salon I go to is a small independent shop. Both rely on the industry's dominant booking platform, paying listing fees and booking commissions, but the platform does not offer prepayment at booking. When a customer does not show up, the shop loses the revenue and is still charged the booking commission unless it processes the cancellation on the platform. Worse, the platform's rigid layout leaves no room to express a shop's unique style or atmosphere.
@@ -23,6 +21,7 @@ Sometimes, when I'm feeling unwell, I wish I could let someone else take my appo
 - **Point and ask (Red-Pen editing)**: Circle any part of a preview screen with a red pen and say *"make this bigger"* or *"change this wording."* The AI updates only that section and shows a diff preview before anything goes live.
 - **Plain-language payment rules**: Say *"No cancellation fee at least 24 hours before; 30% within 24 hours, 60% within 12 hours, and 100% within one hour."* The AI proposes a structured refund policy (`24h → 100%`, `12h → 70%`, `1h → 40%`, `0h → 0%`) for the owner to review and approve before it applies to new bookings.
 - **Consult & ask**: Ask questions like *"What is our current refund policy?"* via chat or live voice (**Gemini Live**). A research AI answers with citations from the shop's spec, change history, and live bookings—and admits when something isn't defined instead of guessing.
+- **AI that watches the money, without touching it**: Ask "Did that refund go through?" and the research AI reads the live PayPal record—order, capture, refund status—and cites it. A background check compares the shop's ledger with PayPal every hour and flags stuck refunds and status mismatches. The AI explains what it found and proposes a fix as a card; the owner approves on screen, and the same deterministic server code executes it with the original idempotency key. The AI's PayPal tools are read-only and limited to the shop's own transactions.
 
 ### PayPal at the core of every booking
 AI turns the owner's plain-language cancellation rules into a structured policy for approval. The server saves the approved policy with each booking and uses it to calculate and execute PayPal refunds.
