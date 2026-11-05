@@ -90,6 +90,8 @@ try {
   await openMenu();
   await expect(nav.getByRole('tree')).toBeVisible();
   const editorToggle = nav.locator('.sidebar-editor-toggle');
+  const editorArrowBounds = await editorToggle.boundingBox(), editorLabelBounds = await item('画面を試す・編集').boundingBox();
+  assert.ok(editorArrowBounds.x + editorArrowBounds.width <= editorLabelBounds.x + 1, 'editor disclosure is on the left, matching settings');
   const beforeCollapse = page.url();
   await editorToggle.click();
   await expect(editorToggle).toHaveAttribute('aria-expanded', 'false');

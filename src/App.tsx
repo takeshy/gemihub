@@ -474,8 +474,8 @@ function Dashboard({
               </div>
             </details> : id === "try" ? <div className="sidebar-editor" key={id}>
               <div className={`sidebar-editor-row${view === id ? " active" : ""}`}>
-                <button className="sidebar-editor-open" aria-current={view === id ? "page" : undefined} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>
                 <button type="button" className="sidebar-editor-toggle" aria-label={editorTreeOpen ? tr("画面一覧を折り畳む") : tr("画面一覧を開く")} aria-expanded={editorTreeOpen} aria-controls={editorTreeId} onClick={() => setEditorTreeOpen(open => !open)}><span aria-hidden="true">{editorTreeOpen ? "▾" : "▸"}</span></button>
+                <button className="sidebar-editor-open" aria-current={view === id ? "page" : undefined} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>
               </div>
               <div className="sidebar-editor-tree" id={editorTreeId} hidden={!editorTreeOpen} ref={setTreeHost} />
             </div> : <button key={id}
