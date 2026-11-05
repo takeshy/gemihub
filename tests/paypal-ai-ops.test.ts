@@ -94,11 +94,38 @@ test("PayPal tools are read-only and only accept IDs in the shop's own ledger", 
   await assert.rejects(tools!.invoke("paypal_get_refund", { refundId: "OTHER-REFUND" }), /このお店の記録にありません/);
   const ledger = await tools!.invoke("ledger_find_booking_payments", { bookingId: "b1" });
   assert.equal((ledger.result as { total: number }).total, 1);
-  await assert.rejects(tools!.invoke("ledger_find_booking_payments", {}), /いずれかを指定/);
+  assert.equal(((await tools!.invoke("ledger_find_booking_payments", {})).result as { total: number }).total, 1, "a latest-record query needs no previously known customer or ID");
   const transactions = await tools!.invoke("paypal_list_transactions", { from: "2026-11-01T00:00:00Z", to: "2026-11-05T00:00:00Z" });
   const result = transactions.result as { total: number; transactions: { id: string }[] };
   assert.equal(result.total, 3, "transactions not tied to the ledger are removed");
   assert.ok(!JSON.stringify(result).includes("payer"), "payer details are never handed to the model");
+});
+
+test("recent refunds are selected by payment activity even when the appointment is in the future", async () => {
+  const { store, shop, checkout } = await setup();
+  checkout.booking.start = "2026-11-09T19:00:00Z";
+  checkout.createdAt = Date.parse("2026-11-05T01:00:00Z");
+  checkout.booking.payment!.currency = "USD";
+  Object.assign(checkout.booking.payment!.cancellation!, { at: "2026-11-05T02:00:00Z", status: "completed" });
+  await store.put("checkout", checkout.id, checkout);
+  const later = structuredClone(checkout); later.id = later.booking.id = "later-payment";
+  later.createdAt = Date.parse("2026-11-05T03:00:00Z"); delete later.booking.payment!.cancellation;
+  await store.put("checkout", later.id, later);
+  const foreign = structuredClone(checkout); foreign.id = foreign.booking.id = "foreign"; foreign.shopId = foreign.booking.shopId = "another-shop";
+  await store.put("checkout", foreign.id, foreign);
+  const tools = (await opsFor(store).toolsFor(shop))!;
+  type Result = { total: number; rows: { bookingId: string; start: string; paidAt: string; refund?: { id: string; at: string } }[] };
+  const all = (await tools.invoke("ledger_find_booking_payments", {})).result as Result;
+  assert.deepEqual(all.rows.map(row => row.bookingId), [later.id, checkout.id]);
+  const latestRefund = (await tools.invoke("ledger_find_booking_payments", { type: "refund", from: "2026-11-05T00:00:00Z", to: "2026-11-05T23:59:59Z" })).result as Result;
+  assert.equal(latestRefund.total, 1);
+  assert.equal(latestRefund.rows[0].refund!.id, "REF1");
+  assert.equal(latestRefund.rows[0].refund!.at, "2026-11-05T02:00:00Z");
+  assert.equal(latestRefund.rows[0].start, "2026-11-09T19:00:00Z");
+  assert.equal(latestRefund.rows[0].paidAt, "2026-11-05T01:00:00.000Z");
+  assert.equal(((await tools.invoke("ledger_find_booking_payments", { from: "2026-11-09T00:00:00Z" })).result as Result).total, 0, "the appointment date never moves payment activity into the future");
+  await assert.rejects(tools.invoke("ledger_find_booking_payments", { from: "invalid" }));
+  await store.close();
 });
 
 test("alerts are detected from the ledger and the same unchanged item is not notified twice", async () => {

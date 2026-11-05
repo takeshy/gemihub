@@ -1,4 +1,4 @@
-import { tr } from "../shared/i18n";
+import { getLocale, intlLocale, tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
@@ -36,6 +36,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
   const [plan, setPlan] = useState<Plan|undefined>(()=>shop.plans.find(plan=>plan.id===saved?.planId&&plan.base===shop.revision&&!plan.approved));
   const [proposals, setProposals] = useState<PayPalProposal[]>([]);
   const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<PayPalAlertState>();
   const [notifySetting, setNotifySetting] = useState(shop.paypalSettings?.enabled !== false);
   const [digestHour, setDigestHour] = useState(shop.paypalSettings?.digestHour ?? 9);
   const alerts = shop.paypalAlerts;
@@ -82,7 +83,11 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
   });
   const checkNow = () => run(async () => {
     setChecking(true);
-    try { await api(`/api/shops/${shop.id}/paypal/alerts/check`, {}); await reload(); }
+    try {
+      const result = await api<PayPalAlertState>(`/api/shops/${shop.id}/paypal/alerts/check`, {});
+      setCheckResult(result);
+      await reload();
+    }
     finally { setChecking(false); }
   });
   const saveAlertSettings = () => run(async () => {
@@ -99,7 +104,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
       <h2 id="assistant-title">{tr("相談・質問")}</h2>
       <p className="small muted">{tr("お店の仕様（spec.md）と変更履歴（history.md）、gemihub の仕組みの説明をもとに答えます。変更を頼むと依頼文の下書きを作り、承認するまで何も反映しません。")}</p>
     </div></div>
-    {shop.isOwner && <AlertPanel alerts={alerts} checking={checking} busy={busy} notify={notifySetting} digestHour={digestHour} onNotify={setNotifySetting} onDigestHour={setDigestHour} onSaveSettings={() => void saveAlertSettings()} onCheck={() => void checkNow()} onAsk={question => ask(question)} onExecute={proposal => void executeProposal(proposal)} />}
+    {shop.isOwner && <AlertPanel alerts={alerts} checkResult={checkResult} checking={checking} busy={busy} notify={notifySetting} digestHour={digestHour} onNotify={setNotifySetting} onDigestHour={setDigestHour} onSaveSettings={() => void saveAlertSettings()} onCheck={() => void checkNow()} onAsk={question => ask(question)} onExecute={proposal => void executeProposal(proposal)} />}
     {voice && <div className="assistant-modes" role="group" aria-label={tr("相談の方法")}>
       <button type="button" aria-pressed={!voiceMode} onClick={() => setMode("chat")}>{tr("チャットで質問")}</button>
       <button type="button" aria-pressed={voiceMode} onClick={() => setMode("voice")}>{tr("AIと話す")}</button>
@@ -164,18 +169,20 @@ function ProposalCard({ proposal, busy, owner, onExecute }: { proposal: PayPalPr
   </div>;
 }
 
-function AlertPanel({ alerts, checking, busy, notify, digestHour, onNotify, onDigestHour, onSaveSettings, onCheck, onAsk, onExecute }: {
-  alerts?: PayPalAlertState; checking: boolean; busy: boolean; notify: boolean; digestHour: number;
+function AlertPanel({ alerts, checkResult, checking, busy, notify, digestHour, onNotify, onDigestHour, onSaveSettings, onCheck, onAsk, onExecute }: {
+  alerts?: PayPalAlertState; checkResult?: PayPalAlertState; checking: boolean; busy: boolean; notify: boolean; digestHour: number;
   onNotify: (value: boolean) => void; onDigestHour: (value: number) => void; onSaveSettings: () => void;
   onCheck: () => void; onAsk: (question: string) => void; onExecute: (proposal: PayPalProposal) => void;
 }) {
   const items: PayPalAlertItem[] = alerts?.items || [];
+  const summary = !items.length ? tr("対応が必要な項目はありません。") : alerts?.locale === getLocale() && alerts.summary ? alerts.summary : tr("対応が必要な項目が{0}件あります。緊急{1}件、注意{2}件、確認{3}件です。", items.length, items.filter(item => item.severity === "high").length, items.filter(item => item.severity === "medium").length, items.filter(item => item.severity === "low").length);
   return <section className="paypal-alerts" aria-label={tr("PayPalの要対応")}>
     <div className="paypal-alerts-head">
       <h3>{tr("要対応")}{!!items.length && <span className="alert-badge">{items.length}</span>}</h3>
       <button type="button" disabled={checking || busy} onClick={onCheck}>{checking ? tr("確認しています…") : tr("今すぐチェック")}</button>
     </div>
-    <p className="small muted">{alerts?.summary || tr("対応が必要な項目はありません。")}</p>
+    <p className="small muted">{summary}</p>
+    {checkResult && <p className="small paypal-check-result" role="status">{tr("確認が完了しました。要対応：{0}件。", checkResult.items.length)} <time dateTime={checkResult.checkedAt}>{new Date(checkResult.checkedAt).toLocaleString(intlLocale())}</time></p>}
     {!!items.length && <ul className="paypal-alert-list">{items.map(item => <li key={item.id}>
       <div className="paypal-alert-row"><span className={`status ${item.severity}`}>{severityText(item.severity)}</span><b>{kindText(item.kind)}</b><span>{item.target}</span></div>
       <p className="small muted">{[item.bookingLabel, item.amount !== undefined && item.currency ? paid(item.amount, item.currency) : "", item.paypalId ? tr("PayPal ID: {0}", item.paypalId) : "", item.elapsedHours !== undefined ? tr("{0}時間経過", Math.round(item.elapsedHours * 10) / 10) : ""].filter(Boolean).join(" ・ ")}</p>

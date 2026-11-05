@@ -500,8 +500,7 @@ function Dashboard({
           <i className={shop?.published ? "online" : ""} />
           {shop?.published ? tr("予約ページを公開中") : tr("公開前の準備中")}
           <p>
-            {tr("まずは、お店のことを")}<br />
-            {tr("聞かせてください。")}</p>
+            {shop?.published ? tr("ご予約やお店の情報を、ここから管理できます。") : <>{tr("まずは、お店のことを")}<br />{tr("聞かせてください。")}</>}</p>
         </div>
       </aside>}
       <section className="workspace">
@@ -1049,13 +1048,14 @@ function Reservations({
   const { money: yen, when, displayTimeZone, timeZoneLabel } = useShopDisplay();
   const [date, setDate] = useState("");
   const [staff, setStaff] = useState("");
+  const visibleBookings = shop.bookings.filter(b => (!date || dateIn(b.start, displayTimeZone()) === date) && (!staff || b.staffId === staff));
   return (
     <div className="panel reservations-panel">
       <div className="section-top">
         <h2>
           {tr("予約一覧")}{" "}
           <span className="count">
-            {shop.bookings.filter((b) => b.status === "active").length}
+            {visibleBookings.length}
           </span>
         </h2>
         <button
@@ -1099,14 +1099,7 @@ function Reservations({
         <Empty text={tr("最初の予約を、楽しみに待ちましょう。")} />
       )}
       <div className="booking-list">
-        {shop.bookings
-          .filter(
-            (b) =>
-              (!date ||
-                dateIn(b.start, displayTimeZone()) === date) &&
-              (!staff || b.staffId === staff),
-          )
-          .map((b) => (
+        {visibleBookings.map((b) => (
             <div className="booking-card" key={b.id}>
               <div>
                 <span className={`status ${b.status}`}>

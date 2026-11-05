@@ -64,7 +64,7 @@ export interface PaymentGateway {
 }
 export class PayPalError extends Error {
   status = 503;
-  constructor(readonly definitive = false, readonly issue?: "REFUND_FAILED_INSUFFICIENT_FUNDS") { super(tr("PayPalの処理状況を確認できません。マイページから再確認してください。")); }
+  constructor(readonly definitive = false, readonly issue?: "REFUND_FAILED_INSUFFICIENT_FUNDS", readonly upstreamStatus?: number) { super(tr("PayPalの処理状況を確認できません。マイページから再確認してください。")); }
 }
 export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
   const environment: PayPalEnvironment = process.env.PAYPAL_ENVIRONMENT === "live" ? "live" : "sandbox";
@@ -82,11 +82,11 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
     const { client, secret } = await credentials();
     try {
       const res = await fetcher(base + "/v1/oauth2/token", { method: "POST", signal: AbortSignal.timeout(15000), headers: { Authorization: `Basic ${Buffer.from(`${client}:${secret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials" });
-      if (!res.ok) throw new PayPalError();
+      if (!res.ok) throw new PayPalError(false, undefined, res.status);
       const value = z.object({ access_token: z.string(), expires_in: z.number() }).parse(await res.json());
       cached = { token: value.access_token, until: Date.now() + Math.max(0, value.expires_in - 60) * 1000 };
       return cached.token;
-    } catch { throw new PayPalError(); }
+    } catch (error) { throw error instanceof PayPalError ? error : new PayPalError(); }
   }
   async function request(path: string, data?: unknown, requestId?: string) {
     const access = await token();
@@ -96,7 +96,7 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
         if (res.status === 401) cached = undefined;
         const error = await res.json().catch(() => ({})) as { details?: { issue?: string }[] };
         const issue = Array.isArray(error.details) && error.details.some(d => d.issue === "REFUND_FAILED_INSUFFICIENT_FUNDS") ? "REFUND_FAILED_INSUFFICIENT_FUNDS" : undefined;
-        throw new PayPalError(res.status === 400 || res.status === 422, issue);
+        throw new PayPalError(res.status === 400 || res.status === 422, issue, res.status);
       }
       return await res.json();
     } catch (error) { throw error instanceof PayPalError ? error : new PayPalError(); }

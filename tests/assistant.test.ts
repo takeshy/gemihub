@@ -11,6 +11,7 @@ import { sample, documents } from "../server/domain.ts";
 import { digest } from "../server/auth.ts";
 import { converse, draftText, fixedConstraints, research, systemBundle, type ShopData } from "../server/assistant.ts";
 import { setOpenAiClient, setProviderResolver } from "../server/llm.ts";
+import { PayPalError } from "../server/paypal.ts";
 
 process.env.DEMO_MODE = "true";
 process.env.OPENAI_API_KEY = "test";
@@ -79,6 +80,7 @@ test("research reads PayPal through read-only tools and cites the record", async
     ],
     async invoke(name) {
       invoked.push(name);
+      if (name === "ledger_find_booking_payments") return { result: { total: 1, rows: [{ bookingId: "b1", start: "2026-11-09T19:00:00Z", paidAt: "2026-11-05T01:00:00Z", refund: { id: "REF1", at: "2026-11-05T02:00:00Z", amount: 49.5, status: "completed" } }] }, source: { path: "sheet:paypal", title: "PayPal ledger" } };
       return { result: { id: "REF1", status: "COMPLETED", amount: { amount: 49.5, currency: "USD" } }, source: { path: "paypal:refund:REF1", title: "PayPal refund REF1" } };
     },
   };
@@ -88,12 +90,37 @@ test("research reads PayPal through read-only tools and cites the record", async
   ]);
   const result = await research("Did the $49.50 refund go through?", data, { paypal: true });
   assert.match(result.answer, /completed/);
-  assert.deepEqual(result.sources.map(source => source.path), ["paypal:refund:REF1"]);
-  assert.deepEqual(invoked, ["paypal_get_refund"]);
+  assert.deepEqual(result.sources.map(source => source.path), ["paypal:refund:REF1", "sheet:paypal"]);
+  assert.deepEqual(invoked, ["ledger_find_booking_payments", "paypal_get_refund"]);
   const researchCall = seen.find(body => /調査担当|research layer/.test(body.instructions || ""))!;
   const names = (researchCall.tools as { name: string }[]).map(tool => tool.name);
   assert.deepEqual(names.sort(), ["ledger_find_booking_payments", "paypal_get_refund"]);
+  assert.match(JSON.stringify(researchCall.input), /REF1/);
+  assert.match(JSON.stringify(researchCall.input), /2026-11-05T02:00:00Z/);
   assert.ok(names.every(name => /^(paypal_get_|ledger_find_)/.test(name)), "no write tool is exposed");
+});
+
+test("a denied Transaction Search points research to owned refund IDs without hiding the error", async () => {
+  const data = shopData(), invoked: string[] = [];
+  data.paypal = {
+    tools: ["ledger_find_booking_payments", "paypal_list_transactions", "paypal_get_refund"].map(name => ({ name, description: "read only", parametersJsonSchema: { type: "object", properties: {} } })),
+    async invoke(name) {
+      invoked.push(name);
+      if (name === "paypal_list_transactions") throw new PayPalError(false, undefined, 403);
+      if (name === "ledger_find_booking_payments") return { result: { rows: [{ refund: { id: "REF1", at: "2026-11-05T02:00:00Z" } }] }, source: { path: "sheet:paypal", title: "Ledger" } };
+      return { result: { id: "REF1", status: "COMPLETED", amount: { amount: 55, currency: "USD" } }, source: { path: "paypal:refund:REF1", title: "Refund" } };
+    },
+  };
+  const seen = scripted([], [
+    call("paypal_list_transactions", { type: "refund" }, "search"),
+    call("paypal_get_refund", { refundId: "REF1" }, "refund"),
+    say(JSON.stringify({ answer: "Refund REF1: COMPLETED, USD 55.00.", sources: ["paypal:refund:REF1"] })),
+  ]);
+  const result = await research("Did the latest refund go through on PayPal?", data, { paypal: true });
+  assert.match(result.answer, /REF1.*COMPLETED.*USD 55/);
+  assert.deepEqual(invoked, ["ledger_find_booking_payments", "paypal_list_transactions", "paypal_get_refund"]);
+  assert.match(JSON.stringify(seen[1].input), /retryable/);
+  assert.match(JSON.stringify(seen[1].input), /not authorized|利用する権限がありません/);
 });
 
 test("a shop with PayPal records still answers non-payment questions in one tool-free research call", async () => {

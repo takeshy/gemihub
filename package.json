@@ -33,6 +33,7 @@
     "check:articles": "node scripts/check-article-authoring.mjs",
     "check:draft-save": "node --import tsx scripts/check-draft-save.mjs",
     "check:paypal-proposals": "node --import tsx scripts/check-paypal-proposals.mjs",
+    "check:judge-paypal": "node --import tsx scripts/check-judge-paypal.mjs",
     "check:staff-images": "node scripts/check-staff-images.mjs",
     "check:owner-booking": "node --import tsx scripts/check-owner-booking.mjs",
     "check:settings-recovery": "node --import tsx scripts/check-settings-recovery.mjs",

@@ -46,6 +46,10 @@ Each final cancellation is fixed (time, actor, reason, percentage, amount) befor
 
 # PayPal checks, alerts and proposals
 
+For a recent-refund question, research receives the shop's recent ledger up front. Payment/refund activity dates are separate from the appointment date, so a refund issued today for a future appointment is included. It reads the refund ID directly from PayPal and reports that ID, status, amount, currency and source. Transaction Search requires its own permission; if it is unavailable, individual refund lookups can still work. A saved ledger status alone is never presented as a new PayPal verification.
+
+Check now reports completion and its check time even when nothing needs attention. Summaries follow the display language, including when an earlier background check was saved in another language. Healthy judge shops remain at zero findings; no artificial payment problems are inserted.
+
 Consult & ask can read the shop's PayPal records. For a question about payments, refunds or transactions (for example "Did the $49.50 refund go through?" or "Are any refunds stuck?"), the research step uses read-only tools: find a booking's order, capture and refund IDs in the shop's ledger, read an order, capture or refund from PayPal by ID, and search the shop's PayPal transactions for up to 31 days. Only IDs that appear in this shop's ledger can be read; other shops' IDs are refused before PayPal is called. Results contain status, amount, IDs and times only, never customer email addresses, and amounts use normal units (USD 49.50, not cents). When the ledger and PayPal disagree, the answer states the difference and cites the PayPal record (for example `paypal:refund:<ID>`). If a record cannot be read, the answer says so instead of guessing. The AI has no tool that writes to PayPal.
 
 A background check runs every 60 minutes and compares the ledger with PayPal. It reports, by severity:

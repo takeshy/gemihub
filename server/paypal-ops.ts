@@ -1,4 +1,4 @@
-import { tr } from "../shared/i18n.ts";
+import { getLocale, tr, type Locale } from "../shared/i18n.ts";
 import { createHash } from "node:crypto";
 import { currencyOf, dateIn, formatMinor, fromMinor, regionOf, toMinor, type Currency } from "../shared/region.ts";
 import { requestLocale } from "./i18n.ts";
@@ -49,6 +49,7 @@ export type PayPalAlertItem = {
 export type PayPalAlertState = {
   shopId: string;
   checkedAt: string;
+  locale?: Locale;
   summary: string;
   items: PayPalAlertItem[];
 };
@@ -77,6 +78,7 @@ type LedgerRef = { kind: RefKind; id: string; bookingId: string; transferId?: st
 type LedgerEntry = {
   bookingId: string;
   start: string;
+  paidAt: string;
   /** Used only for server-side lookups; never handed to the model. */
   customer: string;
   name: string;
@@ -86,7 +88,7 @@ type LedgerEntry = {
   orderId?: string;
   captureId?: string;
   captureStatus?: string;
-  refund?: { id?: string; amount: number; status: string; requestId: string };
+  refund?: { id?: string; at: string; amount: number; status: string; requestId: string };
   transfers: { id: string; at: string; amount: number; currency: Currency; refund: { id?: string; amount: number; status: string; requestId: string } }[];
 };
 type Ledger = { checkouts: Checkout[]; entries: LedgerEntry[]; refs: Map<string, LedgerRef> };
@@ -145,13 +147,14 @@ async function readLedger(store: Store, shop: Shop): Promise<Ledger> {
     entries.set(c.booking.id, {
       bookingId: c.booking.id,
       start: c.booking.start,
+      paidAt: new Date(c.createdAt).toISOString(),
       customer: c.customer,
       name: c.booking.name || "",
       amount: p?.amount ?? toMinor(c.booking.price, c.currency ?? currencyOf(regionOf(shop.published))),
       currency: p?.currency ?? c.currency ?? currencyOf(regionOf(shop.published)),
       environment: p?.environment ?? c.environment,
       ...(p ? { orderId: p.orderId, captureId: p.captureId } : c.orderId ? { orderId: c.orderId } : {}),
-      ...(p?.cancellation ? { refund: { ...(p.cancellation.refundId ? { id: p.cancellation.refundId } : {}), amount: p.cancellation.amount, status: p.cancellation.status, requestId: p.cancellation.requestId } } : {}),
+      ...(p?.cancellation ? { refund: { ...(p.cancellation.refundId ? { id: p.cancellation.refundId } : {}), at: p.cancellation.at, amount: p.cancellation.amount, status: p.cancellation.status, requestId: p.cancellation.requestId } } : {}),
       transfers: (c.booking.transfers || []).map(entry => ({ id: entry.id, at: entry.at, amount: entry.refund.amount, currency: entry.currency, refund: { ...(entry.refund.refundId ? { id: entry.refund.refundId } : {}), amount: entry.refund.amount, status: entry.refund.status, requestId: entry.refund.requestId } })),
     });
   }
@@ -186,6 +189,7 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
     customer: z.string().max(300).optional(),
     from: z.string().max(40).optional(),
     to: z.string().max(40).optional(),
+    type: z.enum(["all", "payment", "refund"]).default("all"),
   });
   const tools: ToolDeclaration[] = [
     { name: "paypal_get_order", description: tr("このお店のPayPal注文を読み取る。注文IDは台帳にあるものだけ。"), parametersJsonSchema: { type: "object", properties: { orderId: { type: "string", description: tr("台帳にある注文ID") } }, required: ["orderId"] } },
@@ -196,11 +200,12 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
       to: { type: "string", description: tr("終了日時（ISO 8601、省略時は現在）") },
       type: { type: "string", enum: ["all", "payment", "refund"], description: tr("取引の種別") },
     } } },
-    { name: "ledger_find_booking_payments", description: tr("このお店の台帳から予約とPayPalの注文・決済・返金の対応を探す。予約ID・顧客・期間のいずれかを指定する。"), parametersJsonSchema: { type: "object", properties: {
+    { name: "ledger_find_booking_payments", description: tr("このお店の台帳から予約とPayPalの注文・決済・返金IDを探す。条件なしなら直近の記録を新しい順で返す。期間は来店日ではなく支払い・返金の受付日時で絞る。"), parametersJsonSchema: { type: "object", properties: {
       bookingId: { type: "string", description: tr("予約ID") },
       customer: { type: "string", description: tr("顧客のメールアドレスまたは名前") },
       from: { type: "string", description: tr("開始日時（ISO 8601）") },
       to: { type: "string", description: tr("終了日時（ISO 8601）") },
+      type: { type: "string", enum: ["all", "payment", "refund"], description: tr("返金を探す場合は refund。省略時はすべての支払い・返金") },
     } } },
   ];
   async function invoke(name: string, args: Record<string, unknown> | undefined) {
@@ -258,20 +263,22 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
     }
     if (name === "ledger_find_booking_payments") {
       const input = lookup.parse(args || {});
-      if (!input.bookingId && !input.customer && !input.from && !input.to) throw new Error(tr("予約ID・顧客・期間のいずれかを指定してください"));
       const from = input.from ? Date.parse(input.from) : undefined;
       const to = input.to ? Date.parse(input.to) : undefined;
+      if (from !== undefined && !Number.isFinite(from) || to !== undefined && !Number.isFinite(to) || from !== undefined && to !== undefined && from > to)
+        throw new Error(tr("期間の日時を確認してください"));
+      const activity = (entry: LedgerEntry) => [
+        ...(input.type !== "refund" ? [Date.parse(entry.paidAt)] : []),
+        ...(input.type !== "payment" ? [entry.refund ? Date.parse(entry.refund.at) : NaN, ...entry.transfers.map(transfer => Date.parse(transfer.at))] : []),
+      ].filter(at => Number.isFinite(at) && (from === undefined || at >= from) && (to === undefined || at <= to));
       const rows = ledger.entries.filter(entry => {
         if (input.bookingId && entry.bookingId !== input.bookingId) return false;
         if (input.customer) {
           const needle = input.customer.toLowerCase();
           if (![entry.customer, entry.name, entry.bookingId].some(value => value.toLowerCase().includes(needle))) return false;
         }
-        const at = Date.parse(entry.start);
-        if (from !== undefined && Number.isFinite(from) && at < from) return false;
-        if (to !== undefined && Number.isFinite(to) && at > to) return false;
-        return true;
-      });
+        return activity(entry).length > 0;
+      }).sort((a, b) => Math.max(...activity(b)) - Math.max(...activity(a)) || a.bookingId.localeCompare(b.bookingId));
       const totals = new Map<Currency, { payment: number; refund: number }>();
       for (const entry of rows) {
         const value = totals.get(entry.currency) || { payment: 0, refund: 0 };
@@ -283,9 +290,9 @@ function toolProvider(store: Store, gateway: PaymentGateway, shop: Shop, ledger:
       const source = keep("sheet:paypal", tr("PayPalの台帳"));
       // Ledger amounts are minor units; hand the model the same major-unit values the PayPal tools return.
       const major = (value: number, currency: Currency) => fromMinor(value, currency);
-      const refundView = (refund: NonNullable<LedgerEntry["refund"]>, currency: Currency) => ({ ...(refund.id ? { id: refund.id } : {}), amount: major(refund.amount, currency), status: refund.status });
+      const refundView = (refund: { id?: string; amount: number; status: string; at?: string }, currency: Currency) => ({ ...(refund.id ? { id: refund.id } : {}), ...(refund.at ? { at: refund.at } : {}), amount: major(refund.amount, currency), status: refund.status });
       return { result: { total: rows.length, totals: [...totals].map(([currency, value]) => ({ currency, payment: major(value.payment, currency), refund: major(value.refund, currency) })), rows: rows.slice(0, ledgerLimit).map(entry => ({
-        bookingId: entry.bookingId, start: entry.start, name: entry.name, amount: major(entry.amount, entry.currency), currency: entry.currency,
+        bookingId: entry.bookingId, start: entry.start, paidAt: entry.paidAt, name: entry.name, amount: major(entry.amount, entry.currency), currency: entry.currency,
         environment: entry.environment, orderId: entry.orderId, captureId: entry.captureId,
         ...(entry.refund ? { refund: refundView(entry.refund, entry.currency) } : {}),
         transfers: entry.transfers.map(transfer => ({ id: transfer.id, at: transfer.at, currency: transfer.currency, refund: refundView(transfer.refund, transfer.currency) })),
@@ -576,7 +583,7 @@ export function paypalOps(options: PayPalOpsOptions) {
   const { store, gateway } = options;
   const state = (shopId: string) => store.get<PayPalAlertState>("paypalAlertState", shopId);
   async function saveState(shop: Shop, items: PayPalAlertItem[], summary?: string) {
-    const value: PayPalAlertState = { shopId: shop.id, checkedAt: new Date().toISOString(), summary: summary || fallbackSummary(items), items };
+    const value: PayPalAlertState = { shopId: shop.id, checkedAt: new Date().toISOString(), locale: getLocale(), summary: summary || fallbackSummary(items), items };
     await store.put("paypalAlertState", shop.id, value);
     return value;
   }

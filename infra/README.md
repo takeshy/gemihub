@@ -1,5 +1,15 @@
 # Deploy gemihub.net on the shared VM
 
+For a failed PayPal consultation, inspect the `assistant_conversation_round`, `assistant_research_round` and `assistant_paypal_tool` JSON log events. A shared `traceId` links the rounds and tools; elapsed time, tool names and an upstream HTTP status are logged without prompts, customer details or credentials. For example, Transaction Search can return 403 while a refund-by-ID lookup succeeds.
+
+Operators can replay a question read-only inside the configured app container:
+
+```sh
+sudo docker exec gemihub-web node --import tsx scripts/diagnose-paypal-consult.mjs --shop=SHOP_ID --question="Did the latest refund go through on PayPal?"
+```
+
+The script uses the administrator-selected AI provider and runtime PayPal credentials. It inspects only the specified shop and prints the answer and sources; it does not create a session, modify judge usage or ledger records, or issue a charge/refund. Model API calls still occur.
+
 
 The public brand is **gemihub**; the default management domain is **gemihub.net**, storefront suffix **shops.gemihub.net**, and Google OAuth callback **https://gemihub.net/auth/google/callback**. The former gemihub service is now **kiokuflow**, but retains its legacy VM runtime ID `gemihub`. This service registers as `gemihub-web`, uses a dedicated database `gemihub`, and creates cloud resources prefixed `gemihub-web`. Use `--app gemihub-web` to deploy this service. See [naming notes](../docs/branding.md).
 
