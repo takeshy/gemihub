@@ -2581,6 +2581,10 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .weekday-hours-row > .form-grid { margin-top: 8px; }
 .special-day-row.form-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; margin-bottom: 12px; }
 .special-day-row > .text-button { min-height: 44px; }
+.special-day { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #e8ebe2; }
+.special-day:last-of-type { border-bottom: 0; }
+.special-day-staff { border: 0; padding: 0; margin: 0; min-width: 0; }
+.special-day-staff legend { font-size: 13px; padding: 0; margin-bottom: 4px; }
 @media (max-width: 760px) {
   .special-day-row.form-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .special-day-row > :first-child { grid-column: 1 / -1; }

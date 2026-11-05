@@ -981,7 +981,7 @@ export function ConfigEditor({
           }
         />
       </Field>
-      <SpecialDays hours={c.hours} onChange={specialDays => put("hours", { ...c.hours, specialDays })} />
+      <SpecialDays hours={c.hours} staff={bookingStaff(c)} onChange={specialDays => put("hours", { ...c.hours, specialDays })} />
       </>}
       {(!section || section === "rules") && <>
       <h3>{tr("予約のルール")}</h3>
@@ -1822,16 +1822,29 @@ export function PublicShop({
 }
 
 /** Dates with their own hours: open on a holiday that falls on a closed weekday, or open late on one date. */
-function SpecialDays({ hours, onChange }: { hours: ShopConfig["hours"]; onChange: (value: NonNullable<ShopConfig["hours"]["specialDays"]>) => void }) {
+function SpecialDays({ hours, staff, onChange }: { hours: ShopConfig["hours"]; staff: ShopConfig["staff"]; onChange: (value: NonNullable<ShopConfig["hours"]["specialDays"]>) => void }) {
   const days = hours.specialDays || [];
   const change = (index: number, value: Partial<(typeof days)[number]>) => onChange(days.map((day, i) => i === index ? { ...day, ...value } : day));
+  // Everyone works unless the owner narrows the date down; choosing everyone again goes back to "everyone".
+  const toggleStaff = (index: number, id: string, on: boolean) => {
+    const { staffIds, ...day } = days[index];
+    const chosen = new Set(staffIds || staff.map(person => person.id));
+    if (on) chosen.add(id); else chosen.delete(id);
+    const next = staff.every(person => chosen.has(person.id)) ? day : { ...day, staffIds: staff.map(person => person.id).filter(personId => chosen.has(personId)) };
+    onChange(days.map((item, i) => i === index ? next : item));
+  };
   return <fieldset className="weekday-hours special-days"><legend>{tr("特別営業日")}</legend>
-    <p className="small muted">{tr("祝日だけ定休日でも営業する、特定の日だけ夜遅くまで開ける、など日付ごとの営業時間です。定休日でもこの日は営業し、スタッフ全員がこの時間で予約を受けます。かわりに休む日は臨時休業日に入れてください。")}</p>
-    {days.map((day, index) => <div className="form-grid special-day-row" key={index}>
+    <p className="small muted">{tr("祝日だけ定休日でも営業する、特定の日だけ夜遅くまで開ける、など日付ごとの営業時間です。定休日でもこの日は営業し、出勤するスタッフがこの時間で予約を受けます。かわりに休む日は臨時休業日に入れてください。")}</p>
+    {days.map((day, index) => <div className="special-day" key={index}><div className="form-grid special-day-row">
       <Field label={tr("日付")}><DateInput aria-label={tr("日付")} required value={day.date} onValueChange={date => change(index, { date })} /></Field>
       <Field label={tr("開店")}><input type="time" required value={day.start} onChange={event => change(index, { start: event.target.value })} /></Field>
       <Field label={tr("閉店")}><input type="time" required value={day.end} onChange={event => change(index, { end: event.target.value })} /></Field>
       <button type="button" className="text-button" aria-label={tr("{0} の特別営業日を削除", day.date || tr("日付未入力"))} onClick={() => onChange(days.filter((_, i) => i !== index))}>{tr("削除")}</button>
+    </div>
+      {staff.length > 1 && <fieldset className="special-day-staff"><legend>{tr("出勤するスタッフ")}</legend>
+        <div className="checkboxes">{staff.map(person => <label key={person.id}><input type="checkbox" checked={!day.staffIds || day.staffIds.includes(person.id)} onChange={event => toggleStaff(index, person.id, event.target.checked)} />{person.name}</label>)}</div>
+        <p className="small muted">{day.staffIds ? day.staffIds.length ? tr("選んだスタッフだけが、ふだんの勤務にかかわらずこの時間で予約を受けます。") : tr("出勤するスタッフを1人以上選んでください。") : tr("全員が出勤します。ふだんの勤務にかかわらず、この時間で予約を受けます。")}</p>
+      </fieldset>}
     </div>)}
     <button type="button" disabled={days.length >= 100} onClick={() => onChange([...days, { date: nextFreeDate(days.map(day => day.date)), start: hours.start, end: hours.end }])}>{tr("特別営業日を追加")}</button>
   </fieldset>;

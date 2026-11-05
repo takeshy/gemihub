@@ -1,4 +1,4 @@
-import { tr } from "../shared/i18n.ts";
+import { tr, listSeparator } from "../shared/i18n.ts";
 import { z } from "zod";
 import { paymentRulesSchema, type BookingPayment } from "./payment-domain.ts";
 import type { BookingTransfer } from "./transfer-domain.ts";
@@ -73,7 +73,11 @@ export const shopSchema = z
       holidays: z.array(z.iso.date()),
       weekdayHours: z.array(z.object({ day: z.number().int().min(0).max(6), start: clock, end: clock })).max(7).optional(),
       /** Dates open with their own hours, even on a regular closed weekday (e.g. a public holiday or a late night). */
-      specialDays: z.array(z.object({ date: z.iso.date(), start: clock, end: clock })).max(100).optional(),
+      specialDays: z.array(z.object({
+        date: z.iso.date(), start: clock, end: clock,
+        /** Who works that date; absent means every staff member who handles the service. */
+        staffIds: z.array(z.string()).max(30).optional(),
+      })).max(100).optional(),
     }),
     rules: z.object({
       interval: z.number().int().min(5).max(120),
@@ -94,6 +98,9 @@ export const shopSchema = z
     for (const day of s.hours.specialDays || []) {
       if (day.start >= day.end) fail(tr("特別営業日（{0}）の終了は開始より後にしてください", day.date));
       if (s.hours.holidays.includes(day.date)) fail(tr("{0} は臨時休業日と特別営業日の両方に入っています", day.date));
+      if (day.staffIds && !day.staffIds.length) fail(tr("特別営業日（{0}）に出勤するスタッフを選んでください", day.date));
+      const bookable = new Set([...s.staff.map(p => p.id), ...(s.ownerBooking || !s.staff.length ? [ownerStaffId] : [])]);
+      if (day.staffIds?.some(id => !bookable.has(id))) fail(tr("特別営業日（{0}）の出勤スタッフに、登録されていないスタッフがいます", day.date));
     }
     if (
       new Set(s.menus.map((m) => m.id)).size !== s.menus.length ||
@@ -241,8 +248,13 @@ export const hoursForDate = (config: Pick<ShopConfig, "hours">, date: string) =>
 /** Holidays close the date; a special day opens it even on a regular closed weekday. */
 export const closedOn = (config: Pick<ShopConfig, "hours">, date: string) =>
   config.hours.holidays.includes(date) || (!specialDayFor(config, date) && config.hours.closedWeekdays.includes(weekdayOf(date)));
-export const specialDaysText = (config: Pick<ShopConfig, "hours">) =>
-  [...config.hours.specialDays || []].sort((a, b) => a.date.localeCompare(b.date)).map(day => `${day.date} ${day.start} – ${day.end}`).join(" / ");
+export function specialDaysText(config: Pick<ShopConfig, "staff" | "menus" | "hours" | "ownerBooking">) {
+  const staff = bookingStaff(config);
+  return [...config.hours.specialDays || []].sort((a, b) => a.date.localeCompare(b.date)).map(day => {
+    const names = day.staffIds?.map(id => staff.find(person => person.id === id)?.name).filter(Boolean);
+    return `${day.date} ${day.start} – ${day.end}${names?.length && staff.length > 1 ? tr("（出勤：{0}）", names.join(listSeparator())) : ""}`;
+  }).join(" / ");
+}
 export function hoursText(config: Pick<ShopConfig, "hours">) {
   const days = [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
   return [`${config.hours.start} – ${config.hours.end}`, ...(config.hours.weekdayHours || []).map(hours => `${tr("{0}曜", days[hours.day])} ${hours.start} – ${hours.end}`)].join(" / ");
@@ -273,8 +285,8 @@ export function slots(
     return [];
   const result: { start: string; end: string; staffId: string }[] = [];
   const hours = hoursForDate(config, date);
-  // On a special day everyone who handles the menu works its hours, whatever their regular shift.
-  const special = !!specialDayFor(config, date);
+  // On a special day the chosen staff (everyone, if none are chosen) work its hours, whatever their regular shift.
+  const special = specialDayFor(config, date);
   const closing = zonedDate(date, hours.end, timeZone).getTime();
   for (
     let t = minutes(hours.start);
@@ -291,7 +303,7 @@ export function slots(
         (!requestedStaff || p.id === requestedStaff) &&
         p.menuIds.includes(menuId) &&
         menu.options.every(option => p.menuIds.includes(option.id)) &&
-        (special || p.weekdays.includes(weekday) &&
+        (special ? !special.staffIds || special.staffIds.includes(p.id) : p.weekdays.includes(weekday) &&
         zonedDate(date, p.start, timeZone).getTime() <= start.getTime() &&
         zonedDate(date, p.end, timeZone).getTime() >= end.getTime()) &&
         !bookings.some(

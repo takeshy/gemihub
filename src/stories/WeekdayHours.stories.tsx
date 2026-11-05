@@ -6,3 +6,4 @@ export default meta;
 type Story=StoryObj<typeof meta>;
 export const TueFri:Story={name:"通常19時・火金21時まで",args:{scenario:"weekday-hours"}};
 export const SpecialDays:Story={name:"祝日は営業・翌日休み・特定日だけ22時まで",args:{scenario:"special-days"}};
+export const SpecialDaysStaff:Story={name:"特別営業日の出勤スタッフを選ぶ",args:{scenario:"special-days-staff"}};
