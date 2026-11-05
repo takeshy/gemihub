@@ -65,6 +65,7 @@ export function postArtifacts(
   shell: string,
   menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
+  posts = posts.filter(post => !post.deletedAt);
   const live = publicPosts(posts);
   const files: Record<string, string> = {
     ...driveSnapshot(config, shell, undefined, menuImages),

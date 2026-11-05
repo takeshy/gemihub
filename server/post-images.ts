@@ -12,7 +12,7 @@ export const postImageIds = (body: string) => [
 export const publishedPostImageIds = (posts: Post[]) => [
   ...new Set(
     posts.flatMap((post) =>
-      post.published ? postImageIds(post.published.body) : [],
+      !post.deletedAt && post.published ? postImageIds(post.published.body) : [],
     ),
   ),
 ];

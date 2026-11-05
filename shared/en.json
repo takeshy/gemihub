@@ -1,4 +1,10 @@
 {
+  "保存した記事を開くと、画面上部の「非公開にする」で公開を止められます。「削除する」は記事名を確認してから実行します。編集画面と下書きの画面のどちらからも操作できます。": "Open a saved article and choose Unpublish near the top to take it offline. Choose Delete and confirm the article title to remove it. These actions are available in both the editor and the draft review.",
+  "記事の管理": "Article actions",
+  "この記事を削除しますか？": "Delete this article?",
+  "「{0}」を記事一覧と公開ページから削除します。": "Remove “{0}” from the article list and public pages.",
+  "記事を削除しました。": "Article deleted.",
+  "{0}を削除：{1}": "Deleted {0}: {1}",
   "画像はアップロードと既存画像の選択画面から選べます。下書き保存ではAIを使わず、紹介文も作りません。AIの修正は下書きに保存され、「公開する」を押すまで公開されません。": "Choose images by uploading or from existing images. Saving a draft does not use AI or create an introduction. AI revisions stay in the draft until you press Publish.",
   "見出し、本文、写真、日付を確認します。直したいときは「編集に戻る」か「AIで修正」を使います。": "Check the heading, body, photos, and date. To make changes, use Back to editing or Revise with AI.",
   "画像は何度でも追加できます。追加した画像は下書き保存後の画面で確認できます。": "You can add images as many times as you like. Added images appear on the draft screen after you save the draft.",

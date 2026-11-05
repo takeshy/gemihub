@@ -661,7 +661,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result={title:String(input.title||tr("季節のお店のお便り")),excerpt:"",body:[String(input.source||input.instruction),...selected.map(image=>`![${image!.name}](shop-image:${image!.id})`)].join("\n\n"),conversationId:"c".repeat(64)};
     }
     else if (action === `/api/shops/${shop.id}/posts/drafts` || /\/posts\/[^/]+\/draft$/.test(action)) {
-      const existing = action.endsWith("/draft") ? posts.find(post => post.id === action.split("/").at(-2)) : undefined;
+      const existing = action.endsWith("/draft") ? posts.find(post => !post.deletedAt && post.id === action.split("/").at(-2)) : undefined;
       if (action.endsWith("/draft") && !existing) throw new Error(tr("記事がありません"));
       if (existing && existing.version !== input.version) throw new Error(tr("記事が更新されています。一覧を更新してください"));
       const id = existing?.id || String(input.requestId), at = new Date().toISOString();
@@ -673,7 +673,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = saved;
     }
     else if (action === `/api/shops/${shop.id}/posts`) {
-      if (data === undefined) result = posts;
+      if (data === undefined) result = posts.filter(post => !post.deletedAt);
       else {
         const content = postContentSchema.parse(input.content);
         const at = new Date().toISOString();
@@ -693,9 +693,13 @@ export function createMockClient(scenario: Scenario): ApiClient {
         posts.unshift(post);
         result = post;
       }
-    } else if (action.match(/\/posts\/[^/]+\/(save|publish|unpublish)$/)) {
-      const post = posts.find((p) => p.id === action.split("/").at(-2));
+    } else if (action.match(/\/posts\/[^/]+\/(save|publish|unpublish|delete)$/)) {
+      const post = posts.find((p) => (!p.deletedAt || action.endsWith("/delete")) && p.id === action.split("/").at(-2));
       if (!post) throw new Error(tr("記事がありません"));
+      if (action.endsWith("/delete")) {
+        if (input.confirmed !== true) throw new Error(tr("内容を承認してください"));
+        if (post.deletedAt) return structuredClone(post) as T;
+      }
       if (post.version !== input.version)
         throw new Error(tr("記事が更新されています。一覧を更新してください"));
       if (action.endsWith("/save")) {
@@ -708,7 +712,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         post.published = structuredClone(post.draft);
         post.publishedAt = new Date().toISOString();
         post.address = postAddress(post.draft);
-      } else post.published = null;
+      } else { post.published = null; if (action.endsWith("/delete")) post.deletedAt = new Date().toISOString(); }
       post.version++;
       post.updatedAt = new Date().toISOString();
       result = post;

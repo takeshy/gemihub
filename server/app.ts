@@ -345,7 +345,7 @@ export function createApp(
     const now = new Date();
     return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
   };
-  const postsFor = (shop: Shop) => store.records<Post>("post", shop);
+  const postsFor = async (shop: Shop) => (await store.records<Post>("post", shop)).filter(post => !post.deletedAt);
   // A missing or unreadable image is left out of the public page instead of blocking every save.
   async function storefrontImages(shop: Shop, posts: Post[]) {
     const token = store.memory ? "" : await ownerToken(shop) || "";
@@ -2179,18 +2179,23 @@ export function createApp(
             });
           }
           const postAction = action.match(
-            /^posts\/([^/]+)\/(save|publish|unpublish)$/,
+            /^posts\/([^/]+)\/(save|publish|unpublish|delete)$/,
           );
           if (postAction && method === "POST") {
             return await store.locked(postLockKey(fresh.id), async () => {
             assertOwner(user, fresh);
-            const post = (await postsFor(fresh)).find(
+            const post = (postAction[2] === "delete" ? await store.records<Post>("post", fresh) : await postsFor(fresh)).find(
               (p) => p.id === postAction[1],
             );
             if (!post || post.shopId !== fresh.id)
               fail(404, tr("記事がありません"));
             const raw = await body(req);
-            const changesPublication = postAction[2] !== "save" || (raw as { publish?: boolean }).publish === true;
+            const deleting = postAction[2] === "delete";
+            if (deleting) {
+              z.object({ confirmed: z.literal(true), version: z.number().int().positive() }).parse(raw);
+              if (post.deletedAt) return json(res, post);
+            }
+            const changesPublication = deleting ? !!post.published : postAction[2] !== "save" || (raw as { publish?: boolean }).publish === true;
             const { version } = z
               .object({ version: z.number().int().positive() })
               .parse(raw);
@@ -2227,6 +2232,10 @@ export function createApp(
                 at,
                 summary: tr("{0}を公開：{1}", postLabel(post.draft.category), post.draft.title),
               });
+            } else if (deleting) {
+              post.published = null;
+              post.deletedAt = at;
+              fresh.history.push({ at, summary: tr("{0}を削除：{1}", postLabel(post.draft.category), post.draft.title) });
             } else {
               if (!post.published) fail(409, tr("この記事はすでに非公開です"));
               fresh.history.push({
@@ -2241,7 +2250,8 @@ export function createApp(
             await store.transaction(async () => {
               await store.put("post", post.id, post);
               if (changesPublication) await savePublicShop(fresh);
-              await enqueue(fresh, "posts", changesPublication ? {} : { postId: post.id });
+              else if (deleting) await store.saveShop(fresh);
+              await enqueue(fresh, "posts", changesPublication || deleting ? {} : { postId: post.id });
             });
             return json(res, post);
             });

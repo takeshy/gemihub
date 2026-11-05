@@ -9,7 +9,7 @@ import { DateInput } from "./DateInput";
 import { createPortal } from "react-dom";
 import { submitOnShortcut } from "./submit-shortcut";
 import "./BlogEditor.css";
-import React, { useEffect, useState, useRef, lazy, Suspense } from "react";
+import React, { useEffect, useState, useRef, useId, lazy, Suspense } from "react";
 import { useApi } from "./api";
 import { PostContent } from "./PostContent";
 import {
@@ -74,6 +74,9 @@ export function BlogEditor({
   const aiTrigger = useRef<HTMLButtonElement>(null);
   const confirmPanel = useRef<HTMLElement>(null);
   const confirmBody = useRef<HTMLDivElement>(null);
+  const deleteDialog = useRef<HTMLDialogElement>(null);
+  const deleteTitleId = useId();
+  const [deleteError, setDeleteError] = useState("");
   const base = `/api/shops/${shop.id}/posts`;
   const clean =
     !!current && JSON.stringify(content) === JSON.stringify(current.draft);
@@ -207,6 +210,47 @@ export function BlogEditor({
       notify(tr("下書きを公開しました。"));
     });
   }
+  function unpublish() {
+    if (!current) return;
+    void run(async () => {
+      const saved = await api<Post>(`${base}/${current.id}/unpublish`, { version: current.version });
+      // Changing publication must not overwrite unsaved text in the editor.
+      setCurrent(saved);
+      setPosts(values => values.map(post => post.id === saved.id ? saved : post));
+      await reload();
+      notify(tr("記事を非公開にしました。下書きと履歴は残っています。"));
+    });
+  }
+  function removePost() {
+    if (!current || blocked) return;
+    void run(async () => {
+      setDeleteError("");
+      try {
+        await api(`${base}/${current.id}/delete`, { version: current.version, confirmed: true });
+        deleteDialog.current?.close();
+        setPosts(values => values.filter(post => post.id !== current.id));
+        choose();
+        await reload();
+        notify(tr("記事を削除しました。"));
+      } catch (error) { setDeleteError(error instanceof Error ? error.message : String(error)); }
+    });
+  }
+  const managementActions = current && shop.isOwner && <div className="post-management-actions" role="group" aria-label={tr("記事の管理")}>
+    <span className="pill">{current.published ? tr("公開中") : tr("下書き・非公開")}</span>
+    <div>
+      {current.published && <button type="button" disabled={blocked} onClick={unpublish}>{tr("非公開にする")}</button>}
+      <button type="button" className="danger" disabled={blocked} onClick={() => { setDeleteError(""); deleteDialog.current?.showModal(); }}>{tr("削除する")}</button>
+    </div>
+  </div>;
+  const deletion = <dialog ref={deleteDialog} className="article-delete-dialog" aria-labelledby={deleteTitleId} onCancel={event => { if (blocked) event.preventDefault(); }}>
+    <h2 id={deleteTitleId}>{tr("この記事を削除しますか？")}</h2>
+    <p>{tr("「{0}」を記事一覧と公開ページから削除します。", current?.draft.title || "")}</p>
+    {deleteError && <p className="alert" role="alert">{deleteError}</p>}
+    <div className="actions">
+      <button type="button" autoFocus disabled={blocked} onClick={() => deleteDialog.current?.close()}>{tr("やめる")}</button>
+      <button type="button" className="danger" disabled={blocked} onClick={removePost}>{tr("削除する")}</button>
+    </div>
+  </dialog>;
   const aiPanel = aiOpen && createPortal(
     <section
       className="visual-chat-panel article-ai-chat"
@@ -338,6 +382,7 @@ export function BlogEditor({
           </div>
           <p className="notice">
             {tr("この下書きにはAIで修正を指示できます。「公開する」を押すまでお客様には表示されません。")}</p>
+          {managementActions}
           <div className="post-confirm-body" ref={confirmBody}>
             <PostContent
               post={{ ...content, excerpt: clean ? content.excerpt : "" }}
@@ -356,6 +401,7 @@ export function BlogEditor({
           </div>
         </section>
         {aiPanel}
+        {deletion}
       </div>
     );
   return (
@@ -392,6 +438,7 @@ export function BlogEditor({
             <h2>{current ? tr("記事を編集する") : tr("新しいお便りを書く")}</h2>
             {current && <button type="button" disabled={blocked} onClick={() => choose()}>{tr("新しいお便りを書く")}</button>}
           </div>
+          {managementActions}
           {!shop.isOwner && (
             <p className="notice">{tr("記事の作成・変更・公開は店主が行います。")}</p>
           )}
@@ -488,26 +535,11 @@ export function BlogEditor({
               >
                 {current.published.title} ↗
               </a>
-              <button
-                disabled={blocked}
-                onClick={() =>
-                  void run(async () => {
-                    await accept(
-                      await api<Post>(`${base}/${current.id}/unpublish`, {
-                        version: current.version,
-                      }),
-                    );
-                    notify(
-                      tr("記事を非公開にしました。下書きと履歴は残っています。"),
-                    );
-                  })
-                }
-              >
-                {tr("非公開にする")}</button>
             </div>
           )}
         </section>
       </div>
+      {deletion}
     </div>
   );
 }

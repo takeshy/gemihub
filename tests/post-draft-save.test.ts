@@ -92,9 +92,41 @@ test("background draft export updates only the requested Markdown and private in
   const content = { category: "blogs" as const, date: "2026-11-05", title: "Draft", body: "Body", slug: "draft", excerpt: "" };
   const post: Post = { id: "draft", shopId: shop.id, draft: content, published: null, version: 1, createdAt: "now", updatedAt: "now", updatedBy: shop.owner };
   let progress = 0;
-  await syncPostFiles(shop, [post, { ...post, id: "other" }], encrypt("token"), () => { progress++; }, async () => { throw new Error("Draft export must not download public images"); }, post.id);
+  const posts = [post, { ...post, id: "other" }, { ...post, id: "deleted", deletedAt: "now" }];
+  await syncPostFiles(shop, posts, encrypt("token"), () => { progress++; }, async () => { throw new Error("Draft export must not download public images"); }, post.id);
   assert.deepEqual(writes, ["private-index", "draft-file"]);
   assert.ok(progress > 0);
   assert.equal(shop.google.artifactIds!["web/blogs/live.html"], "live-file", "a draft export cannot move or unpublish live files");
+  await syncPostFiles(shop, posts, encrypt("token"), () => {}, undefined, "deleted");
+  assert.deepEqual(writes, ["private-index", "draft-file"], "a queued save cannot recreate a deleted article's Markdown");
   await store.close();
+});
+
+test("article deletion removes exported pages and Markdown from active Drive folders", async t => {
+  const moves: [string, string][] = [], writes: Record<string, string> = {};
+  mock.method(google, "drive", (() => ({ files: {
+    async get() { return { data: { parents: ["previous-parent"] } }; },
+    async update(input: { fileId: string; addParents?: string; media?: { body: AsyncIterable<Buffer | string> } }) {
+      if (input.addParents) moves.push([input.fileId, input.addParents]);
+      if (input.media) { let body = ""; for await (const chunk of input.media.body) body += chunk.toString(); writes[input.fileId] = body; }
+      return { data: {} };
+    },
+    async create(input: { requestBody: { name: string } }) { return { data: { id: input.requestBody.name } }; },
+  } })) as never);
+  t.after(() => mock.restoreAll());
+  const store = new Store(":memory:"), shop = await store.createShop("owner@example.com");
+  t.after(async () => { await store.close(); });
+  shop.published = structuredClone(sample);
+  shop.google = { folderId: "root", specId: "spec", historyId: "history", artifactFolders: {
+    "admin/posts/deleted": "deleted-folder", "admin/posts/unpublished": "unpublished-folder",
+  }, artifactIds: {
+    "admin/posts/posts.json": "index", "admin/posts/deleted.md": "private-file", "web/blogs/2026-11-05-deleted.html": "public-file",
+  } };
+  const content = { category: "blogs" as const, date: "2026-11-05", title: "Deleted article", body: "Deleted content", slug: "deleted", excerpt: "" };
+  const post: Post = { id: "deleted", shopId: shop.id, draft: content, published: null, deletedAt: "now", version: 2, createdAt: "then", updatedAt: "now", updatedBy: shop.owner };
+  await syncPostFiles(shop, [post], encrypt("token"), () => {});
+  assert.ok(moves.some(([file, folder]) => file === "private-file" && folder === "deleted-folder"));
+  assert.ok(moves.some(([file, folder]) => file === "public-file" && folder === "unpublished-folder"));
+  assert.deepEqual(JSON.parse(writes.index), []);
+  assert.equal(writes["private-file"], undefined); assert.equal(writes["public-file"], undefined);
 });

@@ -24,6 +24,7 @@ export type Post = {
   updatedAt: string;
   updatedBy: string;
   publishedAt?: string;
+  deletedAt?: string;
   address?: { category: PostCategory; date: string; slug: string };
 };
 export type PublicPost = PostContent & { id: string; publishedAt: string };
@@ -43,7 +44,7 @@ export const postAddress = (content: PostContent) => ({
 });
 export function publicPosts(posts: Post[]): PublicPost[] {
   return posts
-    .filter((p) => p.published)
+    .filter((p) => !p.deletedAt && p.published)
     .map((p) => ({ ...p.published!, id: p.id, publishedAt: p.publishedAt! }))
     .sort(
       (a, b) =>
@@ -76,7 +77,7 @@ export function validatePostAddress(
   if (
     others.some(
       (p) =>
-        p.id !== post.id &&
+        !p.deletedAt && p.id !== post.id &&
         JSON.stringify(p.address || postAddress(p.draft)) ===
           JSON.stringify(postAddress(content)),
     )
@@ -92,7 +93,7 @@ export function validatePostAddress(
 export function uniquePostSlug(content: PostContent, posts: Post[], id: string) {
   const original=content.slug;
   let slug=original,index=2;
-  while(posts.some(post=>post.id!==id&&JSON.stringify(post.address||postAddress(post.draft))===JSON.stringify(postAddress({...content,slug})))) {
+  while(posts.some(post=>!post.deletedAt&&post.id!==id&&JSON.stringify(post.address||postAddress(post.draft))===JSON.stringify(postAddress({...content,slug})))) {
     const suffix=`-${index++}`;slug=original.slice(0,80-suffix.length).replace(/-+$/,"")+suffix;
   }
   return slug;

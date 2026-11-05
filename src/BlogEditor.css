@@ -1,4 +1,11 @@
 .post-editor { min-width: 0; }
+.post-management-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 16px; margin: 16px 0; border-bottom: 1px solid var(--line); }
+.post-management-actions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.post-management-actions button { min-height: 44px; padding: 8px 12px; font-size: 14px; }
+.article-delete-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line); border-radius: 14px; color: inherit; }
+.article-delete-dialog::backdrop { background: #18392c66; }
+.article-delete-dialog p { overflow-wrap: anywhere; }
+.article-delete-dialog button { min-height: 44px; font-size: 14px; }
 .post-editor > fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
 .post-editor .article-metadata { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px; }
 .post-editor .article-metadata > .field { flex: 1 1 220px; min-width: 0; margin: 0; }

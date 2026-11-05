@@ -34,6 +34,7 @@ try {
     await page.goto(`${origin}/?tab=blog&shop=${shop.id}&lang=${language}`);
     await page.waitForLoadState('networkidle');
     const title = `Fast draft ${language} ${width}`;
+    await page.getByRole('combobox', { name: new RegExp(label('記事の種類')) }).selectOption(width === 390 ? 'announcements' : 'blogs');
     await page.getByLabel(label('タイトル'), { exact: true }).fill(title);
     await page.getByRole('textbox', { name: label('記事の本文'), exact: true }).fill('A draft with no generated introduction.');
     const before = requests.length;
@@ -77,8 +78,40 @@ try {
     await expect(draft).toBeVisible();
     [post] = await store.records('post', shop);
     assert.equal(post.draft.body, 'Saved after opening the latest version.');
+    const actions = page.getByRole('group', { name: label('記事の管理'), exact: true });
+    const deletion = page.getByRole('dialog', { name: label('この記事を削除しますか？'), exact: true });
+    await expect(actions.getByRole('button', { name: label('非公開にする'), exact: true })).toBeVisible();
+    await actions.getByRole('button', { name: label('削除する'), exact: true }).click();
+    await expect(deletion).toContainText(externalTitle);
+    await expect(deletion.getByRole('button', { name: label('やめる'), exact: true })).toBeFocused();
+    await deletion.getByRole('button', { name: label('やめる'), exact: true }).click();
+    await draft.getByRole('button', { name: label('編集に戻る'), exact: true }).click();
+    await body.fill('Keep these unsaved edits when taking the article offline.');
+    await actions.getByRole('button', { name: label('非公開にする'), exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: label('記事を非公開にしました。下書きと履歴は残っています。') })).toBeVisible();
+    await expect(body).toHaveValue('Keep these unsaved edits when taking the article offline.');
+    await expect(actions.getByRole('button', { name: label('非公開にする'), exact: true })).toHaveCount(0);
+    assert.equal((await context.request.get(response.url())).status(), 404);
+    await actions.getByRole('button', { name: label('削除する'), exact: true }).click();
+    await expect(deletion).toBeVisible();
+    assert.ok(await deletion.evaluate(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
+    }), 'confirmation fits the viewport');
+    await page.screenshot({ path: `/tmp/article-delete-${language}-${width}.png`, fullPage: false });
+    await deletion.getByRole('button', { name: label('やめる'), exact: true }).click();
+    await page.getByRole('button', { name: label('下書き保存'), exact: true }).click();
+    await expect(draft).toBeVisible();
+    await actions.getByRole('button', { name: label('削除する'), exact: true }).click();
+    await deletion.getByRole('button', { name: label('削除する'), exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: label('記事を削除しました。') })).toBeVisible();
+    await expect(page.getByLabel(label('タイトル'), { exact: true })).toHaveValue('');
+    await expect(page.locator('.post-management-item')).toHaveCount(0);
+    [post] = await store.records('post', shop);
+    assert.ok(post.deletedAt); assert.equal(post.published, null);
+    assert.deepEqual(await (await context.request.get(`${origin}/api/shops/${shop.id}/posts`)).json(), []);
     assert.equal(modelCalls, 0); assert.deepEqual(errors, []);
     await context.close();
-    console.log(`${language} ${width}px: one-request draft save/publication, conflict list refresh, preserved edits and successful retry passed without metadata AI.`);
+    console.log(`${language} ${width}px: draft save/publication, conflicts, unpublish preserving edits, and confirmed deletion from both screens passed.`);
   }
 } finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await store.close(); }

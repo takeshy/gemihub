@@ -218,6 +218,7 @@ export async function syncPostFiles(
   draftId?: string,
 ) {
   if (!shop.google || !shop.published) return;
+  posts = posts.filter(post => !post.deletedAt);
   const { drive } = clients(token);
   const config = shop.published;
   const draft = draftId ? posts.find(post => post.id === draftId) : undefined;
@@ -302,6 +303,9 @@ export async function syncPostFiles(
       !(path in files)
     )
       await move(fileId, await folder("admin/posts/unpublished"));
+  for (const [path, fileId] of Object.entries(connection.artifactIds))
+    if (/^admin\/posts\/[^/]+\.md$/.test(path) && !(path in files))
+      await move(fileId, await folder("admin/posts/deleted"));
   const doc = documents(config, shop.history);
   await Promise.all([
     drive.files.update({

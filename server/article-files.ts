@@ -29,7 +29,7 @@ export async function articleFiles(
   shop: Shop,
   config: ShopConfig,
 ) {
-  const posts = await store.records<Post>("post", shop);
+  const posts = (await store.records<Post>("post", shop)).filter(post => !post.deletedAt);
   const generated = documents(config, shop.history);
   const texts = new Map<string, string>([
     ["spec.md", generated.spec],
