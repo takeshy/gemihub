@@ -13,6 +13,42 @@ export function Coupons({ shopId, config }: { shopId: string; config: ShopConfig
   const api = useApi(), base = `/api/shops/${shopId}/coupons`, currency = currencyOf(regionOf(config));
   const [campaigns, setCampaigns] = useState<CouponCampaign[]>(), [issued, setIssued] = useState(0), [rule, setRule] = useState<CouponRule>(defaultCoupon), [request, setRequest] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [requestId, setRequestId] = useState(createRequestId);
+  const [proposing, setProposing] = useState(false), [proposalError, setProposalError] = useState("");
+  const proposalRequest = useRef<AbortController | null>(null);
+  function cancelProposal() {
+    const controller = proposalRequest.current;
+    proposalRequest.current = null;
+    controller?.abort();
+    setProposing(false);
+  }
+  useEffect(() => {
+    setProposing(false); setProposalError("");
+    return () => { proposalRequest.current?.abort(); proposalRequest.current = null; };
+  }, [shopId]);
+  async function propose() {
+    if (proposalRequest.current || busy || !request.trim()) return;
+    const controller = new AbortController();
+    proposalRequest.current = controller;
+    setProposing(true); setProposalError(""); setError(""); setNotice("");
+    // The browser also bounds the entire request, including transport and JSON parsing.
+    const timer = setTimeout(() => {
+      if (proposalRequest.current !== controller) return;
+      cancelProposal();
+      setProposalError(tr("クーポン案の作成が時間切れになりました。もう一度試すか、下の項目から手入力で作成してください。"));
+    }, 35000);
+    try {
+      const result = await api<{ rule: CouponRule | null; question: string }>(`${base}/propose`, { request }, { signal: controller.signal });
+      if (proposalRequest.current !== controller) return;
+      if (!result.rule) { setNotice(result.question); return; }
+      setRule(couponRuleSchema.parse(result.rule)); setRequestId(createRequestId());
+      setNotice(tr("AIの案を下の項目で確認・編集してください。まだ配布は有効になっていません。"));
+    } catch (e) {
+      if (proposalRequest.current === controller) setProposalError(e instanceof Error ? e.message : tr("操作できませんでした"));
+    } finally {
+      clearTimeout(timer);
+      if (proposalRequest.current === controller) { proposalRequest.current = null; setProposing(false); }
+    }
+  }
   const [customers,setCustomers] = useState<{email:string;name:string}[]>([]);
   const load = async () => { const result = await api<{ campaigns: CouponCampaign[]; issued: number; customers?: {email:string;name:string}[] }>(base); setCampaigns(result.campaigns); setIssued(result.issued); setCustomers(result.customers || []); };
   const run = async (fn: () => Promise<void>) => { setError(""); setNotice(""); setBusy(true); try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : tr("操作できませんでした")); } finally { setBusy(false); } };
@@ -24,9 +60,9 @@ export function Coupons({ shopId, config }: { shopId: string; config: ShopConfig
   const issues = couponRuleIssues(rule);
   useEffect(() => { if (focusVersion) { heading.current?.focus(); heading.current?.scrollIntoView({ block: "start" }); } }, [mode, focusVersion]);
   useEffect(() => { if (notice) { feedback.current?.focus(); feedback.current?.scrollIntoView({ block: "nearest" }); } }, [notice]);
-  function show(next: typeof mode) { setError(""); setNotice(""); setMode(next); setFocusVersion(v => v + 1); }
+  function show(next: typeof mode) { cancelProposal(); setProposalError(""); setError(""); setNotice(""); setMode(next); setFocusVersion(v => v + 1); }
   function create() { setRule(defaultCoupon()); setRequest(""); setRequestId(createRequestId()); show("create"); }
-  function change(value: Partial<CouponRule>) { setRule(current => ({ ...current, ...value })); setRequestId(createRequestId()); setNotice(""); }
+  function change(value: Partial<CouponRule>) { cancelProposal(); setProposalError(""); setRule(current => ({ ...current, ...value })); setRequestId(createRequestId()); setNotice(""); }
 
   return <section className="panel coupon-management">
     <h2>{tr("クーポン")}</h2>
@@ -44,11 +80,16 @@ export function Coupons({ shopId, config }: { shopId: string; config: ShopConfig
     <div className="coupon-templates"><span>{tr("用途からはじめる")}</span>{couponTemplateIds.map(template => <button type="button" key={template} disabled={busy} onClick={() => change(couponTemplate(template, dateIn(new Date(), regionOf(config).timeZone)))}>{couponTemplateLabel(template)}</button>)}</div>
     <fieldset disabled={busy}>
       <legend>{tr("AIにクーポンを依頼")}</legend>
-      <label className="field"><span>{tr("作りたいクーポン")}</span><textarea value={request} onChange={e => setRequest(e.target.value)} placeholder={tr("例：誕生日月の会員に毎月1日9時に20%引き、30日間有効。来店5回ごとに500円引き。11月10日の一周年に会員全員へ10%引き。")}/></label>
-      <button type="button" disabled={!request.trim()} onClick={() => void run(async () => { const result = await api<{ rule: CouponRule | null; question: string }>(`${base}/propose`, { request }); if (!result.rule) { setNotice(result.question); return; } setRule(result.rule); setRequestId(createRequestId()); setNotice(tr("AIの案を下の項目で確認・編集してください。まだ配布は有効になっていません。")); })}>{tr("クーポン案を作る")}</button>
+      <label className="field"><span>{tr("作りたいクーポン")}</span><textarea value={request} maxLength={4000} onChange={e => { cancelProposal(); setProposalError(""); setRequest(e.target.value); }} placeholder={tr("例：誕生日月の会員に毎月1日9時に20%引き、30日間有効。来店5回ごとに500円引き。11月10日の一周年に会員全員へ10%引き。")}/></label>
+      <button type="button" disabled={proposing || !request.trim()} onClick={() => void propose()}>{tr("クーポン案を作る")}</button>
+      {proposing && <div className="coupon-proposal-progress">
+        <p role="status"><span className="image-upload-spinner" aria-hidden="true"/>{tr("AIがクーポン案を作成しています…（最大35秒）")}</p>
+        <button type="button" onClick={() => { cancelProposal(); setNotice(tr("クーポン案の作成を中止しました。")); }}>{tr("作成を中止")}</button>
+      </div>}
+      {proposalError && <div role="alert" className="alert">{proposalError}<button type="button" disabled={!request.trim()} onClick={() => void propose()}>{tr("もう一度試す")}</button></div>}
     </fieldset>
     <form onSubmit={e => {
-      e.preventDefault(); if (saving.current) return;
+      e.preventDefault(); if (saving.current || proposalRequest.current) return;
       void run(async () => {
         const result = couponRuleSchema.safeParse(rule);
         if (!result.success) throw new Error(tr("クーポンの入力内容を確認してください"));
@@ -82,7 +123,7 @@ export function Coupons({ shopId, config }: { shopId: string; config: ShopConfig
         {rule.schedule.type === "once" && <label className="field"><span>{tr("配布日")}</span><DateInput aria-label={tr("配布日")} value={rule.schedule.date} onValueChange={date => { if (rule.schedule.type === "once") change({ schedule: { ...rule.schedule, date } }); }}/></label>}
         {(rule.schedule.type === "once" || rule.schedule.type === "monthly") && <label className="field"><span>{tr("配布時刻（店舗時間・時）")}</span><input type="number" min={0} max={23} required value={rule.schedule.hour} onChange={e => { if (rule.schedule.type === "once" || rule.schedule.type === "monthly") change({ schedule: { ...rule.schedule, hour: Number(e.target.value) } }); }}/></label>}
         <p className="small muted">{tr("来店回数は終了した有効な予約だけで計算します。取消・無断キャンセルは含みません。無断キャンセルの記録を待つため、予約終了の24時間後に来店として数えます。来店後のクーポンは次回以降に使えます。1予約に1枚、確定後はキャンセルしても再利用できません。")}</p>
-        <button type="submit" disabled={issues.length > 0} className="primary">{tr("この内容で自動配布を有効にする")}</button>
+        <button type="submit" disabled={issues.length > 0 || proposing} className="primary">{tr("この内容で自動配布を有効にする")}</button>
       </fieldset>
     </form>
     </section>}

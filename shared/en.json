@@ -3255,5 +3255,10 @@
   "空き通知 → 希望の日時に空きやお得な空き枠が出たら、登録したお客様へメール": "Opening alerts → email customers who registered when a time or discounted appointment opens in their requested range",
   "空き時間が出ない場合は別の日を選んでください。休業日や満枠、受付期限を過ぎた時間は予約できません。希望の日時が埋まっているときは「希望の時間が空いたら知らせる」から登録すると、空きやお得な空き枠が出た時にメールでお知らせします。": "If no times appear, choose another date. Closures, fully booked slots, and times past the booking deadline are unavailable. If your preferred time is full, use Tell me when a time opens up and we'll email you when a time or discounted appointment opens.",
   "開始": "Start",
-  "終了": "End"
+  "終了": "End",
+  "クーポン案の作成が時間切れになりました。もう一度試すか、下の項目から手入力で作成してください。": "The coupon proposal timed out. Try again, or create it manually using the fields below.",
+  "AIがクーポン案を作成しています…（最大35秒）": "AI is creating a coupon proposal… (up to 35 seconds)",
+  "クーポン案の作成を中止しました。": "Coupon proposal cancelled.",
+  "作成を中止": "Cancel generation",
+  "もう一度試す": "Try again"
 }

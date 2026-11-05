@@ -31,13 +31,20 @@ const unavailable = (message: string) => Object.assign(new Error(message), { sta
 async function withDeadline<T>(timeoutMs: number | undefined, run: (signal?: AbortSignal) => Promise<T>): Promise<T> {
   if (!timeoutMs) return run();
   for (let attempt = 0; ; attempt++) {
-    const signal = AbortSignal.timeout(timeoutMs);
-    try { return await run(signal); }
-    catch (error) {
+    const controller = new AbortController(), signal = controller.signal;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // SDK work such as credential lookup may not observe the signal.
+      // Enforce the deadline ourselves as well as asking the provider to abort.
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(signal.reason); }, timeoutMs);
+      });
+      return await Promise.race([run(signal), deadline]);
+    } catch (error) {
       if (!signal.aborted) throw error;
       if (attempt >= 1) throw Object.assign(new Error(tr("AIの応答に時間がかかっています。少し時間をおいてお試しください。")), { status: 504 });
       console.warn(`Model call exceeded ${timeoutMs} ms; retrying once`);
-    }
+    } finally { clearTimeout(timer); }
   }
 }
 export function openAiStatus() {

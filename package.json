@@ -43,6 +43,7 @@
     "check:settings-recovery": "node --import tsx scripts/check-settings-recovery.mjs",
     "check:email-login": "node --import tsx scripts/check-email-login.mjs",
     "check:booking-complete": "node --import tsx scripts/check-booking-complete.mjs",
+    "check:coupon-proposal": "node --import tsx scripts/check-coupon-proposal.mjs",
     "check:coupons": "node --import tsx scripts/check-coupons.mjs",
     "check:booking-layout": "node --import tsx scripts/check-booking-layout.mjs",
     "check:booking-transfer": "node --import tsx scripts/check-booking-transfer.mjs",

@@ -2654,3 +2654,6 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
   .coupon-actions button { flex:1 1 120px; }
   .manual-coupon-selection > button { width:100%; }
 }
+
+.coupon-proposal-progress { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; margin-top:.75rem; }
+.coupon-proposal-progress p { display:flex; align-items:center; gap:.6rem; margin:0; }

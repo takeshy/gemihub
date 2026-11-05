@@ -92,12 +92,18 @@ test("AI produces a validated reviewable proposal and can ask for an anniversary
   try {
     const proposal = await proposeCoupon(shop, "birthday 20% monthly", async input => {
       assert.ok(input.schema.properties); assert.match(JSON.stringify(input.contents), /JPY/);
+      assert.equal(input.timeoutMs, 15000);
+      assert.doesNotMatch(JSON.stringify(input.schema), /"(?:minItems|maxItems)":/);
+      assert.match(JSON.stringify(input.schema), /At most 10 items/);
       return JSON.stringify({ rule: rule({ conditions: [{ type: "birthday_month" }], discount: { type: "percent", value: 20 }, schedule: { type: "monthly", day: 1, hour: 9 } }), question: "" });
     });
     assert.equal(proposal.rule!.discount.value, 20);
     assert.deepEqual(await store.records("couponCampaign", shop), [], "a proposal cannot enable or issue a campaign");
     const clarification = await proposeCoupon(shop, "anniversary", async () => JSON.stringify({ rule: null, question: "Which date?" })); assert.equal(clarification.rule, null);
     await assert.rejects(proposeCoupon(shop, "bad rule", async () => JSON.stringify({ rule: rule({ discount: { type: "percent", value: 200 } }), question: "" })));
+    for (const conditions of [[], Array.from({ length: 11 }, () => ({ type: "first_visit" }))]) {
+      await assert.rejects(proposeCoupon(shop, "invalid conditions", async () => JSON.stringify({ rule: rule({ conditions: conditions as CouponRule["conditions"] }), question: "" })));
+    }
   } finally { await store.close(); }
 });
 
