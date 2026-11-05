@@ -5,7 +5,7 @@ PayPal (Sandbox)
 
 PayPal REST API (OAuth 2.0): authenticates the server with the Sandbox app’s client ID and secret.
 Orders API v2 (create, approve, capture): customers prepay for a booking with PayPal. The server checks the amount before confirming the booking.
-Payments API v2 (refund, refund status): when a booking is cancelled, the customer is refunded automatically according to the shop’s refund policy.
+Payments API v2 (refund, refund status): when a booking is cancelled, the customer is refunded automatically according to the shop’s refund policy. For eligible cancellations, gemihub automatically offers the appointment again at a discount. A new customer pays through Orders v2, and after capture the same amount is refunded to the original customer through Payments v2. If nobody books by the deadline, the originally quoted refund is settled.
 All PayPal transactions in the demo run in the PayPal Sandbox with Sandbox business and buyer accounts.
 
 AI
@@ -28,7 +28,7 @@ The earlier hubwork shared the idea of creating web pages through conversation. 
 
 For the current gemihub, I used that idea as a starting point and developed a new product for small shops. It has no workflow to review: owners can create and update their sites through conversation and by marking up the screen.
 
-During the submission period, I implemented PayPal prepayment at booking and automatic refunds based on the cancellation policy, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, a CRM, and design version history with one-click rollback.
+During the submission period, I implemented PayPal prepayment at booking, automatic policy-based refunds, discounted rebooking after eligible cancellations with a larger refund when someone else books, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, a CRM, and design version history with one-click rollback.
 
 
 ## Which additional sponsor tool(s) did you use for this project?

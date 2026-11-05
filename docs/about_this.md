@@ -28,6 +28,27 @@ AI turns the owner's plain-language cancellation rules into a structured policy 
 - **Built for real money**: Every state transition is persisted before calling PayPal, using `PayPal-Request-Id` idempotency keys and a background reconciler to recover interrupted captures or pending refunds without double-charging.
 - **Prepayment for no-shows**: When prepayment is enabled, customers pay the full booking amount upfront. Recording a no-show does not trigger a refund or an additional charge.
 
+### Cancel, and recover more
+
+**Cancel, and the appointment is offered again at a discount. If someone books it, your refund goes up.**
+
+When a customer cancels an eligible prepaid booking from My page, gemihub automatically offers the appointment again on the same shop's booking page. Before confirming, the customer sees the expected refund, the larger refund if someone else books, and the deadline. There is no separate listing step or price negotiation. The shop can enable or disable replacement bookings for each service.
+
+A different customer books the discounted appointment and pays through PayPal. Once that payment is confirmed, the original customer receives the same amount as a refund, and the booking passes to the new customer. The original customer's identity and messages remain private.
+
+With the default cancellation policy:
+
+| Time before visit | Standard cancellation refund | New customer's price | You recover | Increase |
+| --- | --- | --- | --- | --- |
+| 24 h or more | 100% | Not offered — full refund | 100% | — |
+| 24–12 h | 70% | 10% off | 90% | +20 percentage points |
+| 12–1 h | 40% | 30% off | 70% | +30 percentage points |
+| Under 1 h | 0% | Half price | 50% | +50 percentage points |
+
+Percentages use the current customer's actual payment and the policy saved with the booking; shops can set their own refund tiers. The final offer closes 10 minutes before the visit. If nobody books by the deadline, gemihub settles the expected refund shown when the cancellation was accepted, without reducing it as time passes. Settlement ends the request; it is not automatically offered again in the next tier. The customer can undo the cancellation and restore the booking only before the deadline and before someone else starts paying.
+
+In the video, a **$55** appointment has a **$38.50** expected refund (70%). It is offered again at **10% off**, a different customer pays **$49.50**, and the original customer's refund increases to **$49.50** (90%). The example uses PayPal Sandbox; no real money moves.
+
 ### For customers and daily operations
 - **Seamless booking**: Availability is calculated from business hours, staff shifts, service durations, add-ons, and **Google Calendar** busy times. Customers sign in via Google or passwordless email links.
 - **Built-in CRM & Workspace integration**: Owners manage bookings, inquiries, and customer histories, with confirmation emails sent directly from their own **Gmail**. Full **Japanese & English** UI with **JPY & USD** support.

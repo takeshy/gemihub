@@ -33,7 +33,7 @@ A booking and shop management system for small independent businesses and salons
 - **Add-on services:** Configure removal or care as an optional addition to selected services. Prices and durations are combined for availability, booking and payment; options in the same group are mutually exclusive.
 - **Weekday opening hours:** Keep normal hours and override individual weekdays, such as closing at 19:00 normally and 21:00 on Tuesdays and Fridays.
 - **PayPal prepayment & automated refunds:** Accept PayPal payments at booking time and automatically calculate refunds upon cancellation based on your shop's policy.
-- **Cancellations and refunds:** Cancelling an eligible paid booking automatically accepts a replacement reservation. If someone books, the refund increases; before payment starts and before the deadline, the customer can undo the cancellation. New customers see discounted appointments they can book at the displayed price.
+- **Cancellations and refunds:** Cancel, and an eligible prepaid appointment is automatically offered again at a discount. If someone books, the refund increases; before payment starts and before the deadline, the customer can undo the cancellation. New customers see discounted appointments they can book at the displayed price.
 - **Shop controls:** Enable or disable replacement bookings per service under **Settings → Services and prices** (default on). The Booking rules AI can also propose refund-rate changes for review and saving. Default refunds are 100% from 24 hours, 70% from 12 hours, 40% from one hour, then 0%. Available discounts are 10%, 30% and 50%; expired requests settle without relisting. See the illustrated steps at `/manual#guide-cancellations` in the app.
 
 ### 3. Daily Operations & CRM
@@ -41,6 +41,25 @@ A booking and shop management system for small independent businesses and salons
 - **Customer records (CRM):** Automatically aggregate visit counts and spending by customer, and attach private operator notes and photos.
 - **Bilingual interface:** Switch between Japanese and English across management screens, customer pages, and the illustrated manual.
 - **JP/US support:** Choose your shop's currency and time zone independently of the interface language. See the [language and region guide](docs/i18n.md).
+
+---
+
+## Cancel, and recover more
+
+Cancel, and the appointment is offered again at a discount. If someone books it, your refund goes up. Customers see the expected refund, the larger refund if someone books, and the deadline before confirming. Another customer books through the same shop's booking page and pays with PayPal.
+
+With the default cancellation policy:
+
+| Time before visit | Standard cancellation refund | New customer's price | You recover | Increase |
+| --- | --- | --- | --- | --- |
+| 24 h or more | 100% | Not offered — full refund | 100% | — |
+| 24–12 h | 70% | 10% off | 90% | +20 percentage points |
+| 12–1 h | 40% | 30% off | 70% | +30 percentage points |
+| Under 1 h | 0% | Half price | 50% | +50 percentage points |
+
+The higher refund requires another customer to book and pay. If nobody books by the deadline, the expected refund shown at cancellation is settled without reducing it as time passes; the request then ends. The final offer closes 10 minutes before the visit. Customers can undo cancellation only before the deadline and before someone else starts paying.
+
+This applies to eligible PayPal-prepaid bookings and services that allow replacement bookings. Percentages use the customer's actual payment and the policy saved with the booking; custom policies can differ. For example, a $55 booking with a $38.50 expected refund returns $49.50 if someone books at 10% off. See the [project description](docs/about_this.md#cancel-and-recover-more) for the full flow.
 
 ---
 
