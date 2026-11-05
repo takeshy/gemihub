@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { ShopConfig } from "./domain.ts";
 import { defaultAppearance, standardTheme, themeHtmlKey } from "../shared/theme-editing.ts";
 import type { Theme } from "../shared/presentation.ts";
+import { stableJson } from "../shared/stable-json.ts";
 export const defaultHeader = { title: "", subtitle: "", imageUrl: "", showDetails: true, showNavigation: true };
 export const defaultFooter = { text: "", alignment: "center" as const };
 export const headerSchema = z.object({ title: z.string().max(100), subtitle: z.string().max(1500), imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)]), imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(), showDetails: z.boolean(), showNavigation: z.boolean() });
@@ -28,7 +29,7 @@ export const releaseScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("part"), part: z.enum(["header", "footer"]) }),
 ]);
 export type ReleaseScope = z.infer<typeof releaseScopeSchema>;
-export const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+export const same = (a: unknown, b: unknown) => stableJson(a) === stableJson(b);
 export const pageValue = (config: ShopConfig | null, id: string) => config?.pages.find(p => p.id === id) || null;
 export function partValue(config: Pick<ShopConfig, "header" | "footer" | "appearance">, part: "header" | "footer") {
   return { ...config[part], themeHtml: (config.appearance?.theme || standardTheme)[themeHtmlKey(part)] };

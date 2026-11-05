@@ -3,10 +3,11 @@ import { pageValue, scopedSource, replacePart, replaceShared, type ReleaseScope 
 import { sha256 } from "@noble/hashes/sha2.js";
 import type { EditorIndex } from "../server/editor-index-schema";
 import type { LocalDraft } from "./local-preview";
+import { stableJson } from "../shared/stable-json";
 export type SyncStatus = "unfetched" | "synced" | "local" | "remote" | "conflict";
 export async function fingerprint(value: unknown) {
   // Match the server's SHA-256 without requiring a secure browser context.
-  const bytes = sha256(new TextEncoder().encode(JSON.stringify(value)));
+  const bytes = sha256(new TextEncoder().encode(stableJson(value)));
   return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 }
 export async function syncStatus(draft: LocalDraft, index: EditorIndex, scope: ReleaseScope): Promise<SyncStatus> {

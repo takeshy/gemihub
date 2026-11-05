@@ -8,7 +8,7 @@ import { syncConfig, encrypt } from "../server/google.ts";
 import { contentHash, editorIndex } from "../server/editor-sync.ts";
 import { fingerprint, syncStatus, replaceScope } from "../src/editor-sync.ts";
 import { sampleFixtures, type LocalDraft } from "../src/local-preview.ts";
-import { pageValue, type ShopPage } from "../server/pages.ts";
+import { pageValue, scopedSource, same, type ShopPage } from "../server/pages.ts";
 import { createApp } from "../server/app.ts";
 import { Store, type Shop } from "../server/store.ts";
 import { basicSchema } from "../server/live-settings.ts";
@@ -34,6 +34,22 @@ test("editor fingerprints match server SHA-256 and sync still detects conflicts 
     if (previous) Object.defineProperty(globalThis.crypto, "subtle", previous);
     else Reflect.deleteProperty(globalThis.crypto, "subtle");
   }
+});
+
+test("a resolved conflict is no longer a conflict when the remote config has a different key order", async () => {
+  const scope = { kind: "shared" as const };
+  const base = structuredClone(sample);
+  const local = { ...structuredClone(base), description: "ローカルの編集" };
+  // Stored configs are not in schema key order; the browser's copy is re-parsed by the schema.
+  const remote: ShopConfig = JSON.parse(JSON.stringify({ ...base, description: "リモートの編集" }));
+  const draft: LocalDraft = { config: local, source: structuredClone(base), base: 0, fixtures: sampleFixtures(local) };
+  const index = editorIndex(remote, 1);
+  assert.equal(await syncStatus(draft, index, scope), "conflict");
+  const remoteValue = JSON.parse(JSON.stringify(scopedSource(remote, scope)));
+  const source = replaceScope(draft.source!, scope, remoteValue);
+  assert.equal(await syncStatus({ ...draft, source, config: replaceScope(draft.config, scope, scopedSource(local, scope)) }, index, scope), "local", "keeping the local edit can be released");
+  assert.equal(await syncStatus({ ...draft, source, config: replaceScope(draft.config, scope, remoteValue) }, index, scope), "synced", "taking the remote edit is in sync");
+  assert.ok(same(scopedSource(source, scope), scopedSource(remote, scope)));
 });
 
 test("sync status distinguishes unfetched, remote, local and edit/delete conflicts", async () => {
