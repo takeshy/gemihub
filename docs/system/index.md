@@ -9,7 +9,7 @@ This **OKF v0.2 bundle** explains how gemihub works for every shop. It describes
 # Chapters
 
 - [Booking and availability](./booking.md) - Customer sign-in and registration, menu and staff selection, nominated and unassigned staff, how open slots are calculated from hours, holidays, staff shifts, existing bookings and connected Google Calendars, and double-booking prevention.
-- [Payments, cancellation and refunds](./payments.md) - PayPal prepayment at booking, server-decided amounts, refund tiers fixed at booking time, customer and shop cancellations, rounding, no-shows, refund statuses and cancellation without prepayment.
+- [Payments, cancellation and refunds](./payments.md) - PayPal prepayment at booking, server-decided amounts, refund tiers fixed at booking time, customer and shop cancellations, rounding, no-shows, refund statuses, cancellation without prepayment, and reading PayPal in Consult & ask with background alerts and owner-approved fixes.
 - [Shop settings and changes](./shop-settings.md) - What each setting in `spec.md` means, provisional and public publication, how changes are requested, planned, approved and published, and how `history.md` records them.
 - [Customers, inquiries, staff and notifications](./operations.md) - Customer records and notes, inquiries and replies, staff accounts and Calendar connection, and the emails customers and the shop receive.
 - [Data and storage](./data.md) - Where bookings, settings, files, specifications and history are kept, what the server keeps, and how owners export JSON or CSV.

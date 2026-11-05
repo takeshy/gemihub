@@ -43,3 +43,20 @@ Customers cancel from My page. Eligible paid bookings automatically accept a rep
 Replacement notices and a shop-history intent commit with a delivery acknowledgement. The history intent is applied under the configuration lock with its own atomic acknowledgement, so payment operations never wait for Drive, concurrent publication cannot overwrite the history, and retries never append it twice.
 
 Each final cancellation is fixed (time, actor, reason, percentage, amount) before PayPal is called and uses one refund request ID, so retries never refund twice. Statuses shown to the shop and customer: completed, pending, processing (retrying automatically), awaiting funds in the shop's PayPal balance, not required (zero refund), and needs review. The server checks unfinished payments and refunds every minute; uncertain results older than five hours stop for the shop to review.
+
+# PayPal checks, alerts and proposals
+
+Consult & ask can read the shop's PayPal records. For a question about payments, refunds or transactions (for example "Did the $49.50 refund go through?" or "Are any refunds stuck?"), the research step uses read-only tools: find a booking's order, capture and refund IDs in the shop's ledger, read an order, capture or refund from PayPal by ID, and search the shop's PayPal transactions for up to 31 days. Only IDs that appear in this shop's ledger can be read; other shops' IDs are refused before PayPal is called. Results contain status, amount, IDs and times only, never customer email addresses, and amounts use normal units (USD 49.50, not cents). When the ledger and PayPal disagree, the answer states the difference and cites the PayPal record (for example `paypal:refund:<ID>`). If a record cannot be read, the answer says so instead of guessing. The AI has no tool that writes to PayPal.
+
+A background check runs every 60 minutes and compares the ledger with PayPal. It reports, by severity:
+
+- **Needs review** (urgent): a refund in `manual_review`.
+- **Payment not confirmed** (urgent): a capture still in progress after 15 minutes, or a capture whose result is unknown.
+- **Ledger and PayPal disagree** (urgent): PayPal reports a different state from the ledger. Only open refunds and payments active in the last 7 days are checked against PayPal (at most 30). `REFUNDED` and `PARTIALLY_REFUNDED` captures are treated as expected.
+- **Refund stalled** (attention): a refund still `retrying` or `pending` after 2 hours.
+- **Awaiting funds** (attention): a refund waiting for the shop's PayPal balance.
+- **Unsold discounted slot** (check): a replacement-booking offer with 2 hours or less before its deadline.
+
+Detection follows these fixed rules; the AI only writes a 2–4 sentence summary of what was found. Owners see the list under **Needs attention** in Consult & ask and can run **Check now** at any time. Urgent items are emailed when they appear or change; the rest are sent once a day as a digest at the hour chosen in **Notification settings** (9:00 in the shop's time zone by default). Email can be turned off there, and the same item is not sent again until its state changes. Judge shops never send email.
+
+Items that can be fixed carry a proposal, and an answer about a booking shows the proposals for the bookings and PayPal IDs it mentions (otherwise up to five, most urgent first). Proposals are limited to: retry a refund (`retrying`/`pending`), re-sync the state from PayPal (on a disagreement), complete a manual review when PayPal shows the refund finished, and close an unsold discounted slot now at the refund quoted at cancellation. The server decides every operation and amount; the AI cannot propose a new refund or change an amount. Only the owner can approve. Before running, the server takes the booking lock, reads the booking from PayPal again and refuses if anything changed since the proposal, returning the current state. Retries reuse the original PayPal request ID, so a refund is never sent twice. Each executed proposal is recorded in `history.md` and the operation log.
