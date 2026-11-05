@@ -38,6 +38,15 @@ const transactionSearchSchema = z.object({
 });
 /** One payment event, reduced to fields that are useful to the shop owner. */
 export type PayPalTransaction = z.infer<typeof transactionInfoSchema>;
+/** Payment refunds/reversals, excluding fee refunds and bank-transfer reversals.
+ * https://developer.paypal.com/reports/reference/t-codes/
+ */
+export function isRefundTransaction(row: PayPalTransaction) {
+  const code = row.transaction_event_code?.toUpperCase();
+  return ["T1106", "T1107", "T1115", "T1120"].includes(code || "") ||
+    row.paypal_reference_id_type?.toUpperCase() === "REFUND" || /REFUND|REVERSAL/.test(code || "") ||
+    (!code && Number(row.transaction_amount?.value) < 0);
+}
 export interface PayPalTransactionQuery { start: string; end: string; type?: "all" | "payment" | "refund" }
 export interface PaymentGateway {
   environment: PayPalEnvironment;
@@ -117,7 +126,7 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
       }
       if (type === "all") return rows;
       return rows.filter(row => {
-        const refund = row.paypal_reference_id_type?.toUpperCase() === "REFUND" || /REFUND|REVERSAL/.test(row.transaction_event_code || "");
+        const refund = isRefundTransaction(row);
         return type === "refund" ? refund : !refund;
       });
     },

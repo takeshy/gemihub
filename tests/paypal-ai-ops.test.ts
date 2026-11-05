@@ -1,15 +1,32 @@
-import { test } from "node:test";
+import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { Store } from "../server/store.ts";
+import { Store, bookingLockKey } from "../server/store.ts";
+import { createApp } from "../server/app.ts";
+import { digest } from "../server/auth.ts";
+import type { AddressInfo } from "node:net";
 import { sample, type Booking } from "../server/domain.ts";
 import { defaultRefundTiers } from "../server/payment-domain.ts";
 import type { Checkout } from "../server/payments.ts";
 import type { PaymentGateway, PayPalOrder, PayPalRefund, PayPalTransaction } from "../server/paypal.ts";
 import { paypalOps, relevantProposals } from "../server/paypal-ops.ts";
+import type { Transfer } from "../server/transfers.ts";
 
 process.env.DEMO_MODE = "true";
 
 const money = (value: number) => ({ currency_code: "JPY", value: String(value) });
+const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
+
+function opsFor(store: Store, gateway = fakeGateway()) {
+  return paypalOps({ store, gateway, reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid" });
+}
+function transferFixture(shopId: string, bookingId: string): Transfer {
+  return {
+    id: "transfer1", shopId, bookingId, seller: "alice@example.com", sellerName: "Alice", sellerCaptureId: "CAP1",
+    environment: "sandbox", currency: "JPY", basis: 4950, price: 2475, discountPercent: 50,
+    deadline: new Date(Date.now() + 30 * 60000).toISOString(), unsold: { percent: 0, amount: 0 },
+    policy: structuredClone(defaultRefundTiers), phase: "listed", createdAt: new Date().toISOString(), attempts: 0,
+  };
+}
 
 function fakeGateway(refundStatusValue: "PENDING" | "COMPLETED" = "PENDING", captureStatusValue = "COMPLETED"): PaymentGateway & { reads: string[] } {
   const reads: string[] = [];
@@ -199,4 +216,193 @@ test("manual review without a refund ID has no proposal, and consult proposals f
   const items = [proposal("p1", "booking-aaaaaaaa", "REFUND-AAAA"), proposal("p2", "booking-bbbbbbbb", "REFUND-BBBB")];
   assert.deepEqual(relevantProposals(items, ["What about REFUND-BBBB?"]).map(value => value.id), ["p2"]);
   assert.deepEqual(relevantProposals(items, ["Anything stuck?"]).map(value => value.id), ["p1", "p2"]);
+});
+
+test("cancellation and transfer refunds expose their real IDs and manual-review proposals", async () => {
+  const { store, shop, checkout, booking } = await setup();
+  const ops = opsFor(store);
+  for (const status of ["manual_review", "awaiting_funds", "pending"] as const) {
+    checkout.booking.payment!.cancellation!.status = status;
+    checkout.booking.transfers = [{
+      id: "sold-transfer", at: checkout.booking.payment!.cancellation!.at,
+      from: { customer: "previous@example.com", name: "Previous" }, to: { customer: booking.customer, name: booking.name },
+      price: 4950, currency: "JPY", discountPercent: 10,
+      previous: { orderId: "OLD_ORDER", captureId: "OLD_CAPTURE", amount: 5500 },
+      refund: { amount: 4950, status, requestId: "TRANSFER_REQ", refundId: "TRANSFER_REF" },
+    }];
+    await store.put("checkout", checkout.id, checkout);
+    const items = await ops.detect(shop, undefined, "none");
+    const refunds = items.filter(item => item.kind === (status === "pending" ? "refund_stalled" : status));
+    assert.deepEqual(refunds.map(item => item.paypalId).sort(), ["REF1", "TRANSFER_REF"]);
+    for (const item of refunds) {
+      assert.equal(item.paypalKind, "refund");
+      assert.equal(item.proposal?.operation, status === "manual_review" ? "complete_manual_review" : "retry_refund");
+      assert.equal(item.proposal?.targetId, item.paypalId);
+    }
+  }
+  await store.close();
+});
+
+test("closing an unsold listing proposes its settlement refund, including zero, and invalidates changed amounts", async () => {
+  const { store, shop, booking } = await setup();
+  const transfer = transferFixture(shop.id, booking.id);
+  await store.put("transfer", transfer.id, transfer);
+  const ops = opsFor(store);
+  const first = (await ops.detect(shop, undefined, "none")).find(item => item.kind === "unsold_slot")!;
+  assert.equal(first.amount, 0);
+  assert.equal(first.proposal?.amount, 0, "the resale price 2475 is never offered as a zero-refund settlement");
+  transfer.unsold = { percent: 40, amount: 1980 };
+  await store.put("transfer", transfer.id, transfer);
+  const changed = (await ops.detect(shop, undefined, "none")).find(item => item.kind === "unsold_slot")!;
+  assert.equal(changed.proposal?.amount, 1980);
+  assert.notEqual(changed.fingerprint, first.fingerprint);
+  await store.close();
+});
+
+test("pending USD checkout prices are normalized before ledger totals and approval cards", async () => {
+  const { store, shop, checkout } = await setup();
+  delete checkout.booking.payment;
+  checkout.currency = "USD";
+  checkout.booking.price = 49.50;
+  checkout.phase = "capturing";
+  checkout.captureAttemptedAt = Date.now() - 3600000;
+  await store.put("checkout", checkout.id, checkout);
+  const ops = opsFor(store), tools = (await ops.toolsFor(shop))!;
+  const result = (await tools.invoke("ledger_find_booking_payments", { bookingId: checkout.booking.id })).result as { rows: { amount: number }[]; totals: { payment: number }[] };
+  assert.equal(result.rows[0].amount, 49.5);
+  assert.equal(result.totals[0].payment, 49.5);
+  const item = (await ops.detect(shop, undefined, "none")).find(item => item.kind === "capture_stalled")!;
+  assert.equal(item.currency, "USD");
+  assert.equal(item.proposal?.amount, 4950);
+  checkout.currency = "JPY"; checkout.booking.price = 4950;
+  await store.put("checkout", checkout.id, checkout);
+  assert.equal((await ops.detect(shop, undefined, "none")).find(item => item.kind === "capture_stalled")?.amount, 4950);
+  await store.close();
+});
+
+test("transfer buyer stalls and review states alert and resync through the transfer reconciler", async () => {
+  const { store, shop, booking } = await setup();
+  const transfer = transferFixture(shop.id, booking.id), now = Date.now();
+  transfer.buyer = { id: "buyer1", customer: "bob@example.com", name: "Bob", requestKey: "buy1", phase: "capturing", createdAt: now - 6 * 3600000, captureAttemptedAt: now - 6 * 3600000, expires: now - 5 * 3600000, orderId: "BUY_ORDER", returnUrl: "", cancelUrl: "", review: true };
+  const ops = paypalOps({ store, gateway: fakeGateway(),
+    reconcile: async () => { transfer.buyer!.phase = "failed"; transfer.buyer!.review = false; await store.put("transfer", transfer.id, transfer); },
+    closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, appOrigin: () => "https://shop.invalid",
+  });
+  for (const [phase, age, review, expected] of [
+    ["capturing", 6 * 3600000, true, true], ["captured", 3600000, false, true],
+    ["capturing", 60000, false, false], ["creating", 60000, true, true], ["awaiting_approval", 3600000, false, false],
+  ] as const) {
+    Object.assign(transfer.buyer, { phase, review, captureAttemptedAt: now - age });
+    await store.put("transfer", transfer.id, transfer);
+    const item = (await ops.detect(shop, new Date(now), "none")).find(item => item.paypalId === "BUY_ORDER");
+    assert.equal(!!item, expected, `${phase}/${age}/${review}`);
+    if (item) { assert.equal(item.proposal?.operation, "resync"); assert.equal(item.proposal?.targetId, transfer.id); assert.equal(item.amount, transfer.price); }
+  }
+  Object.assign(transfer.buyer, { phase: "capturing", review: true });
+  await store.put("transfer", transfer.id, transfer);
+  const state = await ops.check(shop, { force: true, live: "none" });
+  const item = state.items.find(item => item.paypalId === "BUY_ORDER")!;
+  const result = await ops.execute(shop, { proposalId: item.proposal!.id, alertId: item.id, fingerprint: item.fingerprint }, shop.owner);
+  assert.equal(result.ok, true);
+  assert.ok(!result.state!.items.some(item => item.paypalId === "BUY_ORDER"));
+  await store.close();
+});
+
+test("ledger-only consults never postpone live verification or urgent notification", async () => {
+  const { store, shop, checkout } = await setup();
+  const gateway = fakeGateway("COMPLETED", "REVERSED"); let notices = 0;
+  const ops = paypalOps({ store, gateway, reconcile: async () => {}, closeTransfer: async () => {}, sync: async () => {}, recordHistory: async () => {}, notifyOwner: async () => { notices++; }, appOrigin: () => "https://shop.invalid" });
+  await ops.check(shop, { force: true, live: "none", notify: false });
+  assert.deepEqual(gateway.reads, []);
+  assert.equal(await store.get("paypalAlertRun", shop.id), undefined);
+  await ops.check(shop, { notify: true });
+  assert.ok(gateway.reads.length > 0); assert.equal(notices, 1);
+  const schedule = await store.get("paypalAlertRun", shop.id);
+  gateway.reads.length = 0;
+  await ops.check(shop, { force: true, live: "none", notify: false });
+  assert.deepEqual(await store.get("paypalAlertRun", shop.id), schedule);
+  await ops.check(shop, { notify: true });
+  assert.deepEqual(gateway.reads, [], "a completed periodic check still throttles the next one");
+  await store.put("paypalAlertRun", shop.id, { shopId: shop.id, checkedAt: new Date(Date.now() - 2 * 3600000).toISOString() });
+  checkout.booking.payment!.cancellation!.status = "manual_review";
+  await store.put("checkout", checkout.id, checkout);
+  await ops.check(shop, { force: true, live: "none", notify: false });
+  await ops.check(shop, { notify: true });
+  assert.ok(gateway.reads.length > 0); assert.equal(notices, 2, "a new urgent finding is notified even immediately after a consult");
+  await store.close();
+});
+
+test("notification settings wait for shop updates and preserve the latest revision and publication", async () => {
+  const { store, shop } = await setup();
+  const entered = deferred(), release = deferred();
+  const writer = store.locked(shop.id, async () => {
+    const latest = (await store.shop(shop.id))!; entered.resolve(); await release.promise;
+    latest.revision += 1; latest.published!.name = "New publication";
+    await store.saveShop(latest);
+  });
+  await entered.promise;
+  const settings = opsFor(store).updateSettings(shop, { notify: false, digestHour: 17 });
+  await new Promise(resolve => setImmediate(resolve)); release.resolve();
+  await Promise.all([writer, settings]);
+  const latest = (await store.shop(shop.id))!;
+  assert.equal(latest.revision, shop.revision + 1);
+  assert.equal(latest.published!.name, "New publication");
+  assert.deepEqual(latest.paypalOps, { notify: false, digestHour: 17 });
+  await store.close();
+});
+
+test("real refund event codes contribute to positive refund totals for this shop only", async () => {
+  const { store, shop } = await setup();
+  const gateway = fakeGateway();
+  gateway.transactions = async () => [
+    { transaction_id: "CAP1", transaction_event_code: "T0006", transaction_amount: money(4950) },
+    { transaction_id: "REF1", paypal_reference_id: "CAP1", paypal_reference_id_type: "TXN", transaction_event_code: "T1107", transaction_amount: money(-2000) },
+    { transaction_id: "AUTH_REF", paypal_reference_id: "CAP1", paypal_reference_id_type: "TXN", transaction_event_code: "T1120", transaction_amount: money(500) },
+    { transaction_id: "FOREIGN_REF", paypal_reference_id: "FOREIGN_CAP", paypal_reference_id_type: "TXN", transaction_event_code: "T1107", transaction_amount: money(-99999) },
+  ];
+  const tools = (await opsFor(store, gateway).toolsFor(shop))!;
+  const result = (await tools.invoke("paypal_list_transactions", { type: "all" })).result as { total: number; totals: { currency: string; payment: number; refund: number }[] };
+  assert.equal(result.total, 3);
+  assert.deepEqual(result.totals, [{ currency: "JPY", payment: 4950, refund: 2500 }]);
+  await store.close();
+});
+
+test("HTTP proposal execution releases its booking lock before applying durable shop history", { timeout: 10000 }, async t => {
+  const { store, shop } = await setup();
+  const gateway = fakeGateway();
+  const alert = (await opsFor(store, gateway).check(shop, { force: true, live: "none" })).items.find(item => item.kind === "refund_stalled")!;
+  await store.put("session", digest("ops-owner"), { user: { email: shop.owner, role: "owner", name: "Owner", shopId: shop.id }, expires: Date.now() + 600000 });
+  const server = createApp(store, undefined, undefined, undefined, gateway);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  process.env.APP_ORIGIN = origin;
+  const acquired = deferred(), proceed = deferred(), shopHeld = deferred();
+  let executing = true;
+  const originalLocked = store.locked.bind(store);
+  const locked = mock.method(store, "locked", (id: string, action: () => Promise<unknown>) => originalLocked(id, async () => {
+    if (id === bookingLockKey(shop.id) && executing) { executing = false; acquired.resolve(); await proceed.promise; }
+    return action();
+  }));
+  t.after(async () => { proceed.resolve(); locked.mock.restore(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
+  const response = fetch(`${origin}/api/shops/${shop.id}/paypal/proposals/execute`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=ops-owner", "Content-Type": "application/json" }, body: JSON.stringify({ proposalId: alert.proposal!.id, alertId: alert.id, fingerprint: alert.fingerprint }) });
+  await acquired.promise;
+  const configuration = store.locked(shop.id, async () => {
+    shopHeld.resolve();
+    await store.locked(bookingLockKey(shop.id), async () => {});
+    const latest = (await store.shop(shop.id))!;
+    latest.revision++; await store.saveShop(latest);
+  });
+  await shopHeld.promise; proceed.resolve();
+  const result = await response;
+  assert.equal(result.status, 200);
+  await configuration;
+  const history = (await store.shop(shop.id))!.history.filter(entry => entry.summary.startsWith("PayPal"));
+  assert.equal(history.length, 1);
+  assert.match(history[0].request!, /owner@example.com/);
+  const pending = await store.entries<{ applied: boolean }>("paypalHistory", shop);
+  assert.equal(pending.length, 1); assert.equal(pending[0].value.applied, true);
+  // The normal retry path drains the same intent without appending history again.
+  const retry = await fetch(`${origin}/api/shops/${shop.id}/retry`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=ops-owner", "Content-Type": "application/json" }, body: "{}" });
+  assert.equal(retry.status, 200);
+  assert.equal((await store.shop(shop.id))!.history.filter(entry => entry.summary.startsWith("PayPal")).length, 1);
 });
