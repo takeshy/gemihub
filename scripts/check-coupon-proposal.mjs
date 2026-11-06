@@ -57,7 +57,7 @@ try {
       await expect(note).toBeEditable(); await expect(title).toBeEditable();
       await expect(actions.getByRole('button').first()).toBeEnabled();
     };
-    await note.fill('10% off for first-time customers');
+    await note.fill('10% off for first-time customers, valid 30 days');
     await title.fill('Keep my edits');
     await start(1);
     await proposal.evaluate(button => { button.click(); button.click(); });
@@ -65,7 +65,7 @@ try {
     await page.screenshot({ path: `tmp/coupon-proposal/pending-${language}-${width}.png`, fullPage: true });
     await progress.getByRole('button', { name: label('作成を中止'), exact: true }).click();
     await expect(progress).toHaveCount(0); await expect(proposal).toBeEnabled(); await expect(save).toBeEnabled();
-    await expect(note).toHaveValue('10% off for first-time customers');
+    await expect(note).toHaveValue('10% off for first-time customers, valid 30 days');
     assert.equal(await page.evaluate(() => window.couponRequests[0].signal.aborted), true);
     await start(2);
     await settle(0, response('Cancelled response'));
@@ -79,7 +79,7 @@ try {
     await page.clock.fastForward(35001);
     await expect(panel.getByRole('alert')).toContainText(label('クーポン案の作成が時間切れになりました。もう一度試すか、下の項目から手入力で作成してください。'));
     await expect(progress).toHaveCount(0); await expect(save).toBeEnabled();
-    await expect(note).toHaveValue('10% off for first-time customers');
+    await expect(note).toHaveValue('10% off for first-time customers, valid 30 days');
     await page.screenshot({ path: `tmp/coupon-proposal/timeout-${language}-${width}.png`, fullPage: true });
     await panel.getByRole('button', { name: label('もう一度試す'), exact: true }).click();
     await expect(progress).toBeVisible();
@@ -99,10 +99,13 @@ try {
     await expect(panel.locator('.coupon-campaigns')).toBeVisible();
     await expect(panel.locator('.coupon-feedback')).toHaveCount(0);
     await actions.getByRole('button', { name: label('新しく作る'), exact: true }).click();
-    await note.fill('10% off for first-time customers'); await start(7);
+    await note.fill('10% off for first-time customers, valid 30 days'); await start(7);
     await settle(6, response());
     await expect(title).toHaveValue('AI Welcome');
     await expect(form.getByLabel(label('割引の値'), { exact: true })).toHaveValue('10');
+    await expect(form.getByLabel(label('付与からの有効日数'), { exact: true })).toHaveValue('30');
+    await expect(form.getByLabel(label('配布条件 {0}').replace('{0}', '1'), { exact: true })).toHaveValue('first_visit');
+    await expect(form.getByLabel(label('付与計算のタイミング'), { exact: true })).toHaveValue('registration');
     await expect(save).toBeEnabled(); await expect(progress).toHaveCount(0);
     assert.equal((await store.records('couponCampaign', shop)).length, 0);
     assert.equal((await store.records('couponGrant', shop)).length, 0);
