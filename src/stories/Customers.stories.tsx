@@ -14,7 +14,6 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const List: Story = { name: "一覧・期間指定と自動集計", args: { scenario: "crm-list" } };
-export const Traffic: Story = { name: "匿名ユーザーを含む日別アクセス数", args: { scenario: "crm-list" }, play: async ({ canvasElement }) => { await userEvent.click(await within(canvasElement).findByText(tr("お店のアクセス数"))); } };
 export const Detail: Story = { name: "詳細・種類の絞り込みと画像／ファイル添付", args: { scenario: "crm-detail" } };
 export const Activity: Story = { name: "行動履歴・予約とキャンセルの経過", args: { scenario: "crm-detail" }, play: async ({ canvasElement }) => { (await within(canvasElement).findByRole("region", { name: tr("行動履歴") })).scrollIntoView({ block: "start" }); } };
 export const ActivityLong: Story = { name: "行動履歴・10件ずつページ切替", args: { scenario: "crm-activity-long" }, play: async ({ canvasElement }) => { (await within(canvasElement).findByRole("region", { name: tr("行動履歴") })).scrollIntoView({ block: "start" }); } };

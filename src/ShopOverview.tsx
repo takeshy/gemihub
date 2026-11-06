@@ -7,6 +7,8 @@ import { hoursText, specialDaysText, type ShopConfig } from "../server/domain";
 import { shopInfographic } from "../shared/shop-infographic";
 import { useApi } from "./api";
 import { DataOverview } from "./DataOverview";
+import { PeleDiagram } from "./PeleDiagram";
+import { diagramLabel } from "../shared/diagrams";
 import { ShopRequest } from "./ShopRequest";
 import type { Plan, Workspace } from "./App";
 export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
@@ -66,7 +68,8 @@ export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPla
         {config && infographic && <>
           <div className="shop-spec-intro"><h3>{config.name}</h3><p>{config.description}</p><span className="pill">{data.published ? tr("現在の設定") : tr("公開前の設定")}</span></div>
           <div className="spec-stats"><div><strong>{config.menus.filter(m => m.active).length}</strong><span>{tr("メニュー")}</span></div><div><strong>{infographic.staff.length}</strong><span>{tr("スタッフ")}</span></div><div><strong>{infographic.pageCount}</strong><span>{tr("お客様向け画面")}</span></div></div>
-          <ol className="spec-booking-flow" aria-label={tr("予約の流れ")} style={{ "--flow-steps": infographic.bookingFlow.length } as React.CSSProperties}>{infographic.bookingFlow.map((step, i) => <li key={i}><b>{String(i + 1).padStart(2, "0")}</b><span>{step.label}</span><small>{step.detail}</small></li>)}</ol>
+          <PeleDiagram label={tr("予約の流れ")} source={["flowchart LR", ...infographic.bookingFlow.map((step, i) => `step${i}[${diagramLabel(`${step.label}: ${step.detail}`)}]`), ...infographic.bookingFlow.slice(1).map((_, i) => `step${i} --> step${i + 1}`)].join("\n")} />
+          <details><summary>{tr("予約の流れの説明")}</summary><ol className="spec-booking-flow" aria-label={tr("予約の流れ")} style={{ "--flow-steps": infographic.bookingFlow.length } as React.CSSProperties}>{infographic.bookingFlow.map((step, i) => <li key={i}><b>{String(i + 1).padStart(2, "0")}</b><span>{step.label}</span><small>{step.detail}</small></li>)}</ol></details>
           <div className="spec-card-grid">
             <section className="spec-card"><h3><span aria-hidden="true">◷</span> {tr(" 営業時間と受付")}</h3><p className="spec-highlight">{hoursText(config)}</p><p>{tr("定休日：")}{config.hours.closedWeekdays.map(d => tr("{0}曜", days()[d])).join(listSeparator()) || tr("なし")}</p><p>{tr("臨時休業：")}{config.hours.holidays.join(listSeparator()) || tr("なし")}</p>{!!config.hours.specialDays?.length && <p>{tr("特別営業日：")}{specialDaysText(config)}</p>}<p>{config.rules.advanceDays}{tr("日前から・開始")}{config.rules.leadMinutes}{tr("分前まで受付")}</p><p>{tr("当日予約")}{config.rules.sameDay ? tr("可") : tr("不可")}／{config.rules.interval}{tr("分刻み")}</p></section>
             <section className="spec-card"><h3><span aria-hidden="true">◇</span> {tr(" メニューと料金")}</h3>{config.menus.map(menu => <div className="spec-menu" key={menu.id}><span>{menu.name}{menu.imageId && <small>{tr("画像あり")}</small>}{!menu.active && <small>{tr("（受付停止）")}</small>}</span><b>{money(menu.price)}<small>{menu.duration}{tr("分")}</small></b></div>)}</section>

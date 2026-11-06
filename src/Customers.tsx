@@ -7,7 +7,6 @@ import { bookingMenuName, bookingStaffName, type Booking, type ShopConfig } from
 import { customerPeriods, customerFilterSchema, customerSince, type CustomerFilter, type CustomerSummary, type CustomerDetail } from "../server/customers";
 import { CustomerImageGallery } from "./CustomerImages";
 import { CustomerActivityHistory } from "./CustomerActivity";
-import { ShopAccess } from "./ShopAccess";
 import { CustomerNoteComposer, CustomerNoteCard } from "./CustomerNotes";
 import { CustomerInquiry } from "./Inquiries";
 import { inquiryReplied, inquiryStatus } from "../server/inquiries";
@@ -56,7 +55,6 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
   const customerPages = usePagination(visible, JSON.stringify([shopId, query, sort, rangeQuery]));
   if (selected) return <CustomerProfile key={selected} shopId={shopId} email={selected} initialImages={initialImages && selected === initialEmail} config={config} rangeQuery={rangeQuery} rangeLabel={rangeLabel} initialInquiryId={selected === initialEmail ? initialInquiryId : ""} backToInquiries={backToInquiries} inquiriesChanged={inquiriesChanged} back={() => setSelected("")} saved={customer => { setCustomers(current => current?.map(item => item.email === customer.email ? customer : item)); setAttempt(value => value + 1); }} />;
   return <div className="panel customers">
-    <ShopAccess shopId={shopId} />
     <h2>{tr("お客様一覧 ")}{customers && <span className="pill">{customers.length}{tr("人")}</span>}</h2>
     <p className="muted small">{tr("予約・お問い合わせから自動で集計します。来店実績は、終了した予約のうちキャンセル・無断キャンセルを除く件数です。")}</p>
     {error && <div className="alert" role="alert">{error}<button onClick={() => setAttempt(value => value + 1)}>{tr("再読み込み")}</button></div>}

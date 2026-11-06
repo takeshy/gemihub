@@ -1,4 +1,6 @@
-import { regionOf, zonedDate } from "../../shared/region";
+import { dateIn, regionOf, zonedDate } from "../../shared/region";
+import { analyticsFixture, trafficFixture } from "./booking-analytics-fixtures";
+import type { ArticleAccessDays } from "../../shared/article-access";
 import { shopExport, exportColumns, exportCsv, type ExportTable } from "../../server/data-export";
 import type { Store } from "../../server/store";
 import { tr, listSeparator } from "../../shared/i18n";
@@ -51,6 +53,7 @@ import {
 } from "../../server/domain";
 export type Scenario =
   | TransferScenario
+  | "analytics"
   | "system-payment"
   | "system-owner-only"
   | "us-settings"
@@ -202,6 +205,7 @@ export function scenarioProps(scenario: Scenario) {
           "image-library": "build", "image-library-empty": "build", "image-library-generation": "build",
           "image-library-uploading": "images",
           manual: "manual",
+          analytics: "analytics",
           system: "build",
           "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
@@ -296,6 +300,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     }
   }
   const tomorrow = dateJST(new Date(Date.now() + 86400000));
+  const reservationDate = ["bookings", "bookings-long", "owner-paid", "insufficient-refund"].includes(scenario) ? dateIn(Date.now(), regionOf(config).timeZone) : tomorrow;
   const bookings: Booking[] = [
     {
       id: "story-reservation",
@@ -306,8 +311,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
       price: config.menus[0].price,
       message: tr("前回と同じピンクで、短めにお願いします。"),
       staffId: "aoi",
-      start: zonedDate(tomorrow,"10:00",regionOf(config).timeZone).toISOString(),
-      end: zonedDate(tomorrow,"11:00",regionOf(config).timeZone).toISOString(),
+      start: zonedDate(reservationDate,"10:00",regionOf(config).timeZone).toISOString(),
+      end: zonedDate(reservationDate,"11:00",regionOf(config).timeZone).toISOString(),
       status: "active",
       createdAt: new Date().toISOString(),
     },
@@ -320,8 +325,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
       price: config.menus[1].price,
       message: "",
       staffId: "haru",
-      start: zonedDate(tomorrow,"13:00",regionOf(config).timeZone).toISOString(),
-      end: zonedDate(tomorrow,"14:30",regionOf(config).timeZone).toISOString(),
+      start: zonedDate(reservationDate,"13:00",regionOf(config).timeZone).toISOString(),
+      end: zonedDate(reservationDate,"14:30",regionOf(config).timeZone).toISOString(),
       status: "cancelled",
       createdAt: new Date().toISOString(),
     },
@@ -604,7 +609,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (/\/(menu-images|images)\/[a-f0-9]{64}$/.test(action)) {
       const image = menuImages.get(action.split("/").at(-1)!); if (!image) throw new Error(tr("メニュー画像がありません")); result = image;
     }
-    else if (/^\/api\/public\/[^/]+\/(?:activity|page-views)$/.test(action)) result = { ok: true };
+    else if (/^\/api\/public\/[^/]+\/(?:activity|page-views|booking-events)$/.test(action)) result = { ok: true };
     else if (action.startsWith(`/api/shops/${shop.id}/customers`)) {
       const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
       const now = new Date();
@@ -717,9 +722,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
       result = { config: next, summary: [tr("選んだ対象をローカルで変更")] };
     }
     else if (action === `/api/shops/${shop.id}/access`) {
-      const days = Number(url.searchParams.get("days") || 30);
-      const rows = Array.from({ length: days }, (_, index) => ({ date: new Date(Date.now() - index * 86400000).toISOString().slice(0, 10), views: Math.max(0, 120 - index), uniqueBrowsers: Math.max(0, 65 - index) }));
-      result = { days, timeZone: "Asia/Tokyo", totalViews: rows.reduce((sum, row) => sum + row.views, 0), rows };
+      result = trafficFixture(Number(url.searchParams.get("days") || 30) as ArticleAccessDays, scenario === "crm-empty" ? "empty" : "ready", regionOf(config).country === "US" ? "USD" : "JPY", url.searchParams.get("unit") || "day");
+    }
+    else if (action === `/api/shops/${shop.id}/booking-analytics`) {
+      result = analyticsFixture(Number(url.searchParams.get("days") || 30) as ArticleAccessDays, scenario === "crm-empty" ? "empty" : "ready", regionOf(config).country === "US" ? "USD" : "JPY");
     }
     else if (action === `/api/shops/${shop.id}/posts/access`) {
       const days = Number(url.searchParams.get("days") || 30);

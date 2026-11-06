@@ -10,7 +10,9 @@ import { localeForRequest, requestLocale, regionForRequest } from "./i18n.ts";
 import { paypalGateway, type PaymentGateway } from "./paypal.ts";
 import { ShopLogs, loggedPaymentGateway, logRoute, pageViewShopLimit, pageViewAnonymousLimit } from "./shop-logs.ts";
 import { customerScreens } from "../shared/customer-activity.ts";
-import { type ArticleAccessDays, type ArticleAccessResult, type SiteTrafficResult } from "../shared/article-access.ts";
+import { bookingSteps } from "../shared/booking-analytics.ts";
+import { analyticsDates, bookingAnalytics } from "./booking-analytics.ts";
+import { type ArticleAccessDays, type ArticleAccessResult, type SiteTrafficResult, type MonthlyTrafficResult } from "../shared/article-access.ts";
 import { articleKinds } from "../shared/article-features.ts";
 import { paymentService, checkoutView, type Checkout } from "./payments.ts";
 import { transferService, buyerBusy, type Transfer, type TransferEvent } from "./transfers.ts";
@@ -336,7 +338,7 @@ export function createApp(
     return {
       documents: await shopDocuments(shop),
       today: dateIn(now, regionOf(config).timeZone),
-      logs: logs.toolsFor(shop.id, days => articleAccess(shop, days), days => dailyTraffic(shop, days)),
+      logs: logs.toolsFor(shop.id, days => articleAccess(shop, days), days => dailyTraffic(shop, days), days => conversionAnalytics(shop, days), days => monthlyTraffic(shop, days)),
       ...(paypalTools ? { paypal: paypalTools } : {}),
       records: async kind => {
         if (kind === "bookings") return (await store.bookings(shop.id)).map(booking => ({
@@ -420,6 +422,31 @@ export function createApp(
     const rows: SiteTrafficResult["rows"] = [];
     for (let offset = 0; offset < dates.length; offset += 8) rows.push(...await Promise.all(dates.slice(offset, offset + 8).map(day => store.countDailyTraffic(shop.id, day))));
     return { days, timeZone, totalViews: rows.reduce((sum, row) => sum + row.views, 0), rows };
+  }
+  async function conversionAnalytics(shop: Shop, days: ArticleAccessDays) {
+    const config = await effective(shop), now = new Date();
+    // Read each relevant kind independently so routine access logs cannot crowd out outcomes.
+    const first = analyticsDates(days, now, regionOf(config).timeZone)[0];
+    const from = new Date(Date.parse(`${first}T00:00:00Z`) - 86400000).toISOString();
+    const groups = await Promise.all((["page_view", "booking_step", "activity"] as const).map(kind => store.queryShopLogs(shop.id, from, now.toISOString(), 20001, undefined, { kind })));
+    return bookingAnalytics(config, await store.bookings(shop.id), groups.flat(), days, now, groups.some(rows => rows.length > 20000));
+  }
+  async function monthlyTraffic(shop: Shop, days: ArticleAccessDays): Promise<MonthlyTrafficResult> {
+    const now = new Date(), timeZone = regionOf(shop.published).timeZone;
+    const first = analyticsDates(days, now, timeZone)[0], from = zonedDate(first, "00:00", timeZone).toISOString(), to = now.toISOString();
+    const [daily, logs] = await Promise.all([dailyTraffic(shop, days), store.queryShopLogs(shop.id, from, to, 20001, undefined, { kind: "page_view" })]);
+    const uniqueCountsAvailable = logs.length <= 20000;
+    const months = new Map<string, { date: string; views: number; visitors: Set<string> }>();
+    for (const row of [...daily.rows].reverse()) {
+      const date = row.date.slice(0, 7), month = months.get(date) || { date, views: 0, visitors: new Set<string>() };
+      month.views += row.views; months.set(date, month);
+    }
+    if (uniqueCountsAvailable) for (const log of logs) {
+      if (log.visitorKey) months.get((log.day || dateIn(new Date(log.at), timeZone)).slice(0, 7))?.visitors.add(log.visitorKey);
+    }
+    return { days, unit: "month", from: first, to, timeZone, totalViews: daily.totalViews, uniqueCountsAvailable,
+      rows: [...months.values()].reverse().map(({ date, views, visitors }) => ({ date, views, uniqueBrowsers: uniqueCountsAvailable ? visitors.size : null })),
+    };
   }
   // A missing or unreadable image is left out of the public page instead of blocking every save.
   async function storefrontImages(shop: Shop, posts: Post[]) {
@@ -952,7 +979,7 @@ export function createApp(
       if (method !== "GET" && method !== "HEAD") {
         if (req.headers.origin !== (publicHost ? `https://${host}` : origin()))
           checkOrigin(req);
-        if (!/^\/api\/public\/[^/]+\/(?:page-views|activity)$/.test(path)) {
+        if (!/^\/api\/public\/[^/]+\/(?:page-views|activity|booking-events)$/.test(path)) {
           const key = `${req.socket.remoteAddress}:${path}`;
           const current = rate.get(key);
           const entry =
@@ -1842,9 +1869,11 @@ export function createApp(
             return json(res, post);
           });
         }
-        if ((action === "access" || action === "posts/access") && method === "GET") {
+        if ((action === "access" || action === "posts/access" || action === "booking-analytics") && method === "GET") {
           const days = z.union([z.literal("7"), z.literal("30"), z.literal("90")]).parse(url.searchParams.get("days") || "30");
-          return json(res, action === "access" ? await dailyTraffic(shop, Number(days) as ArticleAccessDays) : await articleAccess(shop, Number(days) as ArticleAccessDays));
+          const unit = z.enum(["day", "month"]).parse(url.searchParams.get("unit") || "day");
+          if (action === "access" && unit === "month") return json(res, await monthlyTraffic(shop, Number(days) as ArticleAccessDays));
+          return json(res, action === "booking-analytics" ? await conversionAnalytics(shop, Number(days) as ArticleAccessDays) : action === "access" ? await dailyTraffic(shop, Number(days) as ArticleAccessDays) : await articleAccess(shop, Number(days) as ArticleAccessDays));
         }
         if (action === "posts" && method === "GET") { await assertOperator(user, shop); return json(res, await postsFor(shop)); }
         if (action === "posts/metadata" && method === "POST") {
@@ -2879,7 +2908,18 @@ export function createApp(
           } else if (input.category || input.key) fail(400, tr("入力形式が不正です"));
           if (input.page === "custom" ? !shop.published!.pages.some(page => page.slug === input.slug) : !!input.slug) fail(404, tr("見つかりません"));
           if ((input.page === "blogs" || input.page === "announcements") && !articleKinds(shop.published).includes(input.page)) fail(404, tr("見つかりません"));
-          if (shop.publication !== "provisional" && !await operator(user, shop)) logs.pageView(shop.id, input.page, dateIn(new Date(), regionOf(shop.published).timeZone), input.visitorId, postId);
+          if (shop.publication !== "provisional" && !await operator(user, shop)) logs.pageView(shop.id, input.page, dateIn(new Date(), regionOf(shop.published).timeZone), input.visitorId, postId, user?.role === "customer" && user.shopId === shop.id ? user.email : undefined);
+          return json(res, { ok: true });
+        }
+        if (action === "booking-events" && method === "POST") {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(shop);
+          const input = z.object({ event: z.enum(bookingSteps), visitorId: z.uuid().optional(), staffId: z.string().min(1).max(100).optional() }).strict().parse(await body(req, 500));
+          if (shop.publication === "provisional" || await operator(user, shop)) return json(res, { ok: true, ignored: true });
+          if (input.staffId && !bookingStaff(shop.published!).some(person => person.id === input.staffId)) fail(400, tr("スタッフが見つかりません"));
+          if (!telemetryAllowed(`${shop.id}:views`, pageViewShopLimit) || !input.visitorId && !telemetryAllowed(`${shop.id}:views:anonymous`, pageViewAnonymousLimit)) return json(res, { ok: true, ignored: true });
+          if (input.visitorId) limitTelemetry(`${shop.id}:views:${input.visitorId}`);
+          logs.bookingStep(shop.id, input.event, input.visitorId, user?.role === "customer" && user.shopId === shop.id ? user.email : undefined, input.staffId);
           return json(res, { ok: true });
         }
         if (action === "activity" && method === "POST") {

@@ -1,4 +1,6 @@
 import React from "react";
+import { within, userEvent } from "storybook/test";
+import { tr } from "../../shared/i18n";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
 
@@ -16,4 +18,6 @@ export const Reservations: Story = {
   args: { scenario: "bookings" },
 };
 
-export const Pagination: Story = { name: "一覧・複数ページ", args: { scenario: "bookings-long" } };
+export const Pagination: Story = { name: "一覧・複数ページ", args: { scenario: "bookings-long" }, play: async ({ canvasElement }) => {
+  await userEvent.click(await within(canvasElement).findByRole("button", { name: tr("絞り込みを解除") }));
+} };

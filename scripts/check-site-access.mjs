@@ -54,9 +54,8 @@ try {
     const admin = await owner.newPage(); await admin.setViewportSize({ width, height: 1000 }); admin.on('pageerror', error => errors.push(error.message));
     await admin.goto(`${origin}/?shop=${shop.id}&lang=${language}`);
     if (width < 600) await admin.locator('.mobile-menu-toggle').click();
-    await admin.getByRole('button', { name: language === 'ja' ? /お客様$/ : /Customers$/ }).click();
+    await admin.getByRole('button', { name: language === 'ja' ? /分析$/ : /Analytics$/ }).click();
     const panel = admin.getByRole('region', { name: language === 'ja' ? 'お店のアクセス数' : 'Shop traffic', exact: true });
-    await panel.locator('summary').click();
     await expect(panel.locator('tbody tr').first()).toContainText('8');
     await panel.getByLabel(language === 'ja' ? 'アクセス数の集計期間' : 'Traffic period', { exact: true }).selectOption('7');
     await expect(panel.locator('tbody tr')).toHaveCount(7);

@@ -5,13 +5,15 @@ import { tr } from "../shared/i18n.ts";
 import type { Store } from "./store.ts";
 import { PayPalError, type PaymentGateway } from "./paypal.ts";
 import type { PayPalToolProvider } from "./paypal-ops.ts";
-import { articleAccessDays, type ArticleAccessDays, type ArticleAccessResult, type SiteTrafficResult } from "../shared/article-access.ts";
+import { articleAccessDays, type ArticleAccessDays, type ArticleAccessResult, type SiteTrafficResult, type MonthlyTrafficResult } from "../shared/article-access.ts";
+import type { BookingAnalytics } from "../shared/booking-analytics.ts";
 
 export const logRetentionDays = 90;
 export const customerLogKey = (shopId: string, email: string) => createHash("sha256").update(`${shopId}:${email.trim().toLowerCase()}`).digest("hex");
 export type ShopLog = {
   id: string; shopId: string; at: string; requestId: string;
-  kind: "access" | "error" | "paypal" | "activity" | "page_view"; ok: boolean;
+  kind: "access" | "error" | "paypal" | "activity" | "page_view" | "booking_step"; ok: boolean;
+  staffId?: string;
   postId?: string;
   visitorKey?: string;
   day?: string;
@@ -44,9 +46,15 @@ export class ShopLogs {
     const id = bookingId ? createHash("sha256").update(JSON.stringify([shopId, customerKey, operation, bookingId, eventKey || ""])).digest("hex") : undefined;
     this.store.afterCommit(() => this.forShop(shopId, () => this.record({ kind: "activity", ok: true, operation, customerKey, ...(bookingId ? { bookingId: safeId(bookingId) } : {}) }, id)));
   }
-  pageView(shopId: string, operation: string, day: string, visitorId?: string, postId?: string) {
+  pageView(shopId: string, operation: string, day: string, visitorId?: string, postId?: string, email?: string) {
     const visitorKey = visitorId ? createHash("sha256").update(`${shopId}:${visitorId}`).digest("hex") : undefined;
-    this.forShop(shopId, () => this.record({ kind: "page_view", ok: true, operation, postId, visitorKey, day }));
+    this.forShop(shopId, () => this.record({ kind: "page_view", ok: true, operation, postId, visitorKey, day, ...(email ? { customerKey: customerLogKey(shopId, email) } : {}) }));
+  }
+  bookingStep(shopId: string, operation: string, visitorId?: string, email?: string, staffId?: string) {
+    this.forShop(shopId, () => this.record({ kind: "booking_step", ok: true, operation,
+      ...(visitorId ? { visitorKey: createHash("sha256").update(`${shopId}:${visitorId}`).digest("hex") } : {}),
+      ...(email ? { customerKey: customerLogKey(shopId, email) } : {}), ...(staffId ? { staffId } : {}),
+    }));
   }
   async customerActivity(shopId: string, email: string, from?: string) {
     const now = Date.now();
@@ -73,9 +81,11 @@ export class ShopLogs {
     const location = error instanceof Error ? error.stack?.match(/server\/[a-zA-Z0-9_-]+\.[cm]?[jt]s:\d+:\d+/)?.[0] : undefined;
     this.record({ kind: "error", ok: false, operation, status, errorType: error instanceof z.ZodError ? "validation" : error instanceof PayPalError ? "paypal" : status < 500 ? "http" : "internal", errorCode: typeof code === "string" && /^[A-Z_]{2,64}$/.test(code) ? code : undefined, location });
   }
-  toolsFor(shopId: string, articleCounts?: (days: ArticleAccessDays) => Promise<ArticleAccessResult>, dailyTraffic?: (days: ArticleAccessDays) => Promise<SiteTrafficResult>): PayPalToolProvider {
+  toolsFor(shopId: string, articleCounts?: (days: ArticleAccessDays) => Promise<ArticleAccessResult>, dailyTraffic?: (days: ArticleAccessDays) => Promise<SiteTrafficResult>, analytics?: (days: ArticleAccessDays) => Promise<BookingAnalytics>, monthlyTraffic?: (days: ArticleAccessDays) => Promise<MonthlyTrafficResult>): PayPalToolProvider {
     return {
-      tools: [{ name: "search_shop_logs", description: tr("このお店のアクセス・エラー・PayPalの処理履歴を検索する。保存は90日、検索期間は最大31日。記録がないことと正常動作を混同しない。"), parametersJsonSchema: { type: "object", properties: {
+      tools: [
+        ...(monthlyTraffic ? [{ name: "get_monthly_traffic", description: "Read shop-local monthly PV and distinct browsers within the selected 7/30/90-day window. Partial months contain only selected dates. Never sum daily uniques. If uniqueCountsAvailable is false, unique counts are null/unavailable while PV remains complete.", parametersJsonSchema: { type: "object", properties: { days: { type: "integer", enum: [...articleAccessDays] } } } }] : []),
+        ...(analytics ? [{ name: "get_booking_analytics", description: "Read this shop's booking funnel, daily entry cohorts (24-hour/7-day conversion), staff conversion, earned staff/menu sales and daily sales trends. Sales are active appointments that have ended, grouped by end date; not payment receipts. logsTruncated means conversion is unavailable. Incomplete cohorts must not be compared as mature cohorts. The window is 7, 30 or 90 calendar days in the shop time zone. No raw customer identities are returned.", parametersJsonSchema: { type: "object", properties: { days: { type: "integer", enum: [...articleAccessDays] } } } }] : []), { name: "search_shop_logs", description: tr("このお店のアクセス・エラー・PayPalの処理履歴を検索する。保存は90日、検索期間は最大31日。記録がないことと正常動作を混同しない。"), parametersJsonSchema: { type: "object", properties: {
         from: { type: "string", description: tr("開始日時（ISO 8601、省略時は24時間前）") },
         to: { type: "string", description: tr("終了日時（ISO 8601、省略時は現在）") },
         kind: { type: "string", enum: ["all", "access", "error", "paypal", "activity", "page_view"] },
@@ -84,6 +94,14 @@ export class ShopLogs {
         reference: { type: "string", description: tr("予約・注文・決済・返金IDまたはリクエストID（完全一致）") },
       } } }, ...(articleCounts ? [{ name: "get_article_access_counts", description: tr("ブログ・お知らせの公開記事別PVとユニークブラウザ数を集計する。ログの検索上限に影響されない集計を使う。"), parametersJsonSchema: { type: "object", properties: { days: { type: "integer", enum: [...articleAccessDays] } } } }] : []), ...(dailyTraffic ? [{ name: "get_daily_traffic", description: tr("お店の日別PVとユニークブラウザ数を調べる。ログイン前も含み、同じ日の同じブラウザは複数ページ見ても1件。日付はお店のタイムゾーン。実人数の目安。"), parametersJsonSchema: { type: "object", properties: { days: { type: "integer", enum: [...articleAccessDays] } } } }] : [])],
       invoke: async (name, args) => {
+        if (name === "get_monthly_traffic" && monthlyTraffic) {
+          const input = z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(90) }).strict().parse(args || {});
+          return { result: await monthlyTraffic(input.days), source: { path: "logs:monthly-traffic", title: tr("お店の月別アクセス数") } };
+        }
+        if (name === "get_booking_analytics" && analytics) {
+          const input = z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }).strict().parse(args || {});
+          return { result: await analytics(input.days), source: { path: "logs:booking-analytics", title: tr("予約の確定率・スタッフ別／メニュー別売上") } };
+        }
         if (name === "get_daily_traffic" && dailyTraffic) {
           const input = z.object({ days: z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30) }).strict().parse(args || {});
           return { result: await dailyTraffic(input.days), source: { path: "logs:traffic", title: tr("お店の日別アクセス数") } };

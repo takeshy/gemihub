@@ -52,9 +52,9 @@ try {
     }
     for (const width of [1280, 390]) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
-      await open('運営/予約・お客様/お客様', 'traffic');
+      await open('運営/分析', 'daily-traffic');
       const traffic = page.getByRole('region', { name: label('お店のアクセス数'), exact: true });
-      await expect(traffic.locator('details')).toHaveAttribute('open', '');
+      await expect(traffic.locator('details').first()).toHaveAttribute('open', '');
       await traffic.getByLabel(label('アクセス数の集計期間'), { exact: true }).selectOption('7');
       await expect(traffic.locator('tbody tr')).toHaveCount(7);
       await capture(shots[0], traffic, width);
@@ -72,9 +72,9 @@ try {
       await expect(traffic.locator('tbody tr')).toHaveCount(10);
       await expect(dailyNavigation.getByRole('button', { name: label('前のページ'), exact: true })).toBeDisabled();
 
-      await open('運営/ブログ・お知らせ', 'access');
+      await open('運営/分析', 'article-traffic');
       const articles = page.getByRole('region', { name: label('お店のアクセス数'), exact: true });
-      await expect(articles.locator('details')).toHaveAttribute('open', '');
+      await expect(articles.locator('details').first()).toHaveAttribute('open', '');
       await expect(articles.locator('tbody tr').first()).toBeVisible();
       await expect(articles.locator('thead')).toContainText(label('ユニーク（ブラウザ）'));
       await capture(shots[1], articles, width);
@@ -167,6 +167,7 @@ try {
       await expect(previous(customerNav)).toBeDisabled();
 
       await open('運営/予約・お客様/予約管理', 'pagination');
+      await page.getByRole('button', { name: label('絞り込みを解除'), exact: true }).click();
       await expect(page.locator('.booking-list > .booking-card')).toHaveCount(10);
       await next(nav(page, '予約一覧')).click();
       await expect(page.locator('.booking-list > .booking-card')).toHaveCount(10);

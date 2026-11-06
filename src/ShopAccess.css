@@ -13,3 +13,10 @@
 .shop-access .shop-access-table time { white-space: nowrap; }
 .shop-access .article-access-table { min-width: 380px; }
 .shop-access .article-access-table td:nth-child(2) { width: 50%; overflow-wrap: anywhere; }
+.analytics-kpis { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.analytics-kpis > div { display: flex; flex: 1 1 120px; flex-direction: column; gap: 4px; padding: 16px; border-radius: 12px; background: var(--cream, #eef3ee); }
+.analytics-kpis strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.analytics-kpis span { font-size: 13px; }
+.shop-access :is(.cohort-table, .staff-analytics-table) { min-width: 620px; }
+.analytics-staff-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.analytics-staff-filter select { max-width: 100%; }

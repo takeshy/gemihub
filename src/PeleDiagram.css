@@ -1,0 +1,18 @@
+.diagram-card { min-width: 0; max-width: 100%; margin: 16px 0; border: 1px solid var(--line, #dbe5de); border-radius: 14px; padding: 12px; background: var(--white, #fffdf8); }
+.diagram-card { --pele-bg: var(--white, #fffdf8); --pele-fg: var(--ink, #284f43); --pele-muted: #63756c; --pele-line: #658578; --pele-surface: #edf4ee; --pele-surface-alt: #e3eee7; --pele-border: #c8d8cf; --pele-accent: #286f58; --pele-font: sans-serif; --pele-series-1: #367d65; --pele-series-2: #6398ca; --pele-series-3: #d5a358; --pele-series-4: #ac7ca4; --pele-series-5: #74a5a8; --pele-series-6: #ba7356; --pele-series-7: #8d91bd; --pele-series-8: #a2a15d; }
+.pele-diagram { width: 100%; min-width: 0; overflow: hidden; }
+.diagram-card .diagram-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; list-style: none; padding: 0; margin: 0 0 12px; color: var(--pele-fg); font-size: 13px; line-height: 1.5; }
+.diagram-legend .pele-legend-item { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 100%; margin: 0; overflow-wrap: anywhere; }
+.diagram-swatch { flex: 0 0 20px; width: 20px; border-top: 3px solid var(--series-color); }
+.diagram-swatch-bar { height: 10px; border: 0; background: var(--series-color); border-radius: 2px; }
+.pele-diagram > svg { display: block; max-width: 100%; height: auto; margin: auto; }
+.diagram-source { margin-top: 8px; font-size: 12px; color: var(--muted, #63756c); }
+.diagram-source summary { cursor: pointer; }
+.diagram-source pre { max-width: 100%; overflow: auto; white-space: pre; max-height: 260px; }
+.sales-pie figcaption { text-align: center; font-weight: 700; margin: 4px 0 12px; }
+.sales-pie .pele-diagram > svg { width: 100%; max-width: 380px; }
+.sales-pie .sales-pie-legend { margin: 12px 0 0; }
+.sales-pie-legend li { display: flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.sales-pie-legend small { display: block; font-variant-numeric: tabular-nums; }
+.sales-pie-percent { fill: white; font-size: 14px; font-weight: 600; stroke: #203d32; stroke-width: .8px; paint-order: stroke; pointer-events: none; }
+.sales-pie :is(path, circle):focus { outline: 3px solid var(--pele-fg); outline-offset: 2px; }

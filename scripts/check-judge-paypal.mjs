@@ -49,6 +49,7 @@ try {
     await context.addCookies([{ name: 'gemihub_session', value: token, url: origin }]);
     const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${origin}/?tab=bookings&shop=${shop.id}&lang=${language}`);
+    await page.getByRole('button', { name: label('絞り込みを解除'), exact: true }).click();
     await expect(page.locator('.reservations-panel .section-top .count')).toHaveText('1');
     await expect(page.locator('.booking-list .booking-card')).toHaveCount(1);
     await expect(page.locator('.sidebar-bottom')).toContainText(label('ご予約やお店の情報を、ここから管理できます。'));

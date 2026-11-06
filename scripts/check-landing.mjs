@@ -30,22 +30,37 @@ try {
     await page.getByRole('heading',{level:1}).waitFor();
     assert.equal(await page.locator('html').getAttribute('lang'),locale);
     assert.ok((await page.title()).startsWith('gemihub —'));
-    // Wait for hydration, then use keyboard activation to test actual client interaction.
-    const customerTab=page.locator('.lp-feature-tabs button').nth(1);
-    await customerTab.focus();await customerTab.press('Enter');
-    await page.locator('.lp-product-frame img[src$="27-customer-timeline.jpg"]').waitFor();
-    assert.equal(await customerTab.getAttribute('aria-pressed'),'true');
-    await page.locator('.lp-feature-tabs button').nth(2).click();
-    await page.locator('.lp-product-frame img[src$="16-blog-edit.jpg"]').waitFor();
-    await page.locator('.lp-feature-tabs button').first().click();
+    assert.equal(await page.locator('#operations .lp-feature-layout').count(),4);
+    assert.equal(await page.locator('#features [data-creation]').count(),3);
+    assert.match(await page.locator('.lp-hero-copy').innerText(), /AI/);
+    assert.ok(await page.locator('#features').evaluate(element => !!(element.compareDocumentPosition(document.querySelector('#operations')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+    assert.equal(await page.locator('.lp-feature-tabs, [aria-controls="lp-feature-panel"]').count(),0);
+    assert.equal(await page.locator('[data-feature="analytics"] .lp-feature-copy a').getAttribute('href'),`/manual?lang=${locale}#guide-staff-sales`);
     const faq=page.locator('.lp-faq summary').first();await faq.focus();await faq.press('Enter');
     assert.equal(await page.locator('.lp-faq details').first().getAttribute('open'),'');
     await faq.press('Enter');
     assert.equal(await page.locator('a[href="#features"]').count(),2);
     for(const width of [1440,768,390,320]) {
       await page.setViewportSize({width,height:width<800?844:1000});
-      await page.evaluate(async()=>{await document.fonts.ready;await Promise.all([...document.images].map(image=>image.decode().catch(()=>{})));});
+      await page.evaluate(async()=>{await document.fonts.ready;});
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${locale}: horizontal overflow at ${width}px`);
+      let previousBottom=0;
+      let previousRowTop=-1;
+      for(const feature of ['create','red-circle','consult','booking','customers','analytics','posts']) {
+        const creation=['create','red-circle','consult'].includes(feature);
+        const section=page.locator(`article[${creation?'data-creation':'data-feature'}="${feature}"]`);
+        await section.scrollIntoViewIfNeeded();
+        if(await section.locator('img').count()) await section.locator('img').evaluate(image=>image.decode());
+        assert.ok(await section.isVisible(),`${locale}/${feature}: visible without switching controls`);
+        const bounds=await section.evaluate(element=>{const rect=element.getBoundingClientRect();return {top:rect.top+scrollY,bottom:rect.bottom+scrollY};});
+        assert.ok(bounds.top>=previousBottom || bounds.top===previousRowTop,`${locale}/${feature}: follows or shares a row with the previous feature`);
+        previousRowTop=bounds.top;
+        previousBottom=bounds.bottom;
+        assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${locale}/${feature}: overflow at ${width}px`);
+        if([1440,390].includes(width)) {
+          await section.screenshot({path:`tmp/lp/${locale}-${width}-${feature}.png`});
+        }
+      }
       if([1440,390].includes(width)){
         await page.evaluate(()=>scrollTo(0,0));
         await page.screenshot({path:`tmp/lp/${locale}-${width}.png`,fullPage:true});
@@ -60,12 +75,15 @@ try {
     await page.waitForURL(url=>url.pathname==='/'&&url.searchParams.get('lang')===locale);
     await page.getByRole('heading',{level:1}).waitFor();
     await context.close();
-    console.log(`${locale}: keyboard features, FAQ, images, 1440/768/390/320px layouts and onboarding link passed.`);
+    console.log(`${locale}: AI creation and red-circle editing lead the page; all features, FAQ, images, 1440/768/390/320px layouts and onboarding link passed.`);
   }
   const context=await browser.newContext({javaScriptEnabled:false});
   const page=await context.newPage();
   await page.goto(origin+'/lp?lang=en');
-  assert.ok((await page.getByRole('heading',{level:1}).innerText()).includes('Your words.'));
+  assert.ok((await page.getByRole('heading',{level:1}).innerText()).includes('Your shop’s website.'));
+  for(const feature of ['booking','customers','analytics','posts']) {
+    assert.ok(await page.locator(`article[data-feature="${feature}"]`).isVisible(),`${feature}: visible with JavaScript disabled`);
+  }
   await page.locator('.lp-faq summary').first().click();
   assert.equal(await page.locator('.lp-faq details').first().getAttribute('open'),'');
   await context.close();

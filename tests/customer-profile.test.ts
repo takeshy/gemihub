@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app.ts";
 import { Store } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
-import { sample, dateJST } from "../server/domain.ts";
+import { sample, dateJST, closedOn } from "../server/domain.ts";
 import { aggregateCustomers, customerSummaries } from "../server/customers.ts";
 
 process.env.DEMO_MODE = "true";
@@ -45,7 +45,7 @@ test("verified customers register their own profile before booking; profiles sta
   assert.equal((await api(`/api/shops/${shop.id}/customers/alice%40example.com`, undefined, "bob")).status, 403);
   assert.equal((await api(`${base}/inquiries`, {name: profile.name, message: "問い合わせの確認"})).status, 200);
   let date = new Date(Date.now() + 3 * 86400000);
-  if (date.getUTCDay() === 2) date = new Date(date.getTime() + 86400000);
+  while (closedOn(sample, dateJST(date))) date = new Date(date.getTime() + 86400000);
   const slots = (await api(`${base}/slots?date=${dateJST(date)}&menu=${sample.menus[0].id}`)).body;
   assert.ok(slots.length);
   assert.equal((await api(`${base}/bookings`, {name: profile.name, menuId: sample.menus[0].id, start: slots[0].start})).status, 200);

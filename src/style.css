@@ -711,16 +711,36 @@ pre {
 .reservation-filters .field > span:first-child { font-size: 12px; min-height: 21px; }
 .reservation-filters .date-input-controls, .reservation-filters select { height: 46px; }
 .reservation-filters input[type="text"], .reservation-filters select { width: 100%; min-width: 0; font-size: 14px; font-weight: 400; }
-.reservation-filters > button { grid-column: 1 / -1; justify-self: start; height: 46px; font-size: 14px; }
+.reservation-filter-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.reservation-filter-actions > button { min-height: 46px; font-size: 14px; }
 .reservations-panel .booking-card { flex-direction: column; align-items: stretch; gap: 16px; }
 .reservations-panel .booking-card > div { min-width: 0; overflow-wrap: anywhere; }
 .reservations-panel .booking-card .actions { flex-wrap: wrap; justify-content: flex-start; }
+.reservations-panel .booking-list { display: grid; gap: 16px; }
+.reservations-panel .reservation-booking { border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: #fffefa; }
+.reservation-booking-header { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.reservation-booking-identity { min-width: 0; display: grid; gap: 6px; }
+.reservation-booking .reservation-booking-identity h3 { margin: 0; font-size: 18px; line-height: 1.6; }
+.reservation-booking-identity time { font-size: 14px; font-variant-numeric: tabular-nums; }
+.reservation-booking-statuses { display: flex; flex-wrap: wrap; gap: 6px; }
+.reservation-booking-statuses .status { font-size: 12px; }
+.reservation-booking-summary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px 20px; margin: 16px 0 8px; }
+.reservation-booking-summary > div { min-width: 0; }
+.reservation-booking-summary dt { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.reservation-booking-summary dd { margin: 0; font-size: 14px; }
+.reservations-panel .reservation-booking p { font-size: 14px; }
+.reservation-booking .reservation-booking-message { margin-top: 12px; padding: 12px; background: #f0f3eb; border-radius: 8px; }
+.reservation-booking .actions { padding-top: 16px; border-top: 1px solid var(--line); }
+.reservations-panel .reservation-booking button { min-height: 44px; font-size: 13px; white-space: normal; overflow-wrap: anywhere; }
 @container reservations (min-width: 640px) {
   .reservation-filters { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
-  .reservation-filters > button { grid-column: auto; margin-top: 28px; }
+  .reservation-filter-actions { grid-column: auto; margin-top: 28px; }
 }
 @container reservations (max-width: 379px) {
   .reservation-filters { grid-template-columns: minmax(0, 1fr); }
+  .reservation-booking-summary { grid-template-columns: minmax(0, 1fr); }
+  .reservations-panel .reservation-booking { padding: 16px; }
+  .reservation-booking .actions { display: grid; grid-template-columns: minmax(0, 1fr); }
 }
 .status {
   font-size: 10px;

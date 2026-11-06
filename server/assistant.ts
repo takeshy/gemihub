@@ -31,6 +31,19 @@ export function systemBundle(): Record<string, string> {
   return bundleCache;
 }
 const recordKinds: RecordKind[] = ["bookings", "customers", "inquiries"];
+const chartInstruction = [
+  "For numerical comparisons, trends, cohorts or flows, include a concise Mermaid diagram in a fenced mermaid code block when it helps answer the question.",
+  "Use xychart-beta for bar/line charts, pie for proportions, flowchart for processes. Use only retrieved values; include units, dates, series labels and a short text explanation with sources.",
+  "Name each xychart series explicitly, for example line \"Booking page visits\" [100, 120] and line \"Confirmed bookings\" [20, 30], so the renderer shows an in-chart legend. Never identify lines by their order. Prefer plain labels about booking page visits and confirmed bookings over cohort jargon.",
+  "Keep charts small (at most 30 points per series; aggregate larger series accurately). Never invent missing values or treat truncated data as complete.",
+  "Use get_booking_analytics (with logs scope) for booking conversion, cohorts and staff sales trends instead of counting sampled search results. Sales are completed active appointment prices by end date, not PayPal receipts.",
+  "Use the same get_booking_analytics tool for menu sales. Its menus rows separate base services and add-ons, allocating the saved discounted booking total by saved item prices with exact currency rounding. Use these returned amounts rather than current catalog prices; unknown item breakdowns are grouped separately. Monthly menu trends sum daily amounts.",
+  "When comparing staff or menu sales trends, plot each staff/menu as a separate named series so they can be compared simultaneously. Do not replace the comparison with a single aggregate line. Keep dates aligned and names consistent.",
+  "For the menu breakdown of one staff member, use that staff row's menus collection, not the shop-wide menus collection. Its menu amounts already reconcile to the staff member's total and exclude other staff.",
+  "For monthly traffic use get_monthly_traffic; never sum daily unique browsers. A null monthly unique count is unavailable, not zero. Monthly views/cohorts/sales include only the selected period; partial first/current months are not full months. For monthly sales/cohorts group daily analytics by YYYY-MM, sum counts/amounts then divide completions by entrants. Mature flags must all be true for the monthly observation window to be mature.",
+  "Cohort mature1Day/mature7Days flags indicate whether the entire daily cohort has completed its 24/168-hour observation window. Mark immature rates as still observing. Selection steps are observed reach counts, not a strictly ordered funnel. If logsTruncated is true, conversion is unavailable.",
+  "Preserve these caveats and any retrieved chart in the final answer. Never render user-provided HTML, links, images or directives in diagrams.",
+].join(" ");
 /** A readable label for a source path shown under answers. */
 export function sourceTitle(path: string) {
   if (path === "spec.md") return tr("お店の仕様（spec.md）");
@@ -75,11 +88,11 @@ export async function research(question: string, data: ShopData, scope: Research
       const provider = providers.find(provider => provider.tools.some(tool => tool.name === name));
       if (!provider) throw new Error(tr("この操作は利用できません"));
       const result = await provider.invoke(name, args);
-      console.info(JSON.stringify({ event: ["search_shop_logs", "get_article_access_counts", "get_daily_traffic"].includes(name) ? "assistant_log_tool" : "assistant_paypal_tool", traceId, tool: name, ok: true, elapsedMs: Date.now() - started }));
+      console.info(JSON.stringify({ event: ["search_shop_logs", "get_article_access_counts", "get_daily_traffic", "get_booking_analytics", "get_monthly_traffic"].includes(name) ? "assistant_log_tool" : "assistant_paypal_tool", traceId, tool: name, ok: true, elapsedMs: Date.now() - started }));
       if (result.source) found.set(result.source.path, result.source);
       return result;
     } catch (error) {
-      console.warn(JSON.stringify({ event: ["search_shop_logs", "get_article_access_counts", "get_daily_traffic"].includes(name) ? "assistant_log_tool" : "assistant_paypal_tool", traceId, tool: name, ok: false, elapsedMs: Date.now() - started, upstreamStatus: error instanceof PayPalError ? error.upstreamStatus : undefined, errorType: error instanceof PayPalError ? "paypal" : "lookup" }));
+      console.warn(JSON.stringify({ event: ["search_shop_logs", "get_article_access_counts", "get_daily_traffic", "get_booking_analytics", "get_monthly_traffic"].includes(name) ? "assistant_log_tool" : "assistant_paypal_tool", traceId, tool: name, ok: false, elapsedMs: Date.now() - started, upstreamStatus: error instanceof PayPalError ? error.upstreamStatus : undefined, errorType: error instanceof PayPalError ? "paypal" : "lookup" }));
       throw error;
     }
   };
@@ -103,7 +116,7 @@ export async function research(question: string, data: ShopData, scope: Research
     const allowed = new Set(Object.keys(material));
     for (let round = 0; round < 4; round++) {
       const started = Date.now();
-      const response = await generateWithTools({ system: researchInstruction(!!scope.paypal) + (scope.logs ? tr(" 日別の訪問数は get_daily_traffic で読む。ログイン前も含む日別PVとユニークブラウザ数で、日付はお店のタイムゾーン。同じ日に何ページ見ても同じブラウザは1件だが、日ごとのユニーク数を足して期間全体のユニーク人数にしない。logs:trafficを根拠にする。ブログ・お知らせの記事別アクセス数は get_article_access_counts で7・30・90日の集計を読む。viewsはPV、uniqueBrowsersは同じブラウザの再訪をまとめた目安で、実人数とは限らない。記事ごとのユニーク数を足してお店全体の人数にしない。ブラウザ保存が使えない閲覧はPVだけに含む。返された集計値をそのまま使い、logs:articlesを根拠にする。その他のログの調査は search_shop_logs を使う。日時はタイムゾーン付きISO 8601で指定する。必要なら種別・失敗のみ・予約や取引ID・リクエストIDで絞り込む。顧客の行動履歴はcustomerにメールアドレスを指定して絞り込む。logs:shop を根拠に入れ、記録の日時・操作・結果を示す。matched は走査した範囲の一致数。scanTruncated が true なら全期間の件数として答えず期間を狭める。rowsTruncated と summaryTruncated も明示する。ログがない・取得に失敗したことを正常動作の証拠にしない。アプリに届いたアクセスだけで、利用者数やCDN経由の全アクセス数ではない。内部エラーの詳細な原因が記録されていなければ断定しない。ログの保存開始前や90日より前は調べられない。回答はJSONのみ（answer と sources）。") : ""), contents, tools, timeoutMs: consultTimeoutMs });
+      const response = await generateWithTools({ system: researchInstruction(!!scope.paypal) + chartInstruction + (scope.logs ? tr(" 日別の訪問数は get_daily_traffic で読む。ログイン前も含む日別PVとユニークブラウザ数で、日付はお店のタイムゾーン。同じ日に何ページ見ても同じブラウザは1件だが、日ごとのユニーク数を足して期間全体のユニーク人数にしない。logs:trafficを根拠にする。ブログ・お知らせの記事別アクセス数は get_article_access_counts で7・30・90日の集計を読む。viewsはPV、uniqueBrowsersは同じブラウザの再訪をまとめた目安で、実人数とは限らない。記事ごとのユニーク数を足してお店全体の人数にしない。ブラウザ保存が使えない閲覧はPVだけに含む。返された集計値をそのまま使い、logs:articlesを根拠にする。その他のログの調査は search_shop_logs を使う。日時はタイムゾーン付きISO 8601で指定する。必要なら種別・失敗のみ・予約や取引ID・リクエストIDで絞り込む。顧客の行動履歴はcustomerにメールアドレスを指定して絞り込む。logs:shop を根拠に入れ、記録の日時・操作・結果を示す。matched は走査した範囲の一致数。scanTruncated が true なら全期間の件数として答えず期間を狭める。rowsTruncated と summaryTruncated も明示する。ログがない・取得に失敗したことを正常動作の証拠にしない。アプリに届いたアクセスだけで、利用者数やCDN経由の全アクセス数ではない。内部エラーの詳細な原因が記録されていなければ断定しない。ログの保存開始前や90日より前は調べられない。回答はJSONのみ（answer と sources）。") : ""), contents, tools, timeoutMs: consultTimeoutMs });
       const calls = response.functionCalls || [];
       console.info(JSON.stringify({ event: "assistant_research_round", traceId, round, elapsedMs: Date.now() - started, tools: calls.map(call => call.name) }));
       const modelContent = response.candidates?.[0]?.content;
@@ -124,7 +137,7 @@ export async function research(question: string, data: ShopData, scope: Research
     }
     throw Object.assign(new Error(tr("記録を確認できませんでした。もう一度お尋ねください。")), { status: 502 });
   }
-  const parsed = researchSchema.parse(JSON.parse(await generateJson({ system: researchInstruction(), contents, schema: z.toJSONSchema(researchSchema), timeoutMs: consultTimeoutMs })));
+  const parsed = researchSchema.parse(JSON.parse(await generateJson({ system: researchInstruction() + chartInstruction, contents, schema: z.toJSONSchema(researchSchema), timeoutMs: consultTimeoutMs })));
   return { answer: parsed.answer, sources: [...new Set(parsed.sources)].filter(path => path in material).map(path => ({ path, title: sourceTitle(path) })) };
 }
 
@@ -164,7 +177,7 @@ export const conversationTools = (): ToolDeclaration[] => [
     usage: { type: "boolean", description: tr("使い方・機能・仕組み・ルール（どう操作するか、何ができるか）の質問なら true。お店の設定値・経緯・実データだけの質問なら false") },
     records: { type: "array", items: { type: "string", enum: recordKinds }, description: tr("答えるのに必要な実データ。bookings は予約台帳、customers はお客様ごとの来店回数・最終来店日・合計金額、inquiries はお問い合わせ。不要なら省略") },
     paypal: { type: "boolean", description: tr("PayPalの決済・返金・取引の状態や金額（返金が完了したか、止まっている返金、期間の返金合計など）を調べるなら true。PayPalの記録を読み取り専用で確認する") },
-    logs: { type: "boolean", description: tr("日別の訪問数やアクセス状況・ブログやお知らせのPVとユニークブラウザ数・エラー・PayPal処理の失敗や経過・お客様の行動履歴を調べるなら true。決済の最新状態も必要なら paypal も true") },
+    logs: { type: "boolean", description: "Also set true for booking funnel, cohort conversion, staff/menu sales and trends. " + tr("日別の訪問数やアクセス状況・ブログやお知らせのPVとユニークブラウザ数・エラー・PayPal処理の失敗や経過・お客様の行動履歴を調べるなら true。決済の最新状態も必要なら paypal も true") },
   }, required: ["question"] } },
   { name: "draft_request", description: tr("設定の変更や新しいページの作成を頼まれたとき、依頼文の下書きを画面に出す。反映はしない。"), parametersJsonSchema: { type: "object", properties: {
     change: { type: "string", description: tr("頼まれた変更の内容。時期や対象を具体的に") },
@@ -173,7 +186,7 @@ export const conversationTools = (): ToolDeclaration[] => [
 ];
 export function conversationInstruction(voice: boolean) {
   return tr("あなたはお店の運営画面のアシスタントで、店主やスタッフと会話します。お店のシステム・設定・経緯・実データに関する事実は、自分の知識で答えず必ず investigate で調べ、その結果だけを伝える。調査結果に書かれていないことは「書かれていません」と伝える。設定の変更や新しいページの作成を頼まれたら、実行したと言わず draft_request で依頼文の下書きを作り、画面で確認して承認するよう伝える。承認は必ず画面で行い、言葉での了承は承認にならない。進行はユーザー主導で、こちらから聞き取りを主導しない。ユーザーの言語で答える。")
-    + (voice ? tr(" 音声で読み上げるので、回答は1〜2文の短い話し言葉にする。investigate や draft_request を呼ぶ前には「調べますね」のような短い相づちだけを言い、結果が戻ったら要点を短く読み上げる。") : tr(" 回答は簡潔にする。"));
+    + (voice ? tr(" 音声で読み上げるので、回答は1〜2文の短い話し言葉にする。investigate や draft_request を呼ぶ前には「調べますね」のような短い相づちだけを言い、結果が戻ったら要点を短く読み上げる。") : tr(" 回答は簡潔にする。") + chartInstruction);
 }
 
 export type ConversationResult = { answer: string; sources: Source[]; draft?: RequestDraft };

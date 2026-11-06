@@ -19,8 +19,12 @@ test("LP HTML contains localized content and metadata before JavaScript runs", (
     assert.ok(html.includes(`rel="canonical" href="https://gemihub.net/lp${locale === "en" ? "?lang=en" : ""}"`));
     assert.ok(html.includes(`href="/?lang=${locale}"`));
     assert.match(html, /src="\/assets\/app.js"/);
-    assert.ok(html.includes(locale === "ja" ? "お店のことばが、" : "Your words."));
+    assert.ok(html.includes(locale === "ja" ? "お店のWebページを、" : "Your shop’s website."));
     assert.ok(!html.includes("/api/"));
+    assert.match(html, /data-feature="customers"/);
+    assert.match(html, /data-feature="analytics"/);
+    assert.ok(html.includes(locale === "ja" ? "お客様情報" : "Customer records"));
+    assert.ok(html.includes(locale === "ja" ? "売上・アクセス分析" : "Sales &amp; traffic"));
   }
 });
 
@@ -43,7 +47,7 @@ test("LP is public on the management host without database/session access; other
     assert.equal(english.headers.get("Content-Language"), "en");
     assert.match(english.headers.get("Content-Type")!, /text\/html/);
     assert.match(english.headers.get("Content-Security-Policy")!, /frame-ancestors 'none'/);
-    assert.match(await english.text(), /Your words\./);
+    assert.match(await english.text(), /Your shop’s website\./);
     const head = await fetch(base + "/lp", { method: "HEAD" });
     assert.equal(head.status, 200);
     assert.equal(await head.text(), "");

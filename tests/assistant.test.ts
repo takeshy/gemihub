@@ -13,6 +13,7 @@ import { converse, draftText, fixedConstraints, research, systemBundle, type Sho
 import { setOpenAiClient, setProviderResolver } from "../server/llm.ts";
 import { PayPalError } from "../server/paypal.ts";
 import { ShopLogs } from "../server/shop-logs.ts";
+import { bookingAnalytics } from "../server/booking-analytics.ts";
 
 process.env.DEMO_MODE = "true";
 process.env.OPENAI_API_KEY = "test";
@@ -34,6 +35,20 @@ function scripted(conversation: object[], researchSteps: object[]) {
 }
 const call = (name: string, args: object, id = "c1") => ({ output_text: "", output: [{ type: "function_call", call_id: id, name, arguments: JSON.stringify(args) }] });
 const say = (text: string) => ({ output_text: text, output: [] });
+
+test("cohort research uses shared analytics and preserves sourced Mermaid through the conversation", async () => {
+  const data = shopData(), store = new Store(":memory:");
+  const chart = '```mermaid\nxychart-beta\ntitle "Sales"\nx-axis ["Mon", "Tue"]\nbar [0, 0]\n```';
+  data.logs = new ShopLogs(store).toolsFor("own", undefined, undefined, async days => bookingAnalytics(sample, [], [], days));
+  const seen = scripted([
+    call("investigate", { question: "Staff sales and booking cohorts", logs: true }), say(chart),
+  ], [call("get_booking_analytics", { days: 7 }), say(JSON.stringify({ answer: chart, sources: ["logs:booking-analytics"] }))]);
+  const result = await converse({ question: "Show staff sales and booking cohorts", messages: [], data });
+  assert.equal(result.answer, chart);
+  assert.deepEqual(result.sources.map(source => source.path), ["logs:booking-analytics"]);
+  assert.ok(seen.every(body => body.instructions?.includes("Mermaid")));
+  await store.close();
+});
 function shopData(records: Record<string, unknown[]> = {}): ShopData & { reads: string[] } {
   const reads: string[] = [];
   return { reads, today: "2026-11-03", documents: documents(sample, [{ at: "2026-10-01T00:00:00Z", summary: "営業時間・休業日を更新", request: "水曜は仕込みに充てたいので定休日にして" }]),

@@ -8,6 +8,8 @@ import { WaitlistRequest, WaitlistWishes, type SlotWish } from "./Waitlist";
 import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers, type CancellationQuote, type MyTransfers, type TransferCheckout, type TransferListing } from "./Transfers";
 import { BookingComplete } from "./BookingComplete";
 import { browserVisitorId } from "./shop-access";
+import { ShopAnalytics } from "./ShopAnalytics";
+import type { BookingStep } from "../shared/booking-analytics";
 import { Coupons, CouponWallet } from "./Coupons";
 import { couponDiscount, couponDiscountLabel, type CouponWalletItem } from "../shared/coupons";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
@@ -389,7 +391,7 @@ function Dashboard({
   const shop = shops.find((s) => s.id === chosen) || shops[0];
   const creating = !!shop?.isOwner && !shop.published;
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
-  const activeTab = !publiclyPublished && ["bookings", "customers", "coupons"].includes(tab)
+  const activeTab = !publiclyPublished && ["bookings", "customers", "analytics", "coupons"].includes(tab)
     ? (shop?.isOwner ? "try" : "staff") : tab;
   const view = creating ? "build" : activeTab;
   function closeMobileMenu() {
@@ -430,7 +432,7 @@ function Dashboard({
     ["assistant", "✳", tr("相談・質問")],
     ["configuration", "⚙", tr("設定")],
     ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
-    ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")]] : []),
+    ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")], ["analytics", "▥", tr("分析")]] : []),
     ...(publiclyPublished && shop?.isOwner ? [["coupons", "◇", tr("クーポン")]] : []),
     ["inquiries", "✉", tr("お問い合わせ")],
     ...(articleKinds(shop?.published).length ? [["blog", "✎", articleKinds(shop?.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop?.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
@@ -576,12 +578,13 @@ function Dashboard({
                   </>
                 )}
                 {view === "assistant" && shop.published && <Assistant key={`${shop.id}:${session.user?.email}`} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} reload={load} />}
+                {view === "analytics" && <ShopAnalytics shopId={shop.id} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
                 {view === "coupons" && shop.isOwner && shop.published && <Coupons key={shop.id} shopId={shop.id} config={shop.published}/>}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop} onSaved={load}/></>}{!shop.isOwner && <><StaffCalendar key={shop.id} shop={shop} onSaved={load}/><StaffPhoto shop={shop} reload={load}/></>}</>}
                 {view === "bookings" && (
-                  <Reservations shop={shop} run={run} reload={load} />
+                  <Reservations key={shop.id} shop={shop} run={run} reload={load} />
                 )}
                 {view === "customers" && <Customers key={`${shop.id}:${initialCustomer}:${initialCustomerImages}:${initialInquiryId}`} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
                 {view === "blog" && (
@@ -1062,8 +1065,8 @@ function Reservations({
   reload: () => Promise<unknown>;
 }) {
   const api = useApi();
-  const { money: yen, when, displayTimeZone, timeZoneLabel } = useShopDisplay();
-  const [date, setDate] = useState("");
+  const { money: yen, when, shopToday, displayTimeZone, timeZoneLabel } = useShopDisplay();
+  const [date, setDate] = useState(() => shopToday());
   const [staff, setStaff] = useState("");
   const visibleBookings = shop.bookings.filter(b => (!date || dateIn(b.start, displayTimeZone()) === date) && (!staff || b.staffId === staff));
   const bookingPages = usePagination(visibleBookings, JSON.stringify([shop.id, date, staff]));
@@ -1102,6 +1105,8 @@ function Reservations({
             ))}
           </select>
         </Field>
+        <div className="reservation-filter-actions">
+        <button onClick={() => setDate(shopToday())}>{tr("今日")}</button>
         <button
           onClick={() => {
             setDate("");
@@ -1109,6 +1114,7 @@ function Reservations({
           }}
         >
           {tr("絞り込みを解除")}</button>
+        </div>
       </div>
       <div {...checkoutPages.listProps}>{checkoutPages.items.map(checkout => <div className="booking-card" key={checkout.id}>
         <div><h3>{tr("{0} 様・{1}", checkout.name, when(checkout.start))}</h3><p>{checkout.customer} ／ {yen(checkout.amount, checkout.currency || "JPY")}</p><p>{checkout.review ? tr("PayPalの決済結果を照合してください。予約枠を確保したまま、自動の課金再送は停止しています。") : tr("お支払い手続き中・予約未確定")}</p></div>
@@ -1118,10 +1124,17 @@ function Reservations({
       {!shop.bookings.length && !shop.paymentCheckouts?.length && (
         <Empty text={tr("最初の予約を、楽しみに待ちましょう。")} />
       )}
+      {!!shop.bookings.length && !visibleBookings.length && <Empty text={tr("指定した条件の予約はありません。日付・スタッフを変更するか、絞り込みを解除してください。")} />}
       <div {...bookingPages.listProps} className="booking-list">
         {bookingPages.items.map((b) => (
-            <div className="booking-card" key={b.id}>
-              <div>
+            <div className="booking-card reservation-booking" key={b.id}>
+              <div className="reservation-booking-body">
+                <div className="reservation-booking-header">
+                  <div className="reservation-booking-identity">
+                    <h3>{b.name} {tr(" 様 ")}</h3>
+                    <time dateTime={b.start}>{when(b.start)}</time>
+                  </div>
+                  <div className="reservation-booking-statuses">
                 <span className={`status ${b.status}`}>
                   {shop.transferListings?.some(listing => listing.bookingId === b.id) ? tr("キャンセル受付済み") : b.status === "active"
                     ? tr("予約確定")
@@ -1130,22 +1143,20 @@ function Reservations({
                       : tr("キャンセル済み")}
                 </span>
                 {!!b.transfers?.length && <span className="status transfer">{tr("キャンセル枠からの予約")}</span>}
-                <h3>
-                  {b.name} {tr(" 様 ")}<small>{when(b.start)}</small>
-                </h3>
-                <p>
-                  {bookingMenuName(shop.published, b)}{" "}
-                  /{" "}
-                  {bookingStaffName(shop.published, b.staffId)}
-                </p>
-                <span className="small muted">{b.customer}</span>
+                  </div>
+                </div>
+                <dl className="reservation-booking-summary">
+                  <div><dt>{tr("メニュー")}</dt><dd>{bookingMenuName(shop.published, b)}</dd></div>
+                  <div><dt>{tr("スタッフ")}</dt><dd>{bookingStaffName(shop.published, b.staffId)}</dd></div>
+                </dl>
+                <span className="small muted reservation-booking-email">{b.customer}</span>
                 {(() => {
                   const listing = shop.transferListings?.find(listing => listing.bookingId === b.id);
                   return listing && <p className="transfer-status" role="status"><span className="status transfer">{tr("お得な空き枠")}</span> {tr("{0}（{1}%引き）・{2}まで", paid(listing.price, listing.currency), listing.discountPercent, when(listing.deadline))}{listing.review ? tr("・PayPalの決済結果を照合してください") : listing.buying ? tr("・代わりの方が支払い手続き中") : ""}</p>;
                 })()}
                 <PaymentDetails booking={b} operator />
                 {b.coupon && <p>{b.coupon.title} · {tr("クーポン割引：{0}", yen(b.coupon.discountAmount,b.coupon.currency))}</p>}
-                {b.message && <p className="pre-wrap"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
+                {b.message && <p className="pre-wrap reservation-booking-message"><b>{tr("予約時のメッセージ")}</b><br />{b.message}</p>}
               </div>
               {b.status === "active" && (
                 <div className="actions">
@@ -1353,7 +1364,7 @@ export function PublicShop({
     const page = category ? articleKey ? "article" : category : pageSlug ? "custom" : pane === "about" ? "home" : pane;
     if (!["home", "reserve", "mine", "contact", "blogs", "announcements", "article", "custom"].includes(page)) return;
     const payload = { page, ...(page === "article" ? { category, key: articleKey } : {}), ...(page === "custom" ? { slug: pageSlug } : {}) };
-    const key = `${base}:${JSON.stringify(payload)}`;
+    const key = `${base}:${session.user?.email || ""}:${JSON.stringify(payload)}`;
     const report = () => {
       if (document.visibilityState !== "visible" || lastPageView.current === key) return;
       lastPageView.current = key;
@@ -1362,7 +1373,12 @@ export function PublicShop({
     };
     report(); document.addEventListener("visibilitychange", report);
     return () => document.removeEventListener("visibilitychange", report);
-  }, [api, base, slug, data?.shopId, data?.paymentSimulation, pane, category, articleKey, pageSlug, confirmed]);
+  }, [api, base, slug, data?.shopId, data?.paymentSimulation, pane, category, articleKey, pageSlug, confirmed, session.user?.email]);
+  function reportBookingStep(event: BookingStep, staffId?: string) {
+    if (!data || data.isOperator || data.paymentSimulation || location.protocol === "file:") return;
+    const visitorId = browserVisitorId(slug);
+    void api(`${base}/booking-events`, { event, ...(visitorId ? { visitorId } : {}), ...(staffId ? { staffId } : {}) }, { keepalive: true }).catch(() => {});
+  }
   useEffect(() => {
     if (!isCustomer || !data || data.isOperator || data.paymentSimulation || category || pageSlug || confirmed || location.protocol === "file:") { lastActivity.current = ""; return; }
     const event = pane === "reserve" ? "reserve_view" : pane === "mine" ? "mypage_view" : "";
@@ -1641,6 +1657,7 @@ export function PublicShop({
                         onClick={() => {
                           setMenu(m.id);
                           setOptionIds([]);
+                          reportBookingStep("menu_selected");
                         }}
                         key={m.id}
                       >
@@ -1661,7 +1678,7 @@ export function PublicShop({
                 {c.staff.some(person => person.id !== ownerStaffId) && <Field label={tr("スタッフ")}>
                   <select
                     value={staff}
-                    onChange={(e) => setStaff(e.target.value)}
+                    onChange={(e) => { setStaff(e.target.value); reportBookingStep("staff_selected", e.target.value || undefined); }}
                   >
                     <option value="">{tr("指名なし（空いているスタッフ）")}</option>
                     {bookingStaff(c)
@@ -1692,6 +1709,7 @@ export function PublicShop({
                       key={t.start}
                       onClick={() => {
                         setSelected(t.start);
+                        reportBookingStep("slot_selected", staff || t.staffId);
                         setRequestId(createRequestId());
                       }}
                     >
