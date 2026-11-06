@@ -15,3 +15,5 @@ export const Reservations: Story = {
   name: "予約管理",
   args: { scenario: "bookings" },
 };
+
+export const Pagination: Story = { name: "一覧・複数ページ", args: { scenario: "bookings-long" } };

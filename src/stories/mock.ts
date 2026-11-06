@@ -76,6 +76,13 @@ export type Scenario =
   | "image-page"
   | "crm-list"
   | "crm-detail"
+  | "crm-activity-long"
+  | "crm-pagination"
+  | "crm-inquiry-long"
+  | "crm-list-long"
+  | "bookings-long"
+  | "inquiries-long"
+  | "blog-long"
   | "crm-inquiry"
   | "crm-images"
   | "crm-images-empty"
@@ -188,7 +195,7 @@ export function scenarioProps(scenario: Scenario) {
                 ? "/s/salon-nagi"
                 : "/",
     // Remote/conflict fixtures change the FAQ page, so open that page rather than the default booking screen.
-    search: ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : scenario === "crm-detail" ? "?customer=guest%40example.com" : "",
+    search: ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry-long" ? "?customer=guest%40example.com&inquiry=pagination-inquiry-22" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : ["crm-detail", "crm-activity-long", "crm-pagination"].includes(scenario) ? "?customer=guest%40example.com" : "",
     initialTab: scenario.startsWith("owner-transfer-") ? "bookings" : ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
@@ -204,7 +211,8 @@ export function scenarioProps(scenario: Scenario) {
           "local-editor-new": "try",
           "blog-editor": "blog",
           bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
-          "crm-list": "customers", "crm-detail": "customers", "crm-inquiry": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
+          "crm-pagination": "customers", "crm-inquiry-long": "customers", "crm-list-long": "customers", "bookings-long": "bookings", "inquiries-long": "inquiries", "blog-long": "blog",
+          "crm-list": "customers", "crm-detail": "customers", "crm-activity-long": "customers", "crm-inquiry": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
           inquiries: "inquiries",
           "staff-login": "staff",
           "calendar-disconnected": "staff",
@@ -230,6 +238,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
   let pendingChatFailure = scenario === "proposal-failure" || scenario === "question-failure";
   let customerProfile: MemberProfile | null = scenario === "registration" ? null : { name: tr("山田 花子"), birthDate: "1990-01-01", gender: "female" };
   const posts = scenario === "empty-blog" ? [] : storyPosts();
+  if (scenario === "blog-long") {
+    const templates = [...posts];
+    posts.splice(0, posts.length, ...Array.from({ length: 23 }, (_, index) => ({ ...structuredClone(templates[index % templates.length]), id: `pagination-post-${index}` })));
+  }
   const config = structuredClone(sample);
   if (scenario.startsWith("us-")) { config.region = {country:"US",timeZone:"America/Los_Angeles"}; config.menus = config.menus.map((menu,i)=>({...menu,price:i?78:55.25})); }
   if (["menu-addons","manage-addons"].includes(scenario)) {
@@ -414,6 +426,16 @@ export function createMockClient(scenario: Scenario): ApiClient {
       customerNotes.push({ id: "story-note", shopId: shop.id, email: "guest@example.com", text: tr("落ち着いたピンクがお好み。次回は短めに整える。"), attachments: [], createdBy: shop.owner, createdAt: new Date(Date.now() - 86400000).toISOString(), updatedBy: shop.owner, updatedAt: new Date(Date.now() - 86400000).toISOString(), status: "active" });
     }
   }
+  if (["crm-pagination", "crm-inquiry-long", "crm-list-long", "bookings-long", "inquiries-long"].includes(scenario)) {
+    shop.bookings = []; shop.inquiries = []; customerNotes.length = 0;
+    for (let index = 0; index < 23; index++) {
+      for (const direction of [1, -1]) shop.bookings.push({ ...bookings[0], id: `pagination-booking-${direction}-${index}`, start: new Date(Date.now() + direction * (index + 1) * 86400000).toISOString(), end: new Date(Date.now() + direction * (index + 1) * 86400000 + 3600000).toISOString() });
+      const at = new Date(Date.now() - (index + 1) * 3600000).toISOString();
+      shop.inquiries.push({ id: `pagination-inquiry-${index}`, name: tr("山田 花子"), email: "guest@example.com", message: `${tr("お問い合わせ")} ${index + 1}`, reply: "", status: "in_progress", at });
+      shop.inquiries.push({ id: `pagination-customer-${index}`, name: `${tr("お客様")} ${index + 1}`, email: `customer${String(index + 1).padStart(2, "0")}@example.com`, message: tr("お問い合わせ"), reply: "", status: "in_progress", at });
+      customerNotes.push({ id: `pagination-note-${index}`, shopId: shop.id, email: "guest@example.com", text: `${tr("お店のメモ")} ${index + 1}`, attachments: [], createdBy: shop.owner, createdAt: at, updatedBy: shop.owner, updatedAt: at, status: "active" });
+    }
+  }
   if (scenario === "crm-images" || scenario.startsWith("image-library")) {
     // Generated placeholders keep Storybook independent of real customer photos.
     for (let index = 0; index < 3; index++) {
@@ -594,7 +616,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         const customer = current().find(customer => customer.email === email);
         if (!customer) throw new Error(tr("お客様が見つかりません"));
         const tail = route[2] || "";
-        if (tail === "activity") return structuredClone({ retentionDays: 90, truncated: false, rows: [
+        if (tail === "activity") return structuredClone({ retentionDays: 90, truncated: false, rows: ["crm-activity-long", "crm-pagination", "crm-inquiry-long"].includes(scenario) ? Array.from({ length: 23 }, (_, index) => ({ id: `activity-long-${index}`, at: new Date(now.getTime() - (index + 1) * 5 * 60000).toISOString(), operation: index % 2 ? "mypage_view" : "reserve_view" })) : [
           { id: "activity7", at: new Date(now.getTime() - 5 * 60000).toISOString(), operation: "booking_cancelled", bookingId: "booking-demo" },
           { id: "activity6", at: new Date(now.getTime() - 10 * 60000).toISOString(), operation: "booking_cancellation_withdrawn", bookingId: "booking-demo" },
           { id: "activity5", at: new Date(now.getTime() - 15 * 60000).toISOString(), operation: "booking_cancellation_requested", bookingId: "booking-demo" },

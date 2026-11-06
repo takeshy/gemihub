@@ -1,3 +1,4 @@
+import { Pagination, usePagination } from "./Pagination";
 import { tr } from "../shared/i18n";
 import { useShopDisplay } from "./money";
 import { articleKinds } from "../shared/article-features";
@@ -82,6 +83,7 @@ export function BlogEditor({
   const clean =
     !!current && JSON.stringify(content) === JSON.stringify(current.draft);
   const blocked = busy || mediaBusy || !shop.isOwner;
+  const postPages = usePagination(posts, shop.id);
   async function load() {
     const values = await api<Post[]>(base);
     setPosts(values);
@@ -417,7 +419,7 @@ export function BlogEditor({
         {!posts.length && (
           <p className="empty">{tr("最初のお便りを書いてみましょう。")}</p>
         )}
-        {posts.map((post) => (
+        <div {...postPages.listProps} className="post-management-items">{postPages.items.map((post) => (
           <button
             key={post.id}
             className={`post-management-item ${post.id === current?.id ? "selected" : ""}`}
@@ -431,7 +433,8 @@ export function BlogEditor({
             <strong>{post.draft.title}</strong>
             <small>{post.draft.date.replaceAll("-", "/")}</small>
           </button>
-        ))}
+        ))}</div>
+        <Pagination pagination={postPages} label={tr("お店のお便り")} disabled={blocked} />
       </div>
       <div className="post-editor-workspace">
         <section className="panel post-editor">

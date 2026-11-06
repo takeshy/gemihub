@@ -1,5 +1,6 @@
 import { serviceName } from "../shared/brand";
 import { Brand } from "./Brand";
+import { Pagination, usePagination } from "./Pagination";
 import { tr, intlLocale, listSeparator } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
@@ -1065,6 +1066,8 @@ function Reservations({
   const [date, setDate] = useState("");
   const [staff, setStaff] = useState("");
   const visibleBookings = shop.bookings.filter(b => (!date || dateIn(b.start, displayTimeZone()) === date) && (!staff || b.staffId === staff));
+  const bookingPages = usePagination(visibleBookings, JSON.stringify([shop.id, date, staff]));
+  const checkoutPages = usePagination(shop.paymentCheckouts || [], shop.id);
   return (
     <div className="panel reservations-panel">
       <div className="section-top">
@@ -1107,15 +1110,16 @@ function Reservations({
         >
           {tr("絞り込みを解除")}</button>
       </div>
-      {shop.paymentCheckouts?.map(checkout => <div className="booking-card" key={checkout.id}>
+      <div {...checkoutPages.listProps}>{checkoutPages.items.map(checkout => <div className="booking-card" key={checkout.id}>
         <div><h3>{tr("{0} 様・{1}", checkout.name, when(checkout.start))}</h3><p>{checkout.customer} ／ {yen(checkout.amount, checkout.currency || "JPY")}</p><p>{checkout.review ? tr("PayPalの決済結果を照合してください。予約枠を確保したまま、自動の課金再送は停止しています。") : tr("お支払い手続き中・予約未確定")}</p></div>
         <button onClick={() => run(async () => { await api(`/api/shops/${shop.id}/retry`, {}); await reload(); })}>{tr("決済状況を再確認")}</button>
-      </div>)}
+      </div>)}</div>
+      <Pagination pagination={checkoutPages} label={tr("お支払い手続き中")} />
       {!shop.bookings.length && !shop.paymentCheckouts?.length && (
         <Empty text={tr("最初の予約を、楽しみに待ちましょう。")} />
       )}
-      <div className="booking-list">
-        {visibleBookings.map((b) => (
+      <div {...bookingPages.listProps} className="booking-list">
+        {bookingPages.items.map((b) => (
             <div className="booking-card" key={b.id}>
               <div>
                 <span className={`status ${b.status}`}>
@@ -1170,6 +1174,7 @@ function Reservations({
             </div>
           ))}
       </div>
+      <Pagination pagination={bookingPages} label={tr("予約一覧")} />
     </div>
   );
 }

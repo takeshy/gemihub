@@ -3,6 +3,7 @@ import { tr } from "../shared/i18n";
 import type { CustomerActivityResult } from "../shared/customer-activity";
 import { useApi } from "./api";
 import { useShopDisplay } from "./money";
+import { Pagination, usePagination } from "./Pagination";
 
 export function CustomerActivityHistory({ base, rangeQuery }: { base: string; rangeQuery: string }) {
   const api = useApi();
@@ -10,6 +11,7 @@ export function CustomerActivityHistory({ base, rangeQuery }: { base: string; ra
   const [result, setResult] = useState<CustomerActivityResult>();
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
+  const pagination = usePagination(result?.rows || [], JSON.stringify([base, rangeQuery, attempt]));
   useEffect(() => {
     let active = true;
     setResult(undefined); setError("");
@@ -27,11 +29,12 @@ export function CustomerActivityHistory({ base, rangeQuery }: { base: string; ra
     {error && <p className="alert" role="alert">{error}</p>}
     {!result && !error && <p role="status">{tr("履歴を読み込んでいます…")}</p>}
     {result && !result.rows.length && <p className="empty">{tr("この期間の行動履歴はありません。")}</p>}
-    {result && <ol className="customer-history">{result.rows.map(row => <li key={row.id}>
+    {result && <ol {...pagination.listProps} className="customer-history">{pagination.items.map(row => <li key={row.id}>
       <time dateTime={row.at}>{shopTime(row.at, { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time>
       <h3>{labels[row.operation] || tr("お客様の操作")}</h3>
       {row.bookingId && <p className="small muted">{tr("予約ID：{0}", row.bookingId)}</p>}
     </li>)}</ol>}
-    {result?.truncated && <p className="small muted">{tr("最新100件を表示しています。")}</p>}
+    <Pagination pagination={pagination} label={tr("行動履歴")} />
+    {result?.truncated && <p className="small muted">{tr("これより古い履歴は省略しています（最新100件まで）。")}</p>}
   </section>;
 }

@@ -15,3 +15,5 @@ export const Inquiries: Story = {
   name: "問い合わせ返信",
   args: { scenario: "inquiries" },
 };
+
+export const Pagination: Story = { name: "一覧・複数ページ", args: { scenario: "inquiries-long" } };

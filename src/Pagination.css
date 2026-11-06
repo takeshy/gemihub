@@ -1,0 +1,4 @@
+.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 16px 0 0; }
+.pagination p { margin: 0; }
+.pagination-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pagination-buttons span { font-size: 13px; font-variant-numeric: tabular-nums; }

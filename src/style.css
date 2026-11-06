@@ -1540,6 +1540,7 @@ pre {
 .post-management-list {
   padding: 22px 18px;
 }
+.post-management-list .pagination { width: 100%; }
 .post-management-list h2 {
   font-size: 16px;
 }
@@ -1747,6 +1748,12 @@ pre {
   .post-management-list > p {
     width: 100%;
     margin: 0;
+  }
+  .post-management-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    width: 100%;
   }
   .post-management-item {
     width: calc(50% - 5px);

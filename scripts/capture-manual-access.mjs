@@ -59,9 +59,18 @@ try {
       await expect(traffic.locator('tbody tr')).toHaveCount(7);
       await capture(shots[0], traffic, width);
       await traffic.getByLabel(label('アクセス数の集計期間'), { exact: true }).selectOption('90');
-      await expect(traffic.locator('tbody tr')).toHaveCount(90);
+      const dailyNavigation = traffic.getByRole('navigation', { name: label('{0}のページ切替').replace('{0}', label('日別の訪問数')), exact: true });
+      const dates = [];
+      for (let index = 0; index < 9; index++) {
+        await expect(traffic.locator('tbody tr')).toHaveCount(10);
+        dates.push(...await traffic.locator('tbody time').allTextContents());
+        if (index < 8) await dailyNavigation.getByRole('button', { name: label('次のページ'), exact: true }).click();
+      }
+      assert.equal(new Set(dates).size, 90, 'Every day appears on exactly one page');
+      await expect(dailyNavigation.getByRole('button', { name: label('次のページ'), exact: true })).toBeDisabled();
       await traffic.getByRole('button', { name: label('更新'), exact: true }).click();
-      await expect(traffic.locator('tbody tr')).toHaveCount(90);
+      await expect(traffic.locator('tbody tr')).toHaveCount(10);
+      await expect(dailyNavigation.getByRole('button', { name: label('前のページ'), exact: true })).toBeDisabled();
 
       await open('運営/ブログ・お知らせ', 'access');
       const articles = page.getByRole('region', { name: label('お店のアクセス数'), exact: true });
@@ -76,6 +85,111 @@ try {
         await expect(activity.getByRole('heading', { name: label(text), exact: true })).toHaveCount(1);
       }
       await capture(shots[2], activity, width);
+      assert.ok(await activity.evaluate(element => element.nextElementSibling === null), 'Activity history is the last customer detail section');
+
+      await open('運営/予約・お客様/お客様', 'activity-long');
+      const longActivity = page.getByRole('region', { name: label('行動履歴'), exact: true });
+      const nav = (scope, name) => scope.getByRole('navigation', { name: label('{0}のページ切替').replace('{0}', label(name)), exact: true });
+      const next = navigation => navigation.getByRole('button', { name: label('次のページ'), exact: true });
+      const previous = navigation => navigation.getByRole('button', { name: label('前のページ'), exact: true });
+      const activityNavigation = nav(longActivity, '行動履歴');
+      await expect(longActivity.locator('ol > li')).toHaveCount(10);
+      await expect(previous(activityNavigation)).toBeDisabled();
+      await next(activityNavigation).click(); await expect(longActivity.locator('ol > li')).toHaveCount(10);
+      await next(activityNavigation).click(); await expect(longActivity.locator('ol > li')).toHaveCount(3);
+      await expect(next(activityNavigation)).toBeDisabled();
+      await previous(activityNavigation).click(); await expect(longActivity.locator('ol > li')).toHaveCount(10);
+      await longActivity.getByRole('button', { name: label('更新'), exact: true }).click();
+      await expect(longActivity.locator('ol > li')).toHaveCount(10);
+      await expect(previous(activityNavigation)).toBeDisabled();
+
+      await open('運営/予約・お客様/お客様', 'paged-detail');
+      const bookings = page.getByRole('region', { name: label('予約内容'), exact: true });
+      const upcoming = bookings.locator('div[tabindex="-1"]').first();
+      await expect(upcoming.locator('.customer-booking')).toHaveCount(10);
+      await next(nav(bookings, '今後の予約')).click();
+      await expect(upcoming.locator('.customer-booking')).toHaveCount(10);
+      await next(nav(bookings, '今後の予約')).click();
+      await expect(upcoming.locator('.customer-booking')).toHaveCount(3);
+      await bookings.locator('summary').click();
+      const past = bookings.locator('details');
+      await expect(past.locator('.customer-booking')).toHaveCount(10);
+      await next(nav(past, '過去の予約・キャンセル')).click();
+      await expect(past.locator('.customer-booking')).toHaveCount(10);
+      await expect(upcoming.locator('.customer-booking')).toHaveCount(3);
+      const responses = page.getByRole('region', { name: label('お問い合わせへの対応'), exact: true });
+      await expect(responses.locator('.customer-inquiry-target:visible')).toHaveCount(10);
+      const replyDraft = responses.getByRole('textbox', { name: label('返信内容'), exact: true }).first();
+      await replyDraft.fill('Draft kept across pages');
+      await next(nav(responses, 'お問い合わせへの対応')).click();
+      await expect(responses.locator('.customer-inquiry-target:visible')).toHaveCount(10);
+      await previous(nav(responses, 'お問い合わせへの対応')).click();
+      await expect(replyDraft).toHaveValue('Draft kept across pages');
+      const timeline = page.getByRole('heading', { name: label('お客様のタイムライン'), exact: true }).locator('..');
+      await expect(timeline.locator('ol > li:visible')).toHaveCount(10);
+      await next(nav(timeline, 'お客様のタイムライン')).click();
+      await timeline.getByRole('checkbox', { name: label('予約'), exact: true }).uncheck();
+      await expect(previous(nav(timeline, 'お客様のタイムライン'))).toBeDisabled();
+      await timeline.getByRole('checkbox', { name: label('お問い合わせ'), exact: true }).uncheck();
+      await expect(timeline.locator('ol > li:visible')).toHaveCount(10);
+      await timeline.getByRole('button', { name: label('メモを編集'), exact: true }).first().click();
+      const noteDraft = timeline.getByRole('textbox', { name: label('メモ本文'), exact: true }).first();
+      await noteDraft.fill('Note draft kept across pages');
+      await next(nav(timeline, 'お客様のタイムライン')).click();
+      await previous(nav(timeline, 'お客様のタイムライン')).click();
+      await expect(noteDraft).toHaveValue('Note draft kept across pages');
+      await timeline.getByRole('checkbox', { name: label('メモ'), exact: true }).uncheck();
+      await expect(timeline.locator('ol > li:visible')).toHaveCount(0);
+      await expect(timeline.locator('.pagination')).toHaveCount(0);
+      await timeline.getByRole('checkbox', { name: label('お問い合わせ'), exact: true }).check();
+      await next(nav(timeline, 'お客様のタイムライン')).click();
+      const inquiryLink = timeline.getByRole('button', { name: label('お問い合わせの対応を見る'), exact: true }).first();
+      await inquiryLink.click();
+      await expect(responses.locator('.customer-inquiry-target:visible')).toHaveCount(10);
+      assert.ok(await responses.locator('.customer-inquiry-target:visible').evaluateAll(nodes => nodes.some(node => node === document.activeElement)), 'Timeline link focuses the inquiry on its page');
+
+      await open('運営/予約・お客様/お客様', 'paged-inquiry');
+      const linkedInquiry = page.locator('[data-inquiry-id="pagination-inquiry-22"]');
+      await expect(linkedInquiry).toBeVisible(); await expect(linkedInquiry).toBeFocused();
+      const linkedResponses = page.getByRole('region', { name: label('お問い合わせへの対応'), exact: true });
+      await expect(linkedResponses.locator('.customer-inquiry-target:visible')).toHaveCount(3);
+      await expect(next(nav(linkedResponses, 'お問い合わせへの対応'))).toBeDisabled();
+
+      await open('運営/予約・お客様/お客様', 'paged-list');
+      await expect(page.locator('.customer-table tbody tr')).toHaveCount(10);
+      const customerNav = nav(page, 'お客様一覧');
+      await next(customerNav).click(); await expect(page.locator('.customer-table tbody tr')).toHaveCount(10);
+      await next(customerNav).click(); await expect(page.locator('.customer-table tbody tr')).toHaveCount(4);
+      await page.getByRole('searchbox', { name: label('氏名・メールで検索'), exact: true }).fill('customer23@');
+      await expect(page.locator('.customer-table tbody tr')).toHaveCount(1);
+      await page.getByRole('searchbox', { name: label('氏名・メールで検索'), exact: true }).fill('');
+      await expect(page.locator('.customer-table tbody tr')).toHaveCount(10);
+      await expect(previous(customerNav)).toBeDisabled();
+
+      await open('運営/予約・お客様/予約管理', 'pagination');
+      await expect(page.locator('.booking-list > .booking-card')).toHaveCount(10);
+      await next(nav(page, '予約一覧')).click();
+      await expect(page.locator('.booking-list > .booking-card')).toHaveCount(10);
+      await page.getByRole('combobox', { name: label('スタッフ'), exact: true }).selectOption('aoi');
+      await expect(previous(nav(page, '予約一覧'))).toBeDisabled();
+
+      await open('運営/予約・お客様/お問い合わせ', 'pagination');
+      await expect(page.locator('.inquiry-list-item')).toHaveCount(10);
+      await next(nav(page, 'お問い合わせ一覧')).click();
+      await page.getByRole('searchbox', { name: label('お問い合わせを検索'), exact: true }).fill(label('お問い合わせ') + ' 23');
+      await expect(page.locator('.inquiry-list-item')).toHaveCount(1);
+      await page.getByRole('searchbox', { name: label('お問い合わせを検索'), exact: true }).fill('');
+      await expect(page.locator('.inquiry-list-item')).toHaveCount(10);
+      await expect(previous(nav(page, 'お問い合わせ一覧'))).toBeDisabled();
+
+      await open('運営/ブログ・お知らせ', 'pagination');
+      await expect(page.locator('.post-management-item')).toHaveCount(10);
+      await next(nav(page, 'お店のお便り')).click();
+      await expect(page.locator('.post-management-item')).toHaveCount(10);
+      await next(nav(page, 'お店のお便り')).click();
+      await expect(page.locator('.post-management-item')).toHaveCount(3);
+      await expect(next(nav(page, 'お店のお便り'))).toBeDisabled();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${language}/${width}/pagination: no overflow`);
     }
     await open('運営/使い方', 'manual');
     if (language === 'en') assert.doesNotMatch(await page.locator('.manual').innerText(), /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u);
@@ -97,7 +211,7 @@ try {
       }
     }
     assert.deepEqual(errors, []);
-    console.log(`${language}: traffic periods, article counts, all activity states, manual images and zoom passed at desktop/mobile widths`);
+    console.log(`${language}: traffic periods, all list pagination, deep inquiry links, reply/note drafts, activity states, manual images and zoom passed at desktop/mobile widths`);
     await context.close();
   }
 } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }

@@ -3,6 +3,7 @@ import { useShopDisplay } from "./money";
 import React, { useRef, useState } from "react";
 import { DateInput } from "./DateInput";
 import { useApi } from "./api";
+import { Pagination, usePagination } from "./Pagination";
 import { createRequestId } from "./request-id";
 import type { Inquiry } from "./App";
 import {
@@ -29,6 +30,7 @@ export function Inquiries({
   const visible = validRange
     ? filterInquiries(inquiries, { showCompleted, query, reply, from, to }, displayTimeZone())
     : [];
+  const pagination = usePagination(visible, JSON.stringify([shopId, showCompleted, query, reply, from, to]));
   return (
     <section className="panel inquiries-list" aria-label={tr("お問い合わせ一覧")}>
       <h2>{tr("お問い合わせ")}</h2>
@@ -81,7 +83,7 @@ export function Inquiries({
           {tr("終了日は開始日以降にしてください。")}</p>
       )}
       <p className="small muted">
-        {visible.length}{tr("件表示／全")}{inquiries.length}{tr("件")}</p>
+        {tr("条件に一致：{0}件／全{1}件", visible.length, inquiries.length)}</p>
       {!visible.length && (
         <p className="empty">
           {inquiries.length
@@ -89,8 +91,8 @@ export function Inquiries({
             : tr("まだお問い合わせはありません。")}
         </p>
       )}
-      <div className="inquiry-list-items">
-        {visible.map((inquiry) => (
+      <div {...pagination.listProps} className="inquiry-list-items">
+        {pagination.items.map((inquiry) => (
           <a
             key={inquiry.id}
             className="inquiry-list-item"
@@ -118,6 +120,7 @@ export function Inquiries({
           </a>
         ))}
       </div>
+      <Pagination pagination={pagination} label={tr("お問い合わせ一覧")} />
     </section>
   );
 }

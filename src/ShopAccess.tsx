@@ -4,6 +4,7 @@ import { articleAccessDays, type ArticleAccessDays, type ArticleAccessResult, ty
 import { postLabel } from "../server/post-domain";
 import { useApi } from "./api";
 import "./ShopAccess.css";
+import { Pagination, usePagination } from "./Pagination";
 
 export function ShopAccess({ shopId, initialView = "daily" }: { shopId: string; initialView?: "daily" | "articles" }) {
   const api = useApi();
@@ -14,6 +15,8 @@ export function ShopAccess({ shopId, initialView = "daily" }: { shopId: string; 
   const [result, setResult] = useState<ArticleAccessResult>();
   const [traffic, setTraffic] = useState<SiteTrafficResult>();
   const [error, setError] = useState("");
+  const dailyPages = usePagination(traffic?.rows || [], JSON.stringify([shopId, days, view, attempt]));
+  const articlePages = usePagination(result?.rows || [], JSON.stringify([shopId, days, view, attempt]));
   useEffect(() => {
     if (!open) return;
     let active = true;
@@ -35,14 +38,16 @@ export function ShopAccess({ shopId, initialView = "daily" }: { shopId: string; 
       {!result && !traffic && !error && <p role="status">{tr("アクセス数を読み込んでいます…")}</p>}
       {traffic && <>
         <p>{tr("日付の基準：{0}。同じ日の同じブラウザは、複数ページ見ても1件です。", traffic.timeZone)}</p>
-        <div className="shop-access-scroll"><table className="shop-access-table"><thead><tr><th>{tr("日付")}</th><th>PV</th><th>{tr("ユニーク（ブラウザ）")}</th></tr></thead><tbody>{traffic.rows.map(row => <tr key={row.date}><td><time dateTime={row.date}>{row.date}</time></td><td>{row.views}</td><td>{row.uniqueBrowsers}</td></tr>)}</tbody></table></div>
+        <div {...dailyPages.listProps} className="shop-access-scroll"><table className="shop-access-table"><thead><tr><th>{tr("日付")}</th><th>PV</th><th>{tr("ユニーク（ブラウザ）")}</th></tr></thead><tbody>{dailyPages.items.map(row => <tr key={row.date}><td><time dateTime={row.date}>{row.date}</time></td><td>{row.views}</td><td>{row.uniqueBrowsers}</td></tr>)}</tbody></table></div>
+        <Pagination pagination={dailyPages} label={tr("日別の訪問数")} />
       </>}
       {result && <>
         <p><b>{tr("公開記事の合計：{0} PV", result.total)}</b>　{tr("ブログ：{0} PV・お知らせ：{1} PV", result.byCategory.blogs, result.byCategory.announcements)}</p>
-        {!result.rows.length ? <p className="empty">{tr("公開中の記事はありません。")}</p> : <div className="shop-access-scroll"><table className="shop-access-table article-access-table">
+        {!result.rows.length ? <p className="empty">{tr("公開中の記事はありません。")}</p> : <div {...articlePages.listProps} className="shop-access-scroll"><table className="shop-access-table article-access-table">
           <thead><tr><th>{tr("種類")}</th><th>{tr("記事")}</th><th>PV</th><th>{tr("ユニーク（ブラウザ）")}</th></tr></thead>
-          <tbody>{result.rows.map(row => <tr key={row.postId}><td>{postLabel(row.category)}</td><td style={{ overflowWrap: "anywhere" }}>{row.title}</td><td>{row.views}</td><td>{row.uniqueBrowsers}</td></tr>)}</tbody>
+          <tbody>{articlePages.items.map(row => <tr key={row.postId}><td>{postLabel(row.category)}</td><td style={{ overflowWrap: "anywhere" }}>{row.title}</td><td>{row.views}</td><td>{row.uniqueBrowsers}</td></tr>)}</tbody>
         </table></div>}
+        <Pagination pagination={articlePages} label={tr("ブログ・お知らせの記事別")} />
       </>}
     </details>
   </section>;
