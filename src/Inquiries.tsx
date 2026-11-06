@@ -6,19 +6,39 @@ import { useApi } from "./api";
 import { Pagination, usePagination } from "./Pagination";
 import { createRequestId } from "./request-id";
 import type { Inquiry } from "./App";
+import { InquiryCreate } from "./InquiryCreate";
+import { InquiryHistory, InquiryRecordForm, InquiryContact } from "./InquiryHistory";
+import "./Inquiries.css";
 import {
   filterInquiries,
-  inquiryReplied,
+  inquiryReplied, inquiryReplyLabel,
   inquiryStatus,
+  inquiryStatusLabel, inquiryStatuses, inquiryChannelLabel,
   type InquiryStatus,
 } from "../server/inquiries";
 export function Inquiries({
   shopId,
   inquiries,
+  reload,
 }: {
   shopId: string;
   inquiries: Inquiry[];
+  reload: () => Promise<unknown>;
 }) {
+  const api = useApi();
+  const [view, setView] = useState<"list" | "board">("list");
+  const [selectedId, setSelectedId] = useState("");
+  const [moving, setMoving] = useState(false), [error, setError] = useState("");
+  const moveBusy = useRef(false);
+  async function move(inquiry: Inquiry, status: InquiryStatus) {
+    if (moveBusy.current || inquiryStatus(inquiry) === status) return;
+    moveBusy.current = true; setMoving(true); setError("");
+    try {
+      await api(`/api/shops/${shopId}/inquiries/${inquiry.id}/status`, { status, previousStatus: inquiryStatus(inquiry) });
+      await reload();
+    } catch (error) { setError(error instanceof Error ? error.message : tr("対応状況を変更できませんでした。")); }
+    finally { moveBusy.current = false; setMoving(false); }
+  }
   const { shopTime, displayTimeZone } = useShopDisplay();
   const when = (at?: string) => at && Number.isFinite(Date.parse(at)) ? shopTime(at, {year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}) : tr("日時未記録");
   const [showCompleted, setShowCompleted] = useState(false),
@@ -31,9 +51,22 @@ export function Inquiries({
     ? filterInquiries(inquiries, { showCompleted, query, reply, from, to }, displayTimeZone())
     : [];
   const pagination = usePagination(visible, JSON.stringify([shopId, showCompleted, query, reply, from, to]));
+  const selected = inquiries.find(inquiry => inquiry.id === selectedId);
+  const refresh = async () => { await reload(); };
+  if (selected) return <section className="panel inquiry-detail" aria-label={tr("お問い合わせの詳細")}>
+    <button type="button" onClick={() => setSelectedId("")}>{tr("← お問い合わせ一覧へ")}</button>
+    {selected.email && <a className="button" data-customer-inquiry-link href={`/?${new URLSearchParams({ shop: shopId, customer: selected.email, inquiry: selected.id })}`}>{tr("お客様の詳細で対応する →")}</a>}
+    <CustomerInquiry key={selected.id} shopId={shopId} inquiry={selected} onChanged={refresh} onReload={refresh} />
+  </section>;
   return (
     <section className="panel inquiries-list" aria-label={tr("お問い合わせ一覧")}>
       <h2>{tr("お問い合わせ")}</h2>
+      <InquiryCreate shopId={shopId} onCreated={async inquiry => { await reload(); setSelectedId(inquiry.id); }} />
+      <div className="inquiry-view-switch" role="group" aria-label={tr("お問い合わせの表示方法")}>
+        <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}>{tr("一覧表示")}</button>
+        <button type="button" aria-pressed={view === "board"} onClick={() => { setView("board"); setShowCompleted(true); }}>{tr("カンバン表示")}</button>
+      </div>
+      {error && <p className="alert" role="alert">{error}</p>}
       <p>
         {tr("お客様のお名前やお問い合わせを開くと、お客様の詳細画面で返信・対応状況の変更ができます。")}</p>
       <div className="inquiry-filters">
@@ -91,38 +124,45 @@ export function Inquiries({
             : tr("まだお問い合わせはありません。")}
         </p>
       )}
-      <div {...pagination.listProps} className="inquiry-list-items">
-        {pagination.items.map((inquiry) => (
-          <a
-            key={inquiry.id}
-            className="inquiry-list-item"
-            data-customer-inquiry-link
-            aria-label={tr("{0}のお問い合わせを開く", inquiry.name)}
-            href={`/?${new URLSearchParams({ shop: shopId, customer: inquiry.email, inquiry: inquiry.id })}`}
-          >
-            <div className="inquiry-list-top">
-              <strong>{inquiry.name} {tr(" 様")}</strong>
-              <time dateTime={inquiry.at}>{when(inquiry.at)}</time>
-            </div>
-            <span className="small muted">{inquiry.email}</span>
-            <p className="inquiry-message-preview">{inquiry.message}</p>
-            <div className="inquiry-badges">
-              <span className={`pill inquiry-status-${inquiryStatus(inquiry)}`}>
-                {inquiryStatus(inquiry) === "completed" ? tr("対応済み") : tr("対応中")}
-              </span>
-              <span
-                className={`pill ${inquiryReplied(inquiry) ? "inquiry-replied" : "inquiry-unreplied"}`}
-              >
-                {inquiryReplied(inquiry) ? tr("返信済み") : tr("未返信")}
-              </span>
-              <span className="inquiry-open">{tr("お客様の詳細で対応する →")}</span>
-            </div>
-          </a>
-        ))}
-      </div>
-      <Pagination pagination={pagination} label={tr("お問い合わせ一覧")} />
+      {view === "list" ? <>
+        <div {...pagination.listProps} className="inquiry-list-items">{pagination.items.map(inquiry => <InquiryCard key={inquiry.id} inquiry={inquiry} shopId={shopId} when={when} open={() => setSelectedId(inquiry.id)} />)}</div>
+        <Pagination pagination={pagination} label={tr("お問い合わせ一覧")} />
+      </> : <div className="inquiry-board" aria-label={tr("お問い合わせカンバン")}>
+        {inquiryStatuses.map(status => <InquiryColumn key={status} status={status} inquiries={visible} shopId={shopId} resetKey={JSON.stringify([showCompleted, query, reply, from, to])} when={when} open={setSelectedId} move={move} busy={moving} />)}
+      </div>}
     </section>
   );
+}
+function InquiryCard({ inquiry, shopId, when, open }: { inquiry: Inquiry; shopId: string; when: (at?: string) => string | undefined; open: () => void }) {
+  const content = <>
+    <div className="inquiry-list-top"><strong>{inquiry.name} {tr(" 様")}</strong><time dateTime={inquiry.at}>{when(inquiry.at)}</time></div>
+    {inquiry.subject && <h3>{inquiry.subject}</h3>}
+    <span className="small muted">{inquiry.email || inquiry.phone || tr("連絡先未登録")}</span>
+    <p className="inquiry-message-preview">{inquiry.message}</p>
+    <div className="inquiry-badges"><span className={`pill inquiry-status-${inquiryStatus(inquiry)}`}>{inquiryStatusLabel(inquiryStatus(inquiry))}</span><span className="pill">{inquiryReplyLabel(inquiry)}</span></div>
+    <span className="inquiry-open">{inquiry.email ? tr("お客様の詳細で対応する →") : tr("やりとりを開く →")}</span>
+  </>;
+  return inquiry.email ? <a className="inquiry-list-item" data-customer-inquiry-link aria-label={tr("{0}のお問い合わせを開く", inquiry.name)} href={`/?${new URLSearchParams({ shop: shopId, customer: inquiry.email, inquiry: inquiry.id })}`}>{content}</a>
+    : <button type="button" className="inquiry-list-item" aria-label={tr("{0}のお問い合わせを開く", inquiry.name)} onClick={open}>{content}</button>;
+}
+function InquiryColumn({ status, inquiries, shopId, resetKey, when, open, move, busy }: { status: InquiryStatus; inquiries: Inquiry[]; shopId: string; resetKey: string; when: (at?: string) => string | undefined; open: (id: string) => void; move: (inquiry: Inquiry, status: InquiryStatus) => Promise<void>; busy: boolean }) {
+  const rows = inquiries.filter(inquiry => inquiryStatus(inquiry) === status);
+  const pagination = usePagination(rows, `${shopId}:${resetKey}`);
+  const label = inquiryStatusLabel(status);
+  return <section className="inquiry-column" aria-label={tr("{0}のお問い合わせ", label)} onDragOver={event => { if (!busy) event.preventDefault(); }} onDrop={event => {
+    event.preventDefault(); if (busy) return;
+    const inquiry = inquiries.find(inquiry => inquiry.id === event.dataTransfer.getData("text/plain"));
+    if (inquiry) void move(inquiry, status);
+  }}>
+    <h3>{label} <span className="count">{rows.length}</span></h3>
+    {!rows.length && <p className="small muted">{tr("この状態のお問い合わせはありません。")}</p>}
+    <div {...pagination.listProps}>{pagination.items.map(inquiry => <div className="inquiry-board-card" key={inquiry.id} draggable={!busy} onDragStart={event => { event.dataTransfer.setData("text/plain", inquiry.id); event.dataTransfer.effectAllowed = "move"; }}>
+      <div className="inquiry-drag-handle" draggable={!busy} role="img" aria-label={tr("ドラッグして対応状況を変更")} title={tr("ドラッグして対応状況を変更")}>⠿</div>
+      <InquiryCard inquiry={inquiry} shopId={shopId} when={when} open={() => open(inquiry.id)} />
+      <label className="inquiry-card-status">{tr("対応状況")}<select aria-label={tr("{0}の対応状況", inquiry.name)} value={status} disabled={busy} onChange={event => void move(inquiry, event.target.value as InquiryStatus)}>{inquiryStatuses.map(value => <option key={value} value={value}>{inquiryStatusLabel(value)}</option>)}</select></label>
+    </div>)}</div>
+    <Pagination pagination={pagination} label={label} disabled={busy} />
+  </section>;
 }
 export function CustomerInquiry({
   shopId,
@@ -173,12 +213,14 @@ export function CustomerInquiry({
         <h3>{tr("お問い合わせ")}</h3>
         <time dateTime={inquiry.at}>{when(inquiry.at)}</time>
       </div>
+      {inquiry.subject && <h4>{inquiry.subject}</h4>}
+      <p className="small muted">{inquiry.source && inquiryChannelLabel(inquiry.source)}{inquiry.phone && tr(" · 電話：{0}", inquiry.phone)}</p>
       <p className="customer-message">{inquiry.message}</p>
       <div className="inquiry-badges">
         <span
           className={`pill ${inquiryReplied(inquiry) ? "inquiry-replied" : "inquiry-unreplied"}`}
         >
-          {inquiryReplied(inquiry) ? tr("返信済み") : tr("未返信")}
+          {inquiryReplyLabel(inquiry)}
         </span>
         <label>
           {tr("対応状況")}<select
@@ -197,17 +239,14 @@ export function CustomerInquiry({
               });
             }}
           >
-            <option value="in_progress">{tr("対応中")}</option>
-            <option value="completed">{tr("対応済み")}</option>
+            {inquiryStatuses.map(value => <option key={value} value={value}>{inquiryStatusLabel(value)}</option>)}
           </select>
         </label>
       </div>
-      {inquiry.reply && (
-        <div className="customer-reply">
-          <b>{tr("お店からの返信（最新）")}</b>
-          <p className="customer-message">{inquiry.reply}</p>
-        </div>
-      )}
+      <InquiryContact inquiry={inquiry} shopId={shopId} onChanged={onChanged} />
+      <InquiryHistory inquiry={inquiry} />
+      <InquiryRecordForm shopId={shopId} inquiryId={inquiry.id} onChanged={onChanged} />
+      {!inquiry.email && <p className="small muted">{tr("メールアドレスがないためメールを送信できません。電話対応やメモとして記録してください。")}</p>}
       {error && (
         <div className="alert" role="alert">
           <p>{error}</p>
@@ -229,7 +268,7 @@ export function CustomerInquiry({
           {notice}
         </p>
       )}
-      <form
+      {inquiry.email && <form
         onSubmit={(event) => {
           event.preventDefault();
           const value = text.trim();
@@ -272,7 +311,7 @@ export function CustomerInquiry({
         <button className="primary" disabled={busy || !text.trim()}>
           {busy ? tr("保存しています…") : tr("メールで返信")}
         </button>
-      </form>
+      </form>}
     </article>
   );
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { memberProfile, type MemberProfile } from "./customer-profile.ts";
 import type { Booking } from "./domain.ts";
 import { dateIn, zonedDate } from "../shared/region.ts";
+import type { InquiryChannel, InquiryInteraction } from "./inquiries.ts";
 
 export const customerPeriods = [
   { value: "all", get label() { return tr("全期間"); } },
@@ -45,6 +46,11 @@ export type Inquiry = {
   reply: string;
   status: string;
   at: string;
+  phone?: string;
+  subject?: string;
+  source?: InquiryChannel;
+  createdBy?: string;
+  interactions?: InquiryInteraction[];
 };
 export type CustomerRecord = Partial<MemberProfile> & {
   shopId: string;

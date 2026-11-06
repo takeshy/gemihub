@@ -45,7 +45,8 @@ test("verified customers register their own profile before booking; profiles sta
   assert.equal((await api(`/api/shops/${shop.id}/customers/alice%40example.com`, undefined, "bob")).status, 403);
   assert.equal((await api(`${base}/inquiries`, {name: profile.name, message: "問い合わせの確認"})).status, 200);
   let date = new Date(Date.now() + 3 * 86400000);
-  if (date.getUTCDay() === 2) date = new Date(date.getTime() + 86400000);
+  // The requested date is shop-local: the UTC weekday differs around midnight.
+  while (sample.hours.closedWeekdays.includes(new Date(`${dateJST(date)}T00:00:00Z`).getUTCDay())) date = new Date(date.getTime() + 86400000);
   const slots = (await api(`${base}/slots?date=${dateJST(date)}&menu=${sample.menus[0].id}`)).body;
   assert.ok(slots.length);
   assert.equal((await api(`${base}/bookings`, {name: profile.name, menuId: sample.menus[0].id, start: slots[0].start})).status, 200);

@@ -62,15 +62,7 @@ export type Plan = {
   chat?: ChatReference;
   base: number;
 };
-export type Inquiry = {
-  id: string;
-  name: string;
-  email: string;
-  message: string;
-  reply: string;
-  status: string;
-  at?: string;
-};
+export type Inquiry = Omit<import("../server/customers").Inquiry, "shopId" | "at"> & { at?: string };
 export type Workspace = Shop & {
   isOwner: boolean;
   plans: Plan[];
@@ -594,7 +586,7 @@ function Dashboard({
                     demo={session.demo}
                   />
                 )}
-                {!creating && <div hidden={view!=="inquiries"}><Inquiries shopId={shop.id} inquiries={shop.inquiries}/></div>}
+                {!creating && <div hidden={view!=="inquiries"}><Inquiries key={shop.id} shopId={shop.id} inquiries={shop.inquiries} reload={load}/></div>}
                 {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {view === "settings" && (
                   <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />
@@ -1211,7 +1203,7 @@ function Settings({
         <p>{tr("設定や記録をまとめて保存できます。CSVはスプレッドシートでも開けます。写真・添付ファイルの本体はGoogle Driveに保存されています。")}</p>
         <a className="button" download href={`/api/shops/${shop.id}/export?format=json`}>{tr("まとめて保存（JSON）")}</a>
         <label>{tr("CSVで保存するデータ")}<select aria-label={tr("CSVで保存するデータ")} value={exportTable} onChange={event => setExportTable(event.target.value)}>
-          {[["bookings", tr("予約")], ["customers", tr("お客様")], ["inquiries", tr("お問い合わせ")], ["customerNotes", tr("お客様メモ")], ["members", tr("家族・スタッフ")], ["posts", tr("ブログ・お知らせ")], ["menus", tr("メニュー・料金")], ["staff", tr("スタッフ・勤務")]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          {[["bookings", tr("予約")], ["customers", tr("お客様")], ["inquiries", tr("お問い合わせ")], ["inquiryInteractions", tr("お問い合わせのやりとり")], ["customerNotes", tr("お客様メモ")], ["members", tr("家族・スタッフ")], ["posts", tr("ブログ・お知らせ")], ["menus", tr("メニュー・料金")], ["staff", tr("スタッフ・勤務")]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
         <a className="button" download href={`/api/shops/${shop.id}/export?format=csv&table=${exportTable}`}>{tr("選んだデータを保存（CSV）")}</a>
       </section>}

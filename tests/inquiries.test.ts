@@ -305,10 +305,12 @@ test("an accepted inquiry reply sends its queued email before removing the mail 
   });
   await store.put("inquiry", question.id, { ...question, shopId: shop.id });
   const sent: string[] = [];
+  let mailFailure = false;
   mock.method(google, "gmail", (() => ({
     users: {
       messages: {
         async send(input: { requestBody: { raw: string } }) {
+          if (mailFailure) throw new Error("Temporary Gmail failure");
           sent.push(Buffer.from(input.requestBody.raw, "base64url").toString());
         },
       },
@@ -343,4 +345,121 @@ test("an accepted inquiry reply sends its queued email before removing the mail 
   assert.equal(sent.length, 1);
   assert.ok(sent[0].includes(`To: ${question.email}`));
   assert.equal((await store.list("job")).length, 0);
+  assert.equal((await store.records<import("../server/inquiries.ts").InquiryInteraction>("inquiryInteraction", shop))[0].delivery, "sent");
+  const retryInput = { text: "A second email", requestId: randomUUID(), previousReply: "ご相談ありがとうございます" };
+  const retry = () => fetch(`${origin}/api/shops/${shop.id}/inquiries/${question.id}/reply`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" }, body: JSON.stringify(retryInput) });
+  mailFailure = true; assert.equal((await retry()).status, 200);
+  assert.equal((await store.list("job")).length, 1);
+  assert.equal((await store.records<import("../server/inquiries.ts").InquiryInteraction>("inquiryInteraction", shop)).filter(entry => entry.delivery === "retrying").length, 1);
+  mailFailure = false; assert.equal((await retry()).status, 200); assert.equal((await retry()).status, 200);
+  assert.equal(sent.length, 2, "retry delivers the pending email once without replacing history");
+  assert.equal((await store.list("job")).length, 0);
+  assert.ok((await store.records<import("../server/inquiries.ts").InquiryInteraction>("inquiryInteraction", shop)).every(entry => entry.delivery === "sent"));
+});
+
+test("manual inquiries keep phone, customer and internal history, scoped retries, contacts and independent kanban states", async t => {
+  process.env.DEMO_MODE = "true";
+  const store = new Store(":memory:");
+  const shop = await store.createShop("support-owner@example.com");
+  shop.published = structuredClone(sample); shop.google = { folderId: "folder", specId: "spec", historyId: "history" }; await store.saveShop(shop);
+  const other = await store.createShop("other-support@example.com");
+  for (const [id, email, role] of [["owner", shop.owner, "owner"], ["staff", "support-staff@example.com", "customer"], ["customer", question.email, "customer"], ["other", other.owner, "owner"], ["revoked", "revoked@example.com", "customer"]] as const) {
+    await store.put("session", digest(id), { user: { email, name: id, role, shopId: role === "customer" ? shop.id : undefined }, expires: Date.now() + 600000 });
+  }
+  await store.put("member", `${shop.id}:support-staff@example.com`, { shopId: shop.id, email: "support-staff@example.com", accepted: true });
+  await store.put("inquiry", "foreign", { ...question, id: "foreign", shopId: other.id });
+  const server = createApp(store);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
+  t.after(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
+  async function request(tail: string, data?: unknown, user = "owner") {
+    const response = await fetch(`${origin}/api/shops/${shop.id}/inquiries${tail}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${user}`, "Content-Type": "application/json" }, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+    return { status: response.status, body: await response.json() };
+  }
+  const input = { requestId: randomUUID(), name: "電話のお客様", phone: "03-1234-5678", subject: "電話でのご相談", source: "phone", message: "色の相談を受けた" };
+  for (const user of ["customer", "other", "revoked", "anonymous"]) {
+    assert.equal((await request("", input, user)).status, 403);
+    assert.equal((await request("", undefined, user)).status, 403);
+    assert.equal((await request("/foreign/interactions", { requestId: randomUUID(), kind: "note", text: "private" }, user)).status, 403);
+  }
+  const created = await request("", input, "staff"); assert.equal(created.status, 200);
+  const id = created.body.inquiry.id;
+  assert.equal(created.body.inquiry.email, ""); assert.equal(created.body.inquiry.status, "new"); assert.equal(created.body.inquiry.createdBy, "support-staff@example.com");
+  assert.equal((await request("", input)).body.inquiry.id, id);
+  assert.equal((await request("", { ...input, message: "変更" })).status, 409);
+  assert.equal((await request("", { ...input, requestId: randomUUID(), createdBy: "forged" })).status, 400);
+  assert.equal((await request("/foreign/interactions", { requestId: randomUUID(), kind: "note", text: "private" })).status, 404);
+  assert.equal((await request(`/${id}/reply`, { requestId: randomUUID(), text: "返信" })).status, 400);
+  assert.equal((await store.list("job")).length, 0, "phone-only creation and failed email do not send mail");
+  for (const kind of ["phone", "customer", "note"]) {
+    const entry = { requestId: randomUUID(), kind, text: `record-${kind}` };
+    assert.equal((await request(`/${id}/interactions`, entry, "staff")).status, 200);
+    assert.equal((await request(`/${id}/interactions`, entry)).status, 200);
+    assert.equal((await request(`/${id}/interactions`, { ...entry, text: "different" })).status, 409);
+  }
+  assert.equal((await store.records("inquiryInteraction", shop)).length, 3);
+  assert.equal((await store.list("job")).length, 0, "internal and incoming records never enqueue email");
+  let rows = (await request("")).body as Inquiry[];
+  assert.equal(filterInquiries(rows, { ...filter, query: "record-note" }).length, 1);
+  assert.equal(filterInquiries(rows, { ...filter, query: "03-1234" }).length, 1);
+  assert.equal(filterInquiries(rows, { ...filter, query: "電話でのご相談" }).length, 1);
+  assert.equal(rows[0].interactions?.length, 3);
+  const contact = { email: "guest@example.com", phone: input.phone, previousEmail: "", previousPhone: input.phone };
+  assert.equal((await request(`/${id}/contact`, contact)).status, 200);
+  assert.equal((await request(`/${id}/contact`, contact)).status, 200);
+  assert.equal((await request(`/${id}/contact`, { ...contact, email: "stale@example.com" })).status, 409);
+  await store.put("inquiry", "public", { ...question, id: "public", shopId: shop.id });
+  assert.equal((await request("/public/contact", contact)).status, 403, "verified public addresses cannot be replaced");
+  assert.equal((await request(`/${id}/status`, { status: "waiting", previousStatus: "new" })).status, 200);
+  assert.equal((await request(`/${id}/status`, { status: "completed", previousStatus: "new" })).status, 409);
+  const email = { requestId: randomUUID(), text: "email one", previousReply: "" };
+  assert.equal((await request(`/${id}/reply`, email)).status, 200);
+  assert.equal((await request(`/${id}/reply`, email)).status, 200);
+  assert.equal((await store.list("job")).length, 1);
+  assert.equal((await request(`/${id}/reply`, { requestId: randomUUID(), text: "email two", previousReply: "email one" })).status, 200);
+  rows = (await request("")).body;
+  const saved = rows.find(row => row.id === id)!;
+  assert.equal(saved.status, "waiting", "email does not move kanban state");
+  assert.equal(saved.reply, "email two");
+  assert.deepEqual(saved.interactions!.filter(entry => entry.kind === "email").map(entry => entry.text).sort(), ["email one", "email two"]);
+  assert.ok(saved.interactions!.filter(entry => entry.kind === "email").every(entry => entry.to === "guest@example.com" && entry.delivery === "queued"));
+  const customer = await fetch(`${origin}/api/shops/${shop.id}/customers/guest@example.com?period=all`, { headers: { Cookie: "gemihub_session=owner" } });
+  assert.equal(customer.status, 200);
+  const detail = await customer.json(); assert.equal(detail.history.find((event: any) => event.inquiry?.id === id).inquiry.interactions.length, 5);
+  const exportResponse = await fetch(`${origin}/api/shops/${shop.id}/export`, { headers: { Cookie: "gemihub_session=owner" } });
+  const exported = await exportResponse.json(); assert.equal(exported.records.inquiryInteractions.length, 5);
+  assert.ok(exported.records.inquiryInteractions.every((entry: any) => entry.shopId === shop.id));
+  await assert.rejects(store.delete("inquiryInteraction", saved.interactions![0].id), /状態変更/);
+});
+
+test("legacy reply retries stay idempotent and later emails preserve the previous reply without inventing its date", async t => {
+  const { writeInquiry, readInquiries } = await import("../server/inquiry-service.ts");
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("legacy-support@example.com"); shop.published = structuredClone(sample); await store.saveShop(shop);
+  await store.put("inquiry", question.id, { ...question, shopId: shop.id, reply: "old reply" });
+  const input = { requestId: randomUUID(), text: "old reply", previousReply: "" };
+  const key = digest(`${shop.id}:${question.id}:${input.requestId}`);
+  await store.put("inquiryReplyRequest", key, { shopId: shop.id, inquiryId: question.id, hash: digest(JSON.stringify({ text: input.text, previousReply: input.previousReply, status: null })), done: true });
+  const sent: unknown[] = [];
+  const queue = async (mail: unknown) => { sent.push(mail); };
+  await writeInquiry(store, shop, shop.owner, question.id, "reply", input, queue);
+  assert.equal(sent.length, 0, "retry from an older client never queues the original email twice");
+  await writeInquiry(store, shop, shop.owner, question.id, "reply", { requestId: randomUUID(), text: "new reply", previousReply: "old reply" }, queue);
+  const rows = await readInquiries(store, shop); assert.equal(rows[0].interactions!.length, 2);
+  const legacy = rows[0].interactions!.find(entry => entry.legacy)!; assert.equal(legacy.text, "old reply"); assert.equal(legacy.at, "");
+});
+
+test("an inquiry email and its retry receipt roll back when durable queueing fails", async t => {
+  const { writeInquiry } = await import("../server/inquiry-service.ts");
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("atomic-support@example.com"); shop.published = structuredClone(sample); await store.saveShop(shop);
+  await store.put("inquiry", question.id, { ...question, shopId: shop.id });
+  const input = { requestId: randomUUID(), text: "message", previousReply: "" };
+  await assert.rejects(writeInquiry(store, shop, shop.owner, question.id, "reply", input, async () => { throw new Error("queue unavailable"); }), /queue unavailable/);
+  assert.equal((await store.get<Inquiry>("inquiry", question.id))!.reply, "");
+  assert.equal((await store.records("inquiryInteraction", shop)).length, 0);
+  assert.equal((await store.list("inquiryEntryRequest")).length, 0);
+  let queued = 0;
+  await writeInquiry(store, shop, shop.owner, question.id, "reply", input, async () => { queued++; });
+  assert.equal(queued, 1); assert.equal((await store.records("inquiryInteraction", shop)).length, 1);
 });
