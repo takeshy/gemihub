@@ -82,8 +82,8 @@ In the video, a **$55** appointment has a **$38.50** expected refund (70%). It i
 
 Building a system that non-technical salon owners can configure purely through conversation required bridging the gap between casual human requests and strict software logic:
 
-- **People point, they don't specify**: Owners don't say *"update the hero section padding"*—they point and say *"fix this."* We built the red-pen tool to pass the screenshot, annotations, and DOM structure to the AI, while enforcing server-side scoping so edits never bleed into other sections.
-- **Everyday language is ambiguous, but money must be exact**: *"The day before"* could mean the previous calendar day or 24 hours prior. We designed the AI to translate casual phrasing into exact hour/percentage tiers, state its interpretation clearly for approval, and leave all payment execution strictly to deterministic server code.
+- **People point, they don't specify**: Owners don't say *"update the hero section padding"*—they point and say *"fix this."* I built the red-pen tool to pass the screenshot, annotations, and DOM structure to the AI, while enforcing server-side scoping so edits never bleed into other sections.
+- **Everyday language is ambiguous, but money must be exact**: *"The day before"* could mean the previous calendar day or 24 hours prior. I designed the AI to translate casual phrasing into exact hour/percentage tiers, state its interpretation clearly for approval, and leave all payment execution strictly to deterministic server code.
 - **Non-technical users don't know what to ask for**: Instead of blank forms, the AI interviews the owner, imports data from existing URLs/notes, and cites real shop records when answering questions.
 - **Earning trust**: Every AI action follows a strict **propose → preview → approve** workflow, logged in a plain-language change history.
 
@@ -99,9 +99,9 @@ Building a system that non-technical salon owners can configure purely through c
 
 ## What we learned
 
-**AI-generated designs break easily, so they must be effortless to verify.** While building gemihub with AI coding tools, we noticed that tweaking one screen often broke spacing or mobile layouts on another. We solved this for ourselves by cataloging every screen in **Storybook** with isolated mock data in both Japanese and English.
+**AI-generated designs break easily, so they must be effortless to verify.** While building gemihub with AI coding tools, I noticed that tweaking one screen often broke spacing or mobile layouts on another. I solved this for myself by cataloging every screen in **Storybook** with isolated mock data in both Japanese and English.
 
-We quickly realized shop owners face the exact same risk when redesigning their site with AI—so we built the same safety net directly into the product:
+I quickly realized shop owners face the exact same risk when redesigning their site with AI—so I built the same safety net directly into the product:
 - **Storefront screen catalog**: All pages (Booking, About, My Page, Contact, blog, custom pages, shared header/footer) appear side-by-side as live thumbnails so owners can spot layout issues at a glance.
 - **Visual version history**: Owners can restore the whole design or just a single screen, page, header or footer. The current design is saved before a restore, so they can undo it from version history. The 10 most recent archived versions are retained.
 
