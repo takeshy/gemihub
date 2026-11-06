@@ -1,0 +1,15 @@
+.shop-access { min-width: 0; }
+.shop-access summary { cursor: pointer; padding: 6px 0; font-size: 16px; }
+.shop-access .shop-access-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 16px; }
+.shop-access .shop-access-controls label { display: flex; flex: 1 1 160px; flex-direction: column; gap: 6px; }
+.shop-access .shop-access-controls select { width: 100%; min-width: 0; }
+.shop-access .shop-access-scroll { max-width: 100%; overflow-x: auto; }
+.shop-access .shop-access-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.shop-access .shop-access-table th,
+.shop-access .shop-access-table td { padding: 10px 12px; border-bottom: 1px solid var(--line, #e1e7dc); text-align: left; vertical-align: top; }
+.shop-access .shop-access-table th { font-weight: 600; }
+.shop-access .shop-access-table td:nth-last-child(-n+2),
+.shop-access .shop-access-table th:nth-last-child(-n+2) { text-align: right; font-variant-numeric: tabular-nums; }
+.shop-access .shop-access-table time { white-space: nowrap; }
+.shop-access .article-access-table { min-width: 380px; }
+.shop-access .article-access-table td:nth-child(2) { width: 50%; overflow-wrap: anywhere; }

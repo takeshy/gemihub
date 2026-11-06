@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app.ts";
+import { ShopLogs } from "../server/shop-logs.ts";
 import { digest } from "../server/auth.ts";
 import { Store } from "../server/store.ts";
 import { sample, dateJST, slots, type Booking } from "../server/domain.ts";
@@ -205,6 +206,9 @@ test("HTTP flow enforces consent, ownership, charge-before-booking, idempotence 
   unavailableRows.mock.restore();
   assert.equal((await request(`${base}/bookings/${id}/cancel`, "alice", {})).status, 200); assert.equal(f.calls.refund, 1);
   assert.equal((await request(base + "/bookings", "bob")).body.length, 0);
+  const activity = (await new ShopLogs(store).customerActivity(shop.id, "alice@example.com")).rows;
+  assert.equal(activity.filter(row => row.operation === "booking_completed").length, 1);
+  assert.equal(activity.filter(row => row.operation === "booking_cancelled").length, 1);
 });
 
 test("PayPal adapter uses Sandbox OAuth, integer JPY, stable request IDs and redacts failures", async () => {

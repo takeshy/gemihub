@@ -8,6 +8,10 @@ import { localizeShell } from "../shared/html.ts";
 import { tr, intlLocale, getLocale, listSeparator } from "../shared/i18n.ts";
 import { localeForRequest, requestLocale, regionForRequest } from "./i18n.ts";
 import { paypalGateway, type PaymentGateway } from "./paypal.ts";
+import { ShopLogs, loggedPaymentGateway, logRoute, pageViewShopLimit, pageViewAnonymousLimit } from "./shop-logs.ts";
+import { customerScreens } from "../shared/customer-activity.ts";
+import { type ArticleAccessDays, type ArticleAccessResult, type SiteTrafficResult } from "../shared/article-access.ts";
+import { articleKinds } from "../shared/article-features.ts";
 import { paymentService, checkoutView, type Checkout } from "./payments.ts";
 import { transferService, buyerBusy, type Transfer, type TransferEvent } from "./transfers.ts";
 import { maxWishesPerCustomer, queueWaitlistNotices, readWaitlistOpenings, slotWishInputSchema, waitlistBaseline, wishError, type SlotWish, type WaitlistListing } from "./waitlist.ts";
@@ -31,6 +35,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import { randomBytes, randomUUID, createHash } from "node:crypto";
+import { AsyncResource } from "node:async_hooks";
 import { resolveTxt } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
@@ -76,7 +81,7 @@ import {
   createFolder,
   trashFile,
 } from "./google.ts";
-import { regionOf, currencyOf, dateIn, formatMinor } from "../shared/region.ts";
+import { regionOf, currencyOf, dateIn, formatMinor, zonedDate } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
@@ -116,6 +121,7 @@ import {
   postLabel,
   postAddress,
   postKey,
+  postPath,
   validatePostAddress,
   uniquePostSlug,
   publicPosts,
@@ -242,9 +248,19 @@ export function createApp(
   loginMailer?: LoginMailer,
   storefrontFiles?: StorefrontFiles,
 ) {
+  const logs = new ShopLogs(store);
+  paymentGateway = loggedPaymentGateway(paymentGateway, logs);
+  const reportError = (error: unknown) => { logs.error(error); console.error(error); };
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const pageFiles = storefrontFiles || (store.memory ? memoryStorefrontFiles(store) : bucketStorefrontFiles());
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
+  const customerLoginLog = async (user: User) => {
+    if (user.role !== "customer" || !user.shopId) return;
+    try {
+      const shop = await store.shop(user.shopId);
+      if (shop && !isArchivedShop(shop) && !await operator(user, shop)) logs.activity(shop.id, user.email, "login");
+    } catch { console.warn(JSON.stringify({ event: "customer_login_log_failed", shopId: user.shopId })); }
+  };
   const customerEmailLogin = emailLogin(store, loginMailer || (async (shop, to, subject, text) => {
     if (shop.judge) { await enqueue(shop, "mail", { to, subject, body: text }); return; }
     const token = await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"));
@@ -304,7 +320,7 @@ export function createApp(
       const [spec, history] = await Promise.all([readDriveText(token, shop.google.specId), readDriveText(token, shop.google.historyId)]);
       return { spec: spec.trim() ? spec : generated.spec, history: history.trim() ? history : generated.history };
     } catch (error) {
-      console.error(error);
+      reportError(error);
       return generated;
     }
   }
@@ -313,9 +329,14 @@ export function createApp(
     const config = await effective(shop);
     const now = new Date();
     const paypalTools = await paypal.toolsFor(shop);
+    if (paypalTools) {
+      const invoke = paypalTools.invoke;
+      paypalTools.invoke = (name, args) => logs.forShop(shop.id, () => invoke(name, args));
+    }
     return {
       documents: await shopDocuments(shop),
       today: dateIn(now, regionOf(config).timeZone),
+      logs: logs.toolsFor(shop.id, days => articleAccess(shop, days), days => dailyTraffic(shop, days)),
       ...(paypalTools ? { paypal: paypalTools } : {}),
       records: async kind => {
         if (kind === "bookings") return (await store.bookings(shop.id)).map(booking => ({
@@ -355,6 +376,51 @@ export function createApp(
     return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
   };
   const postsFor = async (shop: Shop) => (await store.records<Post>("post", shop)).filter(post => !post.deletedAt);
+  const legacyArticleIds = new Map<string, Record<string, string>>();
+  async function publishedArticleId(shop: Shop, category: string | undefined, key: string | undefined) {
+    if (!category || !key || !articleKinds(shop.published).includes(category as "blogs" | "announcements")) fail(404, tr("記事がありません"));
+    const path = `${category}/${key}`, release = shop.storefrontRelease;
+    if (release && !release.paths.includes(storefrontFile(path, false, "ja"))) fail(404, tr("記事がありません"));
+    if (release?.posts) return release.posts[path] || fail(404, tr("記事がありません"));
+    // Compatibility for old releases: resolve their article IDs once, until the normal worker
+    // rebuilds the release with its immutable route-to-ID manifest. New releases need no post reads.
+    const cacheKey = `${shop.id}:${release?.id || "legacy"}`;
+    let ids = legacyArticleIds.get(cacheKey);
+    if (!ids) {
+      ids = Object.fromEntries(publicPosts(await postsFor(shop)).map(post => [`${post.category}/${postKey(post)}`, post.id]));
+      legacyArticleIds.set(cacheKey, ids);
+      if (legacyArticleIds.size > 64) legacyArticleIds.delete(legacyArticleIds.keys().next().value!);
+    }
+    return ids[path] || fail(404, tr("記事がありません"));
+  }
+  async function articleAccess(shop: Shop, days: ArticleAccessDays): Promise<ArticleAccessResult> {
+    const now = Date.now(), from = new Date(now - days * 86400000).toISOString(), to = new Date(now).toISOString();
+    const posts = publicPosts(await postsFor(shop)).filter(post => articleKinds(shop.published).includes(post.category));
+    const rows: ArticleAccessResult["rows"] = [];
+    // Server-side count aggregations avoid downloading traffic logs or silently sampling busy shops.
+    // Limit concurrent RPCs while counting every published article.
+    for (let offset = 0; offset < posts.length; offset += 8) {
+      rows.push(...await Promise.all(posts.slice(offset, offset + 8).map(async post => {
+        const [views, uniqueBrowsers] = await Promise.all([store.countPostViews(shop.id, post.id, from, to), store.countPostVisitors(shop.id, post.id, from, to)]);
+        return { postId: post.id, category: post.category, title: post.title, path: postPath(`/s/${shop.slug}`, post), views, uniqueBrowsers };
+      })));
+    }
+    rows.sort((a, b) => b.views - a.views || a.postId.localeCompare(b.postId));
+    const byCategory = { blogs: 0, announcements: 0 };
+    for (const row of rows) byCategory[row.category] += row.views;
+    return { days, from, to, total: byCategory.blogs + byCategory.announcements, byCategory, rows };
+  }
+  async function dailyTraffic(shop: Shop, days: ArticleAccessDays): Promise<SiteTrafficResult> {
+    const timeZone = regionOf(shop.published).timeZone;
+    const today = dateIn(new Date(), timeZone), dates: string[] = [];
+    for (let offset = 0; offset < days; offset++) {
+      const day = new Date(`${today}T00:00:00Z`);
+      day.setUTCDate(day.getUTCDate() - offset); dates.push(day.toISOString().slice(0, 10));
+    }
+    const rows: SiteTrafficResult["rows"] = [];
+    for (let offset = 0; offset < dates.length; offset += 8) rows.push(...await Promise.all(dates.slice(offset, offset + 8).map(day => store.countDailyTraffic(shop.id, day))));
+    return { days, timeZone, totalViews: rows.reduce((sum, row) => sum + row.views, 0), rows };
+  }
   // A missing or unreadable image is left out of the public page instead of blocking every save.
   async function storefrontImages(shop: Shop, posts: Post[]) {
     const token = store.memory ? "" : await ownerToken(shop) || "";
@@ -378,7 +444,7 @@ export function createApp(
         shop.storefrontRelease = release;
         storefrontRetry.delete(shop.id);
       } catch (error) {
-        console.error(error);
+        reportError(error);
         fail(503, tr("公開ページの保存に失敗しました。以前の公開ページは保持しています。同じ操作を再試行してください。"));
       }
     }
@@ -491,13 +557,13 @@ export function createApp(
   /** Scheduled runs also queue reminders and opening alerts. Failing to queue them must never hold back mail already waiting. */
   const flushMail = async (shop: Shop, scheduled = false) => {
     const latest = scheduled ? await store.shop(shop.id) : undefined;
-    const openings = latest ? await readWaitlistOpenings(store, latest, wish => availableSlots(store, latest, latest.published!, wish.date, wish.menuId, wish.staffId, calendar, undefined, wish.optionIds)).catch(error => { console.error(error); }) : undefined;
+    const openings = latest ? await readWaitlistOpenings(store, latest, wish => availableSlots(store, latest, latest.published!, wish.date, wish.menuId, wish.staffId, calendar, undefined, wish.optionIds)).catch(error => { reportError(error); }) : undefined;
     await store.locked(mailLockKey(shop.id), async () => {
       const fresh = await store.shop(shop.id);
       if (!fresh) return;
       const queueMail = (id: string, mail: Partial<Job>) => enqueue(fresh, "mail", mail, id);
-      if (scheduled) await queueBookingReminders(store, fresh, queueMail).catch(error => { console.error(error); });
-      if (openings) await queueWaitlistNotices(store, fresh, { openings, listings: () => waitlistListings(fresh), enqueue: queueMail }).catch(error => { console.error(error); });
+      if (scheduled) await queueBookingReminders(store, fresh, queueMail).catch(error => { reportError(error); });
+      if (openings) await queueWaitlistNotices(store, fresh, { openings, listings: () => waitlistListings(fresh), enqueue: queueMail }).catch(error => { reportError(error); });
       await flushJobs(fresh, "mail");
     });
   };
@@ -520,7 +586,11 @@ export function createApp(
   }
   const payments = paymentService(store, paymentGateway, async (booking, event) => {
     const key = `${booking.id}:${event}`;
-    if (await store.get("paymentNotice", key)) return;
+    const activity = () => {
+      if (event === "paid" && !booking.transfers?.length) logs.activity(booking.shopId, booking.customer, "booking_completed", booking.id);
+      else if (booking.status === "cancelled") logs.activity(booking.shopId, booking.customer, "booking_cancelled", booking.id);
+    };
+    if (await store.get("paymentNotice", key)) { activity(); return; }
     const shop = await store.shop(booking.shopId);
     if (!shop?.published) return;
     const config = shop.published;
@@ -530,12 +600,20 @@ export function createApp(
       await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
         tr("{0} 様\n予約: {1}\nメニュー: {2}{3}\n支払額: {4}\n{5}{6}", booking.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined);
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
+      activity();
     });
   });
   const shopWhen = (config: ShopConfig, at: string) => new Date(at).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" });
   async function transferNotice(transfer: Transfer, booking: Booking, event: TransferEvent) {
     const key = `transfer:${transfer.id}:${event}`;
-    if (await store.get("paymentNotice", key)) return;
+    const activity = () => {
+      if (event === "listed") logs.activity(transfer.shopId, transfer.seller, "booking_cancellation_requested", booking.id, transfer.id);
+      else if (event === "sold") {
+        const recipient = booking.transfers?.find(entry => entry.id === transfer.id)?.to.customer || transfer.buyer?.customer;
+        if (recipient) logs.activity(transfer.shopId, recipient, "booking_completed", booking.id, transfer.id);
+      } else logs.activity(transfer.shopId, transfer.seller, "booking_cancelled", booking.id);
+    };
+    if (await store.get("paymentNotice", key)) { activity(); return; }
     const shop = await store.shop(transfer.shopId);
     if (!shop?.published) return;
     const config = shop.published;
@@ -565,6 +643,7 @@ export function createApp(
         await notify(shop, config, transfer.seller, tr("{0} キャンセルの返金額が確定しました", config.name),
           tr("{0} 様\n{1}\n受付期限を過ぎたため、キャンセル受付時の返金予定額（{2}%返金・{3}）で確定しました。返金の状況は別のメールとマイページでお知らせします。", transfer.sellerName, visit, transfer.unsold.percent, money(transfer.unsold.amount)), []);
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
+      activity();
     });
   }
   const transfers = transferService(store, paymentGateway, payments, transferNotice);
@@ -713,7 +792,7 @@ export function createApp(
         fresh.publishingError =
           error instanceof Error ? error.message : tr("Google 連携エラー");
         await store.saveShop(fresh);
-        console.error(error);
+        reportError(error);
         fail(
           503,
           tr("保存・反映を完了できませんでした。同じ画面から再試行してください。処理中は予約受付を停止しています。"),
@@ -734,7 +813,7 @@ export function createApp(
     fresh.lastPublishedPlanId = plan.id;
     retireDesignVersions(fresh);
     await savePublicShop(fresh);
-    await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
+    await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError);
     if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
     await flushFiles(fresh);
     return { ok: true, url: `/s/${fresh.slug}` };
@@ -746,7 +825,23 @@ export function createApp(
       until: number;
     }
   >();
-  const server = createServer((req, res) => requestLocale.run(localeForRequest(req), async () => {
+  const telemetryAllowed = (key: string, limit: number) => {
+    const now = Date.now(), name = `telemetry:${key}`, current = rate.get(name);
+    const entry = current && current.until > now ? current : { n: 0, until: now + 60000 };
+    rate.set(name, entry);
+    if (rate.size > 10000) for (const [id, value] of rate) if (value.until <= now) rate.delete(id);
+    return ++entry.n <= limit;
+  };
+  const limitTelemetry = (key: string) => {
+    if (!telemetryAllowed(key, 240)) fail(429, tr("少し時間をおいてお試しください"));
+  };
+  const server = createServer((req, res) => logs.run(undefined, () => requestLocale.run(localeForRequest(req), async () => {
+    const started = Date.now();
+    const route = logRoute((req.url || "/").split("?")[0]);
+    const operation = `${["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"].includes(req.method || "") ? req.method : "OTHER"} ${route}`;
+    logs.setOperation(operation);
+    // close covers both completed and aborted responses, once, in the request's async context.
+    res.once("close", AsyncResource.bind(() => logs.record({ kind: "access", operation, ok: res.writableFinished && res.statusCode < 400, status: res.writableFinished ? res.statusCode : 499, durationMs: Date.now() - started })));
     res.setHeader("Content-Language", getLocale());
     res.setHeader("Vary", "Cookie, X-Gemihub-Language, Accept-Language");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -802,6 +897,10 @@ export function createApp(
           : undefined;
       if (host !== appHost && !hosted) fail(404, tr("お店が見つかりません"));
       const publicHost = !!hosted;
+      const ownerLogId = path.match(/^\/api\/shops\/([^/]+)(?:\/|$)/)?.[1];
+      const publicLogSlug = path.match(/^\/(?:api\/public|s)\/([^/]+)(?:\/|$)/)?.[1];
+      const logShop = hosted || allShops.find(shop => ownerLogId ? shop.id === ownerLogId : !!publicLogSlug && shop.slug === publicLogSlug && !!shop.published);
+      if (logShop) logs.bind(logShop.id);
       const s = await session(store, req);
       const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
       const savedJudgeOwner = async () => {
@@ -853,16 +952,18 @@ export function createApp(
       if (method !== "GET" && method !== "HEAD") {
         if (req.headers.origin !== (publicHost ? `https://${host}` : origin()))
           checkOrigin(req);
-        const key = `${req.socket.remoteAddress}:${path}`;
-        const current = rate.get(key);
-        const entry =
-          current && current.until > Date.now()
-            ? current
-            : { n: 0, until: Date.now() + 60000 };
-        if (++entry.n > 60) fail(429, tr("少し時間をおいてお試しください"));
-        rate.set(key, entry);
-        if (rate.size > 10000)
-          for (const [k, v] of rate) if (v.until < Date.now()) rate.delete(k);
+        if (!/^\/api\/public\/[^/]+\/(?:page-views|activity)$/.test(path)) {
+          const key = `${req.socket.remoteAddress}:${path}`;
+          const current = rate.get(key);
+          const entry =
+            current && current.until > Date.now()
+              ? current
+              : { n: 0, until: Date.now() + 60000 };
+          if (++entry.n > 60) fail(429, tr("少し時間をおいてお試しください"));
+          rate.set(key, entry);
+          if (rate.size > 10000)
+            for (const [k, v] of rate) if (v.until < Date.now()) rate.delete(k);
+        }
       }
       if (path === "/api/session" && method === "GET") {
         const judgeOwner = !publicHost ? await savedJudgeOwner() : undefined;
@@ -929,6 +1030,7 @@ export function createApp(
           return redirect(res, "/");
         }
         await login(store, res, ticket.user);
+        await customerLoginLog(ticket.user);
         return redirect(res, `${publicHost ? "/" : `/s/${ticket.slug}`}?pane=mine`);
       }
       const staffLogin = path.match(/^\/api\/staff-login\/([^/]+)$/);
@@ -1135,6 +1237,7 @@ export function createApp(
         }
         if (pending.shopId) await rememberJudgeOwner(pending.shopId);
         await login(store, res, u);
+        await customerLoginLog(u);
         if (!pending.shopId && u.legacyNotes) {
           return redirect(res, "/settings/migration");
         }
@@ -1222,6 +1325,7 @@ export function createApp(
           const ownerId = cookie(req, "gemihub_session")!;
           const customer: User = { email: `judge-customer-${randomBytes(6).toString("hex")}@${judgeEmailDomain}`, name: tr("審査用のお客様"), role: "customer", shopId: own.id };
           await login(store, res, customer, judgeUntil()!.getTime());
+          await customerLoginLog(customer);
           appendCookie(res, `gemihub_judge_owner=${ownerId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((judgeUntil()!.getTime() - Date.now()) / 1000))}${secureCookie}`);
           return json(res, { ok: true, slug: own.slug });
         }
@@ -1314,7 +1418,7 @@ export function createApp(
         if (path === "/api/admin/ai-test" && method === "POST") {
           const input = z.object({ provider: z.enum(["vertex", "openai"]) }).parse(await body(req));
           try { return json(res, await testProvider(input.provider)); }
-          catch (error) { const status = (error as { status?: number }).status; if (status && status < 500) throw error; console.error(error); return json(res, { ok: false, error: error instanceof Error ? error.message : String(error) }); }
+          catch (error) { const status = (error as { status?: number }).status; if (status && status < 500) throw error; reportError(error); return json(res, { ok: false, error: error instanceof Error ? error.message : String(error) }); }
         }
         fail(404, tr("見つかりません"));
       }
@@ -1346,6 +1450,7 @@ export function createApp(
           shopId: shop.id, email, name: u.name, birthDate: "1990-01-01", gender: "not_specified", updatedBy: email, updatedAt: new Date().toISOString(),
         });
         await login(store, res, u);
+        await customerLoginLog(u);
         return json(res, { ok: true });
       }
       if (user?.role === "owner" && user.legacyNotes && !publicHost && path.startsWith("/api/")) {
@@ -1512,7 +1617,7 @@ export function createApp(
           assertOwner(user, shop);
           const input = z.object({ proposalId: z.string().min(1).max(200), alertId: z.string().min(1).max(200), fingerprint: z.string().min(1).max(200) }).parse(await body(req, 10000));
           const result = await paypal.execute(shop, input, user!.email);
-          await syncPaymentHistory(shop.id).catch(console.error);
+          await syncPaymentHistory(shop.id).catch(reportError);
           return json(res, result, result.ok ? 200 : 409);
         }
         const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
@@ -1553,6 +1658,12 @@ export function createApp(
           const email = normalizeEmail(decodeURIComponent(customerRoute[1]));
           const customer = customers.find(customer => customer.email === email) || fail(404, tr("お客様が見つかりません"));
           const tail = customerRoute[2] || "";
+          if (tail === "activity") {
+            const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
+            const now = new Date(), timeZone = regionOf(shop.published).timeZone;
+            const since = customerSince(filter, now, timeZone);
+            return json(res, await logs.customerActivity(shop.id, email, since ? zonedDate(since, "00:00", timeZone).toISOString() : undefined));
+          }
           if (!tail) return json(res, customer);
           if (tail === "images") return json(res, {
             name: customer.name,
@@ -1731,6 +1842,10 @@ export function createApp(
             return json(res, post);
           });
         }
+        if ((action === "access" || action === "posts/access") && method === "GET") {
+          const days = z.union([z.literal("7"), z.literal("30"), z.literal("90")]).parse(url.searchParams.get("days") || "30");
+          return json(res, action === "access" ? await dailyTraffic(shop, Number(days) as ArticleAccessDays) : await articleAccess(shop, Number(days) as ArticleAccessDays));
+        }
         if (action === "posts" && method === "GET") { await assertOperator(user, shop); return json(res, await postsFor(shop)); }
         if (action === "posts/metadata" && method === "POST") {
           assertOwner(user,shop);
@@ -1825,7 +1940,7 @@ export function createApp(
             } catch (error) {
               fresh.publishingError = error instanceof Error ? error.message : tr("Google 連携エラー");
               await store.saveShop(fresh);
-              console.error(error);
+              reportError(error);
               fail(503, tr("復元を完了できませんでした。版履歴から同じ版の復元を再試行してください。処理中は予約受付を停止しています。"));
             }
             // Only a whole-design restore makes that version "current"; a single screen leaves the rest as it is.
@@ -1840,7 +1955,7 @@ export function createApp(
             // Drafts, article records, bookings, customer/inquiry records and payments are untouched.
             retireDesignVersions(fresh);
             await savePublicShop(fresh);
-            await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(console.error);
+            await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError);
             // Post pages embed the header/footer, so they follow the restored design.
             await enqueue(fresh, "posts");
             await flushFiles(fresh);
@@ -2739,6 +2854,7 @@ export function createApp(
           const customer = await customerEmailLogin.verify(shop, requestOrigin, input);
           await rememberJudgeOwner(shop.id);
           await login(store, res, customer);
+          await customerLoginLog(customer);
           return json(res, { ok: true, redirectTo: `${storefrontPath}?pane=mine&lang=${getLocale()}` });
         }
         const imageRead = action.match(/^(menu-images|images)\/([a-f0-9]{64})$/);
@@ -2749,6 +2865,32 @@ export function createApp(
           const ids = imageRead[1] === "images" ? managedImageIds(config) : config.menus.filter(menu => menu.active).map(menu => menu.imageId);
           if (!ids.includes(imageRead[2]) && !(imageRead[1] === "images" && publishedPostImageIds(await postsFor(shop)).includes(imageRead[2]))) fail(404, tr("画像がありません"));
           return await imageResponse(req, res, shop, imageRead[2], url);
+        }
+        if (action === "page-views" && method === "POST") {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(shop);
+          const input = z.object({ page: z.enum(["home", "reserve", "mine", "contact", "blogs", "announcements", "article", "custom"]), category: postCategorySchema.optional(), key: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(), slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/).optional(), visitorId: z.uuid().optional() }).strict().parse(await body(req, 600));
+          let postId: string | undefined;
+          // Beyond a budget the view goes uncounted, without a write or an error for the owner to chase.
+          if (!telemetryAllowed(`${shop.id}:views`, pageViewShopLimit) || !input.visitorId && !telemetryAllowed(`${shop.id}:views:anonymous`, pageViewAnonymousLimit)) return json(res, { ok: true, ignored: true });
+          if (input.visitorId) limitTelemetry(`${shop.id}:views:${input.visitorId}`);
+          if (input.page === "article") {
+            postId = await publishedArticleId(shop, input.category, input.key);
+          } else if (input.category || input.key) fail(400, tr("入力形式が不正です"));
+          if (input.page === "custom" ? !shop.published!.pages.some(page => page.slug === input.slug) : !!input.slug) fail(404, tr("見つかりません"));
+          if ((input.page === "blogs" || input.page === "announcements") && !articleKinds(shop.published).includes(input.page)) fail(404, tr("見つかりません"));
+          if (shop.publication !== "provisional" && !await operator(user, shop)) logs.pageView(shop.id, input.page, dateIn(new Date(), regionOf(shop.published).timeZone), input.visitorId, postId);
+          return json(res, { ok: true });
+        }
+        if (action === "activity" && method === "POST") {
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(shop);
+          const input = z.object({ event: z.enum(customerScreens) }).strict().parse(await body(req, 200));
+          if (await operator(user, shop)) return json(res, { ok: true, ignored: true });
+          if (!user || user.role !== "customer" || user.shopId !== shop.id) fail(403, tr("このお店のお客様としてログインしてください"));
+          limitTelemetry(`${shop.id}:activity:${user.email}`);
+          logs.activity(shop.id, user.email, input.event);
+          return json(res, { ok: true });
         }
         const bookingAction = /^(?:bookings|checkouts|slots|transfers|waitlist)(?:\/|$)/.test(action);
         let deliverMail = false;
@@ -2785,6 +2927,7 @@ export function createApp(
                 if (input.expectedTransfer) fail(409, tr("キャンセル条件が変わりました。返金予定額と受付期限を確認し直してください。"));
               }
               const booking = await payments.cancel(paid, u.email, "customer", at);
+              logs.activity(shop.id, u.email, "booking_cancelled", booking.id);
               deliverMail = true;
               return ({ ok: true, booking: customerBooking(booking) });
             }
@@ -2853,6 +2996,7 @@ export function createApp(
                   : { ...config, notificationEmail: undefined },
               shopId: shop.id,
               canEdit: user?.email === shop.owner && user.authMethod !== "email" && !publicHost,
+              isOperator: await operator(user, shop),
               customerProfile: profile,
               registrationRequired: isCustomer && !profile,
               preview: false,
@@ -2984,6 +3128,7 @@ export function createApp(
               if (t.seller !== u.email) fail(404, tr("この空き枠は見つかりません"));
               if (Date.now() >= Date.parse(t.deadline)) fail(409, tr("受付期限を過ぎたため、キャンセルは取り消せません。返金状況をご確認ください。"));
               await transfers.withdraw(t);
+              logs.activity(shop.id, u.email, "booking_cancellation_withdrawn", t.bookingId, t.id);
               return ({ ok: true });
             }
             if (verb === "checkout") {
@@ -3088,6 +3233,7 @@ export function createApp(
               const returnUrl = back.href;
               back.searchParams.set("paypal", "cancel");
               const checkout = await payments.begin(b, config.rules.payment.refundTiers, returnUrl, back.href, currencyOf(regionOf(config)), config.name);
+              logs.activity(shop.id, u.email, "booking_started", b.id);
               return ({ ok: false, checkout: checkoutView(checkout) });
             }
             await store.transaction(async () => {
@@ -3108,6 +3254,7 @@ export function createApp(
               );
             });
             deliverMail = true;
+            logs.activity(shop.id, u.email, "booking_completed", b.id);
             return ({ ok: true, booking: customerBooking(b) });
           }
           const cancel = action.match(/^bookings\/([^/]+)\/cancel$/);
@@ -3142,6 +3289,7 @@ export function createApp(
               );
             });
             deliverMail = true;
+            logs.activity(shop.id, u.email, "booking_cancelled", b.id);
             return ({ ok: true });
           }
           if (action === "inquiries" && method === "POST") {
@@ -3177,7 +3325,7 @@ export function createApp(
         });
         if (deliverMail) {
           await flushMail(shopRef);
-          void syncPaymentHistory(shopRef.id).catch(console.error);
+          void syncPaymentHistory(shopRef.id).catch(reportError);
         }
         return json(res, result);
       }
@@ -3340,6 +3488,7 @@ export function createApp(
       );
       res.end(method === "HEAD" ? undefined : data);
     } catch (error) {
+      logs.error(error, `${req.method || "OTHER"} ${route}`);
       const err = error as Error & {
         status?: number;
       };
@@ -3366,7 +3515,7 @@ export function createApp(
         status,
       );
     }
-  }));
+  })));
   attachAssistantLive(server, async (req, shopId) => {
     const s = await session(store, req);
     const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
@@ -3385,18 +3534,19 @@ export function createApp(
       for (const shop of shops.filter(
         (s) => s.published && !isArchivedShop(s),
       )) {
-        void reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)).catch(console.error);
-        void syncFiles(shop.id).catch(console.error);
-        void flushMail(shop, true).catch(console.error);
-        void paypal.check(shop, { notify: true }).catch(console.error);
-        void hasActiveCoupons(store, shop).then(active => active ? store.locked(bookingLockKey(shop.id), async () => {
+        const job = (operation: string, work: () => Promise<unknown>) => logs.run(shop.id, () => void work().catch(error => { logs.error(error); console.error(error); }), operation);
+        job("reconcile_payments", () => reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)));
+        job("sync_files", () => syncFiles(shop.id));
+        job("deliver_mail", () => flushMail(shop, true));
+        job("paypal_check", () => paypal.check(shop, { notify: true }));
+        job("issue_coupons", () => hasActiveCoupons(store, shop).then(active => active ? store.locked(bookingLockKey(shop.id), async () => {
           const fresh = await store.shop(shop.id);
           if (fresh) await issueCoupons(store, fresh);
-        }) : undefined).catch(console.error);
+        }) : undefined));
       }
-    })().catch(console.error);
+    })().catch(reportError);
   }, 60000);
   timer.unref();
-  server.on("close", () => { stopped = true; clearInterval(timer); });
+  server.on("close", () => { stopped = true; clearInterval(timer); void logs.drain(); });
   return server;
 }

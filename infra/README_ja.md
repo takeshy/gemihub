@@ -171,3 +171,12 @@ Google OAuthは `projects/495062043717/secrets/google-client-id/versions/1` と 
 - ページのHTMLが `/_assets/` のCSS・画像を参照し、それらが200を返すこと。
 - `?pane=reserve`・`?pane=mine`・`?pane=contact` の操作画面で、ログイン・予約・お問い合わせが従来どおり動くこと。
 - 保存に失敗した店舗はアプリのログに `Storefront <店舗ID>: background release failed` と出ます。再試行は30秒から最大1時間まで間隔を空けて行います。
+
+
+店舗ログは既存Firestore DBを使います。CRMの行動履歴を利用する前に、`main.tf` の `gemihub_log_events.expiresAt` TTLと、`customerKey`・`at`降順の複合索引を適用してください。新規バケットやOAuthスコープは不要です。TTL削除待ちでもアプリの検索は90日より前を除外します。
+
+アクセス集計には追加の `postId`・`at` 索引と、`gemihub_article_visitors.expiresAt`・`gemihub_daily_visitors.expiresAt` のTTLも必要です。画面を利用する前に適用してください。BigQueryや外部Analyticsのアカウントは不要です。
+
+ログの絞り込み検索には `log_search` の複合索引（種類・成否・顧客・照合IDの組み合わせと日時降順）も適用してください。顧客だけの検索は既存の `customer_activity` 索引を使います。
+
+閲覧の記録上限は店舗ごとに1分1200件、ブラウザIDなしはその内数で1分240件です。この2枠を超えたイベントは200・`ignored: true`で除外し、集計やエラーログには加えません。画面のアクセス数は記録できた閲覧の集計です。

@@ -7,6 +7,7 @@ import { syncBuiltinESMExports } from "node:module";
 import { google } from "googleapis";
 import type OpenAI from "openai";
 import { createApp } from "../server/app.ts";
+import { ShopLogs } from "../server/shop-logs.ts";
 import { Store, type Shop, type User } from "../server/store.ts";
 import { sample, shopSchema, shopDate, ownerStaffId } from "../server/domain.ts";
 import { availableSlots, bookingCalendars, calendarScope, type CalendarGateway } from "../server/calendar.ts";
@@ -81,6 +82,7 @@ test("judges start without Google, see recorded mail instead of sending it, swit
   const customerSession = await (await call("/api/session", undefined, `${customer}; ${ownerMemo}`)).json() as { user: { role: string; email: string }; judgeCustomer?: boolean };
   assert.equal(customerSession.user.role, "customer");
   assert.equal(customerSession.judgeCustomer, true);
+  assert.ok((await new ShopLogs(store).customerActivity(shop.id, customerSession.user.email)).rows.some(row => row.operation === "login"));
   assert.equal((await call(`/api/public/${shop.slug}`, undefined, customer)).status, 200, "the judge's trial customer may use the provisional shop");
   const stranger = cookies(await call("/api/judge/start", { invite }))[0];
   const strangerCustomer = cookies(await call("/api/judge/customer", {}, stranger)).find(value => value.startsWith("gemihub_session="));

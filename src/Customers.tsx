@@ -6,6 +6,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { bookingMenuName, bookingStaffName, type Booking, type ShopConfig } from "../server/domain";
 import { customerPeriods, customerFilterSchema, customerSince, type CustomerFilter, type CustomerSummary, type CustomerDetail } from "../server/customers";
 import { CustomerImageGallery } from "./CustomerImages";
+import { CustomerActivityHistory } from "./CustomerActivity";
+import { ShopAccess } from "./ShopAccess";
 import { CustomerNoteComposer, CustomerNoteCard } from "./CustomerNotes";
 import { CustomerInquiry } from "./Inquiries";
 import { inquiryReplied, inquiryStatus } from "../server/inquiries";
@@ -52,6 +54,7 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
   });
   if (selected) return <CustomerProfile key={selected} shopId={shopId} email={selected} initialImages={initialImages && selected === initialEmail} config={config} rangeQuery={rangeQuery} rangeLabel={rangeLabel} initialInquiryId={selected === initialEmail ? initialInquiryId : ""} backToInquiries={backToInquiries} inquiriesChanged={inquiriesChanged} back={() => setSelected("")} saved={customer => { setCustomers(current => current?.map(item => item.email === customer.email ? customer : item)); setAttempt(value => value + 1); }} />;
   return <div className="panel customers">
+    <ShopAccess shopId={shopId} />
     <h2>{tr("お客様一覧 ")}{customers && <span className="pill">{customers.length}{tr("人")}</span>}</h2>
     <p className="muted small">{tr("予約・お問い合わせから自動で集計します。来店実績は、終了した予約のうちキャンセル・無断キャンセルを除く件数です。")}</p>
     {error && <div className="alert" role="alert">{error}<button onClick={() => setAttempt(value => value + 1)}>{tr("再読み込み")}</button></div>}
@@ -142,6 +145,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
         {!customer.history.some(event => event.kind === "inquiry") && <p className="empty">{tr("この期間のお問い合わせはありません。")}</p>}
         {customer.history.map(event => event.kind === "inquiry" && <div key={event.inquiry.id} data-inquiry-id={event.inquiry.id} className="customer-inquiry-target" tabIndex={-1} ref={node => { if (node) inquiryNodes.current.set(event.inquiry.id,node); else inquiryNodes.current.delete(event.inquiry.id); }}><CustomerInquiry shopId={shopId} inquiry={event.inquiry} onChanged={reloadInquiries} onReload={reloadInquiries}/></div>)}
       </section>
+      <CustomerActivityHistory base={base} rangeQuery={rangeQuery} />
       <div className="panel"><h2>{tr("お客様のタイムライン")}</h2><p className="small muted">{tr("チェックした種類を新しい順に表示（{0}）", timeZoneLabel)}</p>
         <fieldset className="customer-history-filter">
           <legend>{tr("タイムラインの表示")}</legend>

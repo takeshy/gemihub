@@ -11,6 +11,7 @@ import { submitOnShortcut } from "./submit-shortcut";
 import "./BlogEditor.css";
 import React, { useEffect, useState, useRef, useId, lazy, Suspense } from "react";
 import { useApi } from "./api";
+import { ShopAccess } from "./ShopAccess";
 import { PostContent } from "./PostContent";
 import {
   postLabel,
@@ -406,6 +407,7 @@ export function BlogEditor({
     );
   return (
     <div className="blog-editor-layout">
+      <ShopAccess shopId={shop.id} initialView="articles" />
       <div className="panel post-management-list">
         <div className="section-top">
           <h2>{tr("お店のお便り")}</h2>

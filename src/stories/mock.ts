@@ -25,6 +25,7 @@ import {
   publicPosts,
   summarizePost,
   postKey,
+  postPath,
   postContentSchema,
   validatePostAddress,
   uniquePostSlug,
@@ -581,6 +582,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (/\/(menu-images|images)\/[a-f0-9]{64}$/.test(action)) {
       const image = menuImages.get(action.split("/").at(-1)!); if (!image) throw new Error(tr("メニュー画像がありません")); result = image;
     }
+    else if (/^\/api\/public\/[^/]+\/(?:activity|page-views)$/.test(action)) result = { ok: true };
     else if (action.startsWith(`/api/shops/${shop.id}/customers`)) {
       const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
       const now = new Date();
@@ -592,6 +594,16 @@ export function createMockClient(scenario: Scenario): ApiClient {
         const customer = current().find(customer => customer.email === email);
         if (!customer) throw new Error(tr("お客様が見つかりません"));
         const tail = route[2] || "";
+        if (tail === "activity") return structuredClone({ retentionDays: 90, truncated: false, rows: [
+          { id: "activity7", at: new Date(now.getTime() - 5 * 60000).toISOString(), operation: "booking_cancelled", bookingId: "booking-demo" },
+          { id: "activity6", at: new Date(now.getTime() - 10 * 60000).toISOString(), operation: "booking_cancellation_withdrawn", bookingId: "booking-demo" },
+          { id: "activity5", at: new Date(now.getTime() - 15 * 60000).toISOString(), operation: "booking_cancellation_requested", bookingId: "booking-demo" },
+          { id: "activity4", at: new Date(now.getTime() - 20 * 60000).toISOString(), operation: "booking_completed", bookingId: "booking-demo" },
+          { id: "activity3", at: new Date(now.getTime() - 25 * 60000).toISOString(), operation: "booking_started", bookingId: "booking-demo" },
+          { id: "activity2", at: new Date(now.getTime() - 30 * 60000).toISOString(), operation: "reserve_view" },
+          { id: "activity1", at: new Date(now.getTime() - 35 * 60000).toISOString(), operation: "mypage_view" },
+          { id: "activity0", at: new Date(now.getTime() - 40 * 60000).toISOString(), operation: "login" },
+        ] }) as T;
         if (tail === "images") return structuredClone({ name: customer.name, images: customerImages(customerNotes.filter(note => note.email === email)) }) as T;
         if (tail === "notes") {
           const id = String(input.requestId);
@@ -681,6 +693,17 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else if (input.target === "name") next.name = tr("季節のアトリエ");
       else next.description = tr("季節を楽しむ、小さなネイルサロン。");
       result = { config: next, summary: [tr("選んだ対象をローカルで変更")] };
+    }
+    else if (action === `/api/shops/${shop.id}/access`) {
+      const days = Number(url.searchParams.get("days") || 30);
+      const rows = Array.from({ length: days }, (_, index) => ({ date: new Date(Date.now() - index * 86400000).toISOString().slice(0, 10), views: Math.max(0, 120 - index), uniqueBrowsers: Math.max(0, 65 - index) }));
+      result = { days, timeZone: "Asia/Tokyo", totalViews: rows.reduce((sum, row) => sum + row.views, 0), rows };
+    }
+    else if (action === `/api/shops/${shop.id}/posts/access`) {
+      const days = Number(url.searchParams.get("days") || 30);
+      const rows = publicPosts(posts).map((post, index) => ({ postId: post.id, category: post.category, title: post.title, path: postPath(`/s/${shop.slug}`, post), views: Math.round((index + 1) * days * 2.4), uniqueBrowsers: Math.round((index + 1) * days * 1.5) }));
+      const byCategory = { blogs: 0, announcements: 0 }; for (const row of rows) byCategory[row.category] += row.views;
+      result = { days, from: new Date(Date.now() - days * 86400000).toISOString(), to: new Date().toISOString(), total: byCategory.blogs + byCategory.announcements, byCategory, rows };
     }
     else if (action === `/api/shops/${shop.id}/posts/metadata`) {
       const article=input.content as {title:string;body:string};

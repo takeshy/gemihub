@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app.ts";
+import { ShopLogs } from "../server/shop-logs.ts";
 import { digest } from "../server/auth.ts";
 import { Store } from "../server/store.ts";
 import { sample, dateJST, slots, type Booking } from "../server/domain.ts";
@@ -351,6 +352,11 @@ test("HTTP: listing, browsing, buying and privacy; non-transferable menus and ca
   assert.equal(operatorView.transfers![0].from.customer, "alice@example.com", "operators keep the full transfer record");
   assert.equal(operatorView.transfers![0].from.message, booking.message);
   assert.match((await store.shop(shop.id))!.history.at(-1)!.summary, /Alice 様 → Bob 様/);
+  const logs = new ShopLogs(store);
+  assert.ok((await logs.customerActivity(shop.id, "alice@example.com")).rows.some(row => row.operation === "booking_cancellation_requested"));
+  const bobActivity = (await logs.customerActivity(shop.id, "bob@example.com")).rows;
+  assert.equal(bobActivity.filter(row => row.operation === "booking_completed").length, 1);
+  assert.ok(bobActivity.some(row => row.operation === "booking_cancellation_withdrawn"));
 });
 
 test("reconciliation retries a failed sold event and commits its acknowledgement with side effects", async () => {
@@ -471,6 +477,8 @@ test("HTTP: a failed sale notice and shop history recover once, addressed to tha
   assert.equal((await checkout()).booking.transfers![0].refund.status, "completed");
   assert.equal(await store.get("paymentNotice", noticeKey), undefined);
   assert.equal((await store.shop(shop.id))!.history.length, 0, "failed notice rolls back shop history");
+  const logs = new ShopLogs(store);
+  assert.equal((await logs.customerActivity(shop.id, "bob@example.com")).rows.filter(row => row.operation === "booking_completed").length, 0, "a failed outer transaction does not commit activity");
   // Before the next background pass, Bob transfers the reservation to Carol.
   const again = await transfers.list(await checkout(), "bob@example.com", (await transfers.quote(await checkout())).terms!);
   await transfers.begin(again, { customer: "carol@example.com", name: "Carol", requestKey: "c" }, "https://r", "https://c");
@@ -494,4 +502,6 @@ test("HTTP: a failed sale notice and shop history recover once, addressed to tha
   assert.equal((await store.shop(shop.id))!.history.length, 1);
   assert.equal((await store.list("job")).length, jobs.length, "retries do not enqueue duplicate mail or history exports");
   assert.equal(f.calls.capture, 3); assert.equal(f.calls.refund, 2);
+  assert.equal((await logs.customerActivity(shop.id, "bob@example.com")).rows.filter(row => row.operation === "booking_completed").length, 1, "replayed sale keeps one event for the original buyer");
+  assert.equal((await logs.customerActivity(shop.id, "carol@example.com")).rows.filter(row => row.operation === "booking_completed").length, 0);
 });

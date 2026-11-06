@@ -82,6 +82,7 @@ export function attachAssistantLive(server: Server, authorize: (req: IncomingMes
             usage: { type: Type.BOOLEAN, description: tr("使い方・機能・仕組み・ルール（どう操作するか、何ができるか）の質問なら true。お店の設定値・経緯・実データだけの質問なら false") },
             records: { type: Type.ARRAY, items: { type: Type.STRING, enum: ["bookings", "customers", "inquiries"] }, description: tr("答えるのに必要な実データ。bookings は予約台帳、customers はお客様ごとの来店回数・最終来店日・合計金額、inquiries はお問い合わせ。不要なら省略") },
             paypal: { type: Type.BOOLEAN, description: tr("PayPalの決済・返金・取引の状態や金額（返金が完了したか、止まっている返金、期間の返金合計など）を調べるなら true。PayPalの記録を読み取り専用で確認する") },
+            logs: { type: Type.BOOLEAN, description: tr("日別の訪問数やアクセス状況・ブログやお知らせのPVとユニークブラウザ数・エラー・PayPal処理の失敗や経過・お客様の行動履歴を調べるなら true。決済の最新状態も必要なら paypal も true") },
           }, required: ["question"] } },
           { name: "draft_request", description: tr("設定の変更や新しいページの作成を頼まれたとき、依頼文の下書きを画面に出す。反映はしない。"), parameters: { type: Type.OBJECT, properties: {
             change: { type: Type.STRING, description: tr("頼まれた変更の内容。時期や対象を具体的に") },

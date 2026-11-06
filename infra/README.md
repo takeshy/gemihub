@@ -188,3 +188,12 @@ After deploying, verify that:
 - Page HTML refers to CSS and images under `/_assets/`, and those return 200.
 - Sign-in, booking and inquiries still work on the `?pane=reserve`, `?pane=mine` and `?pane=contact` screens.
 - A shop whose release fails logs `Storefront <shop id>: background release failed`; retries back off from 30 seconds up to one hour.
+
+
+Shop logs use the existing Firestore database. Apply the `gemihub_log_events.expiresAt` TTL policy and the `customerKey` + descending `at` composite index in `main.tf` before enabling CRM activity queries. No new bucket or OAuth scope is required. Application queries exclude records older than 90 days even while TTL deletion is pending.
+
+Traffic reports additionally require the `postId` + `at` index and the `gemihub_article_visitors.expiresAt` / `gemihub_daily_visitors.expiresAt` TTL policies. Apply these resources before enabling the reports; no BigQuery or external analytics account is needed.
+
+Filtered log searches also require the `log_search` composite indexes (category, success/failure, customer and reference combinations plus descending time). The `customer_activity` index covers the customer-only query.
+
+Page-view recording is capped at 1,200 events per shop per minute, with a 240/min sub-budget for events without a browser ID. These excess events return 200 with `ignored: true`; they do not appear in counts or add error logs. Reported traffic is therefore recorded traffic, not a complete audit of every visit.

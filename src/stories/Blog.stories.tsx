@@ -18,6 +18,12 @@ export const BlogEditor: Story = {
   args: { scenario: "blog-editor" },
 };
 
+export const Access: Story = {
+  name: "記事別のPV・ユニークブラウザ数",
+  args: { scenario: "blog-editor" },
+  play: async ({ canvasElement }) => { await userEvent.click(await within(canvasElement).findByText(tr("お店のアクセス数"))); },
+};
+
 export const TextArticle: Story = {name:"テキストで作成・画像を追加",args:{scenario:"blog-editor"}};
 
 export const WriteArticle: Story = {name:"自分で作成・テキスト入力",args:{scenario:"blog-editor"}};

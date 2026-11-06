@@ -18,6 +18,16 @@ Bookings and inquiries are grouped by email address. The shop sees visit counts,
 
 Customers send inquiries from the shop page. The shop replies from the management screen; the reply is emailed to the customer and the inquiry status is updated.
 
+# Traffic and activity history
+
+Open "Shop traffic" in Customers or Blog posts and announcements to view daily visits or article traffic over 7, 30 or 90 days. This includes visitors who have not signed in or registered. PV counts page displays, including reloads. Daily unique browsers count the same browser once per shop-local calendar day across all pages; article unique browsers count each browser once per article in the chosen period. Dates follow the shop's configured time zone.
+
+Unique browsers approximate people. Separate devices, private browsing, cleared storage and the 90-day browser-ID rotation may count separately. When browser storage is unavailable, a display contributes PV only. Never add daily or article unique counts and call the result overall unique people. Signed-in owners and accepted staff, previews, provisional pages and offline displays are excluded. Views before logging began or that could not be sent are unavailable. These are major page displays rather than complete click tracking. Under extreme traffic each shop counts at most 1,200 views per minute, so totals can be lower than actual views.
+
+Customer details also show signed-in activity history: login, opening booking and My page screens, booking confirmation and cancellation. This personal history is separate from anonymous traffic; anonymous browser IDs are not matched to customer names or email addresses.
+
+For actual counts, assistant research uses `get_daily_traffic` (`logs:traffic`) and `get_article_access_counts` (`logs:articles`), shared with the management reports. Use `search_shop_logs` (`logs:shop`) for access, errors, PayPal processing diagnostics and signed-in activity. Generic log search is bounded; do not use its truncated counts instead of traffic aggregates. Only owners and accepted staff can read shop reports and histories.
+
 # Staff
 
 The owner grants Calendar FreeBusy access during normal owner sign-in, alongside Drive and Gmail permissions. The owner is a booking provider without a staff registration, and their calendar is checked automatically. New shops start with no additional staff. The owner has no separate calendar status panel; ordinary sign-in handles consent. Legacy explicit staff assignments remain supported. Other staff sign in through the staff login link with their own Google account and can manage bookings, inquiries and customer notes, but not shop settings or publication. Busy times in each connected calendar block booking slots for the corresponding staff member.

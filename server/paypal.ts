@@ -64,7 +64,7 @@ export interface PaymentGateway {
 }
 export class PayPalError extends Error {
   status = 503;
-  constructor(readonly definitive = false, readonly issue?: "REFUND_FAILED_INSUFFICIENT_FUNDS", readonly upstreamStatus?: number) { super(tr("PayPalの処理状況を確認できません。マイページから再確認してください。")); }
+  constructor(readonly definitive = false, readonly issue?: "REFUND_FAILED_INSUFFICIENT_FUNDS", readonly upstreamStatus?: number, readonly debugId?: string, readonly diagnosticIssue?: string) { super(tr("PayPalの処理状況を確認できません。マイページから再確認してください。")); }
 }
 export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
   const environment: PayPalEnvironment = process.env.PAYPAL_ENVIRONMENT === "live" ? "live" : "sandbox";
@@ -82,7 +82,7 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
     const { client, secret } = await credentials();
     try {
       const res = await fetcher(base + "/v1/oauth2/token", { method: "POST", signal: AbortSignal.timeout(15000), headers: { Authorization: `Basic ${Buffer.from(`${client}:${secret}`).toString("base64")}`, "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials" });
-      if (!res.ok) throw new PayPalError(false, undefined, res.status);
+      if (!res.ok) throw new PayPalError(false, undefined, res.status, res.headers.get("paypal-debug-id") || undefined);
       const value = z.object({ access_token: z.string(), expires_in: z.number() }).parse(await res.json());
       cached = { token: value.access_token, until: Date.now() + Math.max(0, value.expires_in - 60) * 1000 };
       return cached.token;
@@ -94,9 +94,10 @@ export function paypalGateway(fetcher: typeof fetch = fetch): PaymentGateway {
       const res = await fetcher(base + path, { method: data === undefined ? "GET" : "POST", signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json", Prefer: "return=representation", ...(requestId ? { "PayPal-Request-Id": requestId } : {}) }, body: data === undefined ? undefined : JSON.stringify(data) });
       if (!res.ok) {
         if (res.status === 401) cached = undefined;
-        const error = await res.json().catch(() => ({})) as { details?: { issue?: string }[] };
+        const error = await res.json().catch(() => ({})) as { name?: string; details?: { issue?: string }[] };
         const issue = Array.isArray(error.details) && error.details.some(d => d.issue === "REFUND_FAILED_INSUFFICIENT_FUNDS") ? "REFUND_FAILED_INSUFFICIENT_FUNDS" : undefined;
-        throw new PayPalError(res.status === 400 || res.status === 422, issue, res.status);
+        const diagnosticIssue = (Array.isArray(error.details) ? error.details[0]?.issue : undefined) || error.name;
+        throw new PayPalError(res.status === 400 || res.status === 422, issue, res.status, res.headers.get("paypal-debug-id") || undefined, typeof diagnosticIssue === "string" && /^[A-Z_]{1,100}$/.test(diagnosticIssue) ? diagnosticIssue : undefined);
       }
       return await res.json();
     } catch (error) { throw error instanceof PayPalError ? error : new PayPalError(); }

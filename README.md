@@ -40,6 +40,8 @@ A booking and shop management system for small independent businesses and salons
 ### 3. Daily Operations & CRM
 - **Booking & inquiry management:** Track daily reservations by staff or date, reply to customer inquiries via email, and track resolution status.
 - **Customer records (CRM):** Automatically aggregate visit counts and spending by customer, and attach private operator notes and photos.
+- **Traffic before registration:** Open **Shop traffic** in **Customers** or **Blog posts and announcements** for daily PV/unique browsers and article-level counts over 7, 30 or 90 days. A browser counts once per shop-local day across pages. Unique browsers approximate people: other devices, private browsing and cleared storage can count separately. Signed-in owners and staff are excluded; browsers without storage contribute PV only.
+- **Customer activity and log research:** Customer details show sign-ins, booking/My page views, payment starts, confirmations, cancellations and rebooking requests/withdrawals. Ask **Consult & ask** "How many visitors came yesterday?", "Which articles are read most?" or "Were there any errors today?" It reads the same traffic counts and the shop's own access, error and PayPal logs, with sources. Logs are retained for 90 days in Firestore. See the in-app manual at `/manual#guide-shop-traffic`, `/manual#guide-article-access` and `/manual#guide-customer-activity`.
 - **Bilingual interface:** Switch between Japanese and English across management screens, customer pages, and the illustrated manual.
 - **JP/US support:** Choose your shop's currency and time zone independently of the interface language. See the [language and region guide](docs/i18n.md).
 
@@ -111,6 +113,8 @@ Open http://localhost:3000 and click **Try the salon demo** (use http://localhos
 
 - For development with hot reload, run `npm run dev` (server) and `npm run dev:web` (Vite at http://localhost:5173) in separate terminals.
 - To browse all screens with isolated mock data, run `npm run storybook` (http://localhost:6005).
+- Traffic stories are under **Management → Bookings and customers → Customers** (daily traffic and activity history) and **Management → Blog posts and announcements** (article PV/unique browsers). After `npm run build-storybook`, run `npm run capture:manual:access` to refresh the Japanese/English guide images, or `npm run check:manual:access` to check period switching, all activity types, image zoom and desktop/mobile layout. The checks use isolated mocks and send no live API requests.
+- Traffic and diagnostic logs use the existing Firestore database. Apply the TTL policies and filtered-search/article indexes in [infra/README.md](infra/README.md) before enabling them in production. Counts cover recorded displays; network failures and recording limits can omit visits. No BigQuery or external analytics account is required.
 - After building Storybook, run `npm run capture:manual:cancellations` to capture the Japanese and English cancellation guide. `npm run check:manual` checks all referenced images, translated instructions, image zoom and mobile layout.
 - Cancellation stories are under **Customer screens → Cancellations and discounted appointments** and **Management → Bookings and customers → Replacement bookings** (15 states). Cancellation, undo, payment confirmation and refund retry are simulated. After `npm run build-storybook`, run `npm run check:storybook:transfers` to check their interactions in Japanese/English and desktop/mobile widths; set `CHROMIUM` to an installed browser path if needed.
 

@@ -12,6 +12,7 @@ import { digest } from "../server/auth.ts";
 import { converse, draftText, fixedConstraints, research, systemBundle, type ShopData } from "../server/assistant.ts";
 import { setOpenAiClient, setProviderResolver } from "../server/llm.ts";
 import { PayPalError } from "../server/paypal.ts";
+import { ShopLogs } from "../server/shop-logs.ts";
 
 process.env.DEMO_MODE = "true";
 process.env.OPENAI_API_KEY = "test";
@@ -59,6 +60,9 @@ test("research is one call over the material the caller chose, without tools, an
   assert.equal(seen.length, 1);
   assert.equal(seen[0].tools, undefined, "the research layer gets no tools");
   const input = JSON.stringify(seen[0].input);
+  const sent = (seen[0].input as { role: string; content: { text?: string }[] }[]).find(message => message.role === "user")!;
+  const material = JSON.parse(sent.content.find(part => part.text)?.text || "{}");
+  assert.ok(Number.isFinite(Date.parse(material.now)) && Date.parse(material.now) <= Date.now(), "research receives the current server time");
   assert.ok(input.includes("spec.md") && input.includes("history.md") && input.includes("sheet:bookings"));
   assert.ok(!input.includes("system/payments.md"), "OKF chapters are given only for usage questions");
   assert.deepEqual(result.sources.map(source => source.path), ["sheet:bookings", "spec.md"], "material that was not given is not cited");
@@ -131,6 +135,45 @@ test("a shop with PayPal records still answers non-payment questions in one tool
   assert.equal(result.answer, "水曜は定休日です。");
   assert.equal(seen.length, 1);
   assert.equal(seen[0].tools, undefined, "PayPal tools are offered only when investigate asks for paypal");
+});
+
+test("investigate searches the same customer activity as CRM and cites only the shop's logs", async () => {
+  const store = new Store(":memory:"), logs = new ShopLogs(store), data = shopData();
+  logs.activity("own", "guest@example.com", "mypage_view");
+  logs.activity("foreign", "guest@example.com", "reserve_view");
+  await logs.drain();
+  data.logs = logs.toolsFor("own");
+  const seen = scripted([
+    call("investigate", { question: "お客様はマイページを開いた？", logs: true }),
+    say("マイページを開いた記録があります。"),
+  ], [
+    call("search_shop_logs", { kind: "activity", customer: "guest@example.com" }),
+    say(JSON.stringify({ answer: "マイページを開いた記録があります。", sources: ["logs:shop", "logs:foreign"] })),
+  ]);
+  const result = await converse({ question: "お客様の行動履歴を調べて", messages: [], data });
+  assert.deepEqual(result.sources.map(source => source.path), ["logs:shop"]);
+  const payloads = JSON.stringify(seen);
+  assert.ok(payloads.includes("mypage_view"));
+  assert.ok(!payloads.includes("reserve_view"));
+  assert.ok(!payloads.includes("paypal_get_order"), "log-only questions do not get PayPal tools");
+});
+
+test("access questions use daily and article aggregates with source keys rather than sampled log counts", async t => {
+  const diagnosticEvents: { event: string; tool?: string }[] = [];
+  t.mock.method(console, "info", (message: string) => { diagnosticEvents.push(JSON.parse(message)); });
+  const data = shopData(), store = new Store(":memory:"), logs = new ShopLogs(store);
+  data.logs = logs.toolsFor("own", async days => ({ days, from: "2026-11-01T00:00:00Z", to: "2026-11-06T00:00:00Z", total: 6001, byCategory: { blogs: 6001, announcements: 0 }, rows: [{ postId: "p1", title: "Article", category: "blogs", path: "/s/shop/blogs/article", views: 6001, uniqueBrowsers: 100 }] }), async days => ({ days, timeZone: "Asia/Tokyo", totalViews: 7000, rows: [{ date: "2026-11-06", views: 7000, uniqueBrowsers: 120 }] }));
+  const seen = scripted([], [
+    call("get_daily_traffic", { days: 7 }),
+    call("get_article_access_counts", { days: 7 }),
+    say(JSON.stringify({ answer: "Today: 120 browsers, 7,000 PV. Article: 6,001 PV and 100 browsers.", sources: ["logs:traffic", "logs:articles", "logs:foreign"] })),
+  ]);
+  const result = await research("今日の訪問数と記事のアクセス数は？", data, { logs: true });
+  assert.deepEqual(result.sources.map(source => source.path), ["logs:traffic", "logs:articles"]);
+  assert.ok(JSON.stringify(seen).includes("6001"));
+  assert.deepEqual(diagnosticEvents.filter(event => event.event === "assistant_log_tool").map(event => event.tool), ["get_daily_traffic", "get_article_access_counts"]);
+  assert.ok(!diagnosticEvents.some(event => event.event === "assistant_paypal_tool"));
+  await assert.rejects(data.logs.invoke("get_daily_traffic", { shopId: "foreign" }));
 });
 
 test("the conversation layer researches facts and turns change requests into a draft without applying anything", async () => {

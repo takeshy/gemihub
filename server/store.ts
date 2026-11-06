@@ -1,7 +1,8 @@
 import { tr } from "../shared/i18n.ts";
-import { Firestore } from "@google-cloud/firestore";
+import { Firestore, FieldValue } from "@google-cloud/firestore";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID, createHash } from "node:crypto";
+import { logRetentionDays, type ShopLog, type ShopLogFilters } from "./shop-logs.ts";
 import type { Checkout } from "./payments.ts";
 import type { ShopConfig, Booking } from "./domain.ts";
 import { judgeActive, type DemoGoogle } from "./judge.ts";
@@ -78,10 +79,15 @@ const chatKinds = new Set(["shopChat", "shopChatMessage"]);
 const businessKinds = new Set(["booking", "inquiry", "member", "post", "customer", "customerNote", "couponCampaign", "couponGrant", "couponUse", "couponManual", ...chatKinds]);
 type Entry = { kind: string; id: string; value: unknown };
 export class Store {
+  private shopLogs = new Map<string, ShopLog>();
+  private articleVisitors = new Map<string, { shopId: string; postId: string; at: string }>();
+  private dailyVisitors = new Set<string>();
+  private logWrites = new Set<Promise<unknown>>();
   readonly memory: boolean;
   private firestore?: Firestore;
   private values = new Map<string, Entry>();
   private batch = new AsyncLocalStorage<Entry[]>();
+  private commitActions = new AsyncLocalStorage<{ actions: (() => void)[]; status: "pending" | "committed" | "failed" }>();
   private localLocks = new Map<string, Promise<unknown>>();
   private closing?: Promise<void>;
   private leases = new AsyncLocalStorage<LockLease[]>();
@@ -113,6 +119,54 @@ export class Store {
     return createHash("sha256")
       .update(kind + ":" + id)
       .digest("hex");
+  }
+  async appendShopLog(log: ShopLog) {
+    const clean = JSON.parse(JSON.stringify({ ...log, references: [...new Set([log.bookingId, log.orderId, log.captureId, log.refundId, log.requestId].filter((value): value is string => !!value))] })) as ShopLog;
+    if (this.memory) {
+      if (this.shopLogs.has(log.id)) return;
+      this.shopLogs.set(log.id, clean);
+      if (log.kind === "page_view" && log.postId && log.visitorKey) this.articleVisitors.set(`${log.shopId}:${log.postId}:${log.visitorKey}`, { shopId: log.shopId, postId: log.postId, at: log.at });
+      if (log.kind === "page_view" && log.day && log.visitorKey) this.dailyVisitors.add(`${log.shopId}:${log.day}:${log.visitorKey}`);
+      return;
+    }
+    const shopRef = this.firestore!.collection("gemihub_shop_logs").doc(log.shopId);
+    const expiresAt = new Date(Date.parse(log.at) + logRetentionDays * 86400000);
+    const batch = this.firestore!.batch();
+    batch.create(shopRef.collection("gemihub_log_events").doc(log.id), { ...clean, expiresAt });
+    if (log.kind === "page_view" && log.postId && log.visitorKey) batch.set(shopRef.collection("article_audiences").doc(log.postId).collection("gemihub_article_visitors").doc(log.visitorKey), { lastSeenAt: FieldValue.serverTimestamp(), expiresAt });
+    if (log.kind === "page_view" && log.day && log.visitorKey) batch.set(shopRef.collection("daily_audiences").doc(log.day).collection("gemihub_daily_visitors").doc(log.visitorKey), { expiresAt });
+    const write = batch.commit();
+    this.logWrites.add(write);
+    try { await write; } catch (error) { if ((error as { code?: number }).code !== 6) throw error; } finally { this.logWrites.delete(write); }
+  }
+  async queryShopLogs(shopId: string, from: string, to: string, limit: number, customerKey?: string, filters: ShopLogFilters = {}): Promise<ShopLog[]> {
+    const earliest = new Date(Math.max(Date.parse(from), Date.now() - logRetentionDays * 86400000)).toISOString();
+    if (this.memory) return [...this.shopLogs.values()].filter(row => row.shopId === shopId && (!customerKey || row.customerKey === customerKey) && (!filters.kind || row.kind === filters.kind) && (!filters.failuresOnly || !row.ok) && (!filters.reference || row.references?.includes(filters.reference)) && row.at >= earliest && row.at <= to).sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id)).slice(0, limit).map(row => structuredClone(row));
+    let query = this.firestore!.collection("gemihub_shop_logs").doc(shopId).collection("gemihub_log_events").where("at", ">=", earliest).where("at", "<=", to);
+    if (customerKey) query = query.where("customerKey", "==", customerKey);
+    if (filters.kind) query = query.where("kind", "==", filters.kind);
+    if (filters.failuresOnly) query = query.where("ok", "==", false);
+    if (filters.reference) query = query.where("references", "array-contains", filters.reference);
+    const result = await query.orderBy("at", "desc").limit(limit).get();
+    return result.docs.map(doc => { const { expiresAt: _expiry, ...row } = doc.data(); return row as ShopLog; });
+  }
+  async countPostViews(shopId: string, postId: string, from: string, to: string): Promise<number> {
+    const earliest = new Date(Math.max(Date.parse(from), Date.now() - logRetentionDays * 86400000)).toISOString();
+    if (this.memory) return [...this.shopLogs.values()].filter(row => row.shopId === shopId && row.kind === "page_view" && row.postId === postId && row.at >= earliest && row.at <= to).length;
+    const result = await this.firestore!.collection("gemihub_shop_logs").doc(shopId).collection("gemihub_log_events").where("postId", "==", postId).where("at", ">=", earliest).where("at", "<=", to).count().get();
+    return result.data().count;
+  }
+  async countPostVisitors(shopId: string, postId: string, from: string, to: string): Promise<number> {
+    const earliest = new Date(Math.max(Date.parse(from), Date.now() - logRetentionDays * 86400000)).toISOString();
+    if (this.memory) return [...this.articleVisitors.values()].filter(row => row.shopId === shopId && row.postId === postId && row.at >= earliest && row.at <= to).length;
+    const result = await this.firestore!.collection("gemihub_shop_logs").doc(shopId).collection("article_audiences").doc(postId).collection("gemihub_article_visitors").where("lastSeenAt", ">=", new Date(earliest)).where("lastSeenAt", "<=", new Date(to)).count().get();
+    return result.data().count;
+  }
+  async countDailyTraffic(shopId: string, day: string) {
+    if (this.memory) return { date: day, views: [...this.shopLogs.values()].filter(row => row.shopId === shopId && row.kind === "page_view" && row.day === day).length, uniqueBrowsers: [...this.dailyVisitors].filter(key => key.startsWith(`${shopId}:${day}:`)).length };
+    const shopRef = this.firestore!.collection("gemihub_shop_logs").doc(shopId);
+    const [views, visitors] = await Promise.all([shopRef.collection("gemihub_log_events").where("day", "==", day).count().get(), shopRef.collection("daily_audiences").doc(day).collection("gemihub_daily_visitors").count().get()]);
+    return { date: day, views: views.data().count, uniqueBrowsers: visitors.data().count };
   }
   private ref(kind: string, id: string) {
     return this.firestore!.collection("gemihub_state").doc(this.key(kind, id));
@@ -234,11 +288,21 @@ export class Store {
     this.activeLocks();
     if (this.batch.getStore()) return fn();
     const entries: Entry[] = [];
-    return this.batch.run(entries, async () => {
-      const result = await fn();
-      await this.persist(entries);
-      return result;
-    });
+    const commit = { actions: [] as (() => void)[], status: "pending" as "pending" | "committed" | "failed" };
+    return this.commitActions.run(commit, () => this.batch.run(entries, async () => {
+      try {
+        const result = await fn();
+        await this.persist(entries);
+        commit.status = "committed";
+        for (const action of commit.actions) action();
+        return result;
+      } catch (error) { if (commit.status === "pending") commit.status = "failed"; throw error; }
+    }));
+  }
+  afterCommit(action: () => void) {
+    const commit = this.commitActions.getStore();
+    if (!commit || commit.status === "committed") action();
+    else if (commit.status === "pending") commit.actions.push(action);
   }
   async cleanup() {
     for (const kind of ["session", "oauth", "ticket", "emailLogin", "emailLoginLimit", "visual", "imageGenerationData", "settingsAiProposal"]) {
@@ -366,6 +430,7 @@ export class Store {
     return this.closing ??= (async () => {
       while (this.localLocks.size)
         await Promise.allSettled([...this.localLocks.values()]);
+      while (this.logWrites.size) await Promise.allSettled([...this.logWrites]);
       await this.firestore?.terminate();
     })();
   }

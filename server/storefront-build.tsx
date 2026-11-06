@@ -18,11 +18,11 @@ import type { StorefrontFiles } from "./storefront-files.ts";
  * Bump when the generated markup changes in a way existing shops should receive.
  * Releases from an older generator keep being served until they are rebuilt in the background.
  */
-export const storefrontRenderer = 3;
+export const storefrontRenderer = 5;
 /** `assets` are shop-level files (`shops/{id}/assets/{name}`) the pages refer to; absent on releases before renderer 2. */
-export type StorefrontRelease = { id: string; paths: string[]; assets?: string[]; renderer?: number };
+export type StorefrontRelease = { id: string; paths: string[]; assets?: string[]; renderer?: number; posts?: Record<string, string> };
 export type StorefrontAsset = { body: Buffer; contentType: string };
-export type StorefrontBuild = { pages: Record<string, string>; assets: Record<string, StorefrontAsset> };
+export type StorefrontBuild = { pages: Record<string, string>; assets: Record<string, StorefrontAsset>; posts?: Record<string, string> };
 export type StorefrontShell = { html: string; css: string };
 
 const prefix = (shopId: string, release: string) => `shops/${shopId}/releases/${release}/`;
@@ -103,7 +103,7 @@ export function buildStorefront(shop: Shop, posts: PublicPost[], origin: string,
           post && `<meta name="gemihub-post-category" content="${post.category}"><meta name="gemihub-post-title" content="${escapeHtml(post.title)}"><meta name="gemihub-post-date" content="${post.date}">`,
         ].filter(Boolean).join("");
         const body = renderToStaticMarkup(<StaticStorefront config={c} view={view} base={base} provisional={shop.publication === "provisional"} imageSources={sources} />);
-        pages[storefrontFile(path, hosted, locale)] = localizeShell(shell.html).replace(/<title>.*?<\/title>/s, "").replace("</head>", () => `${head}</head>`).replace('<div id="root"></div>', () => `<div id="root" data-page="static-storefront" data-shop-base="${escapeHtml(base)}">${body}</div><script defer src="/storefront-login.js"></script>`);
+        pages[storefrontFile(path, hosted, locale)] = localizeShell(shell.html).replace(/<title>.*?<\/title>/s, "").replace("</head>", () => `${head}</head>`).replace('<div id="root"></div>', () => `<div id="root" data-page="static-storefront" data-shop-base="${escapeHtml(base)}" data-shop-slug="${escapeHtml(shop.slug)}">${body}</div><script defer src="/storefront-login.js"></script>`);
       };
       render({ kind: "home", posts: live }, c.name, c.description);
       for (const category of articleKinds(c)) render({ kind: "archive", category, posts: live }, `${postLabel(category)} | ${c.name}`, c.description);
@@ -116,15 +116,15 @@ export function buildStorefront(shop: Shop, posts: PublicPost[], origin: string,
       }
     }
   });
-  return { pages, assets };
+  return { pages, assets, posts: Object.fromEntries(live.map(post => [`${post.category}/${postKey(post)}`, post.id])) };
 }
 
 /** Writes assets, then pages; the caller commits the returned pointer only after every object exists. */
 export async function writeStorefront(files: StorefrontFiles, shopId: string, build: StorefrontBuild): Promise<StorefrontRelease> {
   const paths = Object.keys(build.pages).sort(), assets = Object.keys(build.assets).sort(), hash = createHash("sha256");
-  hash.update(JSON.stringify([storefrontRenderer, assets]));
+  hash.update(JSON.stringify([storefrontRenderer, assets, build.posts || {}]));
   for (const path of paths) hash.update(JSON.stringify([path, build.pages[path]]));
-  const release: StorefrontRelease = { id: hash.digest("hex"), paths, assets, renderer: storefrontRenderer };
+  const release: StorefrontRelease = { id: hash.digest("hex"), paths, assets, renderer: storefrontRenderer, posts: build.posts || {} };
   for (const name of assets) await files.write(storefrontAssetObject(shopId, name), build.assets[name].body, build.assets[name].contentType);
   for (const path of paths) await files.write(storefrontObject(shopId, release, path), build.pages[path], `${path.endsWith(".xml") ? "application/xml" : "text/html"}; charset=utf-8`);
   return release;

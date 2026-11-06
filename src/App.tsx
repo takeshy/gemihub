@@ -6,6 +6,7 @@ import { PaymentDetails } from "./PaymentDetails";
 import { WaitlistRequest, WaitlistWishes, type SlotWish } from "./Waitlist";
 import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers, type CancellationQuote, type MyTransfers, type TransferCheckout, type TransferListing } from "./Transfers";
 import { BookingComplete } from "./BookingComplete";
+import { browserVisitorId } from "./shop-access";
 import { Coupons, CouponWallet } from "./Coupons";
 import { couponDiscount, couponDiscountLabel, type CouponWalletItem } from "../shared/coupons";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
@@ -1300,6 +1301,7 @@ export function PublicShop({
     customerProfile?: MemberProfile | null;
     registrationRequired?: boolean;
     paymentSimulation?: boolean;
+    isOperator?: boolean;
   }>();
   const { money: yen, when, shopTime, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
@@ -1339,6 +1341,32 @@ export function PublicShop({
   const isCustomer =
     session.user?.role === "customer" && session.user.shopId === data?.shopId;
   const confirmed = completedBooking && isCustomer && completedBooking.customer === session.user?.email && completedBooking.shopId === data?.shopId ? completedBooking : undefined;
+  const lastActivity = useRef("");
+  const lastPageView = useRef("");
+  useEffect(() => {
+    if (!data || data.paymentSimulation || confirmed || location.protocol === "file:") return;
+    const page = category ? articleKey ? "article" : category : pageSlug ? "custom" : pane === "about" ? "home" : pane;
+    if (!["home", "reserve", "mine", "contact", "blogs", "announcements", "article", "custom"].includes(page)) return;
+    const payload = { page, ...(page === "article" ? { category, key: articleKey } : {}), ...(page === "custom" ? { slug: pageSlug } : {}) };
+    const key = `${base}:${JSON.stringify(payload)}`;
+    const report = () => {
+      if (document.visibilityState !== "visible" || lastPageView.current === key) return;
+      lastPageView.current = key;
+      const visitorId = browserVisitorId(slug);
+      void api(`${base}/page-views`, { ...payload, ...(visitorId ? { visitorId } : {}) }, { keepalive: true }).catch(() => {});
+    };
+    report(); document.addEventListener("visibilitychange", report);
+    return () => document.removeEventListener("visibilitychange", report);
+  }, [api, base, slug, data?.shopId, data?.paymentSimulation, pane, category, articleKey, pageSlug, confirmed]);
+  useEffect(() => {
+    if (!isCustomer || !data || data.isOperator || data.paymentSimulation || category || pageSlug || confirmed || location.protocol === "file:") { lastActivity.current = ""; return; }
+    const event = pane === "reserve" ? "reserve_view" : pane === "mine" ? "mypage_view" : "";
+    const key = `${base}:${session.user?.email}:${event}`;
+    if (!event) { lastActivity.current = ""; return; }
+    if (lastActivity.current === key) return;
+    lastActivity.current = key;
+    void api(`${base}/activity`, { event }).catch(() => {});
+  }, [api, base, isCustomer, data?.shopId, data?.paymentSimulation, data?.isOperator, pane, category, pageSlug, confirmed, session.user?.email]);
   const leavePaymentReturn = (nextPane: string, coupon?: string) => {
     const query = new URLSearchParams(search);
     if (onPaneChange) return false;

@@ -3,7 +3,7 @@ type: "Concept"
 title: "Data and storage"
 description: "Firestore records, owner Drive files, and JSON/CSV exports."
 tags: ["data", "storage", "firestore", "drive", "privacy"]
-updated: "2026-11-03"
+updated: "2026-11-06"
 ---
 
 # Business records
@@ -15,6 +15,12 @@ Cancellation, no-show, membership revocation and note deletion preserve records 
 # Owner's Google Drive
 
 Images, private attachments, specifications, change history and offline page exports remain in the owner's Drive. Business records do not require Drive access to be read. Drive or email failures remain visible and can be retried.
+
+# Operational and traffic records
+
+Operational logs, page displays and browser-deduplication records are stored in the shop's Firestore database for 90 days. Logs do not contain email addresses, names, IP addresses, credentials, request bodies, URL query strings or raw payment responses. Customer activity uses a shop-scoped hash of the normalized customer email. Anonymous traffic uses a separate shop-scoped hash of a random browser UUID stored in localStorage for 90 days, with no browser fingerprint or customer identity matching.
+
+Page displays and their article/daily browser records commit in one Firestore batch. Reports use database count aggregations, not samples of recent logs. A logging failure must not change authentication, booking or payment outcomes. Firestore TTL and application query bounds enforce retention. BigQuery and external analytics are not used by this implementation.
 
 # Export
 
