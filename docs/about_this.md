@@ -17,6 +17,7 @@ Ambiguous money matters strain human relationships, but when rules are executed 
 * **AI That Watches the Money Without Touching It**: Ask *"Did that refund go through?"* and the research AI reads the live PayPal record and cites it. An hourly check compares the shop's ledger with PayPal and flags stuck payments or refunds; fixes are decided by fixed server rules and run only after the owner approves them on screen. The AI's PayPal access is read-only—it cannot create refunds or change amounts.
 * **Research AI & Gemini Live**: Ask questions like *"What is our current refund policy?"* via chat or low-latency voice (**Gemini Live**), receiving answers grounded in shop specs and live data.
 * **Centralized Customer CRM**: Keep the lifeblood of the business in one place—view past bookings, inquiries, memos, and reference photos on a single screen.
+* **Traffic & Operations Visibility**: Daily and per-page traffic reports, customer activity, and searchable operational logs—so the owner can see how the shop is doing and trace anything that happened.
 * **Opening Alerts**: Customers can request alerts for openings that match their preferred service and time, including discounted slots.
 * **Accurate Availability Calculation**: Computes available slots dynamically from business hours, special opening days, staff shifts, service durations, add-ons, and **Google Calendar** busy times. Customers book frictionlessly via Google sign-in or magic links.
 
@@ -84,5 +85,5 @@ Realizing that salon owners face the exact same risk when redesigning their site
 ## What's next for gemihub
 
 * **Expanded Business Types**: Support restaurants and cafés with table-size configurations, course selections, and prepaid PayPal reservations.
-* **Plain-Language Analytics**: Let AI analyze traffic logs and booking histories to surface actionable advice on popular services, drop-off points, and peak operating hours in plain English and Japanese.
+* **Plain-Language Analytics**: Build on the traffic reports and operational logs now in place, letting AI surface actionable advice on popular services, drop-off points, and peak operating hours in plain English and Japanese.
 * **External AI Agent Access**: Provide a **Model Context Protocol (MCP) server** and agent APIs, allowing external AI assistants to look up availability and handle PayPal bookings while adhering to the strict *propose → preview → approve* safety boundaries.
