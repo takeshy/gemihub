@@ -40,7 +40,7 @@ export function createTransferFixtures(scenario: string, shop: Workspace, sessio
   function updateOwnerListings() {
     shop.transferListings = offers.filter(offer => offer.phase === "listed").map(offer => ({
       id: offer.id, bookingId: offer.bookingId, price: offer.amount, currency: offer.currency,
-      discountPercent: offer.discountPercent, deadline: offer.deadline, buying: busy(offer), review: !!offer.buyer?.review,
+      discountPercent: offer.discountPercent, deadline: offer.deadline, buying: busy(offer), review: !!offer.buyer?.review, unsold: offer.unsold?.amount ?? 0,
     }));
   }
   function list(booking: Booking, at = new Date().toISOString()) {

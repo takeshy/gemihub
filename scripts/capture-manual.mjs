@@ -274,7 +274,7 @@ try {
   await page.getByRole("button", { name: "山田 花子", exact: true }).waitFor();
   await page.getByLabel("集計期間").selectOption("month");
   await page.getByRole("button", { name: "山田 花子", exact: true }).waitFor();
-  await page.getByLabel("氏名・メールで検索").fill("山田");
+  await page.getByLabel("氏名・メール・電話番号で検索").fill("山田");
   await capture("26-customers.jpg", ".customers");
   await open("detail", "山田 花子", "運営/予約・お客様/お客様");
   await page.getByLabel("お客様メモ", { exact: true }).fill("落ち着いたピンクがお好み。次回は短めに整えます。");

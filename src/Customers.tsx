@@ -46,7 +46,7 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
     return () => { active = false; };
   }, [shopId, attempt, rangeQuery, ready]);
   const q = query.trim().toLowerCase();
-  const visible = (customers || []).filter(customer => customer.name.toLowerCase().includes(q) || customer.email.includes(q)).sort((a, b) => {
+  const visible = (customers || []).filter(customer => customer.name.toLowerCase().includes(q) || customer.email.includes(q) || !!customer.phone?.includes(q)).sort((a, b) => {
     const direction = sort.endsWith("asc") ? 1 : -1;
     const difference = sort.startsWith("visits") ? a.visitCount - b.visitCount : (a.lastVisit ? Date.parse(a.lastVisit) : 0) - (b.lastVisit ? Date.parse(b.lastVisit) : 0);
     // Customers without visits always follow those with visits when sorting by date.
@@ -60,6 +60,7 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
     <h2>{tr("お客様一覧 ")}{customers && <span className="pill">{customers.length}{tr("人")}</span>}</h2>
     <p className="muted small">{tr("予約・お問い合わせから自動で集計します。来店実績は、終了した予約のうちキャンセル・無断キャンセルを除く件数です。")}</p>
     {error && <div className="alert" role="alert">{error}<button onClick={() => setAttempt(value => value + 1)}>{tr("再読み込み")}</button></div>}
+    <PhoneCustomerForm shopId={shopId} saved={() => setAttempt(value => value + 1)} />
     <div className="customer-controls">
       <label>{tr("集計期間")}<select value={period} onChange={event => { setCustomers(undefined); setPeriod(event.target.value as CustomerFilter["period"]); }}>
         {customerPeriods.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -68,7 +69,7 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
     </div>
     <p className="small muted">{ready ? tr("集計対象：{0}。来店回数・最終来店日・合計金額・履歴に適用します。未来の予約も表示します。", rangeLabel) : tr("開始日を指定してください。")}</p>
     <div className="customer-controls">
-      <label>{tr("氏名・メールで検索")}<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={tr("氏名またはメールアドレス")} /></label>
+      <label>{tr("氏名・メール・電話番号で検索")}<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={tr("氏名・メールアドレス・電話番号")} /></label>
       <label>{tr("並び順")}<select value={sort} onChange={event => setSort(event.target.value)}>
         <option value="last-desc">{tr("最終来店日が新しい順")}</option><option value="last-asc">{tr("最終来店日が古い順")}</option>
         <option value="visits-desc">{tr("来店回数が多い順")}</option><option value="visits-asc">{tr("来店回数が少ない順")}</option>
@@ -76,15 +77,37 @@ export function Customers({ shopId, config, initialEmail = "", initialImages = f
     </div>
     {!customers && ready && !error && <p role="status">{tr("お客様を読み込んでいます…")}</p>}
     {customers?.length === 0 ? <div className="empty">{since ? tr("指定した期間に予約・お問い合わせはありません。") : tr("まだお客様はいません。予約やお問い合わせが届くと、ここに表示されます。")}</div> : customers && visible.length === 0 ? <div className="empty">{tr("検索に一致するお客様はいません。")}</div> : customers && <div {...customerPages.listProps} className="customer-table-wrap"><table className="customer-table">
-      <thead><tr><th>{tr("氏名")}</th><th>{tr("メールアドレス")}</th><th>{tr("来店回数")}</th><th>{tr("最終来店日")}</th><th>{tr("合計金額")}</th><th>{tr("メモ")}</th></tr></thead>
+      <thead><tr><th>{tr("氏名")}</th><th>{tr("メール・電話番号")}</th><th>{tr("来店回数")}</th><th>{tr("最終来店日")}</th><th>{tr("合計金額")}</th><th>{tr("メモ")}</th></tr></thead>
       <tbody>{customerPages.items.map(customer => <tr key={customer.email}>
         <td><button className="text-button" onClick={() => setSelected(customer.email)}>{customer.name || tr("氏名未記入")}</button></td>
-        <td>{customer.email}</td><td>{customer.visitCount}{tr("回")}</td><td>{customer.lastVisit ? when(customer.lastVisit) : tr("来店なし")}</td>
+        <td>{customer.phone || customer.email}</td><td>{customer.visitCount}{tr("回")}</td><td>{customer.lastVisit ? when(customer.lastVisit) : tr("来店なし")}</td>
         <td>{yen(customer.totalAmount)}</td><td>{customer.hasNote ? tr("あり") : tr("なし")}</td>
       </tr>)}</tbody>
     </table></div>}
     <Pagination pagination={customerPages} label={tr("お客様一覧")} />
   </div>;
+}
+
+function PhoneCustomerForm({ shopId, saved }: { shopId: string; saved: () => void }) {
+  const api = useApi();
+  const [name, setName] = useState(""), [phone, setPhone] = useState(""), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
+  return <details className="phone-customer">
+    <summary>{tr("電話番号でお客様を登録")}</summary>
+    <p className="small muted">{tr("メールアドレスのないお客様を、お名前と電話番号で登録します。同じ電話番号は同じお客様として記録し、メールは届きません。")}</p>
+    {error && <p role="alert" className="alert">{error}</p>}
+    {notice && <p role="status" className="notice">{notice}</p>}
+    <form onSubmit={event => {
+      event.preventDefault(); setBusy(true); setError(""); setNotice("");
+      void api(`/api/shops/${shopId}/customers/phone`, { name, phone }).then(() => { setNotice(tr("{0} 様を登録しました。", name)); setName(""); setPhone(""); saved(); }).catch(e => setError(e instanceof Error ? e.message : tr("操作できませんでした"))).finally(() => setBusy(false));
+    }}>
+      <fieldset disabled={busy}>
+        <legend>{tr("お客様の情報")}</legend>
+        <label className="field"><span>{tr("お名前")}</span><input required maxLength={100} value={name} onChange={event => setName(event.target.value)} /></label>
+        <label className="field"><span>{tr("電話番号")}</span><input required type="tel" autoComplete="off" maxLength={40} value={phone} onChange={event => setPhone(event.target.value)} /></label>
+        <button className="primary" type="submit">{tr("お客様を登録する")}</button>
+      </fieldset>
+    </form>
+  </details>;
 }
 
 function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, rangeLabel, initialInquiryId, backToInquiries, inquiriesChanged, back, saved }: { initialInquiryId: string; backToInquiries?: () => void; inquiriesChanged?: () => Promise<unknown>; shopId: string; email: string; initialImages: boolean; config: ShopConfig | null; rangeQuery: string; rangeLabel: string; back: () => void; saved: (customer: CustomerSummary) => void }) {
@@ -154,7 +177,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
       <div className="panel customer-profile">
         <div className="section-top"><h2>{customer.name || tr("氏名未記入")}</h2><a data-customer-images-link className="button" href={`?${new URLSearchParams({ shop: shopId, customer: email, customerView: "images" })}`} onClick={event => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && event.button === 0) { event.preventDefault(); setImagesOpen(true); } }}>{tr("画像一覧")}</a></div>
         <p className="small muted">{tr("集計対象：")}{rangeLabel}</p>
-        <h3>{tr("基本情報")}</h3><dl className="customer-basic-info"><div><dt>{tr("お名前")}</dt><dd>{customer.name || tr("未登録")}</dd></div><div><dt>{tr("メールアドレス")}</dt><dd>{customer.email}</dd></div><div><dt>{tr("生年月日")}</dt><dd>{customer.profile?.birthDate.replace(/-/g, "/") || tr("未登録")}</dd></div><div><dt>{tr("性別")}</dt><dd>{genderOptions.find(option => option.value === customer.profile?.gender)?.label || tr("未登録")}</dd></div></dl>
+        <h3>{tr("基本情報")}</h3><dl className="customer-basic-info"><div><dt>{tr("お名前")}</dt><dd>{customer.name || tr("未登録")}</dd></div><div><dt>{customer.phone ? tr("電話番号") : tr("メールアドレス")}</dt><dd>{customer.phone || customer.email}</dd></div><div><dt>{tr("生年月日")}</dt><dd>{customer.profile?.birthDate.replace(/-/g, "/") || tr("未登録")}</dd></div><div><dt>{tr("性別")}</dt><dd>{genderOptions.find(option => option.value === customer.profile?.gender)?.label || tr("未登録")}</dd></div></dl>
         <dl className="customer-stats"><div><dt>{tr("来店回数")}</dt><dd>{customer.visitCount}{tr("回")}</dd></div><div><dt>{tr("最終来店日")}</dt><dd>{customer.lastVisit ? when(customer.lastVisit) : tr("来店なし")}</dd></div><div><dt>{tr("合計金額")}</dt><dd>{yen(customer.totalAmount)}</dd></div></dl>
         <CustomerNoteComposer base={base} rangeQuery={rangeQuery} saved={changed} />
       </div>

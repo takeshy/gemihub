@@ -9,6 +9,7 @@ import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers
 import { BookingComplete } from "./BookingComplete";
 import { browserVisitorId } from "./shop-access";
 import { Coupons, CouponWallet } from "./Coupons";
+import { PhoneBooking, PhoneReplacement } from "./PhoneBooking";
 import { couponDiscount, couponDiscountLabel, type CouponWalletItem } from "../shared/coupons";
 import { defaultRefundTiers, policyText } from "../server/payment-domain";
 import { StaffAccounts, StaffCalendar, StaffLogin, StaffPhoto } from "./StaffAccounts";
@@ -76,7 +77,7 @@ export type Workspace = Shop & {
   plans: Plan[];
   bookings: Booking[];
   paymentCheckouts?: { id: string; start: string; amount: number; currency?: Currency; phase: string; review: boolean; customer: string; name: string }[];
-  transferListings?: { id: string; bookingId: string; price: number; currency: Currency; discountPercent: number; deadline: string; buying: boolean; review: boolean }[];
+  transferListings?: { id: string; bookingId: string; price: number; currency: Currency; discountPercent: number; deadline: string; buying: boolean; review: boolean; unsold: number }[];
   paypalAlerts?: PayPalAlertState;
   paypalSettings?: { enabled: boolean; digestHour: number };
   inquiries: Inquiry[];
@@ -1086,6 +1087,7 @@ function Reservations({
         >
           {tr("更新")}</button>
       </div>
+      {shop.published && <PhoneBooking key={shop.id} shopId={shop.id} config={shop.published} reload={reload} />}
       <div className="filters reservation-filters">
         <Field label={tr("日付（{0}）", timeZoneLabel)}>
           <DateInput aria-label={tr("日付（{0}）", timeZoneLabel)}
@@ -1138,10 +1140,16 @@ function Reservations({
                   /{" "}
                   {bookingStaffName(shop.published, b.staffId)}
                 </p>
-                <span className="small muted">{b.customer}</span>
+                {!b.phone && <span className="small muted">{b.customer}</span>}
+                {b.phone && <p><span className="status transfer">{tr("電話予約")}</span> <a href={`tel:${b.phone}`}>{b.phone}</a> · {tr("当日現金払い：{0}", yen(b.price))}</p>}
                 {(() => {
                   const listing = shop.transferListings?.find(listing => listing.bookingId === b.id);
                   return listing && <p className="transfer-status" role="status"><span className="status transfer">{tr("お得な空き枠")}</span> {tr("{0}（{1}%引き）・{2}まで", paid(listing.price, listing.currency), listing.discountPercent, when(listing.deadline))}{listing.review ? tr("・PayPalの決済結果を照合してください") : listing.buying ? tr("・代わりの方が支払い手続き中") : ""}</p>;
+                })()}
+                {(() => {
+                  const listing = shop.transferListings?.find(listing => listing.bookingId === b.id);
+                  const today = dateIn(new Date(), displayTimeZone());
+                  return listing && !listing.buying && !listing.review && dateIn(b.start, displayTimeZone()) === today && Date.parse(b.start) > Date.now() && <PhoneReplacement shopId={shop.id} listing={listing} reload={reload} />;
                 })()}
                 <PaymentDetails booking={b} operator />
                 {b.coupon && <p>{b.coupon.title} · {tr("クーポン割引：{0}", yen(b.coupon.discountAmount,b.coupon.currency))}</p>}

@@ -48,6 +48,7 @@
     "check:booking-complete": "node --import tsx scripts/check-booking-complete.mjs",
     "check:coupon-proposal": "node --import tsx scripts/check-coupon-proposal.mjs",
     "check:coupons": "node --import tsx scripts/check-coupons.mjs",
+    "check:phone-booking": "node --import tsx scripts/check-phone-booking.mjs",
     "check:booking-layout": "node --import tsx scripts/check-booking-layout.mjs",
     "check:booking-transfer": "node --import tsx scripts/check-booking-transfer.mjs",
     "check:menu-addons": "node --import tsx scripts/check-menu-addons.mjs",

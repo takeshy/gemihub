@@ -34,7 +34,7 @@ export async function queueBookingReminders(store: Store, shop: Shop,
   for (const booking of bookings) {
     const due = bookingReminderDue(config, booking);
     // A withdrawn listing leaves no reminder marker, so its holder is reminded on the next check.
-    if (booking.status !== "active" || listed.has(booking.id) || !Number.isFinite(due) || due > now || Date.parse(booking.start) <= now ||
+    if (booking.status !== "active" || booking.phone || listed.has(booking.id) || !Number.isFinite(due) || due > now || Date.parse(booking.start) <= now ||
       // Short-notice bookings and purchases already receive their confirmation; avoid a second immediate email.
       !(Date.parse(bookingHeldSince(booking)) <= due)) continue;
     const id = `booking-reminder:${createHash("sha256").update(JSON.stringify([shop.id, booking.id, booking.customer, booking.start])).digest("hex")}`;

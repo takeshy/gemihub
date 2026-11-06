@@ -2,6 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import { memberProfile, type MemberProfile } from "./customer-profile.ts";
 import type { Booking } from "./domain.ts";
+import type { Store } from "./store.ts";
 import { dateIn, zonedDate } from "../shared/region.ts";
 
 export const customerPeriods = [
@@ -51,6 +52,8 @@ export type CustomerRecord = Partial<MemberProfile> & {
   email: string;
   updatedBy: string;
   updatedAt: string;
+  /** Set on a customer registered by phone: `email` then holds their `tel:` key rather than an address. */
+  phone?: string;
 };
 export const customerFileLimit = 5 * 1024 * 1024;
 export const customerTotalFileLimit = 10 * 1024 * 1024;
@@ -90,6 +93,7 @@ export type CustomerSummary = {
   totalAmount: number;
   hasNote: boolean;
   registered?: boolean;
+  phone?: string;
 };
 export type CustomerEvent =
   | { kind: "booking"; at: string; booking: Booking }
@@ -100,6 +104,19 @@ export type CustomerDetail = CustomerSummary & {
   profile?: MemberProfile;
 };
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
+// Width and punctuation vary as numbers are typed in, so the key keeps only what identifies the line.
+export const phoneCustomerSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  phone: z.string().transform(value => value.normalize("NFKC").trim()).pipe(z.string().regex(/^[0-9+()\- ]{6,20}$/, { error: () => tr("電話番号を確認してください") })),
+});
+export const phoneKey = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+/** A customer known by name and phone only. They hold no account, so they receive no email. */
+export async function savePhoneCustomer(store: Store, shopId: string, name: string, phone: string, by: string) {
+  const email = phoneKey(phone), id = `${shopId}:${email}`, at = new Date().toISOString();
+  const previous = await store.get<CustomerRecord & { createdAt?: string }>("customer", id);
+  await store.put("customer", id, { ...previous, shopId, email, name, phone, createdAt: previous?.createdAt || at, updatedBy: by, updatedAt: at });
+  return email;
+}
 const timestamp = (value: string) => Date.parse(value) || 0;
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 export const isVisit = (booking: Booking, now: Date) =>
@@ -127,7 +144,8 @@ export function aggregateCustomers(
   for (const booking of bookings) add(booking.customer, { kind: "booking", at: booking.start, booking });
   for (const inquiry of inquiries) add(inquiry.email, { kind: "inquiry", at: inquiry.at, inquiry });
   const profiles = new Map(records.flatMap(record => { const profile = memberProfile(record); return profile ? [[normalizeEmail(record.email), profile] as const] : []; }));
-  for (const email of profiles.keys()) if (!groups.has(email)) groups.set(email, []);
+  const phoneRecords = new Map(records.flatMap(record => record.phone ? [[normalizeEmail(record.email), record] as const] : []));
+  for (const email of [...profiles.keys(), ...phoneRecords.keys()]) if (!groups.has(email)) groups.set(email, []);
   const notesByEmail = new Map<string, CustomerNote[]>();
   for (const note of notes.filter(note => note.status === "active")) {
     const email = normalizeEmail(note.email);
@@ -139,13 +157,14 @@ export function aggregateCustomers(
     // Equal timestamps use a stable identity tie-break, independent of sheet row order.
     const latest = [...history].sort((a, b) => timestamp(recordedAt(b)) - timestamp(recordedAt(a)) || compare(eventId(b), eventId(a)))[0];
     const customerNotes = notesByEmail.get(email) || [];
-    const profile = profiles.get(email);
+    const profile = profiles.get(email), phoneRecord = phoneRecords.get(email);
     const selectedHistory: CustomerEvent[] = [...history, ...customerNotes.map(note => ({ kind: "note" as const, at: note.createdAt, note }))].filter(event => timestamp(event.at) >= start);
     const visits = selectedHistory.flatMap(event => event.kind === "booking" && isVisit(event.booking, now) ? [event.booking] : []);
     return {
       email,
-      name: profile?.name || (latest?.kind === "booking" ? latest.booking.name : latest?.kind === "inquiry" ? latest.inquiry.name : ""),
+      name: profile?.name || phoneRecord?.name || (latest?.kind === "booking" ? latest.booking.name : latest?.kind === "inquiry" ? latest.inquiry.name : ""),
       ...(profile ? { profile, registered: true } : {}),
+      ...(phoneRecord ? { phone: phoneRecord.phone } : {}),
       visitCount: visits.length,
       lastVisit: visits.map(booking => booking.start).sort((a, b) => timestamp(b) - timestamp(a))[0] || null,
       totalAmount: visits.reduce((sum, booking) => sum + booking.price, 0),
@@ -156,5 +175,5 @@ export function aggregateCustomers(
 }
 
 export function customerSummaries(customers: CustomerDetail[]): CustomerSummary[] {
-  return customers.filter(customer => customer.history.length > 0 || customer.registered).map(({ history, profile, ...summary }) => summary);
+  return customers.filter(customer => customer.history.length > 0 || customer.registered || customer.phone).map(({ history, profile, ...summary }) => summary);
 }

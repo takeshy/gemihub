@@ -2664,3 +2664,6 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 
 .coupon-proposal-progress { display:flex; align-items:center; flex-wrap:wrap; gap:.75rem; margin-top:.75rem; }
 .coupon-proposal-progress p { display:flex; align-items:center; gap:.6rem; margin:0; }
+
+.phone-booking, .phone-customer { margin: 0 0 16px; }
+.phone-booking form, .phone-customer form { margin-top: 12px; }

@@ -160,9 +160,9 @@ try {
       const customerNav = nav(page, 'お客様一覧');
       await next(customerNav).click(); await expect(page.locator('.customer-table tbody tr')).toHaveCount(10);
       await next(customerNav).click(); await expect(page.locator('.customer-table tbody tr')).toHaveCount(4);
-      await page.getByRole('searchbox', { name: label('氏名・メールで検索'), exact: true }).fill('customer23@');
+      await page.getByRole('searchbox', { name: label('氏名・メール・電話番号で検索'), exact: true }).fill('customer23@');
       await expect(page.locator('.customer-table tbody tr')).toHaveCount(1);
-      await page.getByRole('searchbox', { name: label('氏名・メールで検索'), exact: true }).fill('');
+      await page.getByRole('searchbox', { name: label('氏名・メール・電話番号で検索'), exact: true }).fill('');
       await expect(page.locator('.customer-table tbody tr')).toHaveCount(10);
       await expect(previous(customerNav)).toBeDisabled();
 
