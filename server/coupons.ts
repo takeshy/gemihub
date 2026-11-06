@@ -84,13 +84,19 @@ export async function issueCoupons(store: Store, shop: Shop, now = Date.now()) {
     }
   }
 }
+export type CouponUse = {
+  shopId: string; grantId: string; customer: string; bookingId: string; at: string;
+  status: "used" | "returned";
+  returnedAt?: string; returnedReason?: "cancelled" | "rebooking";
+};
 export async function couponWallet(store: Store, shop: Shop, customer: string, now = Date.now()): Promise<CouponWalletItem[]> {
   const grants = (await store.records<CouponGrant>("couponGrant", shop)).filter(g => g.customer === normalizeEmail(customer));
   if (!grants.length) return [];
-  const uses = await store.records<{ grantId: string }>("couponUse", shop), bookings = await store.bookings(shop.id);
-  const checkouts = (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id);
+  const uses = await store.records<CouponUse>("couponUse", shop), bookings = await store.bookings(shop.id);
+  const checkouts = await store.records<Checkout>("checkout", shop);
   return grants.map(g => {
-    const used = uses.some(u => u.grantId === g.id) || bookings.some(b => b.coupon?.grantId === g.id) || checkouts.some(c => c.booking.coupon?.grantId === g.id && c.phase === "confirmed");
+    const activeUse = (b: Booking) => b.coupon?.grantId === g.id && b.status !== "cancelled" && normalizeEmail(b.customer) === g.customer;
+    const used = uses.some(u => u.grantId === g.id && u.status === "used") || bookings.some(activeUse);
     const reserved = checkouts.some(c => c.booking.coupon?.grantId === g.id && checkoutHolding(c, now));
     return { ...g, state: used ? "used" as const : reserved ? "reserved" as const : Date.parse(g.expiresAt) <= now ? "expired" as const : "available" as const };
   }).sort((a, b) => b.issuedAt.localeCompare(a.issuedAt) || a.id.localeCompare(b.id));
@@ -103,14 +109,29 @@ export async function applyCoupon(store: Store, shop: Shop, customer: string, pr
   if (discountAmount <= 0) return fail(tr("このクーポンは利用できません。選び直してください。"));
   return { price: fromMinor(toMinor(price, currency) - toMinor(discountAmount, currency), currency), coupon: { grantId: grant.id, campaignId: grant.campaignId, title: grant.title, originalPrice: price, discountAmount, currency } satisfies BookingCoupon };
 }
-export async function recordCouponUse(store: Store, booking: Booking) {
+const couponUseKey = (booking: Booking) => digest(JSON.stringify(["coupon-use", booking.coupon!.grantId, booking.id]));
+// The customer who cancels after the appointment began has had the discounted visit, or missed it.
+const couponReturnable = (booking: Booking) => {
+  const cancellation = booking.payment?.cancellation;
+  return booking.status === "cancelled" && !(cancellation?.reason === "customer" && Date.parse(cancellation.at) >= Date.parse(booking.start));
+};
+/** Caller holds bookingLockKey. Keeps the coupon's usage record in step with the booking, in the same commit. */
+export async function syncCouponUse(store: Store, booking: Booking) {
   if (!booking.coupon) return;
-  const existing = await store.get<{ bookingId: string }>("couponUse", booking.coupon.grantId);
-  if (existing) {
-    if (existing.bookingId !== booking.id) fail(tr("このクーポンは利用できません。選び直してください。"));
-    return;
-  }
-  await store.put("couponUse", booking.coupon.grantId, { shopId: booking.shopId, grantId: booking.coupon.grantId, customer: booking.customer, bookingId: booking.id, at: new Date().toISOString() });
+  if (couponReturnable(booking)) return returnCouponUse(store, booking, "cancelled");
+  // A returned use is final: reconciling an earlier booking must not consume the coupon again.
+  const key = couponUseKey(booking);
+  if (await store.get<CouponUse>("couponUse", key)) return;
+  const shop = await store.shop(booking.shopId), uses = shop ? await store.records<CouponUse>("couponUse", shop) : [];
+  if (uses.some(use => use.grantId === booking.coupon!.grantId && use.status === "used")) fail(tr("このクーポンは利用できません。選び直してください。"));
+  await store.put("couponUse", key, { shopId: booking.shopId, grantId: booking.coupon.grantId, customer: booking.customer, bookingId: booking.id, at: new Date().toISOString(), status: "used" } satisfies CouponUse);
+}
+/** Caller holds bookingLockKey; commit with the cancellation/holder change. */
+export async function returnCouponUse(store: Store, booking: Booking, reason: "cancelled" | "rebooking", at = booking.updatedAt || new Date().toISOString()) {
+  if (!booking.coupon) return;
+  const key = couponUseKey(booking), current = await store.get<CouponUse>("couponUse", key);
+  if (current?.status === "returned") return;
+  await store.put("couponUse", key, { shopId: booking.shopId, grantId: booking.coupon.grantId, customer: booking.customer, bookingId: booking.id, at: current?.at || booking.createdAt, status: "returned", returnedAt: at, returnedReason: reason } satisfies CouponUse);
 }
 
 /** Caller holds bookingLockKey. Save the manual operation before grants so interrupted batches resume. */

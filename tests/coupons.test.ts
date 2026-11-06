@@ -4,12 +4,13 @@ import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { Store, bookingLockKey } from "../server/store.ts";
 import { sample, shopDate, slots, type Booking } from "../server/domain.ts";
-import { issueCoupons, couponWallet, applyCoupon, validateCouponRule, grantManualCoupons, campaignEnabled, issueLimit, visitSettleMs } from "../server/coupons.ts";
+import { issueCoupons, couponWallet, applyCoupon, validateCouponRule, grantManualCoupons, campaignEnabled, issueLimit, visitSettleMs, syncCouponUse, type CouponUse } from "../server/coupons.ts";
 import { couponRuleSchema, couponRuleIssues, couponTemplate, couponTemplateIds, couponDiscount, type CouponRule, type CouponCampaign, type CouponGrant } from "../shared/coupons.ts";
 import { proposeCoupon } from "../server/coupon-ai.ts";
 import { createApp } from "../server/app.ts";
 import { digest } from "../server/auth.ts";
 import { defaultRefundTiers } from "../server/payment-domain.ts";
+import { paymentService, type Checkout } from "../server/payments.ts";
 import { paypalValue } from "../shared/region.ts";
 import type { PaymentGateway, PayPalOrder } from "../server/paypal.ts";
 const hour = 3600000;
@@ -143,7 +144,7 @@ async function fixture(t: TestContext, paid = false) {
   const base = `/api/public/${shop.slug}`, ownerBase = `/api/shops/${shop.id}/coupons`;
   const input = (days: number, couponId: string, price: number) => ({ name: "Alice", menuId: "simple", staffId: "aoi", start: slots(shop.published!, [], shopDate(shop.published!, Date.now() + days * 86400000), "simple", "aoi")[0].start, couponId, requestId: randomUUID(), expectedPrice: price, ...(paid ? { paymentConsent: { amount: price, policy: defaultRefundTiers } } : {}) });
   const calculate = () => call(`${ownerBase}/calculate`, {}, "owner");
-  return { store, shop, call, base, ownerBase, input, calls, amounts, calculate };
+  return { store, shop, call, base, ownerBase, input, calls, amounts, calculate, gateway };
 }
 
 test("HTTP owner controls, private wallet, server prices, concurrent reuse protection and zero-price booking", async t => {
@@ -168,7 +169,7 @@ test("HTTP owner controls, private wallet, server prices, concurrent reuse prote
   assert.equal(saved.price, 4950); assert.equal(saved.coupon.discountAmount, 550);
   assert.equal((await f.call(`${f.base}/bookings`, results[0].status === 200 ? first : other)).body.booking.id, saved.id);
   await f.call(`${f.base}/bookings/${saved.id}/cancel`, {});
-  assert.equal((await f.call(`${f.base}/coupons`)).body[0].state, "used", "confirmed bookings consume coupons even after cancellation");
+  assert.equal((await f.call(`${f.base}/coupons`)).body[0].state, "available", "normal cancellation returns the unexpired coupon");
   await f.call(f.ownerBase, { requestId: randomUUID(), rule: rule({ title: "Free", discount: { type: "percent", value: 100 } }) }, "owner");
   await f.calculate();
   const free = (await f.call(`${f.base}/coupons`)).body.find((g: CouponGrant) => g.title === "Free");
@@ -193,7 +194,83 @@ test("PayPal reserves a coupon while pending, releases on abandonment, captures 
   assert.equal((await f.call(`${f.base}/coupons`)).body[0].state, "used");
   const cancelled = await f.call(`/api/shops/${f.shop.id}/bookings/${id}/status`, { status: "cancelled" }, "owner");
   assert.equal(cancelled.status, 200); assert.deepEqual(f.amounts, [5000, 5000, -5000]);
-  assert.equal((await f.call(`${f.base}/coupons`)).body[0].state, "used");
+  assert.equal((await f.call(`${f.base}/coupons`)).body[0].state, "available");
+});
+
+test("customer and shop cancellations return coupons once; reuse and later reconciliation retain single-use protection", async t => {
+  for (const paid of [false,true]) for (const who of ["alice","owner"]) await t.test(`${paid?"paid":"unpaid"} ${who}`,async sub=>{
+    const f=await fixture(sub,paid);
+    await f.call(`${f.ownerBase}/manual`,{requestId:randomUUID(),title:"Returnable",discount:{type:"percent",value:10},validDays:30,customers:["alice@example.com"]},"owner");
+    const grant=(await f.call(`${f.base}/coupons`)).body[0] as CouponGrant;
+    const first=await f.call(`${f.base}/bookings`,f.input(3,grant.id,4950));
+    const booking:Booking=paid?(await f.call(`${f.base}/checkouts/${first.body.checkout.id}/capture`,{})).body.booking:first.body.booking;
+    const cancelled=who==="owner"?await f.call(`/api/shops/${f.shop.id}/bookings/${booking.id}/status`,{status:"cancelled"},"owner"):await f.call(`${f.base}/bookings/${booking.id}/cancel`,paid?{expectedRefund:4950}:{});
+    assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));
+    const returned=(await f.call(`${f.base}/coupons`)).body[0];
+    assert.equal(returned.state,"available");assert.equal(returned.expiresAt,grant.expiresAt);
+    const attempts=await Promise.all([4,5].map(day=>f.call(`${f.base}/bookings`,f.input(day,grant.id,4950))));
+    assert.deepEqual(attempts.map(r=>r.status).sort(),[200,409]);
+    const next=attempts.find(r=>r.status===200)!.body;
+    const nextBooking:Booking=paid?(await f.call(`${f.base}/checkouts/${next.checkout.id}/capture`,{})).body.booking:next.booking;
+    const old=(await f.store.bookings(f.shop.id)).find(b=>b.id===booking.id)!;
+    await syncCouponUse(f.store,old);
+    if(paid)await paymentService(f.store,f.gateway).reconcile(f.shop.id);
+    assert.equal((await f.call(`${f.base}/coupons`)).body[0].state,"used","the cancelled booking must not release the later use");
+    const uses=(await f.store.records<CouponUse>("couponUse",f.shop)).filter(u=>u.grantId===grant.id);
+    assert.equal(uses.length,2);assert.equal(uses.find(u=>u.bookingId===booking.id)!.status,"returned");assert.equal(uses.find(u=>u.bookingId===nextBooking.id)!.status,"used");
+    assert.equal((await f.call(`/api/shops/${f.shop.id}/bookings/${nextBooking.id}/status`,{status:"no_show"},"owner")).status,200);
+    assert.equal((await f.call(`${f.base}/coupons`)).body[0].state,"used","no-shows never return coupons");
+    assert.equal((await f.call(`${f.base}/bookings`,f.input(6,grant.id,4950))).status,409);
+  });
+});
+
+test("expired coupons keep their original expiry on cancellation; fully discounted bookings can return their coupons", async t=>{
+  const f=await fixture(t,true);
+  await f.call(`${f.ownerBase}/manual`,{requestId:randomUUID(),title:"Free",discount:{type:"percent",value:100},validDays:1,customers:["alice@example.com"]},"owner");
+  const grant=(await f.call(`${f.base}/coupons`)).body[0] as CouponGrant;
+  const first=await f.call(`${f.base}/bookings`,f.input(3,grant.id,0));assert.equal(first.body.booking.price,0);assert.equal(f.calls.create,0);
+  await f.call(`${f.base}/bookings/${first.body.booking.id}/cancel`,{});
+  assert.equal((await f.call(`${f.base}/coupons`)).body[0].state,"available");
+  const second=await f.call(`${f.base}/bookings`,f.input(4,grant.id,0));assert.equal(second.body.booking.price,0);
+  const expiredAt=new Date(Date.now()-1000).toISOString();await f.store.put("couponGrant",grant.id,{...grant,expiresAt:expiredAt});
+  await f.call(`/api/shops/${f.shop.id}/bookings/${second.body.booking.id}/status`,{status:"cancelled"},"owner");
+  const wallet=(await f.call(`${f.base}/coupons`)).body[0];assert.equal(wallet.state,"expired");assert.equal(wallet.expiresAt,expiredAt);
+  assert.equal((await f.call(`${f.base}/bookings`,f.input(5,grant.id,0))).status,409);
+});
+
+test("a finalized cancellation returns its coupon while the cash refund is still pending",async t=>{
+  const f=await fixture(t,true);
+  await f.call(`${f.ownerBase}/manual`,{requestId:randomUUID(),title:"Pending refund",discount:{type:"amount",value:500},validDays:30,customers:["alice@example.com"]},"owner");
+  const grant=(await f.call(`${f.base}/coupons`)).body[0] as CouponGrant;
+  const begun=await f.call(`${f.base}/bookings`,f.input(3,grant.id,5000));const id=begun.body.checkout.id;
+  await f.call(`${f.base}/checkouts/${id}/capture`,{});
+  f.gateway.refund=async(_capture,amount,request,currency="JPY")=>({id:request,status:"PENDING",amount:{currency_code:currency,value:paypalValue(amount,currency)}});
+  assert.equal((await f.call(`${f.base}/bookings/${id}/cancel`,{expectedRefund:5000})).status,200);
+  assert.equal((await f.store.get<Checkout>("checkout",id))!.booking.payment!.cancellation!.status,"pending");
+  assert.equal((await f.call(`${f.base}/coupons`)).body[0].state,"available");
+  assert.equal((await f.call(`${f.base}/bookings`,f.input(4,grant.id,5000))).status,200);
+});
+
+test("a customer's cancellation after the start keeps the coupon used; the shop's own cancellation still returns it", async t => {
+  for (const [reason, state] of [["customer", "used"], ["shop", "available"]] as const) await t.test(reason, async sub => {
+    const f = await fixture(sub, true);
+    await f.call(`${f.ownerBase}/manual`, { requestId: randomUUID(), title: "Late", discount: { type: "percent", value: 10 }, validDays: 30, customers: ["alice@example.com"] }, "owner");
+    const grant = (await f.call(`${f.base}/coupons`)).body[0] as CouponGrant;
+    const begun = await f.call(`${f.base}/bookings`, f.input(3, grant.id, 4950)), id = begun.body.checkout.id;
+    await f.call(`${f.base}/checkouts/${id}/capture`, {});
+    const checkout = (await f.store.get<Checkout>("checkout", id))!;
+    await paymentService(f.store, f.gateway).cancel(checkout, reason === "shop" ? "owner@example.com" : "alice@example.com", reason, new Date(Date.parse(checkout.booking.start) + hour).toISOString());
+    assert.equal((await f.call(`${f.base}/coupons`)).body[0].state, state);
+  });
+});
+
+test("a second booking cannot record a use while another booking holds the coupon", async t => {
+  const f = await fixture(t);
+  await f.call(`${f.ownerBase}/manual`, { requestId: randomUUID(), title: "Once", discount: { type: "percent", value: 10 }, validDays: 30, customers: ["alice@example.com"] }, "owner");
+  const grant = (await f.call(`${f.base}/coupons`)).body[0] as CouponGrant;
+  const held = (await f.call(`${f.base}/bookings`, f.input(3, grant.id, 4950))).body.booking as Booking;
+  await assert.rejects(syncCouponUse(f.store, { ...held, id: "another-booking" }), /status|利用できません|cannot/i);
+  assert.equal((await f.store.records<CouponUse>("couponUse", f.shop)).length, 1);
 });
 
 test("manual grants are owner-only, scoped to selected members, retryable without duplication and usable in bookings", async t => {

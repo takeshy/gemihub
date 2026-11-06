@@ -448,6 +448,10 @@ export function createMockClient(scenario: Scenario): ApiClient {
   };
   const transferFixtures = createTransferFixtures(scenario, shop, session);
   const couponItems: CouponWalletItem[] = scenario.startsWith("coupon-") ? [{ id: "c".repeat(64), shopId: shop.id, campaignId: "welcome", customer: "guest@example.com", title: tr("初回クーポン"), discount: { type: "percent", value: 10 }, currency: "JPY", issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now()+30*86400000).toISOString(), state: "available" }] : [];
+  const returnCoupon = (booking: Booking) => {
+    const coupon = couponItems.find(item => item.id === booking.coupon?.grantId);
+    if (coupon) coupon.state = Date.parse(coupon.expiresAt) > Date.now() ? "available" : "expired";
+  };
   let wishes: SlotWish[] = scenario === "waitlist-mypage" ? [{ id: "story-wish", date: "2026-05-17", from: "10:00", to: "20:00", menuId: "simple", optionIds: [], discountOnly: false }, { id: "story-wish-discount", date: "2026-05-24", from: "13:00", to: "18:00", menuId: "simple", optionIds: [], discountOnly: true }] : [];
   if (scenario.startsWith("calendar-")) {
     shop.isOwner = false;
@@ -918,7 +922,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const b = shop.bookings.find((b) => b.id === action.split("/").at(-2));
       if (!b) throw new Error(tr("予約がありません"));
       transferFixtures.release(b.id);
-      if (input.status === "cancelled") simulateCancellation(b, "shop");
+      if (input.status === "cancelled") { simulateCancellation(b, "shop"); returnCoupon(b); }
       else b.status = input.status as Booking["status"];
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/retry`) {
@@ -1014,6 +1018,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         if (!b) throw new Error(tr("予約がありません"));
         transferFixtures.release(b.id);
         simulateCancellation(b, "customer");
+        returnCoupon(b);
         result = { ok: true };
       } else if (action.endsWith("/auth/email")) result = { ok: true };
       else if (action.endsWith("/profile")) {

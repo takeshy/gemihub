@@ -1554,13 +1554,14 @@ export function PublicShop({
                             if (b.payment && !b.payment.cancellation) {
                               const quote = await api<CancellationQuote>(`${base}/bookings/${b.id}/cancel-quote`);
                               const message = quote.transfer ? tr("予約をキャンセルしますか？\n返金予定額：{0}\n代わりに利用する方が見つかると、返金額が{1}に増えます。\n受付期限：{2}\n予約が入るか受付期限を過ぎると、返金額が確定します。ほかの方の支払い開始前なら、キャンセルを取り消せます。", paid(quote.amount, b.payment.currency), paid(quote.transfer.price, b.payment.currency), when(quote.transfer.deadline)) : tr("予約をキャンセルしますか？返金額は{0}（{1}%）です。", paid(quote.amount, b.payment.currency), quote.percent);
-                              if (!window.confirm(message)) return;
+                              const couponNote = Date.parse(b.start) <= Date.now() ? tr("開始時刻を過ぎたキャンセルでは、クーポンは戻りません。") : quote.transfer ? tr("有効期限内のクーポンは、キャンセルが確定すると再利用できます。受付中は返却されません。") : tr("有効期限内のクーポンは再利用できます。");
+                              if (!window.confirm(message + (b.coupon ? "\n" + couponNote : ""))) return;
                               expectedRefund = quote.amount;
                               expectedTransfer = quote.transfer;
                             }
                             const result = await api<{ cancellationPending?: boolean }>(`${base}/bookings/${b.id}/cancel`, { expectedRefund, expectedTransfer });
                             await loadMine();
-                            notify(result.cancellationPending ? tr("キャンセルを受け付けました") : tr("予約をキャンセルしました。"));
+                            notify(result.cancellationPending ? tr("キャンセルを受け付けました") : b.coupon && !b.payment ? `${tr("予約をキャンセルしました。")} ${tr("有効期限内のクーポンは再利用できます。")}` : tr("予約をキャンセルしました。"));
                           })
                         }
                       >

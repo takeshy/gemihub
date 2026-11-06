@@ -124,7 +124,7 @@ export function Coupons({ shopId, config }: { shopId: string; config: ShopConfig
         {rule.schedule.type === "monthly" && <label className="field"><span>{tr("毎月の日付（存在しない日は月末）")}</span><input type="number" min={1} max={31} required value={rule.schedule.day} onChange={e => { if (rule.schedule.type === "monthly") change({ schedule: { ...rule.schedule, day: Number(e.target.value) } }); }}/></label>}
         {rule.schedule.type === "once" && <label className="field"><span>{tr("配布日")}</span><DateInput aria-label={tr("配布日")} value={rule.schedule.date} onValueChange={date => { if (rule.schedule.type === "once") change({ schedule: { ...rule.schedule, date } }); }}/></label>}
         {(rule.schedule.type === "once" || rule.schedule.type === "monthly") && <label className="field"><span>{tr("配布時刻（店舗時間・時）")}</span><input type="number" min={0} max={23} required value={rule.schedule.hour} onChange={e => { if (rule.schedule.type === "once" || rule.schedule.type === "monthly") change({ schedule: { ...rule.schedule, hour: Number(e.target.value) } }); }}/></label>}
-        <p className="small muted">{tr("来店回数は終了した有効な予約だけで計算します。取消・無断キャンセルは含みません。無断キャンセルの記録を待つため、予約終了の24時間後に来店として数えます。来店後のクーポンは次回以降に使えます。1予約に1枚、確定後はキャンセルしても再利用できません。")}</p>
+        <p className="small muted">{tr("来店回数は終了した有効な予約だけで計算します。取消・無断キャンセルは含みません。無断キャンセルの記録を待つため、予約終了の24時間後に来店として数えます。来店後のクーポンは次回以降に使えます。1予約に1枚使えます。通常キャンセルが確定した場合は、有効期限内のクーポンを再利用できます。無断キャンセルでは戻りません。")}</p>
         <button type="submit" disabled={issues.length > 0 || proposing} className="primary">{tr("この内容で自動配布を有効にする")}</button>
       </fieldset>
     </form>
@@ -197,5 +197,6 @@ export function CouponWallet({ items, config, onUse }: { items: CouponWalletItem
     {available.map(card)}{pending.map(card)}
     {!!history.length && <details className="coupon-wallet-history"><summary>{tr("使用済み・期限切れ（{0}枚）",history.length)}</summary>{history.map(card)}</details>}
     <p className="small">{tr("クーポンを選んで予約へ進めます。キャンセル枠の割引との併用はできません。")}</p>
+    <p className="small">{tr("通常キャンセルが確定した場合は、有効期限内のクーポンを再利用できます。無断キャンセルでは戻りません。")}</p>
   </section>;
 }

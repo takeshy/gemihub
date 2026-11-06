@@ -1,5 +1,5 @@
 import { tr } from "../shared/i18n.ts";
-import { recordCouponUse } from "./coupons.ts";
+import { syncCouponUse } from "./coupons.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Booking } from "./domain.ts";
 import { refundQuote, type RefundTiers } from "./payment-domain.ts";
@@ -38,7 +38,7 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
   async function sync(c: Checkout) {
     const snapshot = createHash("sha256").update(JSON.stringify(c.booking)).digest("hex");
     if (c.synced !== snapshot) {
-      await store.transaction(async () => { await store.saveBooking(c.booking); await recordCouponUse(store, c.booking); });
+      await store.transaction(async () => { await store.saveBooking(c.booking); await syncCouponUse(store, c.booking); });
       c.synced = snapshot;
     }
     if (c.phase === "captured") c.phase = "confirmed";
@@ -154,7 +154,8 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
       c.booking.updatedBy = by;
       c.booking.updatedAt = at;
       payment.cancellation = { ...quote, at, by, reason, status: quote.amount ? "retrying" : "not_required", requestId: randomUUID() };
-      await save(c); // Freeze cancellation time, rate and amount even if Firestore/PayPal is unavailable.
+      // Freeze cancellation time, rate and amount even if Firestore/PayPal is unavailable.
+      await store.transaction(async () => { await save(c); await syncCouponUse(store, c.booking); });
     }
     await refund(c);
     return c.booking;

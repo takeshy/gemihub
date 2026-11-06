@@ -7,6 +7,7 @@ import { fromMinor, type Currency } from "../shared/region.ts";
 import { approvalUrl, PayPalError, type PaymentGateway, type PayPalOrder } from "./paypal.ts";
 import type { Checkout, paymentService } from "./payments.ts";
 import type { Store } from "./store.ts";
+import { returnCouponUse } from "./coupons.ts";
 
 export type TransferBuyer = {
   /** PayPal custom_id and idempotency base; one per checkout attempt on the listing. */
@@ -196,6 +197,7 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
         b.review = true; await save(t); return;
       }
       const at = new Date().toISOString();
+      const previousBooking = structuredClone(c.booking);
       entry = {
         id: t.id, at, from: { customer: t.seller, name: c.booking.name, ...(c.booking.message ? { message: c.booking.message } : {}) }, to: { customer: b.customer, name: b.name },
         price: t.price, currency: t.currency, discountPercent: t.discountPercent,
@@ -214,7 +216,7 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
       c.customer = b.customer;
       t.phase = "sold"; t.closedAt = at;
       // The holder change and the refund intent are written together, before calling PayPal.
-      await store.transaction(async () => { await saveCheckout(c); await save(t); });
+      await store.transaction(async () => { await returnCouponUse(store, previousBooking, "rebooking", at); await saveCheckout(c); await save(t); });
     } else if (t.phase !== "sold") { t.phase = "sold"; t.closedAt = entry.at; await save(t); }
     await refundSeller(c, entry);
     await notifyEvent(t, c.booking, "sold");

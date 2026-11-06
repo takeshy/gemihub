@@ -1,4 +1,11 @@
 {
+  "開始時刻を過ぎたキャンセルでは、クーポンは戻りません。": "Coupons are not returned when you cancel after the start time.",
+  "有効期限内のクーポンは再利用できます。": "Your unexpired coupon can be reused.",
+  "通常キャンセルが確定した場合は、有効期限内のクーポンを再利用できます。無断キャンセルでは戻りません。": "After a normal cancellation is finalized, the coupon can be reused until its original expiry. No-shows do not return coupons.",
+  "有効期限内のクーポンは、キャンセルが確定すると再利用できます。受付中は返却されません。": "Your unexpired coupon becomes reusable when the cancellation is finalized. It stays used while the cancellation is pending.",
+  "来店回数は終了した有効な予約だけで計算します。取消・無断キャンセルは含みません。無断キャンセルの記録を待つため、予約終了の24時間後に来店として数えます。来店後のクーポンは次回以降に使えます。1予約に1枚使えます。通常キャンセルが確定した場合は、有効期限内のクーポンを再利用できます。無断キャンセルでは戻りません。": "Visits count active bookings ending at least 24 hours ago, excluding cancellations and no-shows. This allows time to record a no-show. Coupons issued after a visit can be used on a later booking, one per booking. A finalized normal cancellation returns the coupon for reuse until its original expiry. No-shows do not return coupons.",
+  "マイページの「お持ちのクーポン」を確認し、予約の確認欄で1枚選ぶと割引後の金額になります。通常キャンセルが確定した場合は、有効期限内のクーポンを再利用できます。無断キャンセルでは戻りません。": "Check Your coupons on My page and choose one in the booking summary to apply its discount. After a normal cancellation is finalized, it can be reused until its original expiry. No-shows do not return coupons.",
+  "お客様はマイページの「お持ちのクーポン」から確認し、「このクーポンで予約」または予約の確認欄で1枚選んで使います。通常キャンセルが確定した場合は、有効期限内のクーポンを再利用できます。無断キャンセルでは戻りません。": "Members can check Your coupons on My page and choose Book with this coupon, or select one in the booking summary. A finalized normal cancellation returns it for reuse until its original expiry. No-shows do not return coupons.",
   "クーポンの操作": "Coupon actions",
   "新しく作る": "Create a coupon",
   "クーポンを作る": "Create a coupon",
@@ -17,7 +24,6 @@
   "変更を取り消しています…": "Discarding changes…",
   "手動付与": "Manual distribution",
   "読み込み失敗": "Loading failed",
-  "マイページの「お持ちのクーポン」を確認し、予約の確認欄で1枚選ぶと割引後の金額になります。予約確定後はキャンセルしてもクーポンは再利用できません。": "Check Your coupons on My page and choose one in the booking summary to apply its discount. Once the booking is confirmed, a cancellation does not restore the coupon.",
   "クーポン未作成": "No campaigns yet",
   "手動クーポン": "Manual coupon",
   "付与先には、このお店の会員を選んでください。": "Select registered members of this shop as recipients.",
@@ -78,7 +84,6 @@
   "毎月の日付（存在しない日は月末）": "Day of month (clamped to month end)",
   "配布日": "Distribution date",
   "配布時刻（店舗時間・時）": "Distribution hour (shop time)",
-  "来店回数は終了した有効な予約だけで計算します。取消・無断キャンセルは含みません。無断キャンセルの記録を待つため、予約終了の24時間後に来店として数えます。来店後のクーポンは次回以降に使えます。1予約に1枚、確定後はキャンセルしても再利用できません。": "Visits count completed active bookings, excluding cancellations and no-shows. A visit counts 24 hours after the booking ends, so no-shows can be recorded first. Coupons issued after a visit can be used on a later booking. One coupon per booking; once confirmed, it cannot be reused even if cancelled.",
   "この内容で自動配布を有効にする": "Enable automatic distribution with these settings",
   "配布中・停止中のクーポン": "Active and paused campaigns",
   "付与済み {0}枚": "{0} coupons issued",
@@ -3288,7 +3293,6 @@
   "再開するには「配布を再開」を押します。停止中の来店や配布日の分を、さかのぼって付与することはありません。": "Select Resume distribution to start again. Visits and distribution dates that occurred during the pause are not issued retroactively.",
   "有効な自動配布は毎分計算されます。現在の条件で計算したい場合は「今すぐ付与を計算」を押し、完了の案内を確認します。": "Active campaigns calculate eligibility every minute. To run the current conditions now, select Calculate eligibility now and check the completion message.",
   "配布中と停止中のクーポン一覧。停止・再開と、現在の条件での付与計算ができます。": "The list shows active and paused campaigns, with controls to pause, resume and calculate eligibility now.",
-  "お客様はマイページの「お持ちのクーポン」から確認し、「このクーポンで予約」または予約の確認欄で1枚選んで使います。予約確定後は、キャンセルしても再利用できません。": "Customers can check Your coupons on My page and choose Book with this coupon, or select one coupon in the booking summary. Once the booking is confirmed, the coupon cannot be reused even if the booking is cancelled.",
   "クーポン案を作成できませんでした。もう一度お試しください。": "We couldn't create a coupon proposal. Please try again.",
   "割引のtypeはpercentとamountだけです。10%引きは {\"type\":\"percent\",\"value\":10}、固定額の割引は {\"type\":\"amount\",\"value\":金額} にします。USDの$5引きはvalueを5にし、500セントにはしません。fixedやfixed_amountは使わず、金額は店舗通貨で扱い、通貨換算はしません。「3回来店したお客様」はvisit_countのcount:3とcomparison:exact、「3回ごと」はmultiple、「3回以上」はat_leastです。「来店ごとに計算」はscheduleのafter_visitで表します。": "discount.type must be percent or amount only. For 10% off use {\"type\":\"percent\",\"value\":10}. For a fixed currency discount use {\"type\":\"amount\",\"value\":the_amount}. For $5 off in USD set value to 5, not 500 cents. Do not use fixed or fixed_amount. Amounts use the shop currency; do not convert currencies. “Customers who have visited 3 times” uses visit_count with count:3 and comparison:exact; “every 3 visits” uses multiple; “at least 3 visits” uses at_least. “Calculated after each visit” uses schedule after_visit."
 }

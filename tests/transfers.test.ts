@@ -11,6 +11,8 @@ import { defaultRefundTiers, refundQuote } from "../server/payment-domain.ts";
 import { transferTerms } from "../server/transfer-domain.ts";
 import { paymentService, type Checkout } from "../server/payments.ts";
 import { transferService, type Transfer } from "../server/transfers.ts";
+import { couponWallet, applyCoupon, syncCouponUse } from "../server/coupons.ts";
+import type { CouponGrant } from "../shared/coupons.ts";
 import { PayPalError, type PaymentGateway, type PayPalOrder, type PayPalRefund } from "../server/paypal.ts";
 
 process.env.DEMO_MODE = "true";
@@ -151,6 +153,27 @@ test("a shop cancellation after a transfer refunds exactly what the transferee p
   assert.deepEqual(f.requests.map(r => [r.capture, r.amount]), [[`capture-order-${booking.id}`, 4950], [`capture-order-${t.buyer!.id}`, 4950]]);
   // Bob gets back all 4,950 he paid; the 550 Alice gave up by transferring is not returned, as specified.
   assert.equal(f.net(), 550);
+});
+
+test("replacement booking completion returns the seller's coupon without passing it to the buyer or disturbing its later use",async()=>{
+  const {store,shop,f,transfers,payments,checkout,booking}=await setup(18);
+  try{
+    const grant:CouponGrant={id:"c".repeat(64),shopId:shop.id,campaignId:"gift",customer:"alice@example.com",title:"Gift",discount:{type:"amount",value:500},currency:"JPY",issuedAt:new Date().toISOString(),expiresAt:new Date(Date.now()+30*86400000).toISOString()};
+    await store.put("couponGrant",grant.id,grant);
+    const c=await checkout();c.booking.coupon={grantId:grant.id,campaignId:grant.campaignId,title:grant.title,originalPrice:6000,discountAmount:500,currency:"JPY"};await payments.sync(c);
+    const first=await transfers.list(await checkout(),grant.customer,(await transfers.quote(await checkout())).terms!);
+    assert.equal((await couponWallet(store,shop,grant.customer))[0].state,"used","a pending cancellation listing does not return the coupon");
+    await transfers.withdraw(first);assert.equal((await couponWallet(store,shop,grant.customer))[0].state,"used");
+    const listing=await transfers.list(await checkout(),grant.customer,(await transfers.quote(await checkout())).terms!);
+    await transfers.begin(listing,{customer:"bob@example.com",name:"Bob",requestKey:"coupon-buyer"},"https://r","https://c");approve(f,listing);await transfers.capture(listing);
+    assert.equal((await couponWallet(store,shop,grant.customer))[0].state,"available");
+    assert.equal((await checkout()).booking.coupon,undefined);assert.deepEqual(await couponWallet(store,shop,"bob@example.com"),[]);
+    const quoted=await applyCoupon(store,shop,grant.customer,5500,grant.id),next:Booking={...booking,id:randomUUID(),...quoted};
+    await store.transaction(async()=>{await store.saveBooking(next);await syncCouponUse(store,next);});
+    await transfers.capture(listing);await transfers.reconcile(shop.id);await payments.reconcile(shop.id);
+    await payments.cancel(await checkout(),"bob@example.com","customer");
+    assert.equal((await couponWallet(store,shop,grant.customer))[0].state,"used","the buyer's later cancellation does not release the seller's later booking");
+  }finally{await store.close();}
 });
 
 test("repeated transfers never pay anyone more than they paid", async () => {

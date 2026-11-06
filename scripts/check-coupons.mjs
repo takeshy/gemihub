@@ -10,8 +10,8 @@ import {defaultRefundTiers} from '../server/payment-domain.ts';
 import {paypalValue} from '../shared/region.ts';
 process.env.DEMO_MODE='true';
 const english=JSON.parse(await readFile('shared/en.json','utf8'));
-const store=new Store(':memory:'),orders=new Map(),returns=new Map();let captures=0;
-const gateway={environment:'sandbox',async ready(){},async create(id,amount,back,_cancel,currency='JPY'){const order={id,status:'APPROVED',purchase_units:[{custom_id:id,amount:{currency_code:currency,value:paypalValue(amount,currency)}}],links:[{rel:'payer-action',href:`https://www.sandbox.paypal.com/checkoutnow?token=${id}`}]};orders.set(id,order);returns.set(id,back);return structuredClone(order);},async order(id){return structuredClone(orders.get(id));},async capture(id){captures++;const order=orders.get(id);order.purchase_units[0].payments={captures:[{id:`cap-${id}`,status:'COMPLETED',amount:order.purchase_units[0].amount}]};return structuredClone(order);},async refund(){throw new Error('Unexpected refund');},async refundStatus(){throw new Error('Unexpected refund poll');}};
+const store=new Store(':memory:'),orders=new Map(),returns=new Map();let captures=0,refunds=0;
+const gateway={environment:'sandbox',async ready(){},async create(id,amount,back,_cancel,currency='JPY'){const order={id,status:'APPROVED',purchase_units:[{custom_id:id,amount:{currency_code:currency,value:paypalValue(amount,currency)}}],links:[{rel:'payer-action',href:`https://www.sandbox.paypal.com/checkoutnow?token=${id}`}]};orders.set(id,order);returns.set(id,back);return structuredClone(order);},async order(id){return structuredClone(orders.get(id));},async capture(id){captures++;const order=orders.get(id);order.purchase_units[0].payments={captures:[{id:`cap-${id}`,status:'COMPLETED',amount:order.purchase_units[0].amount}]};return structuredClone(order);},async refund(_capture,amount,id,currency='JPY'){refunds++;return {id,status:'COMPLETED',amount:{currency_code:currency,value:paypalValue(amount,currency)}};},async refundStatus(){throw new Error('Unexpected refund poll');}};
 const server=createApp(store,undefined,undefined,undefined,gateway);await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const origin=`http://127.0.0.1:${server.address().port}`;process.env.APP_ORIGIN=origin;
 await mkdir('tmp/coupons',{recursive:true});
@@ -28,7 +28,7 @@ for(const language of ['ja','en'])for(const width of [1280,390]){
  for(const [token,email,role]of[[ownerToken,shop.owner,'owner'],[customerToken,customer,'customer']])await store.put('session',digest(token),{user:{email,name:role==='owner'?'Owner':'Alice',role,shopId:shop.id},expires:Date.now()+600000});
  for(const [email,name]of[[customer,'Alice'],[`bob-${randomUUID()}@example.com`,'Bob']])await store.put('customer',`${shop.id}:${email}`,{shopId:shop.id,email,name,birthDate:'1990-11-01',gender:'not_specified'});
  const context=await browser.newContext({viewport:{width,height:1000},locale:language==='ja'?'ja-JP':'en-US'});await context.addCookies([{name:'gemihub_session',value:ownerToken,url:origin}]);
- const page=await context.newPage();active=page;const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await context.newPage();active=page;const errors=[];page.on('pageerror',e=>errors.push(e.message));const dialogs=[];page.on('dialog',async dialog=>{dialogs.push(dialog.message());await dialog.accept();});
  await page.route('https://www.sandbox.paypal.com/**',async route=>{const id=new URL(route.request().url()).searchParams.get('token');assert.ok(returns.has(id));await route.fulfill({status:302,headers:{location:returns.get(id)},body:''});});
  await page.route(`**/api/shops/${shop.id}/coupons/propose`,route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({rule:{title:'AI Welcome',match:'all',conditions:[{type:'first_visit'}],discount:{type:'percent',value:20},schedule:{type:'registration'},validDays:30},question:''})}));
  let failNextReload=false;
@@ -85,7 +85,24 @@ for(const language of ['ja','en'])for(const width of [1280,390]){
  await expect(page.locator('.booking-complete')).toContainText('Manual Gift');const bookings=await store.bookings(shop.id);assert.equal(bookings.length,1);assert.equal(bookings[0].price,total);assert.equal(bookings[0].coupon.grantId,grant.id);assert.equal(captures,before+(paid?1:0));
  await page.locator('.booking-complete').getByRole('button',{name:label('マイページで予約を確認'),exact:true}).click();await page.locator('.coupon-wallet-history summary').click();await expect(page.locator('.coupon-wallet .booking-card').filter({hasText:'Manual Gift'})).toContainText(label('使用済み'));
  await expect(page.locator('.coupon-wallet .booking-card').filter({hasText:'Manual Gift'}).getByRole('button')).toHaveCount(0);
- assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px ${usd?'USD':'JPY'}: manual grant, reviewed AI proposal, distribution, wallet, discounted ${paid?'payment':'booking'}, and used status passed`);
+ const refundBefore=refunds;
+ await page.getByRole('button',{name:label('キャンセルする'),exact:true}).click();
+ await expect(page.locator('.coupon-wallet .booking-card').filter({hasText:'Manual Gift'})).toContainText(label('利用可能'));
+ assert.equal((await store.get('couponGrant',grant.id)).expiresAt,grant.expiresAt);
+ assert.equal(refunds,refundBefore+(paid?1:0));
+ if(paid)assert.ok(dialogs.at(-1).includes(label('有効期限内のクーポンは、キャンセルが確定すると再利用できます。受付中は返却されません。')));
+ await page.screenshot({path:`tmp/coupons/returned-${language}-${width}.png`,fullPage:true});
+ await page.locator('.coupon-wallet .booking-card').filter({hasText:'Manual Gift'}).getByRole('button',{name:label('このクーポンで予約'),exact:true}).click();
+ await expect(page.getByLabel(label('クーポンを選ぶ'),{exact:true})).toHaveValue(grant.id);
+ await page.locator('.date-input input[type=text]').first().fill(shopDate(config,Date.now()+4*86400000).replaceAll('-','/'));await page.locator('.time-grid button').first().click();
+ if(paid)await page.getByLabel(label('支払額と返金条件を確認しました'),{exact:true}).check();
+ await page.getByRole('button',{name:new RegExp(label(paid?'PayPalで支払いへ進む':'この内容で予約する'))}).click();await expect(page.locator('.booking-complete')).toContainText('Manual Gift');
+ const reused=(await store.bookings(shop.id)).find(b=>b.status==='active');assert.equal(reused.price,total);
+ await page.locator('.booking-complete').getByRole('button',{name:label('マイページで予約を確認'),exact:true}).click();
+ const noShow=await fetch(`${origin}/api/shops/${shop.id}/bookings/${reused.id}/status`,{method:'POST',headers:{Origin:origin,Cookie:`gemihub_session=${ownerToken}`,'Content-Type':'application/json'},body:JSON.stringify({status:'no_show'})});assert.equal(noShow.status,200,await noShow.text());
+ await page.goto(`${origin}/s/${shop.slug}?pane=mine&lang=${language}`);await page.locator('.coupon-wallet-history summary').click();await expect(page.locator('.coupon-wallet .booking-card').filter({hasText:'Manual Gift'})).toContainText(label('使用済み'));
+ await expect(page.locator('.coupon-wallet .booking-card').filter({hasText:'Manual Gift'}).getByRole('button')).toHaveCount(0);assert.equal(refunds,refundBefore+(paid?1:0));
+ assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px ${usd?'USD':'JPY'}: manual grant, reviewed AI proposal, distribution, wallet, discounted ${paid?'payment':'booking'}, cancellation return, reuse and no-show retention passed`);
 }
 }catch(e){if(active&&!active.isClosed())await active.screenshot({path:'tmp/coupons/failure.png',fullPage:true}).catch(()=>{});throw e;}
 finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));await store.close();}

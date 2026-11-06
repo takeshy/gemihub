@@ -21,7 +21,7 @@ import { conversations, createConversation, readConversation, searchConversation
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
 import { emailLogin, type LoginMailer } from "./email-login.ts";
-import { issueCoupons, hasActiveCoupons, campaignEnabled, couponWallet, applyCoupon, recordCouponUse, validateCouponRule, grantManualCoupons } from "./coupons.ts";
+import { issueCoupons, hasActiveCoupons, campaignEnabled, couponWallet, applyCoupon, syncCouponUse, validateCouponRule, grantManualCoupons } from "./coupons.ts";
 import { proposeCoupon } from "./coupon-ai.ts";
 import { couponRuleSchema, type CouponCampaign, type CouponGrant } from "../shared/coupons.ts";
 import { listedBookingIds, queueBookingReminders, reminderCurrent, type BookingReminder } from "./booking-reminders.ts";
@@ -1535,8 +1535,11 @@ export function createApp(
             if (b.status !== "active") fail(409, tr("この予約は処理済みです"));
             const config = fresh.published!;
             b.status = input.status; b.updatedBy = user!.email; b.updatedAt = new Date().toISOString();
-            await store.saveBooking(b);
-            await notify(fresh, config, b.customer, tr("予約の状態が変更されました"), tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status));
+            await store.transaction(async () => {
+              await store.saveBooking(b);
+              await syncCouponUse(store, b);
+              await notify(fresh, config, b.customer, tr("予約の状態が変更されました"), tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status));
+            });
             return { ok: true };
           });
           await flushMail(shop);
@@ -3089,7 +3092,7 @@ export function createApp(
             }
             await store.transaction(async () => {
               await store.saveBooking(b);
-              await recordCouponUse(store, b);
+              await syncCouponUse(store, b);
               if (requestKey)
                 await store.put("request", requestKey, {
                   bookingId: b.id,
@@ -3129,6 +3132,7 @@ export function createApp(
             b.updatedAt = new Date().toISOString();
             await store.transaction(async () => {
               await store.saveBooking(b);
+              await syncCouponUse(store, b);
               await notify(
                 shop,
                 config,
