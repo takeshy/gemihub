@@ -24,7 +24,7 @@ export function WaitlistRequest({ base, config, date, menuId, optionIds, staffId
   useEffect(() => { setFrom(hours.start); setTo(hours.end); }, [hours.start, hours.end]);
   return <details className="waitlist-request">
     <summary>{tr("希望の時間が空いたら知らせる")}</summary>
-    <p className="small muted">{tr("選んだメニューと担当で、希望の時間帯に空きが出るとメールでお知らせします。お知らせは先着順で、枠は確保されません。")}</p>
+    <p className="small muted">{tr("選んだメニューと担当で、希望の時間帯に空きが出るとメールでお知らせします。通知では予約枠は確保されません。予約は先着順です。")}</p>
     <Field label={tr("希望の日付")}>
       <DateInput aria-label={tr("希望の日付")} min={dates[0]} max={dates.at(-1)} value={wishDate} onValueChange={setWishDate} />
     </Field>

@@ -138,6 +138,7 @@ export type Scenario =
   | "customer-choice"
   | "mypage"
   | "waitlist-mypage"
+  | "waitlist-reservation"
   | "coupon-reservation"
   | "coupon-mypage"
   | "contact"
@@ -168,6 +169,7 @@ const publicScenarios = new Set<Scenario>([
   "customer-choice",
   "mypage",
   "waitlist-mypage",
+  "waitlist-reservation",
   "coupon-reservation", "coupon-mypage",
   "contact",
   "anonymous",
@@ -250,6 +252,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   if (scenario.startsWith("transfer-") || scenario.startsWith("owner-transfer-") || ["payment-reservation", "paid-mypage", "partial-refund", "zero-refund", "full-refund", "pending-refund", "failed-refund", "owner-paid", "manage-payment", "insufficient-refund"].includes(scenario)) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   config.notificationEmail = "owner@example.com";
   if (scenario === "system-payment") config.rules.payment = { enabled: true, refundTiers: [{ hoursBefore: 72, percent: 100 }, { hoursBefore: 24, percent: 50 }, { hoursBefore: 0, percent: 0 }] };
+  if (scenario.startsWith("waitlist-")) config.rules.payment = { enabled: true, refundTiers: structuredClone(defaultRefundTiers) };
   if (scenario === "system-owner-only") {
     config.staff = []; config.ownerBooking = true;
     config.appearance = { accent: "sage", layout: "standard", imageUrl: "", articles: { blogs: false, announcements: false } };
@@ -452,7 +455,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     const coupon = couponItems.find(item => item.id === booking.coupon?.grantId);
     if (coupon) coupon.state = Date.parse(coupon.expiresAt) > Date.now() ? "available" : "expired";
   };
-  let wishes: SlotWish[] = scenario === "waitlist-mypage" ? [{ id: "story-wish", date: "2026-05-17", from: "10:00", to: "20:00", menuId: "simple", optionIds: [], discountOnly: false }, { id: "story-wish-discount", date: "2026-05-24", from: "13:00", to: "18:00", menuId: "simple", optionIds: [], discountOnly: true }] : [];
+  let wishes: SlotWish[] = scenario === "waitlist-mypage" ? [{ id: "story-wish", date: tomorrow, from: "10:00", to: "20:00", menuId: "simple", optionIds: [], discountOnly: false }, { id: "story-wish-discount", date: dateJST(new Date(Date.now() + 7 * 86400000)), from: "13:00", to: "18:00", menuId: "simple", optionIds: [], discountOnly: true }] : [];
   if (scenario.startsWith("calendar-")) {
     shop.isOwner = false;
     session.user = { email: "haru@example.com", name: tr("はる"), role: "customer", shopId: shop.id };

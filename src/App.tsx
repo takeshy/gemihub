@@ -1691,7 +1691,7 @@ export function PublicShop({
                 {selectedCoupon && <div><p>{tr("クーポン割引：{0}", yen(discountAmount))}</p><p className="small coupon-selection-expiry">{tr("有効期限：{0}", shopTime(selectedCoupon.expiresAt,{year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit",timeZoneName:"short"}))}</p></div>}
                 {c.rules.payment?.enabled && totalPrice > 0 ? <div className="payment-policy">
                   <h4>{tr("予約時のお支払いと返金条件")}</h4>
-                  <p>{tr("PayPalで{0}をお支払い後、予約が確定します。決済中の枠は10分間確保します。", yen(totalPrice))}</p>
+                  <p>{tr("PayPalで{0}をお支払い後、予約が確定します。「PayPalで支払いへ進む」を押してから10分以内に決済を完了しないと、ほかの方が予約できるようになります。", yen(totalPrice))}</p>
                   <p>{policyText(c.rules.payment.refundTiers)}</p>
                   <p className="small">{tr("返金額はキャンセル時点の残り時間で計算し、最小単位（1円・1セント）未満を切り捨てます。店都合は全額返金。予約後に条件が変更されても、この予約の条件は変わりません。")}</p>
                   {data.paymentSimulation && <p className="notice">{tr("プレビューの練習です。実際の支払い・返金は行いません。")}</p>}

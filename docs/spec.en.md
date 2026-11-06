@@ -121,6 +121,8 @@ Storybook includes 12 customer and 3 operator states with interactive cancellati
 
 ## Opening alerts
 
+Storybook's Customer screens → Opening alerts includes an expanded registration form and saved alerts with stop actions. The manual explains registration, viewing and stopping alerts with Japanese and English screenshots, and states that alerts do not reserve appointments: bookings are first come, first served.
+
 Signed-in registered customers can save a date and time range (for example 5/17 10:00–20:00) from **Tell me when a time opens up** under the time list. The service, add-ons and staff come from the booking form. Dates must be in the booking window, each customer may keep 10 alerts, and identical alerts are not duplicated. Shops with PayPal also offer **Only discounted appointments**.
 
 Ordinary openings use the same availability check as booking, including payment holds, Calendar and hours, so changed shifts count as well as cancellations. A discounted appointment matches on the base service (add-ons are ignored), any requested staff member and the whole appointment fitting the range. Listings someone is paying for and the customer's own cancelled booking are excluded.

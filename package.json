@@ -62,6 +62,8 @@
     "check:i18n:browser": "node --import tsx scripts/check-i18n-browser.mjs",
     "capture:manual:coupons": "node scripts/capture-manual-coupons.mjs",
     "check:manual:coupons": "node scripts/capture-manual-coupons.mjs --check",
+    "capture:manual:waitlist": "node scripts/capture-manual-waitlist.mjs",
+    "check:manual:waitlist": "node scripts/capture-manual-waitlist.mjs --check",
     "capture:manual:cancellations": "node scripts/capture-manual-cancellations.mjs",
     "check:manual": "node scripts/capture-manual-cancellations.mjs --check",
     "capture:manual:en": "node scripts/capture-manual-en.mjs",
