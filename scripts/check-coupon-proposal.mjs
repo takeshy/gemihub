@@ -20,7 +20,7 @@ try {
   for (const language of ['ja', 'en']) for (const width of [1280, 390]) {
     const label = text => language === 'en' ? english[text] || text : text;
     const shop = await store.createShop(`coupon-proposal-${randomUUID()}@example.com`);
-    shop.published = structuredClone(sample); await store.saveShop(shop);
+    shop.published = structuredClone(sample); shop.published.region = { country: "US", timeZone: "America/New_York" }; await store.saveShop(shop);
     const token = randomUUID();
     await store.put('session', digest(token), { user: { email: shop.owner, name: 'Owner', role: 'owner', shopId: shop.id }, expires: Date.now() + 600000 });
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
@@ -107,13 +107,38 @@ try {
     await expect(form.getByLabel(label('配布条件 {0}').replace('{0}', '1'), { exact: true })).toHaveValue('first_visit');
     await expect(form.getByLabel(label('付与計算のタイミング'), { exact: true })).toHaveValue('registration');
     await expect(save).toBeEnabled(); await expect(progress).toHaveCount(0);
+    const fixedRequest = '$5 off for customers who have visited 3 times, valid 60 days, calculated after each visit';
+    await note.fill(fixedRequest); await start(8);
+    // The server normally catches this. Also protect the UI against malformed responses.
+    await settle(7, { ...response(), rule: { ...response().rule, discount: { type: 'cash', value: 5 } } });
+    await expect(panel.getByRole('alert')).toContainText(label('クーポン案を作成できませんでした。もう一度お試しください。'));
+    await expect(panel.getByRole('alert')).not.toContainText(/discriminator|Zod|rule\.discount/);
+    await expect(note).toHaveValue(fixedRequest);
+    await expect(title).toHaveValue('AI Welcome');
+    await expect(form.getByLabel(label('割引の値'), { exact: true })).toHaveValue('10');
+    await expect(save).toBeEnabled();
+    await page.screenshot({ path: `tmp/coupon-proposal/invalid-output-${language}-${width}.png`, fullPage: true });
+    await panel.getByRole('button', { name: label('もう一度試す'), exact: true }).click();
+    const fixed = { title: 'AI Visit Reward', match: 'all', conditions: [{ type: 'visit_count', count: 3, comparison: 'exact' }], discount: { type: 'amount', value: 5 }, schedule: { type: 'after_visit' }, validDays: 60 };
+    await settle(8, { rule: fixed, question: '' });
+    await expect(title).toHaveValue('AI Visit Reward');
+    await expect(form.getByLabel(label('割引の種類'), { exact: true })).toHaveValue('amount');
+    await expect(form.getByLabel(label('割引の値'), { exact: true })).toHaveValue('5');
+    await expect(form.getByLabel(label('付与からの有効日数'), { exact: true })).toHaveValue('60');
+    await expect(form.getByLabel(label('配布条件 {0}').replace('{0}', '1'), { exact: true })).toHaveValue('visit_count');
+    await expect(form.getByLabel(label('回数'), { exact: true })).toHaveValue('3');
+    await expect(form.getByLabel(label('回数の条件'), { exact: true })).toHaveValue('exact');
+    await expect(form.getByLabel(label('付与計算のタイミング'), { exact: true })).toHaveValue('after_visit');
+    await expect(panel.getByRole('alert')).toHaveCount(0);
+    await expect(panel.locator('.coupon-feedback')).toHaveText(label('AIの案を下の項目で確認・編集してください。まだ配布は有効になっていません。'));
+    await expect(save).toBeEnabled();
     assert.equal((await store.records('couponCampaign', shop)).length, 0);
     assert.equal((await store.records('couponGrant', shop)).length, 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
     await page.screenshot({ path: `tmp/coupon-proposal/success-${language}-${width}.png`, fullPage: true });
     assert.deepEqual(errors, []);
     await context.close();
-    console.log(`${language} ${width}px: progress, cancel, late responses, manual edits, timeout, retry, clarification, navigation, and proposal-only success passed`);
+    console.log(`${language} ${width}px: progress, cancel, late responses, manual edits, timeout, retry, clarification, navigation, fixed-amount fields, friendly validation errors, and proposal-only success passed`);
   }
 } catch (error) {
   if (active && !active.isClosed()) await active.screenshot({ path: 'tmp/coupon-proposal/failure.png', fullPage: true }).catch(() => {});

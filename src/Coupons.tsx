@@ -40,7 +40,9 @@ export function Coupons({ shopId, config }: { shopId: string; config: ShopConfig
       const result = await api<{ rule: CouponRule | null; question: string }>(`${base}/propose`, { request }, { signal: controller.signal });
       if (proposalRequest.current !== controller) return;
       if (!result.rule) { setNotice(result.question); return; }
-      setRule(couponRuleSchema.parse(result.rule)); setRequestId(createRequestId());
+      const parsed = couponRuleSchema.safeParse(result.rule);
+      if (!parsed.success) throw new Error(tr("クーポン案を作成できませんでした。もう一度お試しください。"));
+      setRule(parsed.data); setRequestId(createRequestId());
       setNotice(tr("AIの案を下の項目で確認・編集してください。まだ配布は有効になっていません。"));
     } catch (e) {
       if (proposalRequest.current === controller) setProposalError(e instanceof Error ? e.message : tr("操作できませんでした"));
