@@ -54,6 +54,8 @@ export type Inquiry = {
   interactions?: InquiryInteraction[];
   /** Set once replies are recorded as interactions, so later replies need no legacy-history check. */
   emailHistory?: boolean;
+  completedAt?: string;
+  attachments?: CustomerAttachment[];
 };
 export type CustomerRecord = Partial<MemberProfile> & {
   shopId: string;
@@ -70,6 +72,8 @@ export const customerAttachmentSchema = z.object({
   name: z.string().trim().min(1).max(255).regex(/^[^\x00-\x1f\x7f]+$/),
   mimeType: z.string().max(150).regex(/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i),
   size: z.number().int().min(0).max(customerFileLimit),
+  // Optional for records uploaded before content checksums were introduced.
+  sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 export type CustomerAttachment = z.infer<typeof customerAttachmentSchema>;
 export const customerNoteSchema = z.object({
@@ -79,11 +83,14 @@ export const customerNoteSchema = z.object({
   status: z.enum(["active", "deleted"]), updatedAt: z.iso.datetime(), updatedBy: z.string(),
 });
 export type CustomerNote = z.infer<typeof customerNoteSchema>;
+export const customerFileInputSchema = customerAttachmentSchema.omit({ id: true, size: true, sha256: true }).extend({
+  // Drive converts or refuses its native types, leaving a file that cannot be read back or mailed.
+  mimeType: customerAttachmentSchema.shape.mimeType.refine(value => !value.toLowerCase().startsWith("application/vnd.google-apps")),
+  data: z.string().max(Math.ceil(customerFileLimit / 3) * 4).regex(/^[A-Za-z0-9+/]*={0,2}$/),
+}).strict();
 export const customerNoteInputSchema = z.object({
   requestId: z.uuid(), text: z.string().max(10000),
-  files: z.array(customerAttachmentSchema.omit({ id: true, size: true }).extend({
-    data: z.string().max(Math.ceil(customerFileLimit / 3) * 4).regex(/^[A-Za-z0-9+/]*={0,2}$/),
-  })).max(5).default([]),
+  files: z.array(customerFileInputSchema).max(5).default([]),
 }).refine(input => !!input.text.trim() || input.files.length > 0, { get message() { return tr("メモまたは添付ファイルを指定してください"); } });
 export const previewCustomerImage = (mimeType: string) => ["image/png", "image/jpeg", "image/gif", "image/webp"].includes(mimeType);
 export type CustomerImage = CustomerAttachment & { noteId: string; createdAt: string; noteUpdatedAt: string };

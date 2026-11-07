@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import { clients } from "./google.ts";
 import type { Shop, Store } from "./store.ts";
-import { customerFileLimit } from "./customers.ts";
+import { customerFileLimit, customerTotalFileLimit, type CustomerAttachment } from "./customers.ts";
 
 export type FileUpload = { name: string; mimeType: string; data: string };
 export type CustomerFiles = {
@@ -12,6 +12,32 @@ export type CustomerFiles = {
   read(shop: Shop, token: string, id: string): Promise<Buffer>;
   rename(shop: Shop, token: string, id: string, name: string): Promise<void>;
 };
+export function checkedFileSizes(input: FileUpload[]) {
+  const decoded = input.map(file => Buffer.from(file.data, "base64"));
+  if (decoded.some((data, index) => data.length > customerFileLimit || data.toString("base64") !== input[index].data) || decoded.reduce((sum, data) => sum + data.length, 0) > customerTotalFileLimit)
+    throw Object.assign(new Error(tr("添付は1ファイル5MB、合計10MB以内にしてください")), { status: 400 });
+  return decoded.map(data => data.length);
+}
+export async function reserveAttachments(files: CustomerFiles, token: string, input: FileUpload[], sizes: number[]): Promise<CustomerAttachment[]> {
+  const ids = input.length ? await files.reserve(input.length, token) : [];
+  if (ids.length !== input.length) throw new Error(tr("添付ファイルの保存先を作成できませんでした"));
+  return withAttachmentHashes(input.map((file, index) => ({ id: ids[index], name: file.name, mimeType: file.mimeType, size: sizes[index] })), input);
+}
+/** Input must match the upload journal before adding hashes to its legacy attachment metadata. */
+export function withAttachmentHashes(attachments: CustomerAttachment[], input: FileUpload[]): CustomerAttachment[] {
+  return attachments.map((file, index) => ({ ...file, sha256: file.sha256 ?? createHash("sha256").update(Buffer.from(input[index].data, "base64")).digest("hex") }));
+}
+export async function readAttachment(files: CustomerFiles, shop: Shop, token: string, attachment: CustomerAttachment) {
+  const data = await files.read(shop, token, attachment.id);
+  if (data.length !== attachment.size || attachment.sha256 && createHash("sha256").update(data).digest("hex") !== attachment.sha256)
+    throw Object.assign(new Error(tr("添付ファイルが変更されています")), { status: 409 });
+  return data;
+}
+/** The file is gone or was replaced, so retrying the read cannot succeed. */
+export function attachmentUnavailable(error: unknown) {
+  const { status, code, response } = error as { status?: number; code?: number; response?: { status?: number } };
+  return [status, code, response?.status].some(value => value === 404 || value === 409);
+}
 export const googleCustomerFiles: CustomerFiles = {
   async reserve(count, token) {
     const { drive } = clients(token);

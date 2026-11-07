@@ -23,7 +23,8 @@ import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts
 import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } from "./post-metadata.ts";
 import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } from "./staff-accounts.ts";
 import type { InquiryInteraction } from "./inquiries.ts";
-import { inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, writeInquiry } from "./inquiry-service.ts";
+import { createPublicInquiry, inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, stageInquiryFiles, stagePublicInquiry, writeInquiry } from "./inquiry-service.ts";
+import type { InquiryFileStorage } from "./inquiry-files.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
@@ -47,8 +48,8 @@ import { Store, bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type S
 import { resetShop } from "./shop-reset.ts";
 import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
-import { aggregateCustomers, customerSummaries, phoneCustomerSchema, phoneKey, savePhoneCustomer, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry, type CustomerRecord } from "./customers.ts";
-import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
+import { aggregateCustomers, customerSummaries, phoneCustomerSchema, phoneKey, savePhoneCustomer, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type CustomerAttachment, type Inquiry, type CustomerRecord } from "./customers.ts";
+import { attachmentUnavailable, googleCustomerFiles, memoryCustomerFiles, readAttachment, type CustomerFiles } from "./customer-files.ts";
 import { uploadMenuImage, readMenuImage, menuImageResource, validateMenuImages, validateImageIds, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
 import { generateImage } from "./image-generation.ts";
@@ -194,6 +195,7 @@ type Job = {
   reminder?: BookingReminder;
   wishId?: string;
   inquiryInteractionId?: string;
+  attachments?: CustomerAttachment[];
 };
 async function body(req: IncomingMessage, limit = 65536) {
   const chunks: Buffer[] = [];
@@ -256,6 +258,7 @@ export function createApp(
   paymentGateway = loggedPaymentGateway(paymentGateway, logs);
   const reportError = (error: unknown) => { logs.error(error); console.error(error); };
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
+  const inquiryStorage = (shop: Shop): InquiryFileStorage => async () => ({ files: crmFiles, token: store.memory ? "" : await store.ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")) });
   const pageFiles = storefrontFiles || (store.memory ? memoryStorefrontFiles(store) : bucketStorefrontFiles());
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
   const customerLoginLog = async (user: User) => {
@@ -568,6 +571,7 @@ export function createApp(
       (j) => j.shopId === shop.id && j.type === type && !(shop.publishingPlanId && j.type === "posts"),
     )) {
       await requestLocale.run(job.locale || "ja", async () => {
+        let attachmentsRead = false;
         try {
           if (job.wishId) {
             const wish = await store.get<SlotWish>("slotWish", job.wishId);
@@ -593,14 +597,17 @@ export function createApp(
               await store.delete("job", job.id);
               return;
             }
-            await sendMail(token, to, job.subject!, job.body!, job.cc);
+            const attachments = await Promise.all((job.attachments || []).map(async file => ({ name: file.name, mimeType: file.mimeType, data: await readAttachment(crmFiles, shop, token, file) })));
+            attachmentsRead = true;
+            await sendMail(token, to, job.subject!, job.body!, job.cc, attachments);
             await markDelivery(job.inquiryInteractionId, "sent", to);
           }
           await store.delete("job", job.id);
         } catch (err) {
           job.error = err instanceof Error ? err.message : tr("連携エラー");
           job.attempts++;
-          if (job.inquiryInteractionId && job.attempts >= maxInquiryMailAttempts) {
+          const attached = !!job.attachments?.length;
+          if ((job.inquiryInteractionId || attached) && (job.attempts >= maxInquiryMailAttempts || attached && !attachmentsRead && attachmentUnavailable(err))) {
             reportError(err);
             await markDelivery(job.inquiryInteractionId, "failed");
             await store.delete("job", job.id);
@@ -635,15 +642,16 @@ export function createApp(
     subject: string,
     text: string,
     cc?: string[],
+    attachments?: CustomerAttachment[],
   ) {
     if (cc) {
       const recipients = new Map(cc.map(address => [address.toLowerCase(), address]));
       recipients.delete(to.toLowerCase());
-      await enqueue(shop, "mail", { to, cc: [...recipients.values()], subject, body: text });
+      await enqueue(shop, "mail", { to, cc: [...recipients.values()], subject, body: text, ...(attachments?.length ? { attachments } : {}) });
       return;
     }
     for (const address of new Set([to, config.notificationEmail]))
-      await enqueue(shop, "mail", { to: address, subject, body: text });
+      await enqueue(shop, "mail", { to: address, subject, body: text, ...(attachments?.length ? { attachments } : {}) });
   }
   const payments = paymentService(store, paymentGateway, async (booking, event) => {
     const key = `${booking.id}:${event}`;
@@ -1625,9 +1633,21 @@ export function createApp(
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
         if (action === "inquiries" && method === "GET") return json(res, await inquiries(shop));
+        const inquiryFile = action.match(/^inquiries\/([^/]+)\/files\/([^/]+)$/);
+        if (inquiryFile && method === "GET") {
+          const q = await store.get<Inquiry>("inquiry", inquiryFile[1]);
+          if (!q || q.shopId !== shop.id) fail(404, tr("お問い合わせがありません"));
+          const entries = await store.records<InquiryInteraction>("inquiryInteraction", shop);
+          const attachments = [...(q.attachments || []), ...entries.filter(entry => entry.inquiryId === q.id).flatMap(entry => entry.attachments || [])];
+          const file = attachments.find(file => file.id === inquiryFile[2]) || fail(404, tr("添付ファイルがありません"));
+          const data = await readAttachment(crmFiles, shop, (await inquiryStorage(shop)()).token, file);
+          return json(res, { data: data.toString("base64") });
+        }
         const inquiryWrite = action.match(/^inquiries(?:\/([^/]+)\/(reply|status|interactions|contact))?$/);
         if (inquiryWrite && method === "POST") {
-          const input = await body(req);
+          // Receiving and uploading attachments can be slow, so neither holds the shop lock.
+          const input = await body(req, 15 * 1024 * 1024);
+          await stageInquiryFiles(store, shop, inquiryWrite[1], inquiryWrite[2] || "create", input, inquiryStorage(shop));
           const result = await store.locked(shop.id, async () => {
             const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
             await assertOperator(user, fresh);
@@ -1821,9 +1841,7 @@ export function createApp(
           if (fileRoute) {
             const note = (await store.records<CustomerNote>("customerNote", shop)).find(note => note.id === fileRoute[1] && normalizeEmail(note.email) === email && note.status === "active") || fail(404, tr("メモがありません"));
             const attachment = note.attachments.find(file => file.id === fileRoute[2]) || fail(404, tr("添付ファイルがありません"));
-            const token = store.memory ? "" : await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です"));
-            const data = await crmFiles.read(shop, token, attachment.id);
-            if (data.length !== attachment.size) fail(409, tr("添付ファイルが変更されています"));
+            const data = await readAttachment(crmFiles, shop, (await inquiryStorage(shop)()).token, attachment);
             return json(res, { data: data.toString("base64") });
           }
           fail(404, tr("見つかりません"));
@@ -3031,6 +3049,24 @@ export function createApp(
           logs.activity(shop.id, user.email, input.event);
           return json(res, { ok: true });
         }
+        if (action === "inquiries" && method === "POST") {
+          // Receiving and uploading attachments can be slow, so neither holds the shop lock.
+          const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          assertStorefrontAccess(shop);
+          if (!user || user.role !== "customer" || user.shopId !== shop.id) fail(401, tr("このお店のお客様としてログインしてください"));
+          if (!memberProfile(await store.get("customer", `${shop.id}:${user.email}`))) fail(428, tr("先に会員情報を登録してください"));
+          const input = await body(req, 15 * 1024 * 1024);
+          await stagePublicInquiry(store, shop, user.email, input, inquiryStorage(shop));
+          const accepted = await store.locked(shop.id, async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            assertStorefrontAccess(fresh);
+            const config = await effective(fresh);
+            return createPublicInquiry(store, fresh, user.email, input, q => notify(fresh, config, user.email, tr("{0} お問い合わせを受け付けました", config.name), q.message, undefined, q.attachments));
+          });
+          await flushMail(shop);
+          void syncPaymentHistory(shop.id).catch(reportError);
+          return json(res, accepted);
+        }
         const bookingAction = /^(?:bookings|checkouts|slots|transfers|waitlist)(?:\/|$)/.test(action);
         let deliverMail = false;
         const result = await store.locked(bookingAction ? bookingLockKey(shopRef.id) : shopRef.id, async () => {
@@ -3431,36 +3467,6 @@ export function createApp(
             });
             deliverMail = true;
             logs.activity(shop.id, u.email, "booking_cancelled", b.id);
-            return ({ ok: true });
-          }
-          if (action === "inquiries" && method === "POST") {
-            const u = customer();
-            if (!await ownProfile()) fail(428, tr("先に会員情報を登録してください"));
-            const input = z
-              .object({
-                name: z.string().min(1).max(100),
-                message: z.string().min(1).max(5000),
-              })
-              .parse(await body(req));
-            const q: Inquiry = {
-              id: randomUUID(),
-              shopId: shop.id,
-              email: u.email,
-              ...input,
-              reply: "",
-              status: "new",
-              source: "customer",
-              at: new Date().toISOString(),
-            };
-            await store.put("inquiry", q.id, q);
-            await notify(
-              shop,
-              config,
-              u.email,
-              tr("{0} お問い合わせを受け付けました", config.name),
-              input.message,
-            );
-            deliverMail = true;
             return ({ ok: true });
           }
           fail(404, tr("見つかりません"));

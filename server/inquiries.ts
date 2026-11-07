@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { dateIn } from "../shared/region.ts";
 import { tr } from "../shared/i18n.ts";
+import { customerSince } from "./customers.ts";
+import type { CustomerAttachment } from "./customers.ts";
+import { inquiryFilesInputSchema } from "../shared/inquiry-files.ts";
 export const inquiryStatusSchema = z.enum(["new", "in_progress", "waiting", "completed"]);
 export type InquiryStatus = z.infer<typeof inquiryStatusSchema>;
 export const inquiryStatuses = inquiryStatusSchema.options;
@@ -11,6 +14,7 @@ export type InquiryInteraction = {
   at: string; by?: string; legacy?: boolean;
   delivery?: "queued" | "sent" | "retrying" | "simulated" | "failed";
   to?: string;
+  attachments?: CustomerAttachment[];
 };
 export const inquiryStatusLabel = (status: InquiryStatus) => ({ new: tr("未対応"), in_progress: tr("対応中"), waiting: tr("確認待ち"), completed: tr("対応済み") })[status];
 export const inquiryChannelLabel = (kind: InquiryChannel) => ({ customer: tr("お客様からの連絡"), phone: tr("電話対応"), note: tr("社内メモ"), email: tr("メール返信") })[kind];
@@ -23,8 +27,10 @@ export const manualInquirySchema = z.object({
   email: z.union([z.literal(""), z.email()]).default(""), phone: z.string().trim().max(50).default(""),
   subject: z.string().trim().max(200).default(""), message: z.string().trim().min(1).max(5000),
   source: z.enum(["phone", "customer", "note"]).default("phone"),
+  files: inquiryFilesInputSchema.optional(),
 }).strict();
-export const inquiryInteractionSchema = z.object({ requestId: z.uuid(), kind: z.enum(["phone", "customer", "note"]), text: z.string().trim().min(1).max(5000) }).strict();
+export const inquiryInteractionSchema = z.object({ requestId: z.uuid(), kind: z.enum(["phone", "customer", "note"]), text: z.string().trim().min(1).max(5000), files: inquiryFilesInputSchema.optional() }).strict();
+export const publicInquirySchema = z.object({ requestId: z.uuid().optional(), name: z.string().trim().min(1).max(100), message: z.string().trim().min(1).max(5000), files: inquiryFilesInputSchema.optional() });
 export const inquiryReplied = (inquiry: { reply: string }) =>
   !!inquiry.reply.trim();
 type InquiryReplySource = { reply: string; interactions?: InquiryInteraction[] };
@@ -41,6 +47,7 @@ export type InquiryFilter = {
   from: string;
   to: string;
 };
+export const inquiryCompletionCutoff = (now: Date, timeZone = "Asia/Tokyo") => customerSince({ period: "month" }, now, timeZone)!;
 export function filterInquiries<
   T extends {
     id: string;
@@ -53,13 +60,19 @@ export function filterInquiries<
     subject?: string;
     phone?: string;
     interactions?: InquiryInteraction[];
+    completedAt?: string;
   },
->(inquiries: T[], filter: InquiryFilter, timeZone = "Asia/Tokyo"): T[] {
+>(inquiries: T[], filter: InquiryFilter, timeZone = "Asia/Tokyo", now = new Date()): T[] {
   const query = filter.query.trim().toLowerCase();
+  const cutoff = inquiryCompletionCutoff(now, timeZone);
   return inquiries
     .filter((inquiry) => {
       if (!filter.showCompleted && inquiryStatus(inquiry) === "completed")
         return false;
+      if (!filter.from && !filter.to && inquiryStatus(inquiry) === "completed") {
+        const completed = Date.parse(inquiry.completedAt || inquiry.at || "");
+        if (Number.isFinite(completed) && dateIn(completed, timeZone) <= cutoff) return false;
+      }
       if (
         filter.reply !== "all" &&
         inquiryReplied(inquiry) !== (filter.reply === "replied")

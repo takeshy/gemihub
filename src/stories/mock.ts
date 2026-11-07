@@ -130,6 +130,8 @@ export type Scenario =
   | "inquiries"
   | "inquiries-board"
   | "inquiries-history"
+  | "inquiries-attachments"
+  | "inquiries-archive"
   | "inquiries-manual"
   | "inquiries-board-long"
   | "staff-login"
@@ -222,7 +224,7 @@ export function scenarioProps(scenario: Scenario) {
           bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
           "crm-pagination": "customers", "crm-inquiry-long": "customers", "crm-list-long": "customers", "bookings-long": "bookings", "inquiries-long": "inquiries", "blog-long": "blog",
           "crm-list": "customers", "crm-detail": "customers", "crm-activity-long": "customers", "crm-inquiry": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
-          inquiries: "inquiries", "inquiries-board": "inquiries", "inquiries-history": "inquiries", "inquiries-manual": "inquiries", "inquiries-board-long": "inquiries",
+          inquiries: "inquiries", "inquiries-board": "inquiries", "inquiries-history": "inquiries", "inquiries-attachments": "inquiries", "inquiries-archive": "inquiries", "inquiries-manual": "inquiries", "inquiries-board-long": "inquiries",
           "staff-login": "staff",
           "calendar-disconnected": "staff",
           "owner-only": "staff",
@@ -434,6 +436,20 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const inquiryRequests = new Map<string, { text: string; previousReply: unknown }>();
   const customerNotes: CustomerNote[] = [];
   const customerFileData = new Map<string, string>();
+  const attachInquiryFiles = (input: unknown) => ((input || []) as { name: string; mimeType: string; data: string }[]).map(file => {
+    const id = createRequestId(); customerFileData.set(id, file.data);
+    return { id, name: file.name, mimeType: file.mimeType, size: atob(file.data).length };
+  });
+  if (scenario === "inquiries-attachments") {
+    const inquiry = shop.inquiries.find(item => item.id === "support-0")!;
+    inquiry.attachments = attachInquiryFiles([{ name: "sample.pdf", mimeType: "application/pdf", data: btoa("Sample customer attachment") }]);
+    inquiry.interactions![0].attachments = attachInquiryFiles([{ name: "internal.txt", mimeType: "text/plain", data: btoa("Private note attachment") }]);
+  }
+  if (scenario === "inquiries-archive") {
+    const at = new Date(Date.now() - 100 * 86400000).toISOString();
+    shop.inquiries.push({ id: "old-resolved", email: "", name: tr("佐藤 みどり"), message: tr("駐車場の場所を教えてください。"), reply: "", status: "completed", at, completedAt: at });
+    shop.inquiries.push({ id: "recently-resolved", email: "", name: tr("山田 花子"), message: tr("ご来店前のご相談"), reply: "", status: "completed", at, completedAt: new Date().toISOString() });
+  }
   if (scenario.startsWith("crm-")) {
     if (scenario === "crm-empty") { shop.bookings = []; shop.inquiries = []; }
     else {
@@ -974,13 +990,17 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/invite`) {
       shop.members.push({ email: String(input.email), accepted: false });
       result = { ok: true };
+    } else if (action.includes("/inquiries/") && action.includes("/files/")) {
+      const parts = action.split("/"), inquiry = shop.inquiries.find(item => item.id === parts.at(-3)), id = parts.at(-1)!;
+      if (!inquiry || ![...(inquiry.attachments || []), ...(inquiry.interactions || []).flatMap(entry => entry.attachments || [])].some(file => file.id === id)) throw new Error(tr("添付ファイルがありません"));
+      result = { data: customerFileData.get(id) || "" };
     } else if (action === `/api/shops/${shop.id}/inquiries` && data === undefined) result = shop.inquiries;
     else if (action === `/api/shops/${shop.id}/inquiries`) {
       const serialized = JSON.stringify(input), requestId = String(input.requestId), previous = manualInquiryRequests.get(requestId);
       if (previous && previous.serialized !== serialized) throw new Error(tr("お問い合わせの内容が変わっています。新しい操作として作成してください。"));
       if (previous) result = { inquiry: previous.inquiry };
       else {
-        const inquiry: Inquiry = { id: createRequestId(), shopId: shop.id, name: String(input.name), email: String(input.email || "").toLowerCase(), phone: String(input.phone || ""), subject: String(input.subject || ""), message: String(input.message), source: input.source as Inquiry["source"], reply: "", status: "new", at: new Date().toISOString(), createdBy: shop.owner, interactions: [] };
+        const inquiry: Inquiry = { id: createRequestId(), shopId: shop.id, name: String(input.name), email: String(input.email || "").toLowerCase(), phone: String(input.phone || ""), subject: String(input.subject || ""), message: String(input.message), source: input.source as Inquiry["source"], reply: "", status: "new", at: new Date().toISOString(), createdBy: shop.owner, interactions: [], attachments: attachInquiryFiles(input.files) };
         shop.inquiries.push(inquiry); manualInquiryRequests.set(requestId, { serialized, inquiry }); result = { inquiry };
       }
     } else if (action.includes("/inquiries/") && action.endsWith("/contact")) {
@@ -994,7 +1014,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const key = `${q.id}:${input.requestId}`, serialized = JSON.stringify(input), previous = interactionRequests.get(key);
       if (previous && previous !== serialized) throw new Error(tr("記録の内容が変わっています。新しい操作として保存してください。"));
       if (!previous) {
-        q.interactions ||= []; q.interactions.push({ id: String(input.requestId), shopId: shop.id, inquiryId: q.id, kind: input.kind as "phone" | "customer" | "note", text: String(input.text), by: shop.owner, at: new Date().toISOString() });
+        q.interactions ||= []; q.interactions.push({ id: String(input.requestId), shopId: shop.id, inquiryId: q.id, kind: input.kind as "phone" | "customer" | "note", text: String(input.text), by: shop.owner, at: new Date().toISOString(), attachments: attachInquiryFiles(input.files) });
         interactionRequests.set(key, serialized);
       }
       result = { ok: true };
@@ -1009,7 +1029,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
         if (!String(input.text).trim()) throw new Error(tr("返信内容を入力してください"));
         q.interactions ||= [];
         if (q.reply && !q.interactions.some(entry => entry.kind === "email")) q.interactions.push({ id: `${q.id}-legacy`, shopId: shop.id, inquiryId: q.id, kind: "email", text: q.reply, at: "", legacy: true });
-        q.interactions.push({ id: String(input.requestId || createRequestId()), shopId: shop.id, inquiryId: q.id, kind: "email", text: String(input.text).trim(), at: new Date().toISOString(), by: shop.owner, to: q.email, delivery: "sent" });
+        q.interactions.push({ id: String(input.requestId || createRequestId()), shopId: shop.id, inquiryId: q.id, kind: "email", text: String(input.text).trim(), at: new Date().toISOString(), by: shop.owner, to: q.email, delivery: "sent", attachments: attachInquiryFiles(input.files) });
         q.reply = String(input.text).trim();
         q.status = inquiryStatus(q);
         if (input.requestId) inquiryRequests.set(String(input.requestId), { text: String(input.text), previousReply: input.previousReply });
@@ -1020,6 +1040,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (!q) throw new Error(tr("お問い合わせがありません"));
       if (!inquiryStatuses.includes(input.status as typeof inquiryStatuses[number])) throw new Error(tr("対応状況を選択してください"));
       if (input.previousStatus && input.previousStatus !== inquiryStatus(q) && input.status !== inquiryStatus(q)) throw new Error(tr("対応状況が更新されています。最新の状態を確認してください"));
+      if (inquiryStatus(q) !== input.status) {
+        if (input.status === "completed") q.completedAt = new Date().toISOString(); else delete q.completedAt;
+      }
       q.status = String(input.status);
       result = { ok: true };
     } else if (action.endsWith("/bookings/phone-slots")) {
@@ -1147,7 +1170,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       else if (action.endsWith("/profile")) {
         if (input && data !== undefined) customerProfile = customerProfileSchema.parse(input);
         result = { profile: customerProfile };
-      } else if (action.endsWith("/inquiries")) result = { ok: true };
+      } else if (action.endsWith("/inquiries")) {
+        const id = String(input.requestId || createRequestId());
+        if (!shop.inquiries.some(item => item.id === id)) shop.inquiries.push({ id, email: session.user?.email || "", name: String(input.name), message: String(input.message), reply: "", status: "new", source: "customer", at: new Date().toISOString(), attachments: attachInquiryFiles(input.files) });
+        result = { ok: true, id };
+      }
       else
         result = {
           config: current,

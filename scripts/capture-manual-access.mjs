@@ -119,7 +119,8 @@ try {
       await expect(upcoming.locator('.customer-booking')).toHaveCount(3);
       const responses = page.getByRole('region', { name: label('お問い合わせへの対応'), exact: true });
       await expect(responses.locator('.customer-inquiry-target:visible')).toHaveCount(10);
-      const replyDraft = responses.getByRole('textbox', { name: label('返信内容'), exact: true }).first();
+      await responses.getByRole('combobox', { name: label('対応の種類'), exact: true }).first().selectOption('email');
+      const replyDraft = responses.getByRole('textbox', { name: label('対応内容'), exact: true }).first();
       await replyDraft.fill('Draft kept across pages');
       await next(nav(responses, 'お問い合わせへの対応')).click();
       await expect(responses.locator('.customer-inquiry-target:visible')).toHaveCount(10);

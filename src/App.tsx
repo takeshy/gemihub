@@ -1,3 +1,4 @@
+import { InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 import { serviceName } from "../shared/brand";
 import { Brand } from "./Brand";
 import { Pagination, usePagination } from "./Pagination";
@@ -1354,6 +1355,9 @@ export function PublicShop({
   useEffect(() => { setPaymentConsent(false); }, [menu, optionIds, data?.config.rules.payment, selected, couponId, coupons]);
 
   const [message, setMessage] = useState("");
+  const inquiryFiles = useInquiryFiles();
+  const inquiryPending = useRef<{ serialized: string; requestId: string } | undefined>(undefined);
+  const inquirySending = useRef(false);
   const [bookingMessage, setBookingMessage] = useState("");
   const [pane, setPane] = useState(initialPane || (session.user ? "mine" : "about"));
   const [completedBooking, setCompletedBooking] = useState<Booking>();
@@ -1816,12 +1820,20 @@ export function PublicShop({
               className="panel contact-form"
               onSubmit={(e) => {
                 e.preventDefault();
+                if (busy || inquirySending.current) return;
+                inquirySending.current = true;
                 run(async () => {
-                  await api(`${base}/inquiries`, { name, message });
-                  setMessage("");
-                  notify(
-                    tr("お問い合わせを受け付けました。返信はメールでお送りします。"),
-                  );
+                  try {
+                    const fields = { name, message, ...await inquiryFiles.read() };
+                    const serialized = JSON.stringify(fields);
+                    const requestId = inquiryPending.current?.serialized === serialized ? inquiryPending.current.requestId : createRequestId();
+                    inquiryPending.current = { serialized, requestId };
+                    await api(`${base}/inquiries`, { ...fields, requestId });
+                    setMessage(""); inquiryFiles.clear(); inquiryPending.current = undefined;
+                    notify(
+                      tr("お問い合わせを受け付けました。返信はメールでお送りします。"),
+                    );
+                  } finally { inquirySending.current = false; }
                 });
               }}
             >
@@ -1846,6 +1858,7 @@ export function PublicShop({
                   onChange={(e) => setMessage(e.target.value)}
                 />
               </Field>
+              <InquiryFilePicker selection={inquiryFiles} disabled={busy} />
               <button
                 className="primary"
                 disabled={busy || (!isCustomer)}

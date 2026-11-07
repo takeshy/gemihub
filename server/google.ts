@@ -186,12 +186,14 @@ export async function syncConfig(
     }
   }
 }
+export type MailAttachment = { name: string; mimeType: string; data: Buffer };
 export async function sendMail(
   token: string,
   to: string,
   subject: string,
   body: string,
   cc: string[] = [],
+  attachments: MailAttachment[] = [],
 ) {
   if ([to, ...cc].some(address => !/^[^\s@<>,;\r\n]+@[^\s@<>,;\r\n]+\.[^\s@<>,;\r\n]+$/.test(address)))
     throw new Error(tr("メール宛先が不正です"));
@@ -203,10 +205,22 @@ export async function sendMail(
     return true;
   });
   const { gmail } = clients(token);
-  const raw = Buffer.from(
-    `To: ${to}\r\n${copies.length ? `Cc: ${copies.join(", ")}\r\n` : ""}Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`,
-  ).toString("base64url");
-  await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+  const headers = `To: ${to}\r\n${copies.length ? `Cc: ${copies.join(", ")}\r\n` : ""}Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=\r\nMIME-Version: 1.0\r\n`;
+  const textPart = `Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n${Buffer.from(body).toString("base64")}`;
+  let content = headers + textPart;
+  if (attachments.length) {
+    const boundary = `gemihub-${randomBytes(18).toString("hex")}`;
+    const parts = attachments.map(file => {
+      if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/i.test(file.mimeType) || /[\r\n\x00]/.test(file.name)) throw new Error(tr("添付ファイルを確認してください。"));
+      const name = encodeURIComponent(file.name).replace(/['()*]/g, value => `%${value.charCodeAt(0).toString(16).toUpperCase()}`);
+      const data = file.data.toString("base64").match(/.{1,76}/g)?.join("\r\n") || "";
+      return `Content-Type: ${file.mimeType}\r\nContent-Disposition: attachment; filename*=UTF-8''${name}\r\nContent-Transfer-Encoding: base64\r\n\r\n${data}`;
+    });
+    content = `${headers}Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n--${boundary}\r\n${[textPart, ...parts].join(`\r\n--${boundary}\r\n`)}\r\n--${boundary}--\r\n`;
+  }
+  // Attachments exceed the JSON endpoint's size limit, so they use the upload endpoint.
+  if (attachments.length) await gmail.users.messages.send({ userId: "me", media: { mimeType: "message/rfc822", body: content } });
+  else await gmail.users.messages.send({ userId: "me", requestBody: { raw: Buffer.from(content).toString("base64url") } });
 }
 
 export async function syncPostFiles(

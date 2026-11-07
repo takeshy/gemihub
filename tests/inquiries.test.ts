@@ -3,15 +3,19 @@ import { encrypt } from "../server/google.ts";
 import { test, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   filterInquiries,
+  inquiryCompletionCutoff,
   inquiryReplyState,
   inquiryStatus,
   type InquiryFilter,
   type InquiryInteraction,
 } from "../server/inquiries.ts";
-import { maxInquiryMailAttempts } from "../server/inquiry-service.ts";
+import { createPublicInquiry, stageInquiryFiles, stagePublicInquiry, writeInquiry, maxInquiryMailAttempts } from "../server/inquiry-service.ts";
+import { memoryCustomerFiles } from "../server/customer-files.ts";
+import { inquiryFilesInputSchema } from "../shared/inquiry-files.ts";
 import { createApp } from "../server/app.ts";
 import { Store, type User } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
@@ -52,7 +56,7 @@ test("inquiries distinguish reply from completion, include legacy records and fi
     { ...question, id: "invalid", at: "invalid" },
   ];
   const ids = (changes: Partial<InquiryFilter>) =>
-    filterInquiries(records, { ...filter, ...changes }).map((q) => q.id);
+    filterInquiries(records, { ...filter, ...changes }, "Asia/Tokyo", new Date("2026-10-05T00:00:00Z")).map((q) => q.id);
   assert.equal(inquiryStatus(question), "in_progress");
   assert.equal(inquiryStatus(records[3]), "completed");
   assert.equal(ids({}).length, 5);
@@ -479,9 +483,9 @@ async function startReplyApp(t: TestContext, owner: string, connected = true) {
   await store.put("inquiry", question.id, { ...question, shopId: shop.id, createdBy: shop.owner });
   const sent: string[] = [];
   const mail = { fail: false };
-  mock.method(google, "gmail", (() => ({ users: { messages: { async send(input: { requestBody: { raw: string } }) {
+  mock.method(google, "gmail", (() => ({ users: { messages: { async send(input: { requestBody?: { raw: string }; media?: { body: string } }) {
     if (mail.fail) throw new Error("Temporary Gmail failure");
-    sent.push(Buffer.from(input.requestBody.raw, "base64url").toString());
+    sent.push(input.media?.body ?? Buffer.from(input.requestBody!.raw, "base64url").toString());
   } } } })) as any);
   const server = createApp(store);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
@@ -505,9 +509,151 @@ async function startReplyApp(t: TestContext, owner: string, connected = true) {
       return put(kind, id, value);
     });
   };
-  return { store, shop, sent, mail, post, entries, failDelivery };
+  return { store, shop, sent, mail, post, entries, failDelivery, origin };
 }
 const emailReply = (changes = {}) => ({ requestId: randomUUID(), text: "ご連絡ありがとうございます", previousReply: "", previousEmail: question.email, ...changes });
+
+const inquiryFile = (name = "ご案内.pdf", text = "attachment bytes") => ({ name, mimeType: "application/pdf", data: Buffer.from(text).toString("base64") });
+test("inquiry uploads reuse reserved IDs after transaction failure and keep file bytes out of records", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("upload-owner@example.com");
+  const provider = memoryCustomerFiles(store);
+  let reservations = 0, uploads = 0;
+  const storage = async () => ({ token: "", files: { ...provider, reserve: async (count: number, token: string) => { reservations++; return provider.reserve(count, token); }, upload: async (...args: Parameters<typeof provider.upload>) => { uploads++; return provider.upload(...args);} } });
+  const input = { requestId: randomUUID(), name: "Customer", message: "Help", files: [inquiryFile()] };
+  const put = store.put.bind(store);
+  let failWrite = true;
+  mock.method(store, "put", async (kind: string, id: string, data: unknown) => { if (kind === "inquiryCreateRequest" && failWrite) throw new Error("Record unavailable"); return put(kind, id, data); });
+  t.after(() => mock.restoreAll());
+  const write = async () => { await stageInquiryFiles(store, shop, undefined, "create", input, storage); return writeInquiry(store, shop, shop.owner, undefined, "create", input, async () => {}); };
+  await assert.rejects(write, /Record unavailable/);
+  assert.equal((await store.records("inquiry", shop)).length, 0);
+  failWrite = false;
+  const result = await write();
+  assert.equal(reservations, 1); assert.equal(uploads, 1);
+  assert.deepEqual(await write(), result);
+  assert.equal((await store.records("inquiry", shop)).length, 1);
+  assert.equal(JSON.stringify(result).includes(input.files[0].data), false);
+  assert.equal((await provider.read(shop, "", result.inquiry!.attachments![0].id)).toString(), "attachment bytes");
+  const different = { ...input, files: [inquiryFile("different.pdf")] };
+  await stageInquiryFiles(store, shop, undefined, "create", different, storage);
+  await assert.rejects(() => writeInquiry(store, shop, shop.owner, undefined, "create", different, async () => {}), { status: 409 });
+});
+
+test("file validation rejects invalid names, MIME, base64, counts and total size before saving business records", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("validation-owner@example.com"), storage = async () => ({ token: "", files: memoryCustomerFiles(store) });
+  for (const files of [[{ ...inquiryFile(), name: "a\r\nb" }], [{ ...inquiryFile(), mimeType: "application/pdf\r\nX: bad" }], Array.from({ length: 6 }, () => inquiryFile()), [{ ...inquiryFile(), data: "*" }]]) assert.equal(inquiryFilesInputSchema.safeParse(files).success, false);
+  for (const files of [[{ ...inquiryFile(), data: "abc" }], Array.from({ length: 3 }, () => ({ ...inquiryFile(), data: Buffer.alloc(4 * 1024 * 1024).toString("base64") }))]) {
+    await assert.rejects(() => stageInquiryFiles(store, shop, undefined, "create", { requestId: randomUUID(), name: "Customer", message: "Help", files }, storage), { status: 400 });
+  }
+  assert.equal((await store.records("inquiry", shop)).length, 0);
+  assert.equal((await store.records("inquiryFileUpload", shop)).length, 0);
+});
+
+test("public inquiry attachments and notification commit once; verified email remains authoritative", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("public-owner@example.com");
+  const storage = async () => ({ token: "", files: memoryCustomerFiles(store) });
+  const submit = async (data: unknown) => { await stagePublicInquiry(store, shop, question.email, data, storage); return createPublicInquiry(store, shop, question.email, data, notify); };
+  const input = { requestId: randomUUID(), name: "Customer", email: "spoof@example.com", message: "A question", files: [inquiryFile()] };
+  let notifications = 0;
+  const notify = async () => { notifications++; };
+  const result = await submit(input);
+  assert.deepEqual(await submit(input), result);
+  assert.equal(notifications, 1);
+  const q = await store.get<Inquiry>("inquiry", result.id);
+  assert.equal(q!.email, question.email); assert.equal(q!.createdBy, undefined); assert.equal(q!.attachments?.length, 1);
+  await assert.rejects(() => submit({ ...input, message: "changed" }), { status: 409 });
+  await assert.rejects(() => submit({ ...input, requestId: undefined }), { status: 400 });
+});
+
+test("public upload API requires a shop customer and profile, sends only the customer's submitted attachment and hides conversations", async t => {
+  const { store, shop, origin, sent } = await startReplyApp(t, "public-files-api@example.com");
+  shop.publication = "public"; await store.saveShop(shop);
+  for (const [token, shopId] of [["customer", shop.id], ["elsewhere", "other-shop"]]) await store.put("session", digest(token), { user: { email: question.email, name: "Customer", role: "customer", shopId }, expires: Date.now() + 600000 });
+  const base = `${origin}/api/public/${shop.slug}`;
+  const input = { requestId: randomUUID(), name: "Customer", message: "Public with file", email: "spoof@example.com", files: [inquiryFile()] };
+  const post = (data: unknown, token = "customer") => fetch(base + "/inquiries", { method: "POST", headers: { Origin: origin, Cookie: `gemihub_session=${token}`, "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  assert.equal((await post(input, "elsewhere")).status, 401);
+  assert.equal((await post(input)).status, 428);
+  await store.put("customer", `${shop.id}:${question.email}`, { shopId: shop.id, email: question.email, name: "Customer", birthDate: "1990-01-01", gender: "not_specified" });
+  const accepted = await post(input); assert.equal(accepted.status, 200);
+  const { id } = await accepted.json();
+  const delivered = sent.length;
+  assert.equal((await post(input)).status, 200);
+  assert.equal(sent.length, delivered);
+  assert.ok(sent.length >= 1);
+  assert.ok(sent.every(message => message.includes(inquiryFile().data)));
+  const q = await store.get<Inquiry>("inquiry", id);
+  assert.equal(q!.email, question.email); assert.equal(q!.attachments?.length, 1);
+  const response = await fetch(base, { headers: { Cookie: "gemihub_session=customer" } });
+  const publicData = JSON.stringify(await response.json());
+  assert.equal(publicData.includes(q!.attachments![0].id), false);
+  assert.equal(publicData.includes("Public with file"), false);
+});
+
+test("notes keep attachments private, replies send their own MIME attachments and downloads require this shop's operator", async t => {
+  const { store, shop, origin, post, sent, entries } = await startReplyApp(t, "files-owner@example.com");
+  const note = { requestId: randomUUID(), kind: "note", text: "Internal", files: [inquiryFile("private.pdf", "private bytes")] };
+  assert.equal(await post("interactions", note), 200);
+  assert.equal(await post("interactions", note), 200);
+  assert.equal(sent.length, 0);
+  const reply = emailReply({ files: [inquiryFile()] });
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0], /Content-Type: multipart\/mixed/);
+  assert.ok(sent[0].includes("filename*=UTF-8''" + encodeURIComponent("ご案内.pdf")));
+  assert.ok(sent[0].includes(inquiryFile().data));
+  assert.equal(sent[0].includes(inquiryFile("private.pdf", "private bytes").data), false);
+  const history = await entries(); assert.equal(history.length, 2);
+  for (const entry of history) {
+    const path = `/api/shops/${shop.id}/inquiries/${question.id}/files/${entry.attachments![0].id}`;
+    const get = (cookie: string) => fetch(origin + path, { headers: { Cookie: `gemihub_session=${cookie}` } });
+    assert.equal((await get("owner")).status, 200);
+    await store.put("session", digest("staff"), { user: { email: "staff@example.com", name: "Staff", role: "customer", shopId: shop.id }, expires: Date.now() + 600000 });
+    await store.put("member", `${shop.id}:staff@example.com`, { shopId: shop.id, email: "staff@example.com", accepted: true, status: "accepted" });
+    assert.equal((await get("staff")).status, 200);
+    await store.put("member", `${shop.id}:staff@example.com`, { shopId: shop.id, email: "staff@example.com", accepted: false, status: "revoked" });
+    assert.equal((await get("staff")).status, 403);
+    for (const [token, role, email] of [["customer", "customer", question.email], ["other-owner", "owner", "other@example.com"]]) {
+      await store.put("session", digest(token), { user: { email, name: token, role }, expires: Date.now() + 600000 });
+      assert.equal((await get(token)).status, 403);
+    }
+    assert.equal((await get("missing")).status, 403);
+    assert.equal((await fetch(origin + path.replace("/question/", "/missing/"), { headers: { Cookie: "gemihub_session=owner" } })).status, 404);
+  }
+});
+
+test("completion time stays stable on repeated moves and is reset when an inquiry is reopened", async t => {
+  const { store, post } = await startReplyApp(t, "completion-owner@example.com");
+  assert.equal(await post("status", { status: "completed" }), 200);
+  const first = await store.get<Inquiry>("inquiry", question.id); assert.ok(first!.completedAt);
+  assert.equal(await post("status", { status: "completed" }), 200);
+  assert.equal((await store.get<Inquiry>("inquiry", question.id))!.completedAt, first!.completedAt);
+  assert.equal(await post("status", { status: "waiting" }), 200);
+  assert.equal((await store.get<Inquiry>("inquiry", question.id))!.completedAt, undefined);
+});
+
+test("resolved inquiry age uses completion, legacy receipt date, calendar months and explicit date ranges", () => {
+  const now = new Date("2026-03-31T15:01:00Z"); // April 1 in Tokyo, March 31 in LA.
+  const rows = [
+    { ...question, id: "recent", status: "completed", completedAt: "2026-03-02T00:00:00Z" },
+    { ...question, id: "boundary", status: "completed", completedAt: "2026-03-01T14:59:59Z" },
+    { ...question, id: "legacy-old", status: "replied", at: "2026-02-28T00:00:00Z" },
+    { ...question, id: "open-old", status: "waiting", at: "2025-01-01T00:00:00Z" },
+    { ...question, id: "unknown", status: "completed", at: "invalid" },
+  ];
+  const query = { ...filter, showCompleted: true };
+  const ids = (changes = {}) => filterInquiries(rows, { ...query, ...changes }, "Asia/Tokyo", now).map(row => row.id);
+  assert.deepEqual(new Set(ids()), new Set(["recent", "open-old", "unknown"]));
+  assert.ok(ids({ from: "2026-02-01" }).includes("legacy-old"));
+  assert.ok(ids({ to: "2026-12-31" }).includes("boundary"));
+  assert.deepEqual(ids({ showCompleted: false }), ["open-old"]);
+  assert.equal(inquiryCompletionCutoff(now, "Asia/Tokyo"), "2026-03-01");
+  assert.equal(inquiryCompletionCutoff(now, "America/Los_Angeles"), "2026-02-28");
+});
 
 test("phone-only inquiries join an existing phone customer's CRM without using its key as an email address", async t => {
   const { savePhoneCustomer, aggregateCustomers } = await import("../server/customers.ts");
@@ -675,4 +821,164 @@ test("reply badges follow the latest email delivery", () => {
   assert.equal(inquiryReplyState({ reply: "t" }), "replied");
   assert.equal(inquiryReplyState({ reply: "t", interactions: [entry("sent")] }), "replied");
   for (const delivery of ["queued", "retrying", "simulated", "failed"] as const) assert.equal(inquiryReplyState({ reply: "t", interactions: [entry(delivery)] }), delivery);
+});
+
+async function startPublicInquiryApp(t: TestContext, owner: string) {
+  const app = await startReplyApp(t, owner);
+  const { store, shop, origin } = app;
+  shop.publication = "public"; await store.saveShop(shop);
+  await store.put("session", digest("customer"), { user: { email: question.email, name: "Customer", role: "customer", shopId: shop.id }, expires: Date.now() + 600000 });
+  await store.put("customer", `${shop.id}:${question.email}`, { shopId: shop.id, email: question.email, name: "Customer", birthDate: "1990-01-01", gender: "not_specified" });
+  const url = new URL(`${origin}/api/public/${shop.slug}/inquiries`);
+  const headers = { Origin: origin, Cookie: "gemihub_session=customer", "Content-Type": "application/json" };
+  const submit = async (data: unknown) => (await fetch(url, { method: "POST", headers, body: JSON.stringify(data) })).status;
+  const form = (changes = {}) => ({ requestId: randomUUID(), name: "Customer", message: "Question", ...changes });
+  return { ...app, url, headers, submit, form };
+}
+
+test("a slow public upload does not hold the shop lock", async t => {
+  const { url, headers, post } = await startPublicInquiryApp(t, "slow-upload-owner@example.com");
+  const slow = request(url, { method: "POST", headers: { ...headers, "Content-Length": "1000" } });
+  slow.on("error", () => {});
+  slow.write('{"name":"');
+  await new Promise(resolve => setTimeout(resolve, 100));
+  try {
+    const status = await Promise.race([post("status", { status: "waiting" }), new Promise(resolve => setTimeout(() => resolve("blocked"), 2000))]);
+    assert.equal(status, 200);
+  } finally { slow.destroy(); }
+});
+
+test("public attachments cannot use Google native document types", async t => {
+  const { submit, form, store, shop } = await startPublicInquiryApp(t, "native-mime-owner@example.com");
+  const before = (await store.records("inquiry", shop)).length;
+  for (const mimeType of ["application/vnd.google-apps.document", "APPLICATION/VND.GOOGLE-APPS.SHORTCUT"]) assert.equal(await submit(form({ files: [{ ...inquiryFile(), mimeType }] })), 400);
+  assert.equal((await store.records("inquiry", shop)).length, before);
+});
+
+test("a receipt whose attachment was removed stops retrying", async t => {
+  const { store, submit, form, mail } = await startPublicInquiryApp(t, "missing-file-owner@example.com");
+  mail.fail = true;
+  assert.equal(await submit(form({ files: [inquiryFile()] })), 200);
+  const jobs = await store.list<{ attachments: { id: string }[] }>("job");
+  assert.ok(jobs.length >= 1);
+  await store.delete("demoCustomerFile", jobs[0].attachments[0].id);
+  mail.fail = false;
+  assert.equal(await submit(form()), 200);
+  assert.equal((await store.list<{ attachments?: unknown[] }>("job")).filter(job => job.attachments?.length).length, 0);
+});
+
+test("same-size modified public attachments fail downloads and stop all receipt retries before Gmail", async t => {
+  const { store, shop, origin, submit, form, mail, sent } = await startPublicInquiryApp(t, "changed-file-owner@example.com");
+  mail.fail = true;
+  const upload = inquiryFile(), input = form({ files: [upload] });
+  assert.equal(await submit(input), 200);
+  const inquiry = (await store.records<Inquiry>("inquiry", shop)).find(q => q.message === input.message)!;
+  const attachment = inquiry.attachments![0];
+  const original = Buffer.from(upload.data, "base64"), changed = Buffer.alloc(original.length, 0x78);
+  assert.notDeepEqual(changed, original);
+  const file = await store.get<{ name: string; mimeType: string; data: string; shopId: string }>("demoCustomerFile", attachment.id);
+  await store.put("demoCustomerFile", attachment.id, { ...file, data: changed.toString("base64") });
+  const download = await fetch(`${origin}/api/shops/${shop.id}/inquiries/${inquiry.id}/files/${attachment.id}`, { headers: { Cookie: "gemihub_session=owner" } });
+  assert.equal(download.status, 409);
+  mail.fail = false;
+  assert.equal(await submit(form()), 200); // Flush pending receipts as well as the new, unaffected mail.
+  assert.ok(sent.length > 0);
+  assert.ok(sent.every(message => !message.includes("Content-Type: multipart/mixed")));
+  assert.equal((await store.list<{ attachments?: unknown[] }>("job")).filter(job => job.attachments?.length).length, 0);
+  assert.equal(await submit(input), 200); // Accepted replay must not requeue the failed receipt.
+  assert.equal((await store.list("job")).length, 0);
+});
+
+test("a queued reply with same-size modified bytes becomes failed without sending again", async t => {
+  const { store, shop, post, entries, mail, sent } = await startReplyApp(t, "changed-reply-owner@example.com");
+  mail.fail = true;
+  const input = emailReply({ files: [inquiryFile()] });
+  assert.equal(await post("reply", input), 200);
+  const [entry] = await entries(), attachment = entry.attachments![0];
+  assert.equal(entry.delivery, "retrying");
+  const file = await store.get<{ name: string; mimeType: string; data: string; shopId: string }>("demoCustomerFile", attachment.id);
+  await store.put("demoCustomerFile", attachment.id, { ...file, data: Buffer.alloc(attachment.size, 0x78).toString("base64") });
+  mail.fail = false;
+  assert.equal(await post("reply", input), 200);
+  assert.equal((await entries())[0].delivery, "failed");
+  assert.equal(sent.length, 0);
+  assert.equal((await store.list("job")).length, 0);
+});
+
+test("public inquiries are limited per customer without consuming a slot on retry", async t => {
+  const { submit, form } = await startPublicInquiryApp(t, "customer-limit-owner@example.com");
+  const first = form();
+  for (let index = 0; index < 5; index++) assert.equal(await submit(index ? form() : first), 200);
+  assert.equal(await submit(first), 200);
+  assert.equal(await submit(form()), 429);
+});
+
+test("attachment mail uses Gmail media upload and plain mail keeps the raw form", async () => {
+  const { sendMail } = await import("../server/google.ts");
+  const calls: { requestBody?: { raw?: string }; media?: { mimeType: string; body: string } }[] = [];
+  mock.method(google, "gmail", (() => ({ users: { messages: { async send(input: typeof calls[number]) { calls.push(input); } } } })) as any);
+  try {
+    await sendMail(encrypt("token"), "to@example.com", "件名", "本文");
+    await sendMail(encrypt("token"), "to@example.com", "件名", "本文", [], [{ name: "large.pdf", mimeType: "application/pdf", data: Buffer.alloc(1024) }]);
+  } finally { mock.restoreAll(); }
+  assert.ok(calls[0].requestBody?.raw); assert.equal(calls[0].media, undefined);
+  assert.equal(calls[1].requestBody, undefined);
+  assert.equal(calls[1].media?.mimeType, "message/rfc822");
+  assert.ok(calls[1].media?.body.includes("filename*=UTF-8''large.pdf"));
+});
+
+test("CSV exports keep existing column order and append completion and attachment fields", async () => {
+  const { exportColumns } = await import("../server/data-export.ts");
+  assert.deepEqual(exportColumns.inquiries.slice(-2), ["completedAt", "attachments"]);
+  assert.equal(exportColumns.inquiryInteractions.at(-1), "attachments");
+});
+
+test("an accepted retry needs no Google token, and a stored upload is not repeated", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("retry-owner@example.com");
+  const files = memoryCustomerFiles(store);
+  let tokens = 0;
+  const connected = async () => { tokens++; return { token: "", files }; };
+  const disconnected = async (): Promise<never> => { throw Object.assign(new Error("reconnect"), { status: 503 }); };
+  const input = { requestId: randomUUID(), name: "Customer", message: "Help", files: [inquiryFile()] };
+  await stagePublicInquiry(store, shop, question.email, input, connected);
+  assert.equal(tokens, 1);
+  await stagePublicInquiry(store, shop, question.email, input, disconnected);
+  await createPublicInquiry(store, shop, question.email, input, async () => {});
+  await stagePublicInquiry(store, shop, question.email, input, disconnected);
+  const manual = { requestId: randomUUID(), name: "Customer", message: "Help", files: [inquiryFile()] };
+  await stageInquiryFiles(store, shop, undefined, "create", manual, connected);
+  await writeInquiry(store, shop, shop.owner, undefined, "create", manual, async () => {});
+  await stageInquiryFiles(store, shop, undefined, "create", manual, disconnected);
+  await assert.rejects(() => stageInquiryFiles(store, shop, undefined, "create", { ...manual, requestId: randomUUID() }, disconnected), { status: 503 });
+});
+
+test("a record cannot commit attachments that were not staged for the same input", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("unstaged-owner@example.com");
+  await assert.rejects(() => writeInquiry(store, shop, shop.owner, undefined, "create", { requestId: randomUUID(), name: "Customer", message: "Help", files: [inquiryFile()] }, async () => {}), { status: 409 });
+  assert.equal((await store.records("inquiry", shop)).length, 0);
+});
+
+test("resuming a legacy upload adds a checksum from the journal-verified original input", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("legacy-upload-owner@example.com"), files = memoryCustomerFiles(store);
+  const input = { requestId: randomUUID(), name: "Guest", message: "Resume", files: [inquiryFile()] };
+  await stagePublicInquiry(store, shop, question.email, input, async () => ({ token: "", files }));
+  const [journal] = await store.entries<{ attachments: import("../server/customers.ts").CustomerAttachment[] }>("inquiryFileUpload", shop);
+  const checksum = journal.value.attachments[0].sha256;
+  assert.ok(checksum);
+  await store.put("inquiryFileUpload", journal.id, { ...journal.value, attachments: journal.value.attachments.map(({ sha256: _checksum, ...file }) => file) });
+  const result = await createPublicInquiry(store, shop, question.email, input, async () => {});
+  const saved = await store.get<Inquiry>("inquiry", result.id);
+  assert.equal(saved!.attachments![0].sha256, checksum);
+});
+
+test("the shop-wide attachment cap still accepts plain inquiries", async t => {
+  const { reservePublicInquiry, publicInquiryDailyBytes } = await import("../server/inquiry-files.ts");
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("shop-cap-owner@example.com");
+  await reservePublicInquiry(store, shop, "a@example.com", "one", publicInquiryDailyBytes);
+  await assert.rejects(() => reservePublicInquiry(store, shop, "b@example.com", "two", 1), { status: 429 });
+  await reservePublicInquiry(store, shop, "b@example.com", "three", 0);
 });

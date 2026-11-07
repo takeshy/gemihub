@@ -38,9 +38,11 @@ try {
     await list.waitFor();
     console.log(`${width}px: list ready`);
     const cards = list.locator(".inquiry-list-item");
+    assert.equal(await cards.count(), 4);
+    assert.equal(await list.getByRole("checkbox").isChecked(), true);
+    assert.equal(await cards.filter({ hasText: "返信済み" }).count(), 2);
+    await list.getByRole("checkbox").uncheck();
     assert.equal(await cards.count(), 2);
-    assert.equal(await list.getByRole("checkbox").isChecked(), false);
-    assert.equal(await cards.filter({ hasText: "返信済み" }).count(), 1);
     await list.getByRole("checkbox").check();
     assert.equal(await cards.count(), 4);
     await list
@@ -108,12 +110,13 @@ try {
     await bookings.waitFor();
     assert.ok((await bookings.textContent()).includes("担当："));
     assert.ok((await bookings.textContent()).includes("¥"));
+    await inquiry.getByRole("combobox", { name: "対応の種類", exact: true }).selectOption("email");
     const text = `ご来店時にお色をご相談しましょう。${width}`;
     await inquiry
-      .getByRole("textbox", { name: "返信内容", exact: true })
+      .getByRole("textbox", { name: "対応内容", exact: true })
       .fill(text);
     await inquiry
-      .getByRole("button", { name: "メールで返信", exact: true })
+      .getByRole("button", { name: "送信して保存", exact: true })
       .click();
     await inquiry
       .getByRole("status")
@@ -126,9 +129,9 @@ try {
       "in_progress",
     );
     assert.ok(
-      (await inquiry.locator(".customer-reply").textContent()).includes(text),
+      (await inquiry.locator(".inquiry-history").textContent()).includes(text),
     );
-    assert.equal(await inquiry.getByRole("textbox").inputValue(), "");
+    assert.equal(await inquiry.getByRole("textbox", { name: "対応内容", exact: true }).inputValue(), "");
     console.log(`${width}px: reply saved`);
     await page
       .getByRole("button", { name: "← お問い合わせ一覧へ", exact: true })
@@ -144,7 +147,7 @@ try {
     await cards.filter({ hasText: "アートの相談" }).click();
     await inquiry.waitFor();
     assert.ok(
-      (await inquiry.locator(".customer-reply").textContent()).includes(text),
+      (await inquiry.locator(".inquiry-history").textContent()).includes(text),
     );
     await inquiry
       .getByRole("combobox", { name: "対応状況", exact: true })
@@ -167,13 +170,16 @@ try {
       .getByRole("button", { name: "← お問い合わせ一覧へ", exact: true })
       .click();
     await list.waitFor();
+    assert.equal(await cards.count(), 4);
+    assert.equal(await list.getByRole("checkbox").isChecked(), true);
+    await list.getByRole("checkbox").uncheck();
     assert.equal(await cards.count(), 1);
     await list.getByRole("checkbox").check();
     assert.equal(await cards.count(), 4);
     await cards.filter({ hasText: "アートの相談" }).click();
     await inquiry.waitFor();
-    assert.equal(await inquiry.getByRole("combobox").inputValue(), "completed");
-    await inquiry.getByRole("combobox").selectOption("in_progress");
+    assert.equal(await inquiry.getByRole("combobox", { name: "対応状況", exact: true }).inputValue(), "completed");
+    await inquiry.getByRole("combobox", { name: "対応状況", exact: true }).selectOption("in_progress");
     await inquiry
       .getByRole("status")
       .filter({ hasText: "対応状況を保存" })
