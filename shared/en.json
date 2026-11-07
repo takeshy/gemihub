@@ -930,7 +930,7 @@
   "採用する内容をローカルに保存しました。確認してからこの画面だけを本番に反映してください。": "Your choice was saved locally. Review it before applying only this screen to the live site.",
   "先にこの画面のリモート更新を取得するか、競合を解決してください": "Fetch this screen's remote updates or resolve the conflict first",
   "ローカルで確認した画面の変更を反映": "Apply screen changes reviewed locally",
-  "本番に反映しました。サンプルの予約・問い合わせ・記事は本番には保存していません。": "Applied to the live site. Sample bookings, inquiries, and articles were not saved to production.",
+  "本番に反映しました。": "Applied to the live site.",
   "ページ": "Page",
   "ヘッダー": "Header",
   "フッター": "Footer",

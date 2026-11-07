@@ -380,7 +380,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     const remote = await refreshIndex();
     restore(afterRelease(current, next, next.pending!.scope || scope, remote));
     if (scope.kind === "page" && !current.config.pages.some(p => p.id === scope.pageId)) { setScreen("reserve"); setRoute({ pane: "reserve" }); }
-    setNotice(tr("本番に反映しました。サンプルの予約・問い合わせ・記事は本番には保存していません。"));
+    setNotice(tr("本番に反映しました。"));
     await reload();
   }
   const automaticFetch = useRef("");

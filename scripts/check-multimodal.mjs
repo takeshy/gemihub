@@ -168,7 +168,7 @@ try {
     await page.getByRole("button", {name: "反映する", exact: true}).click();
     await capture("23-pen-plan.jpg", '.local-preview [role="dialog"][aria-label="本番への反映内容"]');
     await page.getByRole("button", {name: "この内容を本番に反映", exact: true}).click();
-    await page.getByText("本番に反映しました。サンプルの予約・問い合わせ・記事は本番には保存していません。", {exact: false}).waitFor();
+    await page.getByText("本番に反映しました。", {exact: false}).waitFor();
   }
   await page.setViewportSize({width: 390, height: 844});
   // Conversations are restored on reload; forget the one started above so the first-visit guide shows.
