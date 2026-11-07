@@ -20,6 +20,7 @@ import {
 import type { ReleaseScope } from "./pages.ts";
 import type { Shop } from "./store.ts";
 import { forEachConcurrent } from "./concurrency.ts";
+import type { ScreenId } from "../shared/screens.ts";
 export function oauth() {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -115,7 +116,7 @@ export async function syncConfig(
   config: ShopConfig,
   token: string,
   onProgress: () => void | Promise<void> = () => {},
-  scope?: ReleaseScope,
+  scope?: ReleaseScope | { kind: "screen"; screen: ScreenId },
   menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
   if (!shop.google) throw new Error(tr("Google の保存先が未作成です"));
@@ -128,12 +129,14 @@ export async function syncConfig(
   const previousPage = scope?.kind === "page" ? shop.published?.pages.find(p => p.id === scope.pageId) : undefined;
   // These are one published snapshot, including after a page/part-only release.
   const snapshotPaths = ["web/index.html", "web/data.js", "web/shop.json", "web/mock.json"];
-  const generated = scope?.kind === "part"
+  const generated = scope?.kind === "screen"
+    ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path)))
+    : scope?.kind === "part"
     ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || [`web/parts/${scope.part}.html`, `web/parts/${scope.part}.json`].includes(path)))
     : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || path === "web/pages/index.json" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
   const ids = connection.artifactIds ||= {};
   const folders = connection.artifactFolders ||= {};
-  for (const folder of (scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages"] : ["web", "admin", "web/pages", "web/parts"])) {
+  for (const folder of (scope?.kind === "screen" ? ["web"] : scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages"] : ["web", "admin", "web/pages", "web/parts"])) {
     if (!folders[folder]) {
       folders[folder] = (
         await drive.files.create({
@@ -186,7 +189,7 @@ export async function syncConfig(
     }
   });
   for (const [path, id] of Object.entries(ids)) {
-    if (scope?.kind !== "part" && path.startsWith("web/pages/") && !(path in allGenerated) && (scope?.kind !== "page" || previousPage && [ `web/pages/${previousPage.slug}.html`, `web/pages/${previousPage.slug}.json` ].includes(path))) {
+    if (scope?.kind !== "part" && scope?.kind !== "screen" && path.startsWith("web/pages/") && !(path in allGenerated) && (scope?.kind !== "page" || previousPage && [ `web/pages/${previousPage.slug}.html`, `web/pages/${previousPage.slug}.json` ].includes(path))) {
       await drive.files.update({ fileId: id, requestBody: { trashed: true } });
       delete ids[path];
       await onProgress();

@@ -2379,7 +2379,13 @@ export function createApp(
             const token = await ownerToken(fresh);
             if (!token && !demoEnabled()) fail(503, tr("店主の Google 再接続が必要です"));
             const versions = token ? driveDesignVersions(token) : demoDesignVersions(store);
-            const snapshot = await versions.read(version);
+            const timed = async <T,>(phase: string, work: () => Promise<T>): Promise<T> => {
+              const started = Date.now();
+              if (!store.memory) console.info(JSON.stringify({ event: "restoration_phase", shopId: fresh.id, requestId: input.requestId, target: targetKey(target), phase, state: "started" }));
+              try { return await work(); }
+              finally { if (!store.memory) console.info(JSON.stringify({ event: "restoration_phase", shopId: fresh.id, requestId: input.requestId, target: targetKey(target), phase, state: "finished", durationMs: Date.now() - started })); }
+            };
+            const snapshot = await timed("read", () => versions.read(version));
             let config: ShopConfig;
             try { config = restoreDesign(fresh.published, snapshot.design, target); }
             catch (error) { fail(409, error instanceof Error ? error.message : tr("操作できませんでした")); }
@@ -2398,13 +2404,13 @@ export function createApp(
             fresh.publishingPlanId = `restore:${input.requestId}`;
             await store.saveShop(fresh);
             try {
-              await preserveDesignVersion(fresh, fresh.publishingPlanId, versions, async () => store.saveShop(fresh), true);
+              await timed("backup", () => preserveDesignVersion(fresh, fresh.publishingPlanId!, versions, async () => store.saveShop(fresh), true));
               if (token) {
-                // Regenerate every export from the restored design plus today's operational settings,
+                // Regenerate exports from the restored design plus today's operational settings,
                 // instead of copying archived files that also carry old menus/prices/hours.
                 fresh.google = await provisionShop(fresh, config, token);
                 await store.saveShop(fresh);
-                await syncConfig({ ...fresh, history }, config, token, async () => await store.saveShop(fresh), undefined, await menuImageSnapshot(store, fresh, config, crmFiles, token));
+                await timed("drive", async () => syncConfig({ ...fresh, history }, config, token, async () => await store.saveShop(fresh), target, await menuImageSnapshot(store, fresh, config, crmFiles, token)));
               }
             } catch (error) {
               fresh.publishingError = error instanceof Error ? error.message : tr("Google 連携エラー");
@@ -2423,11 +2429,11 @@ export function createApp(
             delete fresh.publishingError;
             // Drafts, article records, bookings, customer/inquiry records and payments are untouched.
             retireDesignVersions(fresh);
-            await savePublicShop(fresh);
-            await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError);
+            await timed("storefront", () => savePublicShop(fresh));
+            await timed("cleanup", () => pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError));
             // Post pages embed the header/footer, so they follow the restored design.
-            await enqueue(fresh, "posts");
-            await flushFiles(fresh);
+            if (target?.kind !== "screen") await enqueue(fresh, "posts");
+            // The live release and backup are durable. The worker retries article exports independently.
             return json(res, { ok: true });
           }
           if (action === "export" && method === "GET") {

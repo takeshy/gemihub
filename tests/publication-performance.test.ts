@@ -10,8 +10,54 @@ import { designDrive } from "./helpers/design-drive.ts";
 import { createApp } from "../server/app.ts";
 import { digest } from "../server/auth.ts";
 import type { AddressInfo } from "node:net";
+import { Readable } from "node:stream";
+import { randomUUID } from "node:crypto";
+import { designOf, driveDesignVersions } from "../server/design-versions.ts";
 
 const turn = () => new Promise<void>(resolve => setImmediate(resolve));
+
+test("archive reads overlap within a bounded batch and drain on failure", async t => {
+  const drive = designDrive();
+  t.mock.method(google, "drive", (() => drive.client) as never);
+  const files: Record<string, string> = {};
+  const expected: Record<string, string> = {};
+  const paths = ["web/index.html", "web/data.js", "web/shop.json", "web/mock.json", ...Array.from({ length: 12 }, (_, i) => `web/pages/page-${i}.html`)];
+  for (const path of paths) {
+    expected[path] = path;
+    files[path] = (await drive.client.files.create({ requestBody: { name: path }, media: { body: Readable.from([path]) } })).data.id;
+  }
+  const manifestId = (await drive.client.files.create({ requestBody: { name: "manifest.json" }, media: { body: Readable.from([JSON.stringify({ design: designOf(sample), files })]) } })).data.id;
+  const version = { number: 1, at: new Date().toISOString(), summary: "Archive", folderId: "folder", manifestId };
+  const get = drive.client.files.get;
+  let active = 0, peak = 0;
+  drive.client.files.get = async input => {
+    if (input.fileId === manifestId) return get(input);
+    active++; peak = Math.max(peak, active);
+    try { await turn(); return await get(input); } finally { active--; }
+  };
+  const storage = driveDesignVersions(encrypt("fixture"));
+  assert.deepEqual((await storage.read(version)).files, expected);
+  assert.ok(peak > 1 && peak <= 4);
+  let release!: () => void, failed!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  const failure = new Promise<void>(resolve => { failed = resolve; });
+  t.after(() => release());
+  drive.client.files.get = async input => {
+    if (input.fileId === manifestId) return get(input);
+    active++;
+    try {
+      if (input.fileId === files[paths[0]]) { failed(); throw new Error("Archive unreadable"); }
+      await held; return await get(input);
+    } finally { active--; }
+  };
+  let settled = false;
+  const result = storage.read(version).then(() => { settled = true; return null; }, error => { settled = true; return error; });
+  await failure; await turn();
+  assert.equal(settled, false, "a failed read drains in-flight requests before releasing the shop lock");
+  release();
+  assert.match((await result).message, /Archive unreadable/);
+  assert.equal(active, 0);
+});
 
 test("Drive export bounds parallel uploads and checkpoints only new IDs without overlapping saves", async t => {
   const drive = designDrive();
@@ -100,4 +146,101 @@ test("publishing commits the live page without waiting for queued article export
   assert.equal(articleAttempts, 0);
   assert.ok(await store.get("job", "pending-articles"), "the durable worker retains responsibility for the unfinished article export");
   assert.ok((await store.records<{type: string}>("job", shop)).some(job => job.type === "posts"));
+});
+
+test("restores commit without article export waits, with scoped Drive writes and a complete live release", async t => {
+  process.env.DEMO_MODE = "true";
+  const drive = designDrive();
+  t.mock.method(google, "drive", (() => drive.client) as never);
+  const create = drive.client.files.create, update = drive.client.files.update;
+  let articleAttempts = 0;
+  const writes = new Set<string>();
+  drive.client.files.create = async input => {
+    if (input.requestBody?.name === "posts") { articleAttempts++; throw new Error("Article export unavailable"); }
+    const result = await create(input);
+    if (input.media) writes.add(result.data.id);
+    return result;
+  };
+  drive.client.files.update = async input => {
+    if (input.media) writes.add(input.fileId!);
+    return update(input);
+  };
+  const store = new Store(":memory:"), server = createApp(store);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
+  const at = new Date().toISOString(), token = encrypt("fixture");
+  for (const target of [undefined, "part:header", "part:footer", "page:faq", "screen:about"]) {
+    const shop = await store.createShop(`${target?.replaceAll(":", "-") || "all"}@example.com`);
+    const page = (id: string) => ({ id, slug: id, title: id, navigationLabel: id, body: `<p>${id}</p>`, layout: "standard" as const, imageUrl: "" });
+    const archived = { ...structuredClone(sample), pages: [page("faq"), page("access")], header: { ...sample.header, title: "Archived header" }, footer: { ...sample.footer, text: "Archived footer" }, screens: { about: { html: '<h2>Archived about</h2><slot name="menus"></slot>', css: "" } } };
+    shop.published = archived;
+    shop.google = { folderId: "root", specId: (await create({ requestBody: { name: "spec.md" } })).data.id, historyId: (await create({ requestBody: { name: "history.md" } })).data.id };
+    await syncConfig(shop, archived, token);
+    const storage = driveDesignVersions(token);
+    const saved = await storage.capture(shop, { number: 1, at, summary: "Archived" });
+    assert.ok(saved);
+    shop.designVersions = [{ ...saved, number: 1, at, summary: "Archived" }];
+    shop.designPublication = { number: 2, at, summary: "Current" };
+    const current = structuredClone(archived);
+    current.header.title = "Current header"; current.footer.text = "Current footer";
+    current.pages[0] = { ...current.pages[0], slug: "updated-faq", body: "<p>Current FAQ</p>" };
+    current.screens.about.html = '<h2>Current about</h2><slot name="menus"></slot>';
+    current.menus[0].price += 500;
+    await syncConfig(shop, current, token);
+    shop.published = current;
+    await store.saveShop(shop);
+    const user = { email: shop.owner, name: "Owner", role: "owner" as const, shopId: shop.id, refreshToken: token };
+    await store.put("user", shop.owner, user);
+    await store.put("session", digest(shop.id), { user, expires: Date.now() + 60000 });
+    await store.put("job", shop.id + ":pending", { id: shop.id + ":pending", shopId: shop.id, type: "posts", attempts: 0 });
+    const beforeIds = { ...shop.google.artifactIds };
+    const accessBefore = drive.files.get(beforeIds["web/pages/access.html"])!.content;
+    writes.clear();
+    const requestId = randomUUID();
+    const request = () => fetch(origin + `/api/shops/${shop.id}/design-versions/1/restore`, { method: "POST", headers: { Origin: origin, Cookie: `gemihub_session=${shop.id}`, "Content-Type": "application/json" }, body: JSON.stringify({ requestId, revision: shop.revision, target }) });
+    const response = await request();
+    assert.equal(response.status, 200, JSON.stringify(await response.json()));
+    const restored = (await store.shop(shop.id))!;
+    assert.ok(restored.storefrontRelease);
+    assert.equal(articleAttempts, 0, "restoration must not attempt queued article exports before responding");
+    const jobs = await store.records<{type: string}>("job", shop);
+    assert.equal(jobs.filter(job => job.type === "posts").length, target === "screen:about" ? 1 : 2);
+    const ids = restored.google!.artifactIds!;
+    const changed = Object.entries({ ...beforeIds, ...ids }).filter(([, id]) => writes.has(id)).map(([path]) => path).sort();
+    const snapshots = ["web/index.html", "web/data.js", "web/shop.json", "web/mock.json"];
+    const read = (path: string) => drive.files.get(ids[path])!.content;
+    const publicResponse = await fetch(`${origin}/s/${shop.slug}/pages/access?lang=ja`, { headers: { Cookie: `gemihub_session=${shop.id}` } });
+    assert.equal(publicResponse.status, 200);
+    const publicHtml = await publicResponse.text();
+    if (target?.startsWith("part:")) {
+      const part = target.slice(5);
+      assert.deepEqual(changed, [...snapshots, `web/parts/${part}.html`, `web/parts/${part}.json`].sort());
+      assert.equal(read("web/pages/access.html"), accessBefore);
+      assert.match(publicHtml, part === "header" ? /Archived header/ : /Archived footer/);
+      assert.equal(restored.published!.pages[0].body, current.pages[0].body);
+    } else if (target === "page:faq") {
+      assert.deepEqual(changed, [...snapshots, "web/pages/index.json", "web/pages/faq.html", "web/pages/faq.json"].sort());
+      assert.equal(drive.files.get(beforeIds["web/pages/updated-faq.html"])!.trashed, true);
+      assert.equal(read("web/pages/access.html"), accessBefore);
+      assert.match(publicHtml, /\/pages\/faq/);
+      assert.doesNotMatch(publicHtml, /\/pages\/updated-faq/);
+      assert.match(publicHtml, /Current header/);
+    } else if (target === "screen:about") {
+      assert.deepEqual(changed, [...snapshots].sort());
+      assert.deepEqual(restored.published!.screens, archived.screens);
+      assert.deepEqual(restored.published!.pages, current.pages);
+    } else {
+      assert.ok(changed.includes("admin/system.svg"));
+      assert.equal(restored.published!.header.title, archived.header.title);
+    }
+    assert.equal(restored.published!.menus[0].price, current.menus[0].price);
+    const backup = restored.designVersions![0];
+    assert.deepEqual(JSON.parse(drive.files.get(backup.manifestId)!.content).design, designOf(current), "the complete pre-restore design is always backed up");
+    const revision = restored.revision, count = writes.size;
+    assert.equal((await request()).status, 200);
+    assert.equal((await store.shop(shop.id))!.revision, revision);
+    assert.equal(writes.size, count, "retrying a successful request creates no additional writes");
+  }
 });

@@ -11,6 +11,7 @@ import type { Shop, Store } from "./store.ts";
 import { managedImageIds } from "./image-references.ts";
 import { screenIds } from "../shared/screens.ts";
 import { partValue, replacePart } from "./pages.ts";
+import { forEachConcurrent } from "./concurrency.ts";
 
 // An allowlist: operational settings and all business records can never enter a version.
 const designSchema = z.object({
@@ -166,10 +167,11 @@ export function driveDesignVersions(token: string): DesignVersionStorage {
       const manifest = JSON.parse(await readDriveText(token, version.manifestId)) as Manifest;
       // Read every file before overwriting anything; missing/corrupt archives fail safely.
       const files: Record<string, string> = {};
-      for (const [path, id] of Object.entries(manifest.files)) {
-        if (!isDesignArtifact(path) || typeof id !== "string") throw new Error(tr("版の公開ファイルが揃っていません"));
+      const entries = Object.entries(manifest.files);
+      if (entries.some(([path, id]) => !isDesignArtifact(path) || typeof id !== "string")) throw new Error(tr("版の公開ファイルが揃っていません"));
+      await forEachConcurrent(entries, 4, async ([path, id]) => {
         files[path] = await readDriveText(token, id);
-      }
+      });
       return validateSnapshot({ design: manifest.design, files });
     },
     trash: version => trashFile(token, version.folderId),
