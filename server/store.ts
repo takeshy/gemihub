@@ -52,6 +52,8 @@ export type Shop = {
   locale?: "ja" | "en";
   /** Owner settings for PayPal operations alerts. Absent means daily digest at 09:00, enabled. */
   paypalOps?: { notify: boolean; digestHour: number };
+  /** AI phone reception settings. Absent or disabled means calls are not answered by the AI. */
+  phone?: import("./phone-reception.ts").PhoneSettings;
 };
 export type User = {
   email: string;
@@ -121,7 +123,7 @@ export class Store {
       .digest("hex");
   }
   async appendShopLog(log: ShopLog) {
-    const clean = JSON.parse(JSON.stringify({ ...log, references: [...new Set([log.bookingId, log.orderId, log.captureId, log.refundId, log.requestId].filter((value): value is string => !!value))] })) as ShopLog;
+    const clean = JSON.parse(JSON.stringify({ ...log, references: [...new Set([log.bookingId, log.inquiryId, log.callId, log.orderId, log.captureId, log.refundId, log.requestId].filter((value): value is string => !!value))] })) as ShopLog;
     if (this.memory) {
       if (this.shopLogs.has(log.id)) return;
       this.shopLogs.set(log.id, clean);

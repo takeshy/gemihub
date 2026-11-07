@@ -1,0 +1,392 @@
+import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import type { IncomingMessage, Server } from "node:http";
+import { GoogleGenAI, Modality, Type, type FunctionDeclaration, type FunctionResponse, type LiveConnectParameters, type Session as LiveSession } from "@google/genai";
+import { WebSocketServer, WebSocket } from "ws";
+import { z } from "zod";
+import { tr } from "../shared/i18n.ts";
+import { regionOf } from "../shared/region.ts";
+import { spokenPhoneNumber, type PhoneSettings } from "../shared/phone.ts";
+export * from "../shared/phone.ts";
+import type { ShopConfig } from "./domain.ts";
+
+// AI phone reception through Twilio Programmable Voice. Twilio streams 8 kHz μ-law audio over a
+// WebSocket; this module converts it to 16 kHz PCM for Gemini Live and back to μ-law for Twilio.
+// Only the conversation lives here. Availability, bookings and inquiries go through the deterministic
+// server callbacks supplied by the app, so the model never decides stock, prices or payment rules.
+
+// Twilio signs the exact public URL plus the sorted POST parameters with the account Auth Token.
+export function twilioSignature(authToken: string, url: string, params: Record<string, string>) {
+  const data = url + Object.keys(params).sort().map(key => key + params[key]).join("");
+  return createHmac("sha1", authToken).update(data).digest("base64");
+}
+export function validTwilioSignature(authToken: string, url: string, params: Record<string, string>, signature: string) {
+  const expected = twilioSignature(authToken, url, params);
+  if (!signature || expected.length !== signature.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expected.length; index++) difference |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  return difference === 0;
+}
+export type TwilioCredentials = { sid: string; token: string };
+/** Environment first; a local tmp/twilio.json keeps demos working without committing secrets. */
+export function twilioCredentials(): TwilioCredentials {
+  let local: { sid?: string; password?: string } = {};
+  try { local = JSON.parse(readFileSync("tmp/twilio.json", "utf8")); } catch { /* optional local file */ }
+  let fileToken = "";
+  if (process.env.TWILIO_AUTH_TOKEN_FILE) {
+    try { fileToken = readFileSync(process.env.TWILIO_AUTH_TOKEN_FILE, "utf8").trim(); } catch { /* report configuration later */ }
+  }
+  return { sid: process.env.TWILIO_ACCOUNT_SID || local.sid || "", token: process.env.TWILIO_AUTH_TOKEN || fileToken || local.password || "" };
+}
+export const phoneStreamToken = (shopId: string, callSid: string, caller: string, token = twilioCredentials().token) =>
+  createHmac("sha256", token || "phone").update(`${shopId}:${callSid}:${caller}`).digest("hex").slice(0, 32);
+export function streamUrl(base: string, shopId: string, callSid: string, caller: string) {
+  const url = new URL("/phone/stream", base);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.searchParams.set("shop", shopId);
+  url.searchParams.set("call", callSid);
+  url.searchParams.set("from", caller);
+  url.searchParams.set("token", phoneStreamToken(shopId, callSid, caller));
+  return url.href;
+}
+const xml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
+export const twimlSay = (message: string, language = "ja-JP") =>
+  `<?xml version="1.0" encoding="UTF-8"?><Response><Say language="${language}">${xml(message)}</Say><Hangup/></Response>`;
+export const twimlConnect = (base: string, shopId: string, callSid: string, caller: string) =>
+  `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xml(streamUrl(base, shopId, callSid, caller))}"/></Connect></Response>`;
+
+// ---- Audio conversion -------------------------------------------------------------------------
+const MULAW_BIAS = 0x84, MULAW_CLIP = 32635;
+function mulawToLinear(value: number) {
+  const u = (~value) & 0xff;
+  const sign = u & 0x80, exponent = (u >> 4) & 0x07, mantissa = u & 0x0f;
+  let sample = ((mantissa << 3) + MULAW_BIAS) << exponent;
+  sample -= MULAW_BIAS;
+  return sign ? -sample : sample;
+}
+function linearToMulaw(sample: number) {
+  let sign = 0;
+  if (sample < 0) { sign = 0x80; sample = -sample; }
+  sample = Math.min(sample, MULAW_CLIP) + MULAW_BIAS;
+  let exponent = 7;
+  for (let mask = 0x4000; (sample & mask) === 0 && exponent > 0; mask >>= 1) exponent--;
+  return (~(sign | (exponent << 4) | ((sample >> (exponent + 3)) & 0x0f))) & 0xff;
+}
+export function mulawToPcm16(input: Uint8Array) {
+  const output = new Int16Array(input.length);
+  for (let index = 0; index < input.length; index++) output[index] = mulawToLinear(input[index]);
+  return output;
+}
+export function pcm16ToMulaw(input: Int16Array) {
+  const output = new Uint8Array(input.length);
+  for (let index = 0; index < input.length; index++) output[index] = linearToMulaw(input[index]);
+  return output;
+}
+/** Twilio is 8 kHz; Gemini input is 16 kHz. Duplicating samples keeps the stream length stable. */
+export function upsample8kTo16k(input: Int16Array) {
+  const output = new Int16Array(input.length * 2);
+  for (let index = 0; index < input.length; index++) { output[index * 2] = input[index]; output[index * 2 + 1] = input[index]; }
+  return output;
+}
+/** Gemini output is 24 kHz; Twilio is 8 kHz. Average three samples and carry a remainder between chunks. */
+export function downsample24kTo8k(input: Int16Array, remainder = new Int16Array(0)) {
+  const combined = new Int16Array(remainder.length + input.length);
+  combined.set(remainder); combined.set(input, remainder.length);
+  const length = Math.floor(combined.length / 3), output = new Int16Array(length);
+  for (let index = 0; index < length; index++) output[index] = Math.round((combined[index * 3] + combined[index * 3 + 1] + combined[index * 3 + 2]) / 3);
+  return { samples: output, remainder: combined.slice(length * 3) };
+}
+export class TwilioAudioBridge {
+  private remainder = new Int16Array(0);
+  toGemini(payload: string) {
+    return Buffer.from(upsample8kTo16k(mulawToPcm16(Buffer.from(payload, "base64"))).buffer).toString("base64");
+  }
+  fromGemini(payload: string) {
+    const raw = Buffer.from(payload, "base64");
+    // Node pools small Buffers, so the byte offset may not be 2-byte aligned for Int16Array.
+    const copy = new Uint8Array(raw.byteLength);
+    copy.set(raw);
+    const input = new Int16Array(copy.buffer, 0, copy.byteLength >> 1);
+    const converted = downsample24kTo8k(input, this.remainder);
+    this.remainder = converted.remainder;
+    return Buffer.from(pcm16ToMulaw(converted.samples)).toString("base64");
+  }
+}
+
+// ---- Prompt and tools -------------------------------------------------------------------------
+export type PhoneCallerFacts = {
+  config: ShopConfig;
+  settings: PhoneSettings;
+  caller: string;
+  callerName?: string;
+  today: string;
+  now: string;
+  timeZone: string;
+};
+export function phoneInstruction(facts: PhoneCallerFacts) {
+  const config = facts.config;
+  const payment = config.rules.payment?.enabled ? tr("前払いあり") : tr("前払いなし");
+  const menus = config.menus.filter(menu => menu.active).map(menu => ({
+    id: menu.id, name: menu.name, duration: menu.duration, price: menu.price,
+    ...(menu.optionFor ? { option: true } : {}), ...(menu.optionGroup ? { group: menu.optionGroup } : {}),
+  }));
+  const staff = config.staff.map(person => ({ id: person.id, name: person.name, menuIds: person.menuIds }));
+  const hours = config.hours;
+  return [
+    tr("あなたは「{0}」の電話受付AIです。お客様の用件を短く聞き、落ち着いて丁寧に日本語で話してください。", config.name),
+    tr("通話相手の発信者番号は {0} です。番号は相手に言わせず、こちらから読み上げて確認してください。折り返し・確認の連絡先はこの番号を使います。", spokenPhoneNumber(facts.caller)),
+    facts.callerName ? tr("この番号のお客様は「{0}」として記録があります。名前を聞くときの参考にしてください。", facts.callerName) : "",
+    tr("事実は下の店舗情報だけを根拠にしてください。書かれていないことを推測して答えないでください。営業時間・場所・メニューと料金は、この情報から答えられる範囲でその場で答えてかまいません。それ以外の問い合わせは、名前と用件を聞いて create_inquiry を呼び、あとで折り返すことを伝えてください。"),
+    tr("予約は、メニューを聞き、check_availability で空き時間を確認してから候補を2〜3個伝えてください。日時が決まったら名前を必ず聞き、発信者番号を読み上げて確認し、メニュー・日時・来店時の現金払いであることを復唱してから create_booking を呼んでください。予約IDは自分で作らず、必ずツールの結果を使ってください。"),
+    config.rules.payment?.enabled
+      ? tr("この店は前払いを使います。電話で現金予約できるのは今日の残り枠だけです。今日より後の希望には、オンライン予約を案内してください。")
+      : tr("この店は前払いを使いません。予約可能期間内なら今日より後の日も電話で予約できます。"),
+    tr("料金はメニューに書かれた金額をそのまま伝えてください。割引や返金を自分で決めてはいけません。"),
+    tr("聞き取りに失敗したら無理に続けず、名前と用件を聞いて create_inquiry で残してください。"),
+    tr("今日は {0} です（{1}）。現在時刻は {2} です。", facts.today, facts.timeZone, facts.now),
+    tr("店舗情報: {0}", JSON.stringify({
+      name: config.name, description: config.description, address: config.address,
+      hours: { start: hours.start, end: hours.end, closedWeekdays: hours.closedWeekdays, holidays: hours.holidays, weekdayHours: hours.weekdayHours, specialDays: hours.specialDays },
+      menus, staff, payment, rules: { advanceDays: config.rules.advanceDays, interval: config.rules.interval, leadMinutes: config.rules.leadMinutes, sameDay: config.rules.sameDay, cancelHours: config.rules.cancelHours },
+      phone: { sameDayCash: facts.settings.cashBookings, greeting: facts.settings.greeting || "" },
+    })),
+  ].filter(Boolean).join("\n");
+}
+export const phoneTools: FunctionDeclaration[] = [
+  {
+    name: "check_availability",
+    description: tr("指定した日付・メニューの空き時間と、当日分の譲渡枠（割引枠）を調べる。空き状況を推測してはいけない。"),
+    parameters: { type: Type.OBJECT, properties: {
+      date: { type: Type.STRING, description: tr("YYYY-MM-DD。省略時は今日") },
+      menuId: { type: Type.STRING, description: tr("店舗情報のメニューID") },
+      staffId: { type: Type.STRING, description: tr("希望スタッフのID（任意）") },
+      optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("追加メニューのID（任意）") },
+    }, required: ["menuId"] },
+  },
+  {
+    name: "create_booking",
+    description: tr("空き時間を確認済みの現金予約を作成する。名前と発信者番号はサーバーが記録する。"),
+    parameters: { type: Type.OBJECT, properties: {
+      name: { type: Type.STRING, description: tr("お客様の名前。必ず聞いてから渡す") },
+      menuId: { type: Type.STRING, description: tr("メニューID") },
+      start: { type: Type.STRING, description: tr("開始日時のISO 8601（check_availability が返した start をそのまま使う）") },
+      staffId: { type: Type.STRING, description: tr("スタッフID（任意）") },
+      optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("追加メニューID（任意）") },
+      transferId: { type: Type.STRING, description: tr("当日分の譲渡枠を使う場合、check_availability が返した transferId") },
+    }, required: ["name", "menuId", "start"] },
+  },
+  {
+    name: "create_inquiry",
+    description: tr("電話で受け付けた問い合わせ・伝言を、お問い合わせとして記録する。あとで折り返す。"),
+    parameters: { type: Type.OBJECT, properties: {
+      name: { type: Type.STRING, description: tr("お客様の名前") },
+      reason: { type: Type.STRING, description: tr("用件。お客様が話した内容を簡潔に") },
+    }, required: ["name", "reason"] },
+  },
+  {
+    name: "cancel_booking",
+    description: tr("同じ発信者番号で受け付けた現金予約をキャンセルする。オンライン予約のキャンセルは受け付けず、オンラインでの手順を案内する。"),
+    parameters: { type: Type.OBJECT, properties: {
+      start: { type: Type.STRING, description: tr("キャンセルする予約の開始日時（任意。省略時は対象を確認する）") },
+    } },
+  },
+  {
+    name: "finish_call",
+    description: tr("話が終わったので通話を終了する。お礼を言ってから呼ぶ。"),
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+];
+export const phoneToolNames = phoneTools.map(tool => tool.name);
+
+// ---- Phone stream -----------------------------------------------------------------------------
+export type PhoneSlot = { start: string; end: string; staffId: string; staffName?: string; label?: string };
+export type PhoneTransferSlot = { id: string; start: string; end: string; staffId: string; menuName: string; price: number; currency: string; discountPercent: number; refundAmount: number; label?: string };
+export type PhoneAvailability = { date: string; today: string; prepayment: boolean; slots: PhoneSlot[]; transferSlots: PhoneTransferSlot[] };
+export type PhoneBookingResult = { ok: true; bookingId: string; start: string; menuName: string; staffName: string; price: number; currency: string; cash: true; transfer?: { refundAmount: number; currency: string } };
+export type PhoneInquiryResult = { ok: true; inquiryId: string };
+export type PhoneCancelResult = { ok: boolean; message: string; choices?: { id: string; start: string; menuName: string }[] };
+export type PhoneHost = {
+  availability(input: { date?: string; menuId: string; staffId?: string; optionIds?: string[] }): Promise<PhoneAvailability>;
+  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; transferId?: string }): Promise<PhoneBookingResult>;
+  inquire(input: { name: string; reason: string }): Promise<PhoneInquiryResult>;
+  cancel(input: { start?: string }): Promise<PhoneCancelResult>;
+  recordCall(result: PhoneCallRecord): Promise<void>;
+};
+export type PhoneCallRecord = {
+  callSid: string; caller: string; outcome: "answered" | "booking" | "inquiry" | "cancelled" | "blocked" | "closed" | "error" | "ended";
+  transcript: string; turns: { question: string; answer: string }[]; startedAt: string; endedAt: string;
+  bookingId?: string; inquiryId?: string; error?: string;
+};
+export type PhoneAccess = {
+  shopId: string; callSid: string; caller: string; config: ShopConfig; settings: PhoneSettings;
+  callerName?: string; host: PhoneHost;
+};
+export type PhoneAuthorizer = (url: URL) => Promise<PhoneAccess | undefined>;
+export type PhoneConnector = (parameters: LiveConnectParameters) => Promise<LiveSession>;
+export const phoneLiveConfigured = () => !!process.env.GOOGLE_CLOUD_PROJECT && !!(process.env.PHONE_LIVE_MODEL || process.env.VERTEX_LIVE_MODEL);
+const defaultConnector: PhoneConnector = parameters => new GoogleGenAI({
+  vertexai: true, project: process.env.GOOGLE_CLOUD_PROJECT, location: process.env.PHONE_LIVE_LOCATION || process.env.VERTEX_LIVE_LOCATION || "us-central1",
+}).live.connect(parameters);
+
+/**
+ * Returns a synchronous upgrade dispatcher so the app can share one `upgrade` listener with the
+ * assistant voice relay. The handler returns false when the request is not for /phone/stream.
+ */
+export function createPhoneUpgrade(authorize: PhoneAuthorizer, connector: PhoneConnector = defaultConnector) {
+  const sockets = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
+  return (req: IncomingMessage, socket: import("node:stream").Duplex, head: Buffer) => {
+    const url = new URL(req.url || "/", "http://localhost");
+    if (url.pathname !== "/phone/stream") return false;
+    void (async () => {
+      const access = phoneLiveConfigured() ? await authorize(url).catch(() => undefined) : undefined;
+      if (!access) { socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); socket.destroy(); return; }
+      sockets.handleUpgrade(req, socket, head, ws => { void converse(ws, access, connector).catch(error => { console.warn(JSON.stringify({ event: "phone_stream_failed", shopId: access.shopId })); ws.close(1011, tr("通話を続けられませんでした")); void access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: "error", transcript: "", turns: [], startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) }).catch(() => undefined); }); });
+    })().catch(() => socket.destroy());
+    return true;
+  };
+}
+/** Attach the bidirectional Twilio Media Stream WebSocket at /phone/stream. */
+export function attachPhoneReception(server: Server, authorize: PhoneAuthorizer, connector: PhoneConnector = defaultConnector) {
+  const dispatch = createPhoneUpgrade(authorize, connector);
+  server.on("upgrade", (req, socket, head) => { dispatch(req, socket, head); });
+}
+
+async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConnector) {
+  const bridge = new TwilioAudioBridge();
+  const startedAt = new Date().toISOString();
+  let live: LiveSession | undefined;
+  let streamSid = "", stopped = false, finished = false, started = false, greetingSent = false, greetingTimer: NodeJS.Timeout | undefined;
+  let heard = "", spoken = "", transcript: string[] = [];
+  const turns: { question: string; answer: string }[] = [];
+  let outcome: PhoneCallRecord["outcome"] = "ended", bookingId: string | undefined, inquiryId: string | undefined, failure: string | undefined;
+  const pendingInput: string[] = [], pendingMedia: string[] = [];
+  const send = (value: unknown) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(value)); };
+  const media = (payload: string) => {
+    if (!streamSid) { pendingMedia.push(payload); return; }
+    send({ event: "media", streamSid, media: { payload } });
+  };
+  const startGreeting = () => {
+    if (!live || !started || greetingSent) return;
+    greetingSent = true;
+    clearTimeout(greetingTimer);
+    // Start the conversation without waiting for the caller to speak first.
+    greetingTimer = setTimeout(() => { if (!stopped) live?.sendClientContent({ turns: [{ role: "user", parts: [{ text: tr("発信者から電話がかかってきました。店名を名乗り、短く挨拶して用件を聞いてください。") }] }], turnComplete: true }); }, 250);
+    greetingTimer.unref();
+  };
+  const finish = async (error?: string) => {
+    if (finished) return;
+    finished = true; stopped = true; clearTimeout(greetingTimer); clearTimeout(limit);
+    if (live) { try { live.close(); } catch { /* already closed */ } live = undefined; }
+    if (heard.trim() || spoken.trim()) transcript.push(`${tr("お客様")}: ${heard.trim()}\n${tr("AI")}: ${spoken.trim()}`);
+    await access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: error ? "error" : outcome, transcript: transcript.join("\n"), turns, startedAt, endedAt: new Date().toISOString(), ...(bookingId ? { bookingId } : {}), ...(inquiryId ? { inquiryId } : {}), ...(error ? { error } : {}) }).catch(() => undefined);
+    ws.close(1000, tr("通話を終了しました"));
+  };
+  const limit = setTimeout(() => { void finish(); }, 15 * 60000);
+  limit.unref();
+  ws.on("close", () => { if (!finished) void finish(); else { stopped = true; clearTimeout(limit); } });
+  ws.on("error", () => { if (!finished) void finish(tr("通話が切断されました")); });
+  // Twilio sends `start` and media immediately after the socket opens. Listen before the
+  // Gemini connection finishes and buffer audio, otherwise the first words are lost.
+  ws.on("message", raw => {
+    try {
+      const input = JSON.parse(raw.toString());
+      if (input.event === "start") {
+        streamSid = input.start?.streamSid || input.streamSid || "";
+        started = true;
+        for (const payload of pendingMedia.splice(0)) send({ event: "media", streamSid, media: { payload } });
+        for (const data of pendingInput.splice(0)) live?.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } });
+        startGreeting();
+        return;
+      }
+      if (input.event === "media" && input.media?.payload) {
+        const data = bridge.toGemini(input.media.payload);
+        if (live) live.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } });
+        else pendingInput.push(data);
+        return;
+      }
+      if (input.event === "stop") void finish();
+    } catch { /* Ignore malformed Twilio frames instead of dropping the call. */ }
+  });
+
+  const handleTool = async (name: string, args: Record<string, unknown> | undefined): Promise<Record<string, unknown>> => {
+    try {
+      if (name === "check_availability") {
+        const input = z.object({ date: z.string().optional(), menuId: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional() }).parse(args || {});
+        return { ...(await access.host.availability(input)) };
+      }
+      if (name === "create_booking") {
+        const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), transferId: z.string().optional() }).parse(args || {});
+        const result = await access.host.book(input);
+        outcome = "booking"; bookingId = result.bookingId;
+        return { ...result };
+      }
+      if (name === "create_inquiry") {
+        const input = z.object({ name: z.string().trim().min(1).max(100), reason: z.string().trim().min(1).max(2000) }).parse(args || {});
+        const result = await access.host.inquire(input);
+        outcome = "inquiry"; inquiryId = result.inquiryId;
+        return { ...result };
+      }
+      if (name === "cancel_booking") {
+        const input = z.object({ start: z.string().optional() }).parse(args || {});
+        const result = await access.host.cancel(input);
+        if (result.ok) outcome = "cancelled";
+        return { ...result };
+      }
+      if (name === "finish_call") {
+        if (outcome === "ended") outcome = transcript.length || heard.trim() ? "answered" : "ended";
+        setTimeout(() => { void finish(); }, 1200);
+        return { ok: true };
+      }
+      return { error: tr("この操作は利用できません") };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : tr("処理できませんでした");
+      if (name === "create_booking" || name === "create_inquiry") failure = message;
+      return { error: message };
+    }
+  };
+
+  live = await connector({
+    model: process.env.PHONE_LIVE_MODEL || process.env.VERTEX_LIVE_MODEL!,
+    config: {
+      responseModalities: [Modality.AUDIO],
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      contextWindowCompression: { triggerTokens: "24000", slidingWindow: { targetTokens: "12000" } },
+      systemInstruction: phoneInstruction({
+        config: access.config, settings: access.settings, caller: access.caller, callerName: access.callerName,
+        today: new Intl.DateTimeFormat("en-CA", { timeZone: regionOf(access.config).timeZone }).format(new Date()),
+        now: new Date().toLocaleString("ja-JP", { timeZone: regionOf(access.config).timeZone, timeZoneName: "short" }),
+        timeZone: regionOf(access.config).timeZone,
+      }),
+      tools: [{ functionDeclarations: phoneTools }],
+    },
+    callbacks: {
+      onmessage: message => {
+        if (stopped) return;
+        const content = message.serverContent;
+        if (content?.inputTranscription?.text) { heard += content.inputTranscription.text; }
+        if (content?.outputTranscription?.text) { spoken += content.outputTranscription.text; }
+        if (content?.interrupted) send({ event: "clear", streamSid });
+        for (const part of content?.modelTurn?.parts || []) if (part.inlineData?.data) media(bridge.fromGemini(part.inlineData.data));
+        if (content?.turnComplete) {
+          if (heard.trim() || spoken.trim()) {
+            const turn = { question: heard.trim(), answer: spoken.trim() };
+            turns.push(turn); transcript.push(`${tr("お客様")}: ${turn.question}\n${tr("AI")}: ${turn.answer}`); heard = ""; spoken = "";
+          }
+        }
+        const calls = message.toolCall?.functionCalls || [];
+        if (!calls.length) return;
+        void Promise.all(calls.map(async (call): Promise<FunctionResponse> => ({
+          id: call.id, name: call.name, response: await handleTool(call.name || "", call.args as Record<string, unknown> | undefined),
+        }))).then(async functionResponses => {
+          if (!stopped) live?.sendToolResponse({ functionResponses });
+        });
+      },
+      onerror: () => { failure = tr("音声接続が中断しました"); void finish(failure); },
+      onclose: () => { live = undefined; if (!finished) void finish(failure); },
+    },
+  });
+  if (stopped) { try { live.close(); } catch { /* already closed */ } return; }
+  for (const data of pendingInput.splice(0)) live.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } });
+  startGreeting();
+}
