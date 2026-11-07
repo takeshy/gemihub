@@ -16,6 +16,7 @@ Ambiguous money matters strain human relationships, but when rules are executed 
 * **Plain-Language Policy Generation**: Say *"No cancellation fee at least 24 hours before; 30% within 24 hours, 60% within 12 hours, and 100% within one hour."* The AI structures this into a concrete refund policy (`24h → 100%`, `12h → 70%`, `1h → 40%`, `0h → 0%`) for the owner to review and approve before applying it to new bookings.
 * **AI That Watches the Money Without Touching It**: Ask *"Did that refund go through?"* and the research AI reads the live PayPal record and cites it. An hourly check compares the shop's ledger with PayPal and flags stuck payments or refunds; fixes are decided by fixed server rules and run only after the owner approves them on screen. The AI's PayPal access is read-only—it cannot create refunds or change amounts.
 * **Research AI & Gemini Live**: Ask questions like *"What is our current refund policy?"* via chat or low-latency voice (**Gemini Live**), receiving answers grounded in shop specs and live data.
+* **AI Phone Reception (Twilio + Gemini Live)**: When the owner is busy with a client, an AI receptionist answers the shop's phone. It answers questions about hours, location, menus and prices from the published shop settings, takes cash bookings from the same inventory as online bookings (same-day only when the shop requires PayPal prepayment), lets callers cancel their own phone bookings within the shop's cancellation window, and records everything else as an inquiry for a callback. The caller ID becomes the callback number and the CRM key, so callers never have to say their number. Every call keeps a searchable transcript and outcome, and the owner is emailed about new bookings, cancellations and inquiries.
 * **Centralized Customer CRM**: Keep the lifeblood of the business in one place—view past bookings, inquiries, memos, and reference photos on a single screen.
 * **Traffic & Operations Visibility**: Daily and per-page traffic reports, customer activity, and searchable operational logs—so the owner can see how the shop is doing and trace anything that happened.
 * **Opening Alerts**: Customers can request alerts for openings that match their preferred service and time, including discounted slots.
@@ -47,6 +48,7 @@ Ambiguous money matters strain human relationships, but when rules are executed 
 * **AI Layer**:
     * Configurable LLM layer supporting both **Vertex AI (Gemini)** and **OpenAI**.
     * **Gemini Live** for real-time voice conversations over WebSockets.
+    * **Twilio Media Streams** bridged to **Gemini Live** for phone reception: signed webhooks, HMAC-signed stream URLs, and server-side tools (`check_availability`, `create_booking`, `cancel_booking`, `create_inquiry`) that enforce availability, prices and cancellation deadlines—the model only converses.
     * Read-only grounded research agent with PayPal lookups scoped strictly to transaction IDs within the shop's ledger.
 * **Google Cloud & Workspace**:
     * **Cloud Firestore**: Stores business records and distributed locks for payment concurrency control.
@@ -58,6 +60,13 @@ Ambiguous money matters strain human relationships, but when rules are executed 
 Small, family-run salons often operate with irregular rules: staying open late before holidays, opening exclusively on certain national holidays, or offering add-on services (like callus care) that cannot be booked on their own. gemihub supports all of these—special opening days with their own hours and staff, weekday-specific hours, and add-on services—but handling every corner case in one system can make settings overwhelmingly complex.
 
 Instead of just offering a conversational setup interface, I built **infographic architecture diagrams directly into the dashboard** to visualize active rules and dependencies. This allows non-technical owners to understand their exact shop setup at a glance without feeling overwhelmed by configuration complexity.
+
+Phone reception raised a harder question: **what can an AI safely do when nobody has paid?** Online, a PayPal prepayment proves who booked and protects the shop from no-shows. A phone call has neither—caller ID cannot prove who is calling. So the server, not the AI, draws the line:
+
+* When the shop requires PayPal prepayment, phone bookings are limited to the remaining slots today; later dates stay online-only and prepaid.
+* The AI never sells discounted replacement slots by phone, because a replacement booking increases the original customer's refund—someone could otherwise trigger their own larger refund with a booking they never attend.
+* Callers can cancel only cash phone bookings made from the same number, within the shop's deadline. Changes to online bookings are directed online or recorded as inquiries for the owner.
+* The call cannot end quietly after a failed booking or after slots were offered and nothing was booked; the AI must first tell the caller, and unresolved calls are flagged to the owner.
 
 ## Accomplishments that we're proud of
 
