@@ -33,7 +33,7 @@ import {
   type Post,
 } from "../../server/post-domain";
 import { createRequestId } from "../request-id";
-import { aggregateCustomers, customerSummaries, phoneKey, type CustomerRecord, customerFilterSchema, customerSince, customerImages, normalizeEmail, type CustomerNote, type Inquiry } from "../../server/customers";
+import { aggregateCustomers, customerSummaries, phoneCustomerSchema, phoneKey, type CustomerRecord, customerFilterSchema, customerSince, customerImages, normalizeEmail, type CustomerNote, type Inquiry } from "../../server/customers";
 import type { ApiClient } from "../api";
 import { couponDiscount, type CouponWalletItem } from "../../shared/coupons";
 import type { Plan, Session, Workspace } from "../App";
@@ -476,7 +476,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const transferFixtures = createTransferFixtures(scenario, shop, session);
   const couponItems: CouponWalletItem[] = scenario.startsWith("coupon-") ? [{ id: "c".repeat(64), shopId: shop.id, campaignId: "welcome", customer: "guest@example.com", title: tr("初回クーポン"), discount: { type: "percent", value: 10 }, currency: "JPY", issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now()+30*86400000).toISOString(), state: "available" }] : [];
   const phoneCustomers: CustomerRecord[] = [];
-  const registerPhone = (name: string, phone: string) => { const email = phoneKey(phone); phoneCustomers.splice(0, phoneCustomers.length, ...phoneCustomers.filter(item => item.email !== email), { shopId: shop.id, email, name, phone, updatedBy: shop.owner, updatedAt: new Date().toISOString() }); return email; };
+  const registerPhone = (name: string, phone: string) => { ({ name, phone } = phoneCustomerSchema.parse({ name, phone })); const email = phoneKey(phone); phoneCustomers.splice(0, phoneCustomers.length, ...phoneCustomers.filter(item => item.email !== email), { shopId: shop.id, email, name, phone, updatedBy: shop.owner, updatedAt: new Date().toISOString() }); return email; };
   const returnCoupon = (booking: Booking) => {
     const coupon = couponItems.find(item => item.id === booking.coupon?.grantId);
     if (coupon) coupon.state = Date.parse(coupon.expiresAt) > Date.now() ? "available" : "expired";
@@ -974,13 +974,23 @@ export function createMockClient(scenario: Scenario): ApiClient {
       q.status = String(input.status);
       result = { ok: true };
     } else if (action.endsWith("/bookings/phone-slots")) {
-      result = { slots: slots({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } }, shop.bookings, shopDate(config), url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, undefined, url.searchParams.getAll("option")) };
+      result = { slots: slots({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } }, shop.bookings, !config.rules.payment?.enabled && url.searchParams.get("date") || shopDate(config), url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, undefined, url.searchParams.getAll("option")) };
     } else if (action.endsWith("/bookings/phone")) {
-      const input = data as { name: string; phone: string; menuId: string; start: string };
-      const slot = slots({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } }, shop.bookings, shopDate(config), input.menuId).find(item => item.start === input.start);
+      const input = data as { requestId: string; name: string; phone: string; menuId: string; optionIds?: string[]; staffId?: string; start: string; expectedPrice?: number };
+      const customer = phoneCustomerSchema.parse(input);
+      const existing = shop.bookings.find(booking => booking.requestKey === `phone:${input.requestId}`);
+      if (existing) return structuredClone({ ok: true, booking: existing }) as T;
+      const selection = menuSelection(config, input.menuId, input.optionIds || []);
+      if (!selection) throw new Error(tr("メニューと追加メニューの組み合わせを確認してください"));
+      if (input.expectedPrice !== undefined && input.expectedPrice !== selection.price) throw new Error(tr("料金や所要時間が変わりました。メニューと空き時間を確認し直してください。"));
+      const slot = slots({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } }, shop.bookings, config.rules.payment?.enabled ? shopDate(config) : shopDate(config, Date.parse(input.start)), input.menuId, input.staffId, undefined, selection.optionIds).find(item => item.start === input.start);
       if (!slot) throw new Error(tr("この時間は予約できません。空き状況を更新してください"));
-      const booking: Booking = { id: `phone-${shop.bookings.length + 1}`, shopId: shop.id, customer: registerPhone(input.name, input.phone), name: input.name, phone: input.phone, message: "", menuId: input.menuId, price: config.menus.find(menu => menu.id === input.menuId)?.price || 0, ...slot, status: "active", createdAt: new Date().toISOString() };
+      const booking: Booking = { id: `phone-${input.requestId}`, requestKey: `phone:${input.requestId}`, shopId: shop.id, customer: registerPhone(customer.name, customer.phone), ...customer, message: "", menuId: input.menuId, price: selection.price, ...(selection.optionIds.length ? { optionIds: selection.optionIds, items: selection.items } : {}), ...slot, status: "active", createdAt: new Date().toISOString() };
       shop.bookings.push(booking);
+      result = { ok: true, booking };
+    } else if (action.startsWith(`/api/shops/${shop.id}/transfers/`) && action.endsWith("/phone")) {
+      const booking = transferFixtures.replacePhone(action.split("/").at(-2)!, data);
+      registerPhone(booking.name, booking.phone!);
       result = { ok: true, booking };
     } else if (action.endsWith("/status")) {
       const b = shop.bookings.find((b) => b.id === action.split("/").at(-2));

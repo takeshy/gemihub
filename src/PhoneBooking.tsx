@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { tr } from "../shared/i18n";
-import { regionOf, type Currency } from "../shared/region";
+import { dateIn, regionOf, type Currency } from "../shared/region";
 import { bookingStaff, menuSelection, type ShopConfig } from "../server/domain";
 import { createRequestId } from "./request-id";
+import { DateInput } from "./DateInput";
 import { paid, useShopDisplay } from "./money";
 
 type Slot = { start: string; end: string; staffId: string };
@@ -12,20 +13,26 @@ type Slot = { start: string; end: string; staffId: string };
 function PhoneCustomerFields({ shopId, phone, name, onPhone, onName }: { shopId: string; phone: string; name: string; onPhone: (value: string) => void; onName: (value: string) => void }) {
   const api = useApi();
   const [known, setKnown] = useState(false);
+  const current = useRef({ shopId, phone, name });
+  current.current = { shopId, phone, name };
+  const search = useRef(0);
+  useEffect(() => () => { search.current++; }, [shopId, phone]);
   const find = async () => {
     if (!phone.trim()) return;
+    const request = ++search.current;
     const result = await api<{ name: string }>(`/api/shops/${shopId}/customers/phone?number=${encodeURIComponent(phone)}`).catch(() => ({ name: "" }));
+    if (request !== search.current || current.current.shopId !== shopId || current.current.phone !== phone) return;
     setKnown(!!result.name);
-    if (result.name && !name.trim()) onName(result.name);
+    if (result.name && !current.current.name.trim()) onName(result.name);
   };
   return <>
-    <label className="field"><span>{tr("電話番号")}</span><input required type="tel" autoComplete="off" maxLength={40} value={phone} onChange={e => { setKnown(false); onPhone(e.target.value); }} onBlur={() => void find()}/></label>
+    <label className="field"><span>{tr("電話番号")}</span><input required type="tel" autoComplete="off" maxLength={40} value={phone} onChange={e => { search.current++; current.current.phone = e.target.value; setKnown(false); onPhone(e.target.value); }} onBlur={() => void find()}/></label>
     {known && <p className="small muted" role="status">{tr("登録済みのお客様です。")}</p>}
-    <label className="field"><span>{tr("お名前")}</span><input required maxLength={100} value={name} onChange={e => onName(e.target.value)}/></label>
+    <label className="field"><span>{tr("お名前")}</span><input required maxLength={100} value={name} onChange={e => { current.current.name = e.target.value; onName(e.target.value); }}/></label>
   </>;
 }
 
-/** Today's phone bookings, paid in cash at the shop. Online prepayment stays the only way to book ahead. */
+/** Phone bookings, paid in cash at the shop: today's only under online prepayment, any open date without it. */
 export function PhoneBooking({ shopId, config, reload }: { shopId: string; config: ShopConfig; reload: () => Promise<unknown> }) {
   const api = useApi(), base = `/api/shops/${shopId}/bookings`;
   const { money, shopTime } = useShopDisplay(regionOf(config));
@@ -33,18 +40,19 @@ export function PhoneBooking({ shopId, config, reload }: { shopId: string; confi
   const [open, setOpen] = useState(false), [menu, setMenu] = useState(menus[0]?.id || ""), [optionIds, setOptionIds] = useState<string[]>([]), [staff, setStaff] = useState("");
   const [times, setTimes] = useState<Slot[]>(), [start, setStart] = useState(""), [name, setName] = useState(""), [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [requestId, setRequestId] = useState(createRequestId);
+  const prepaid = !!config.rules.payment?.enabled, [date, setDate] = useState(() => dateIn(new Date(), regionOf(config).timeZone));
   const selection = menuSelection(config, menu, optionIds), options = config.menus.filter(option => option.active && option.optionFor?.includes(menu));
   const load = async () => {
-    const query = new URLSearchParams({ menu, ...(staff ? { staff } : {}) });
+    const query = new URLSearchParams({ menu, ...(staff ? { staff } : {}), ...(prepaid ? {} : { date }) });
     for (const id of optionIds) query.append("option", id);
     const result = await api<{ slots: Slot[] }>(`${base}/phone-slots?${query}`);
     setTimes(result.slots); setStart(current => result.slots.some(slot => slot.start === current) ? current : "");
   };
-  useEffect(() => { if (open && menu) { setTimes(undefined); load().catch(e => setError(e instanceof Error ? e.message : tr("操作できませんでした"))); } }, [open, menu, optionIds, staff]);
+  useEffect(() => { if (open && menu) { setTimes(undefined); load().catch(e => setError(e instanceof Error ? e.message : tr("操作できませんでした"))); } }, [open, menu, optionIds, staff, date]);
   const changed = () => { setRequestId(createRequestId()); setNotice(""); };
   return <details className="phone-booking" onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary>{tr("当日の電話予約を登録")}</summary>
-    <p className="small muted">{tr("今日の空き枠だけを、店頭での現金払いとして登録します。オンライン予約と同じ枠を使うので二重予約になりません。キャンセル受付中の枠は選べません。お名前と電話番号はお客様一覧にも登録します。")}</p>
+    <summary>{prepaid ? tr("当日の電話予約を登録") : tr("電話予約を登録")}</summary>
+    <p className="small muted">{prepaid ? tr("今日の空き枠だけを、店頭での現金払いとして登録します。オンライン予約と同じ枠を使うので二重予約になりません。キャンセル受付中の枠は選べません。お名前と電話番号はお客様一覧にも登録します。") : tr("空き枠を、店頭での現金払いとして登録します。オンライン予約と同じ枠を使うので二重予約になりません。お名前と電話番号はお客様一覧にも登録します。")}</p>
     {error && <p role="alert" className="alert">{error}</p>}
     {notice && <p role="status" className="notice">{notice}</p>}
     <form onSubmit={event => {
@@ -64,10 +72,11 @@ export function PhoneBooking({ shopId, config, reload }: { shopId: string; confi
         <label className="field"><span>{tr("メニュー")}</span><select aria-label={tr("メニュー")} value={menu} onChange={e => { setMenu(e.target.value); setOptionIds([]); changed(); }}>{menus.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         {options.map(option => <label className="check-field" key={option.id}><input type="checkbox" checked={optionIds.includes(option.id)} onChange={e => { setOptionIds(current => e.target.checked ? [...current, option.id] : current.filter(id => id !== option.id)); changed(); }}/>{option.name}</label>)}
         <label className="field"><span>{tr("スタッフ")}</span><select aria-label={tr("スタッフ")} value={staff} onChange={e => { setStaff(e.target.value); changed(); }}><option value="">{tr("指名なし")}</option>{bookingStaff(config).filter(person => person.menuIds.includes(menu)).map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
-        <label className="field"><span>{tr("今日の時間")}</span><select aria-label={tr("今日の時間")} required value={start} onChange={e => { setStart(e.target.value); changed(); }}><option value="">{times ? tr("時間を選ぶ") : tr("読み込み中…")}</option>{times?.map(slot => <option key={slot.start} value={slot.start}>{shopTime(slot.start, { hour: "2-digit", minute: "2-digit" })}</option>)}</select></label>
-        {times?.length === 0 && <p className="small muted">{tr("今日の空き枠はありません。")}</p>}
+        {!prepaid && <label className="field"><span>{tr("日付")}</span><DateInput aria-label={tr("日付")} value={date} onValueChange={value => { setDate(value); changed(); }}/></label>}
+        <label className="field"><span>{prepaid ? tr("今日の時間") : tr("時間")}</span><select aria-label={prepaid ? tr("今日の時間") : tr("時間")} required value={start} onChange={e => { setStart(e.target.value); changed(); }}><option value="">{times ? tr("時間を選ぶ") : tr("読み込み中…")}</option>{times?.map(slot => <option key={slot.start} value={slot.start}>{shopTime(slot.start, { hour: "2-digit", minute: "2-digit" })}</option>)}</select></label>
+        {times?.length === 0 && <p className="small muted">{prepaid ? tr("今日の空き枠はありません。") : tr("この日の空き枠はありません。")}</p>}
         <PhoneCustomerFields shopId={shopId} phone={phone} name={name} onPhone={value => { setPhone(value); changed(); }} onName={value => { setName(value); changed(); }}/>
-        {selection && <p>{tr("当日現金払い：{0}", money(selection.price))}</p>}
+        {selection && <p>{tr("店頭で現金払い：{0}", money(selection.price))}</p>}
         <button className="primary" type="submit" disabled={!start}>{tr("電話予約を登録する")}</button>
       </fieldset>
     </form>

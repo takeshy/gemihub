@@ -377,6 +377,12 @@ export function createApp(
   };
   // The owner answering the phone may take today's remaining slots, whatever online cut-offs apply.
   const phoneRules = (config: ShopConfig): ShopConfig => ({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } });
+  // With prepayment on, cash stays same-day so it cannot hold later slots unpaid. Without it, online
+  // bookings are unpaid too, so the phone may book any date they could.
+  const phoneDate = (config: ShopConfig, requested?: string) => {
+    const today = dateIn(new Date(), regionOf(config).timeZone);
+    return config.rules.payment?.enabled ? today : requested || today;
+  };
   const postsFor = async (shop: Shop) => (await store.records<Post>("post", shop)).filter(post => !post.deletedAt);
   const legacyArticleIds = new Map<string, Record<string, string>>();
   async function publishedArticleId(shop: Shop, category: string | undefined, key: string | undefined) {
@@ -1629,7 +1635,7 @@ export function createApp(
         }
         if (action === "bookings/phone-slots" && method === "GET") {
           const config = shop.published || fail(409, tr("先にお店を公開してください"));
-          const date = dateIn(new Date(), regionOf(config).timeZone);
+          const date = phoneDate(config, url.searchParams.get("date") || undefined);
           return json(res, { date, slots: await availableSlots(store, shop, phoneRules(config), date, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")) });
         }
         if (action === "bookings/phone" && method === "POST") {
@@ -1643,9 +1649,9 @@ export function createApp(
             const selection = menuSelection(config, input.menuId, input.optionIds);
             if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
             if (input.expectedPrice !== undefined && input.expectedPrice !== selection!.price) fail(409, tr("料金や所要時間が変わりました。メニューと空き時間を確認し直してください。"));
-            // Today only, and through the same availability as online bookings, so a phone booking can
-            // neither hold a future slot unpaid nor take a slot awaiting its replacement customer.
-            const date = dateIn(new Date(), regionOf(config).timeZone);
+            // The same availability as online bookings, so a phone booking cannot take a slot awaiting
+            // its replacement customer.
+            const date = phoneDate(config, dateIn(input.start, regionOf(config).timeZone));
             const slot = (await availableSlots(store, fresh, phoneRules(config), date, input.menuId, input.staffId, calendar, undefined, input.optionIds)).find(item => item.start === input.start);
             if (!slot) fail(409, tr("この時間は予約できません。空き状況を更新してください"));
             const now = new Date().toISOString();

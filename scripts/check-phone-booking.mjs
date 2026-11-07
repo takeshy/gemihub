@@ -55,6 +55,21 @@ for(const language of ['ja','en'])for(const width of [1280,390]){
  const again=page.locator('.phone-booking').first();await again.locator('summary').click();
  await again.getByLabel(label('電話番号'),{exact:true}).fill('０３－１２３４－５６７８');await again.getByLabel(label('お名前'),{exact:true}).focus();
  await expect(again.getByLabel(label('お名前'),{exact:true})).toHaveValue('Hanako');
+ // Delay lookups to exercise typed names, changed numbers and out-of-order responses.
+ const number=again.getByLabel(label('電話番号'),{exact:true}),name=again.getByLabel(label('お名前'),{exact:true}),pending=[];
+ const lookup='**/customers/phone?*';await page.route(lookup,route=>{pending.push(route);});
+ const reply=async(route,name)=>{const received=page.waitForResponse(route.request().url());await route.fulfill({json:{name}});await(await received).finished();await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));};
+ await name.fill('');await number.fill('03-1111-1111');await name.focus();await expect.poll(()=>pending.length).toBe(1);
+ await name.fill('Typed while searching');await reply(pending.shift(),'Old registered name');
+ await expect(again.getByRole('status')).toBeVisible();await expect(name).toHaveValue('Typed while searching');
+ await name.fill('');await number.fill('03-2222-2222');await name.focus();await expect.poll(()=>pending.length).toBe(1);
+ await number.fill('03-3333-3333');await reply(pending.shift(),'Wrong customer');
+ // A following lookup confirms the previous response was processed without changing the name.
+ await name.focus();await expect.poll(()=>pending.length).toBe(1);await expect(name).toHaveValue('');await expect(again.getByRole('status')).toHaveCount(0);
+ await number.fill('03-4444-4444');await name.focus();await expect.poll(()=>pending.length).toBe(2);
+ await reply(pending.pop(),'Current customer');await expect(name).toHaveValue('Current customer');
+ await name.fill('');await reply(pending.shift(),'Stale customer');await expect(name).toHaveValue('');
+ await page.unroute(lookup);
  // A slot awaiting a replacement goes to a cash customer, and the holder's refund rises.
  const call=async(path,data)=>{const r=await fetch(origin+`/api/public/${shop.slug}${path}`,{method:data===undefined?'GET':'POST',headers:{Cookie:`gemihub_session=${alice}`,Origin:origin,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});return r.json();};
  const menu=config.menus.find(item=>!item.optionFor),date=new Intl.DateTimeFormat('sv',{timeZone:'Asia/Tokyo'}).format(new Date());
@@ -67,7 +82,17 @@ for(const language of ['ja','en'])for(const width of [1280,390]){
  const paidBefore=refunds.length;await replace.getByRole('button',{name:label('差し替えて返金を増やす'),exact:true}).click();
  await expect(page.locator('.booking-card').filter({hasText:'Jiro'})).toContainText('080-5555-6666');
  assert.equal(refunds.length,paidBefore+1);assert.equal(refunds.at(-1),quote.transfer.price);
- assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px: phone booking, customers, name autofill and cash replacement passed`);
+ // Without prepayment, a phone booking can take a later date.
+ const free=(await store.shop(shop.id));free.published={...config,rules:{...config.rules,payment:undefined}};await store.saveShop(free);
+ await page.reload();const later=page.locator('.phone-booking').first();await later.locator('summary').click();
+ const next=new Date(Date.now()+2*86400000),laterDate=new Intl.DateTimeFormat('sv',{timeZone:'Asia/Tokyo'}).format(next);
+ await later.locator('.date-input input[type=text]').fill(laterDate.replaceAll('-','/'));
+ const laterTime=later.getByLabel(label('時間'),{exact:true});await expect.poll(()=>laterTime.locator('option').count()).toBeGreaterThan(1);await laterTime.selectOption({index:1});
+ await later.getByLabel(label('電話番号'),{exact:true}).fill('070-3333-4444');await later.getByLabel(label('お名前'),{exact:true}).fill('Later');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);await page.screenshot({path:`tmp/phone-booking/later-${language}-${width}.png`,fullPage:true});
+ await later.getByRole('button',{name:label('電話予約を登録する'),exact:true}).click();await expect(page.locator('.booking-card').filter({hasText:'070-3333-4444'})).toContainText('Later');
+ assert.equal((await store.bookings(shop.id)).filter(item=>item.name==='Later'&&new Intl.DateTimeFormat('sv',{timeZone:'Asia/Tokyo'}).format(new Date(item.start))===laterDate).length,1);
+ assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px: phone booking, customers, name autofill, cash replacement and later dates without prepayment passed`);
 }
 }catch(e){if(active&&!active.isClosed())await active.screenshot({path:'tmp/phone-booking/failure.png',fullPage:true}).catch(()=>{});throw e;}
 finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));await store.close();}

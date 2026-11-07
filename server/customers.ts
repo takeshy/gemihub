@@ -107,7 +107,9 @@ export const normalizeEmail = (email: string) => email.trim().toLowerCase();
 // Width and punctuation vary as numbers are typed in, so the key keeps only what identifies the line.
 export const phoneCustomerSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  phone: z.string().transform(value => value.normalize("NFKC").trim()).pipe(z.string().regex(/^[0-9+()\- ]{6,20}$/, { error: () => tr("電話番号を確認してください") })),
+  phone: z.string().transform(value => value.normalize("NFKC").trim()).pipe(z.string()
+    .regex(/^[0-9+()\- ]{6,20}$/, { error: () => tr("電話番号を確認してください") })
+    .refine(value => value.replace(/\D/g, "").length >= 6, { error: () => tr("電話番号を確認してください") })),
 });
 export const phoneKey = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 /** A customer known by name and phone only. They hold no account, so they receive no email. */

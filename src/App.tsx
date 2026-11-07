@@ -1141,7 +1141,7 @@ function Reservations({
                   {bookingStaffName(shop.published, b.staffId)}
                 </p>
                 {!b.phone && <span className="small muted">{b.customer}</span>}
-                {b.phone && <p><span className="status transfer">{tr("電話予約")}</span> <a href={`tel:${b.phone}`}>{b.phone}</a> · {tr("当日現金払い：{0}", yen(b.price))}</p>}
+                {b.phone && <p><span className="status transfer">{tr("電話予約")}</span> <a href={`tel:${b.phone}`}>{b.phone}</a> · {tr("店頭で現金払い：{0}", yen(b.price))}</p>}
                 {(() => {
                   const listing = shop.transferListings?.find(listing => listing.bookingId === b.id);
                   return listing && <p className="transfer-status" role="status"><span className="status transfer">{tr("お得な空き枠")}</span> {tr("{0}（{1}%引き）・{2}まで", paid(listing.price, listing.currency), listing.discountPercent, when(listing.deadline))}{listing.review ? tr("・PayPalの決済結果を照合してください") : listing.buying ? tr("・代わりの方が支払い手続き中") : ""}</p>;

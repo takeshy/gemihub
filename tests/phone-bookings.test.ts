@@ -60,17 +60,34 @@ test("a phone booking takes today's slot, bypassing online cut-offs, and records
   assert.ok(!(await f.call(`${f.base}/phone-slots?menu=${f.menu.id}`)).body.slots.some((slot: { start: string }) => slot.start === at), "the slot is taken");
 });
 
-test("only today can be booked by phone, and only by operators", async t => {
+test("with prepayment on, only today can be booked by phone, and only by operators", async t => {
   const f = await fixture(t);
+  const shop = (await f.store.shop(f.shop.id))!;
+  shop.published = { ...f.config, rules: { ...f.config.rules, payment: { enabled: true, refundTiers: [{ hoursBefore: 0, percent: 0 }] } } }; await f.store.saveShop(shop);
   assert.equal((await f.call(`${f.base}/phone`, f.input(start(tomorrow, "13:00")))).status, 409);
+  assert.equal((await f.call(`${f.base}/phone-slots?menu=${f.menu.id}&date=${tomorrow}`)).body.date, today, "the requested date is ignored");
   assert.equal((await f.call(`${f.base}/phone`, f.input(start(today, "09:00")))).status, 409, "a past time");
   assert.equal((await f.call(`${f.base}/phone`, f.input(start(today, "13:00")), "alice")).status, 403);
   assert.equal((await f.call(`${f.base}/phone-slots?menu=${f.menu.id}`, undefined, "alice")).status, 403);
-  for (const phone of ["call me", "", "123"]) assert.equal((await f.call(`${f.base}/phone`, { ...f.input(start(today, "13:00")), phone })).status, 400);
+  for (const phone of ["call me", "", "123", "------", "((()))", "+ (12) 345", "１２３－－－"]) assert.equal((await f.call(`${f.base}/phone`, { ...f.input(start(today, "13:00")), phone })).status, 400);
   const { phone: _phone, ...withoutPhone } = f.input(start(today, "13:00"));
   assert.equal((await f.call(`${f.base}/phone`, withoutPhone)).status, 400, "a phone booking requires a number");
   assert.equal((await f.call(`${f.base}/phone`, { ...f.input(start(today, "13:00")), expectedPrice: 1 })).status, 409);
   assert.deepEqual(await f.store.bookings(f.shop.id), []);
+});
+
+test("with prepayment off, a phone booking can take a later date within the booking window", async t => {
+  const f = await fixture(t), at = start(tomorrow, "13:00");
+  const offered = await f.call(`${f.base}/phone-slots?menu=${f.menu.id}&date=${tomorrow}`);
+  assert.equal(offered.body.date, tomorrow);
+  assert.ok(offered.body.slots.some((slot: { start: string }) => slot.start === at));
+  const saved = await f.call(`${f.base}/phone`, f.input(at));
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal(saved.body.booking.start, at);
+  assert.equal((await f.call(`${f.base}/phone`, f.input(at))).status, 409, "the slot is taken");
+  assert.equal((await f.call(`${f.base}/phone`, f.input(start("2026-11-05", "13:00")))).status, 409, "a past date");
+  assert.equal((await f.call(`${f.base}/phone`, f.input(start("2027-06-01", "13:00")))).status, 409, "beyond the booking window");
+  assert.equal((await f.call(`${f.base}/phone-slots?menu=${f.menu.id}&date=nonsense`)).body.slots.length, 0);
 });
 
 test("phone and online bookings share inventory: an active booking blocks the slot and retries do not double-book", async t => {
@@ -102,6 +119,7 @@ test("a customer can be registered by name and phone alone, and later bookings j
   const phoneList = async () => ((await f.call(customers)).body as CustomerSummary[]).filter(customer => customer.phone);
   assert.equal((await f.call(`${customers}/phone`, { name: "Taro", phone: "０９０－１２３４－５６７８" })).status, 200);
   assert.equal((await f.call(`${customers}/phone`, { name: "Taro" })).status, 400, "a phone number is required");
+  for (const phone of ["------", "((()))", "+ (12) 345"]) assert.equal((await f.call(`${customers}/phone`, { name: "Invalid", phone })).status, 400);
   assert.equal((await f.call(`${customers}/phone`, { name: "Taro", phone: "090-1234-5678" }, "alice")).status, 403);
   const listed = await phoneList();
   assert.deepEqual(listed.map(customer => [customer.name, customer.visitCount]), [["Taro", 0]], "listed before any booking");
@@ -154,6 +172,7 @@ test("the shop replaces a listed slot with a cash customer and raises the holder
   assert.equal((await f.replace({}, "alice")).status, 403);
   assert.equal((await f.replace({ expectedPrice: price + 1 })).status, 409);
   assert.equal((await f.replace({ phone: "" })).status, 400, "a replacement requires a phone number");
+  assert.equal((await f.replace({ phone: "------" })).status, 400, "punctuation alone is not a phone number");
   const requestId = randomUUID(), done = await f.replace({ requestId });
   assert.equal(done.status, 200, JSON.stringify(done.body));
   assert.equal(done.body.booking.price, price); assert.equal(done.body.booking.customer, "tel:0312345678"); assert.equal(done.body.booking.start, f.at);
