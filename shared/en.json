@@ -3738,6 +3738,7 @@
   "ドラッグして対応状況を変更": "Drag to change status",
   "返信先が更新されています。最新の状態を確認してください。": "The recipient has changed. Check the latest status.",
   "送信できませんでした": "Not delivered",
+  "添付の受付上限に達しました。ファイルを外して送信してください。": "This shop has reached its attachment limit for today. Remove the files and send again.",
   "古い完了済みのレコードを表示するには期間指定してください。": "Select a date range to show older resolved inquiries.",
   "カードはドラッグ＆ドロップで対応状況を変更できます。スマートフォンやキーボードでは、カードの対応状況を選んでください。": "Drag and drop cards to change their status. On mobile or with a keyboard, use the status selector on each card.",
   "画面を再読み込みして、添付ファイルを選び直してください。": "Reload the page and select the attachments again.",
@@ -3746,5 +3747,13 @@
   "古い完了案件を期間指定で表示": "Show older resolved inquiries by date range",
   "最近の対応済みは初めから表示します。1ヶ月以上前に完了したお問い合わせは非表示です。古い案件を確認するときは受付日の開始か終了を指定してください。完了日がない古い記録は受付日を基準にします。": "Recently resolved inquiries appear by default. Inquiries resolved at least one month ago are hidden. To see older cases, set either receipt-date bound. Older records without a completion date use their receipt date.",
   "お客様のお問い合わせフォーム、手動受付、対応の記録、メール返信で「画像・ファイルを添付」を使えます。5ファイルまで、1ファイル5MB・合計10MB以内で選びます。保存後は本文や履歴からダウンロードできます。": "Use Attach images or files on customer inquiry forms, manual reception, interaction records and email replies. Select up to five files, 5MB each and 10MB total. Download saved files from the initial message or conversation history.",
-  "メール返信では、その返信に選んだファイルだけを送ります。社内メモ・電話対応・受信した連絡の添付は送信しません。お客様フォームに付けたファイルは受付メールにも添付します。添付は店主の非公開Google Driveに保存し、運営メンバーだけが管理画面から確認できます。": "Email replies send only the files selected for that reply. Files on internal notes, phone records and incoming messages are never emailed. Files submitted through the customer form also appear on the receipt email. Files stay in the owner's private Google Drive; only operators can access them in the management screen."
+  "メール返信では、その返信に選んだファイルだけを送ります。社内メモ・電話対応・受信した連絡の添付は送信しません。お客様フォームに付けたファイルは受付メールにも添付します。添付は店主の非公開Google Driveに保存し、運営メンバーだけが管理画面から確認できます。": "Email replies send only the files selected for that reply. Files on internal notes, phone records and incoming messages are never emailed. Files submitted through the customer form also appear on the receipt email. Files stay in the owner's private Google Drive; only operators can access them in the management screen.",
+  "対応の種類": "Response type",
+  "メールを送信し、やりとりの履歴にも保存します。": "Send an email and save it to the conversation history.",
+  "この対応は記録のみ保存し、メールは送信しません。": "Save this response to the history without sending an email.",
+  "送信して保存": "Send and save",
+  "対応の種類を切り替えてメール送信": "Switch response types and send email",
+  "「対応を記録する」で社内メモ・電話対応・お客様からの連絡・メール返信を選び、同じ入力欄で内容と添付を登録します。メール以外は「記録を追加」で保存し、お客様へ送信しません。履歴は新しい順に10件ずつ表示し、過去の内容も残します。": "In Record a response, choose an internal note, phone call, customer message or email reply. Enter the content and attachments in the same form. For non-email responses, use Add record; nothing is sent to the customer. History shows ten entries per page, newest first, and retains older entries.",
+  "メールを送る場合は、対応の種類で「メール返信」を選び、返信先と対応内容を確認して「送信して保存」を押します。メール本文と添付も履歴に残り、送信待ち・送信済み・再試行中を区別します。メールと記録の下書きは、種類を切り替えてもそれぞれ残ります。メール送信だけでは対応済みになりません。": "To send email, select Email reply, check the recipient and response content, then press Send and save. The email text and attachments are saved to the history, with queued, sent and retrying states. Email and record drafts are retained separately when switching types. Sending email does not resolve the inquiry.",
+  "対応の種類を選び、メール返信は「送信して保存」で履歴にも残します。": "Choose the response type. Email replies use Send and save to keep a history record too."
 }

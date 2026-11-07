@@ -6,7 +6,7 @@ import { useApi } from "./api";
 import { useShopDisplay } from "./money";
 import { createRequestId } from "./request-id";
 import { Pagination, usePagination } from "./Pagination";
-import { InquiryAttachments, InquiryFilePicker, readInquiryFiles, useInquiryFiles } from "./InquiryFiles";
+import { InquiryAttachments, InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 
 export function InquiryHistory({ inquiry, shopId }: { inquiry: Inquiry; shopId: string }) {
   const { shopTime } = useShopDisplay();
@@ -69,34 +69,68 @@ export function InquiryContact({ inquiry, shopId, onChanged }: { inquiry: Inquir
   </form></details>;
 }
 
-export function InquiryRecordForm({ shopId, inquiryId, onChanged }: { shopId: string; inquiryId: string; onChanged: () => Promise<void> }) {
+export function InquiryRecordForm({ shopId, inquiry, onChanged, onReload, disabled = false, onBusyChange }: {
+  shopId: string;
+  inquiry: Inquiry;
+  onChanged: () => Promise<void>;
+  onReload: () => Promise<void>;
+  disabled?: boolean;
+  onBusyChange: (busy: boolean) => void;
+}) {
   const api = useApi();
-  const [kind, setKind] = useState<Exclude<InquiryChannel, "email">>("note"), [text, setText] = useState("");
+  const [kind, setKind] = useState<InquiryChannel>("note");
+  // Email and record drafts stay separate, so switching to email never copies a private memo into it.
+  const [drafts, setDrafts] = useState({ record: "", email: "" });
+  const recordFiles = useInquiryFiles(), emailFiles = useInquiryFiles();
+  const email = kind === "email", mode = email ? "email" : "record";
+  const text = drafts[mode], selection = email ? emailFiles : recordFiles;
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const saving = useRef(false);
-  const pending = useRef<{ serialized: string; requestId: string } | undefined>(undefined);
-  const selection = useInquiryFiles();
+  const recordPending = useRef<{ serialized: string; requestId: string } | undefined>(undefined);
+  const emailPending = useRef<{ serialized: string; requestId: string; previousReply: string; previousEmail: string } | undefined>(undefined);
+  const locked = busy || disabled;
+  function setWorking(value: boolean) { saving.current = value; setBusy(value); onBusyChange(value); }
+  async function reload() {
+    if (saving.current || disabled) return;
+    setWorking(true);
+    try { await onReload(); emailPending.current = undefined; setError(""); }
+    catch (error) { setError(error instanceof Error ? error.message : tr("記録を保存できませんでした。")); }
+    finally { setWorking(false); }
+  }
   return <form className="inquiry-record-form" aria-label={tr("対応を記録する")} onSubmit={event => {
-    event.preventDefault(); if (!text.trim() || saving.current) return;
-    const fields = { kind, text: text.trim() };
-    saving.current = true; setBusy(true); setError(""); setNotice("");
+    event.preventDefault(); if (!text.trim() || saving.current || disabled || email && !inquiry.email) return;
+    const value = text.trim(), previousReply = inquiry.reply, previousEmail = inquiry.email;
+    setWorking(true); setError(""); setNotice("");
     void (async () => {
       try {
-        const fieldsWithFiles = { ...fields, ...await readInquiryFiles(selection.files) };
-        const serialized = JSON.stringify(fieldsWithFiles);
-        const requestId = pending.current?.serialized === serialized ? pending.current.requestId : createRequestId();
-        pending.current = { serialized, requestId };
-        await api(`/api/shops/${shopId}/inquiries/${inquiryId}/interactions`, { ...fieldsWithFiles, requestId });
-        await onChanged(); setText(""); selection.clear(); pending.current = undefined; setNotice(tr("対応の記録を追加しました。メールは送信していません。"));
+        const fields = { text: value, ...await selection.read() };
+        const serialized = JSON.stringify({ kind, ...fields });
+        if (email) {
+          const action = emailPending.current?.serialized === serialized ? emailPending.current : { serialized, requestId: createRequestId(), previousReply, previousEmail };
+          emailPending.current = action;
+          await api(`/api/shops/${shopId}/inquiries/${inquiry.id}/reply`, { ...fields, requestId: action.requestId, previousReply: action.previousReply, previousEmail: action.previousEmail });
+        } else {
+          const action = recordPending.current?.serialized === serialized ? recordPending.current : { serialized, requestId: createRequestId() };
+          recordPending.current = action;
+          await api(`/api/shops/${shopId}/inquiries/${inquiry.id}/interactions`, { ...fields, kind, requestId: action.requestId });
+        }
+        await onChanged();
+        setDrafts(current => ({ ...current, [mode]: "" })); selection.clear();
+        if (email) emailPending.current = undefined; else recordPending.current = undefined;
+        setNotice(email ? tr("返信を受け付けました。") : tr("対応の記録を追加しました。メールは送信していません。"));
       } catch (error) { setError(error instanceof Error ? error.message : tr("記録を保存できませんでした。")); }
-      finally { saving.current = false; setBusy(false); }
+      finally { setWorking(false); }
     })();
   }}>
     <h4>{tr("対応を記録する")}</h4>
-    <label>{tr("記録の種類")}<select aria-label={tr("記録の種類")} value={kind} disabled={busy} onChange={event => setKind(event.target.value as typeof kind)}>{(["note", "phone", "customer"] as const).map(value => <option key={value} value={value}>{inquiryChannelLabel(value)}</option>)}</select></label>
-    <label>{tr("対応内容")}<textarea aria-label={tr("対応内容")} value={text} onChange={event => setText(event.target.value)} disabled={busy} required maxLength={5000} rows={3} /></label>
-    <InquiryFilePicker selection={selection} disabled={busy} />
-    {error && <p className="alert" role="alert">{error}</p>}{notice && <p role="status" className="notice">{notice}</p>}
-    <button type="submit" disabled={busy || !text.trim()}>{busy ? tr("保存しています…") : tr("記録を追加")}</button>
+    <label>{tr("対応の種類")}<select aria-label={tr("対応の種類")} value={kind} disabled={locked} onChange={event => { setKind(event.target.value as InquiryChannel); setError(""); setNotice(""); }}>{(["note", "phone", "customer", "email"] as const).map(value => <option key={value} value={value} disabled={value === "email" && !inquiry.email}>{inquiryChannelLabel(value)}</option>)}</select></label>
+    {email && <p className="small muted">{tr("返信先：")}{inquiry.email}</p>}
+    {!inquiry.email && <p className="small muted">{tr("メールアドレスがないためメールを送信できません。電話対応やメモとして記録してください。")}</p>}
+    <p className="small muted">{email ? tr("メールを送信し、やりとりの履歴にも保存します。") : tr("この対応は記録のみ保存し、メールは送信しません。")}</p>
+    <label>{tr("対応内容")}<textarea aria-label={tr("対応内容")} value={text} onChange={event => setDrafts(current => ({ ...current, [mode]: event.target.value }))} disabled={locked} required maxLength={5000} rows={4} placeholder={email ? tr("お客様への返信を入力してください") : undefined} /></label>
+    <InquiryFilePicker key={mode} selection={selection} disabled={locked} />
+    {error && <div className="alert" role="alert"><p>{error}</p><button type="button" disabled={locked} onClick={() => void reload()}>{tr("最新の状態を確認")}</button></div>}
+    {notice && <p role="status" className="notice">{notice}</p>}
+    <button type="submit" className={email ? "primary" : undefined} disabled={locked || !text.trim() || email && !inquiry.email}>{busy ? tr("保存しています…") : email ? tr("送信して保存") : tr("記録を追加")}</button>
   </form>;
 }

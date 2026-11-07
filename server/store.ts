@@ -305,7 +305,7 @@ export class Store {
     else if (commit.status === "pending") commit.actions.push(action);
   }
   async cleanup() {
-    for (const kind of ["session", "oauth", "ticket", "emailLogin", "emailLoginLimit", "visual", "imageGenerationData", "settingsAiProposal"]) {
+    for (const kind of ["session", "oauth", "ticket", "emailLogin", "emailLoginLimit", "visual", "imageGenerationData", "settingsAiProposal", "inquiryQuota"]) {
       const entries = this.memory
         ? [...this.values.values()].filter((e) => e.kind === kind)
         : (

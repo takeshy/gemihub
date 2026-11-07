@@ -1,8 +1,37 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { google } from "googleapis";
-import { googleCustomerFiles } from "../server/customer-files.ts";
-import type { Shop } from "../server/store.ts";
+import { createHash } from "node:crypto";
+import { checkedFileSizes, googleCustomerFiles, memoryCustomerFiles, readAttachment, reserveAttachments } from "../server/customer-files.ts";
+import { customerFileInputSchema } from "../server/customers.ts";
+import { Store, type Shop } from "../server/store.ts";
+
+test("attachment reads reject same-size content changes and still allow renaming", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("checksum-owner@example.com"), files = memoryCustomerFiles(store);
+  const original = Buffer.from("original"), changed = Buffer.from("modified");
+  assert.equal(changed.length, original.length);
+  const input = [{ name: "document.txt", mimeType: "text/plain", data: original.toString("base64") }];
+  const [attachment] = await reserveAttachments(files, "", input, checkedFileSizes(input));
+  assert.equal(attachment.sha256, createHash("sha256").update(original).digest("hex"));
+  assert.equal(customerFileInputSchema.safeParse({ ...input[0], sha256: attachment.sha256 }).success, false, "clients cannot provide the stored checksum");
+  await files.upload(shop, "", attachment.id, input[0]);
+  assert.deepEqual(await readAttachment(files, shop, "", attachment), original);
+  await files.rename(shop, "", attachment.id, "renamed.txt");
+  assert.deepEqual(await readAttachment(files, shop, "", { ...attachment, name: "renamed.txt" }), original);
+  await files.upload(shop, "", attachment.id, { ...input[0], data: changed.toString("base64") });
+  await assert.rejects(() => readAttachment(files, shop, "", attachment), { status: 409 });
+});
+
+test("legacy attachment reads remain compatible with metadata without a checksum", async t => {
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("legacy-files@example.com"), files = memoryCustomerFiles(store);
+  const file = { name: "legacy.txt", mimeType: "text/plain", data: Buffer.from("legacy").toString("base64") };
+  await files.upload(shop, "", "legacy-file", file);
+  const attachment = { id: "legacy-file", name: file.name, mimeType: file.mimeType, size: 6 };
+  assert.equal((await readAttachment(files, shop, "", attachment)).toString(), "legacy");
+  await assert.rejects(() => readAttachment(files, shop, "", { ...attachment, size: 7 }), { status: 409 });
+});
 
 test("CRM files stay in the owner's Drive and repeated upload validates the reserved file identity", async t => {
   t.after(() => mock.restoreAll());

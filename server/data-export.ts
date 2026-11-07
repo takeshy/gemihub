@@ -5,8 +5,8 @@ import type { ImageUpload } from "./menu-images.ts";
 export const exportColumns = {
   bookings: ["id", "customer", "name", "menuId", "staffId", "start", "end", "status", "createdAt", "updatedBy", "updatedAt", "requestKey", "price", "message", "payment", "optionIds", "items", "coupon", "phone"],
   customers: ["email", "name", "birthDate", "gender", "phone", "updatedBy", "updatedAt"],
-  inquiries: ["id", "email", "name", "message", "reply", "status", "at", "phone", "subject", "source", "createdBy"],
-  inquiryInteractions: ["id", "inquiryId", "kind", "text", "at", "by", "to", "delivery", "legacy"],
+  inquiries: ["id", "email", "name", "message", "reply", "status", "at", "phone", "subject", "source", "createdBy", "completedAt", "attachments"],
+  inquiryInteractions: ["id", "inquiryId", "kind", "text", "at", "by", "to", "delivery", "legacy", "attachments"],
   members: ["email", "accepted", "status", "invitedAt", "acceptedAt", "revokedAt"],
   posts: ["id", "version", "address", "draft", "published", "publishedAt"],
   customerNotes: ["id", "email", "text", "attachments", "createdAt", "createdBy", "status", "updatedAt", "updatedBy"],

@@ -5,7 +5,8 @@ import { inquiryFilesInputSchema } from "../shared/inquiry-files.ts";
 import { digest } from "./auth.ts";
 import { inquiryStatus, inquiryStatusSchema, manualInquirySchema, publicInquirySchema, inquiryInteractionSchema, type InquiryInteraction } from "./inquiries.ts";
 import type { Inquiry, CustomerAttachment } from "./customers.ts";
-import { prepareInquiryFiles, type InquiryFileStorage } from "./inquiry-files.ts";
+import { checkedFileSizes } from "./customer-files.ts";
+import { prepareInquiryFiles, reservePublicInquiry, uploadedInquiryFiles, type InquiryFileStorage } from "./inquiry-files.ts";
 import type { Shop, Store } from "./store.ts";
 
 /** The worker runs every minute, so a reply stops retrying after about one day of failed sends. */
@@ -31,16 +32,49 @@ function setStatus(q: Inquiry, next: string) {
   }
   q.status = next;
 }
+const replySchema = z.object({ text: z.string().trim().min(1).max(5000), requestId: z.uuid().optional(), previousReply: z.string().max(5000).optional(), previousEmail: z.string().max(320).optional(), status: inquiryStatusSchema.optional(), files: inquiryFilesInputSchema.optional() }).strict();
+function parseEntry(action: string, data: unknown) {
+  const input = action === "reply" ? replySchema.parse(data) : inquiryInteractionSchema.parse(data);
+  if (input.files?.length && !input.requestId) fail(400, tr("画面を再読み込みして、添付ファイルを選び直してください。"));
+  return input;
+}
+function assertReplyAllowed(store: Store, shop: Shop, q: Inquiry, input: ReturnType<typeof parseEntry>) {
+  if (!q.email) fail(400, tr("メールアドレスがないためメールを送信できません。電話対応やメモとして記録してください。"));
+  const previous = "previousReply" in input ? input.previousReply : undefined;
+  if (previous !== undefined && previous !== q.reply) fail(409, tr("他の担当者が返信しています。最新の状態を確認してください"));
+  const reviewedEmail = "previousEmail" in input ? input.previousEmail : undefined;
+  if (reviewedEmail === undefined || reviewedEmail !== q.email) fail(409, tr("返信先が更新されています。最新の状態を確認してください。"));
+  if (!shop.google && !shop.judge && !store.memory) fail(503, tr("店主の Google 再接続が必要です"));
+}
+/**
+ * Uploads attachments before the shop lock, so a slow transfer never blocks other shop operations.
+ * Accepted requests stop here without touching storage; writeInquiry repeats every check under the lock.
+ */
+export async function stageInquiryFiles(store: Store, shop: Shop, id: string | undefined, action: string, data: unknown, storage: InquiryFileStorage) {
+  if (!(data as { files?: unknown[] } | undefined)?.files?.length) return;
+  if (!id) {
+    const input = manualInquirySchema.parse(data), inquiryId = digest(`${shop.id}:manual-inquiry:${input.requestId}`);
+    if (!await store.get("inquiryCreateRequest", inquiryId)) await prepareInquiryFiles(store, shop, inquiryId, input.files, storage);
+    return;
+  }
+  if (action !== "reply" && action !== "interactions") return;
+  const q = await store.get<Inquiry>("inquiry", id);
+  if (!q || q.shopId !== shop.id) fail(404, tr("お問い合わせがありません"));
+  const input = parseEntry(action, data), requestKey = digest(`${shop.id}:${q.id}:${input.requestId}`);
+  if (await store.get("inquiryEntryRequest", requestKey) || await store.get("inquiryReplyRequest", requestKey)) return;
+  if (action === "reply") assertReplyAllowed(store, shop, q, input);
+  await prepareInquiryFiles(store, shop, requestKey, input.files, storage);
+}
 type InquiryMail = { to: string; subject: string; body: string; inquiryInteractionId: string; attachments?: CustomerAttachment[] };
-/** Caller holds the shop lock. Upload journals persist before the atomic record/mail transaction. */
-export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>, storage?: InquiryFileStorage) {
+/** Caller holds the shop lock and has staged attachments; the record and mail intent commit atomically. */
+export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>) {
   if (!id) {
     const input = manualInquirySchema.parse(data), inquiryId = digest(`${shop.id}:manual-inquiry:${input.requestId}`), hash = digest(JSON.stringify(input));
     const receipt = await store.get<{ hash: string }>("inquiryCreateRequest", inquiryId);
     if (receipt && receipt.hash !== hash) fail(409, tr("お問い合わせの内容が変わっています。新しい操作として作成してください。"));
     const existing = await store.get<Inquiry>("inquiry", inquiryId);
     if (receipt && existing?.shopId === shop.id) return { inquiry: existing };
-    const attachments = await prepareInquiryFiles(store, shop, inquiryId, input.files, storage);
+    const attachments = await uploadedInquiryFiles(store, shop, inquiryId, input.files);
     const { requestId: _requestId, files: _files, ...values } = input;
     const inquiry: Inquiry = { ...values, email: input.email.trim().toLowerCase(), id: inquiryId, shopId: shop.id, reply: "", status: "new", at: new Date().toISOString(), createdBy: actor, ...(attachments.length ? { attachments } : {}) };
     return store.transaction(async () => { await store.put("inquiry", inquiryId, inquiry); await store.put("inquiryCreateRequest", inquiryId, { shopId: shop.id, hash }); return { inquiry }; });
@@ -61,8 +95,7 @@ export async function writeInquiry(store: Store, shop: Shop, actor: string, id: 
     setStatus(q, input.status); await store.put("inquiry", q.id, q); return { ok: true };
   }
   const email = action === "reply";
-  const input = email ? z.object({ text: z.string().trim().min(1).max(5000), requestId: z.uuid().optional(), previousReply: z.string().max(5000).optional(), previousEmail: z.string().max(320).optional(), status: inquiryStatusSchema.optional(), files: inquiryFilesInputSchema.optional() }).strict().parse(data) : inquiryInteractionSchema.parse(data);
-  if (input.files?.length && !input.requestId) fail(400, tr("画面を再読み込みして、添付ファイルを選び直してください。"));
+  const input = parseEntry(action, data);
   const requestKey = digest(`${shop.id}:${q.id}:${input.requestId || randomUUID()}`);
   if (email) {
     const legacy = await store.get<{ hash: string; done: boolean }>("inquiryReplyRequest", requestKey);
@@ -74,15 +107,8 @@ export async function writeInquiry(store: Store, shop: Shop, actor: string, id: 
   const receipt = await store.get<{ hash: string; done: boolean }>("inquiryEntryRequest", requestKey);
   if (receipt && receipt.hash !== hash) fail(409, tr("記録の内容が変わっています。新しい操作として保存してください。"));
   if (receipt?.done) return { ok: true };
-  if (email) {
-    if (!q.email) fail(400, tr("メールアドレスがないためメールを送信できません。電話対応やメモとして記録してください。"));
-    const previous = "previousReply" in input ? input.previousReply : undefined;
-    if (previous !== undefined && previous !== q.reply) fail(409, tr("他の担当者が返信しています。最新の状態を確認してください"));
-    const reviewedEmail = "previousEmail" in input ? input.previousEmail : undefined;
-    if (reviewedEmail === undefined || reviewedEmail !== q.email) fail(409, tr("返信先が更新されています。最新の状態を確認してください。"));
-    if (!shop.google && !shop.judge && !store.memory) fail(503, tr("店主の Google 再接続が必要です"));
-  }
-  const attachments = await prepareInquiryFiles(store, shop, requestKey, input.files, storage);
+  if (email) assertReplyAllowed(store, shop, q, input);
+  const attachments = await uploadedInquiryFiles(store, shop, requestKey, input.files);
   return store.transaction(async () => {
     if (email) {
       if (q.reply && !q.emailHistory && !(await store.records<InquiryInteraction>("inquiryInteraction", shop)).some(entry => entry.inquiryId === q.id && entry.kind === "email")) {
@@ -99,14 +125,29 @@ export async function writeInquiry(store: Store, shop: Shop, actor: string, id: 
   });
 }
 
-export async function createPublicInquiry(store: Store, shop: Shop, email: string, data: unknown, notify: (q: Inquiry) => Promise<void>, storage?: InquiryFileStorage) {
+function parsePublicInquiry(shop: Shop, email: string, data: unknown) {
   const input = publicInquirySchema.parse(data);
   if (input.files?.length && !input.requestId) fail(400, tr("画面を再読み込みして、添付ファイルを選び直してください。"));
-  const id = digest(`${shop.id}:${email}:public-inquiry:${input.requestId || randomUUID()}`), hash = digest(JSON.stringify(input));
+  return { input, id: digest(`${shop.id}:${email}:public-inquiry:${input.requestId || randomUUID()}`), hash: digest(JSON.stringify(input)) };
+}
+async function publicReceipt(store: Store, id: string, hash: string) {
   const receipt = await store.get<{ hash: string }>("publicInquiryRequest", id);
   if (receipt && receipt.hash !== hash) fail(409, tr("お問い合わせの内容が変わっています。新しい操作として作成してください。"));
-  if (receipt) return { ok: true, id };
-  const attachments = await prepareInquiryFiles(store, shop, id, input.files, storage);
+  return !!receipt;
+}
+/** Runs before the shop lock: applies submission limits, then uploads. An accepted retry needs neither. */
+export async function stagePublicInquiry(store: Store, shop: Shop, email: string, data: unknown, storage: InquiryFileStorage) {
+  const { input, id, hash } = parsePublicInquiry(shop, email, data);
+  if (await publicReceipt(store, id, hash)) return;
+  const bytes = checkedFileSizes(input.files || []).reduce((sum, size) => sum + size, 0);
+  await reservePublicInquiry(store, shop, email, input.requestId || id, bytes);
+  await prepareInquiryFiles(store, shop, id, input.files, storage);
+}
+/** Caller holds the shop lock and has staged the same request. */
+export async function createPublicInquiry(store: Store, shop: Shop, email: string, data: unknown, notify: (q: Inquiry) => Promise<void>) {
+  const { input, id, hash } = parsePublicInquiry(shop, email, data);
+  if (await publicReceipt(store, id, hash)) return { ok: true, id };
+  const attachments = await uploadedInquiryFiles(store, shop, id, input.files);
   const q: Inquiry = { id, shopId: shop.id, email, name: input.name, message: input.message, reply: "", status: "new", source: "customer", at: new Date().toISOString(), ...(attachments.length ? { attachments } : {}) };
   return store.transaction(async () => { await store.put("inquiry", id, q); await notify(q); await store.put("publicInquiryRequest", id, { shopId: shop.id, hash }); return { ok: true, id }; });
 }

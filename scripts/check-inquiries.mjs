@@ -110,12 +110,13 @@ try {
     await bookings.waitFor();
     assert.ok((await bookings.textContent()).includes("担当："));
     assert.ok((await bookings.textContent()).includes("¥"));
+    await inquiry.getByRole("combobox", { name: "対応の種類", exact: true }).selectOption("email");
     const text = `ご来店時にお色をご相談しましょう。${width}`;
     await inquiry
-      .getByRole("textbox", { name: "返信内容", exact: true })
+      .getByRole("textbox", { name: "対応内容", exact: true })
       .fill(text);
     await inquiry
-      .getByRole("button", { name: "メールで返信", exact: true })
+      .getByRole("button", { name: "送信して保存", exact: true })
       .click();
     await inquiry
       .getByRole("status")
@@ -130,7 +131,7 @@ try {
     assert.ok(
       (await inquiry.locator(".inquiry-history").textContent()).includes(text),
     );
-    assert.equal(await inquiry.getByRole("textbox", { name: "返信内容", exact: true }).inputValue(), "");
+    assert.equal(await inquiry.getByRole("textbox", { name: "対応内容", exact: true }).inputValue(), "");
     console.log(`${width}px: reply saved`);
     await page
       .getByRole("button", { name: "← お問い合わせ一覧へ", exact: true })

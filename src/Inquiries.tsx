@@ -4,9 +4,8 @@ import React, { useRef, useState } from "react";
 import { DateInput } from "./DateInput";
 import { useApi } from "./api";
 import { Pagination, usePagination } from "./Pagination";
-import { createRequestId } from "./request-id";
 import type { Inquiry } from "./App";
-import { InquiryAttachments, InquiryFilePicker, readInquiryFiles, useInquiryFiles } from "./InquiryFiles";
+import { InquiryAttachments } from "./InquiryFiles";
 import { InquiryCreate } from "./InquiryCreate";
 import { InquiryHistory, InquiryRecordForm, InquiryContact } from "./InquiryHistory";
 import "./Inquiries.css";
@@ -109,7 +108,7 @@ export function Inquiries({
           />
         </label>
       </div>
-      {!from && !to && <p className="small muted">{tr("古い完了済みのレコードを表示するには期間指定してください。")}</p>}
+      {(view === "board" || showCompleted) && !from && !to && <p className="small muted">{tr("古い完了済みのレコードを表示するには期間指定してください。")}</p>}
       {view === "board" && <p className="small muted">{tr("カードはドラッグ＆ドロップで対応状況を変更できます。スマートフォンやキーボードでは、カードの対応状況を選んでください。")}</p>}
       {view === "list" && <label className="inquiry-completed-toggle">
         <input
@@ -183,7 +182,7 @@ export function CustomerInquiry({
   onReload: () => Promise<void>;
 }) {
   const api = useApi();
-  const { shopTime, displayTimeZone } = useShopDisplay();
+  const { shopTime } = useShopDisplay();
   const when = (at?: string) =>
     at && Number.isFinite(Date.parse(at))
       ? shopTime(at, {
@@ -195,15 +194,8 @@ export function CustomerInquiry({
         })
       : tr("日時未記録");
 
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const selection = useInquiryFiles();
-  const sending = useRef(false);
-  const pending = useRef<
-    { serialized: string; id: string; previousReply: string; previousEmail: string } | undefined
-  >(undefined);
   async function run(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -253,8 +245,7 @@ export function CustomerInquiry({
       </div>
       <InquiryContact inquiry={inquiry} shopId={shopId} onChanged={onChanged} />
       <InquiryHistory inquiry={inquiry} shopId={shopId} />
-      <InquiryRecordForm shopId={shopId} inquiryId={inquiry.id} onChanged={onChanged} />
-      {!inquiry.email && <p className="small muted">{tr("メールアドレスがないためメールを送信できません。電話対応やメモとして記録してください。")}</p>}
+
       {error && (
         <div className="alert" role="alert">
           <p>{error}</p>
@@ -264,7 +255,6 @@ export function CustomerInquiry({
             onClick={() =>
               void run(async () => {
                 await onReload();
-                pending.current = undefined;
               })
             }
           >
@@ -276,48 +266,7 @@ export function CustomerInquiry({
           {notice}
         </p>
       )}
-      {inquiry.email && <form className="inquiry-reply-form" aria-label={tr("メールで返信")}
-        onSubmit={(event) => {
-          event.preventDefault();
-          const value = text.trim();
-          if (!value || busy || sending.current) return;
-          const previousReply = inquiry.reply, previousEmail = inquiry.email;
-          sending.current = true;
-          void run(async () => {
-            try {
-              const fields = { text: value, ...await readInquiryFiles(selection.files) };
-              const serialized = JSON.stringify(fields);
-              const action = pending.current?.serialized === serialized ? pending.current : { serialized, id: createRequestId(), previousReply, previousEmail };
-              pending.current = action;
-              await api(`/api/shops/${shopId}/inquiries/${inquiry.id}/reply`, {
-                ...fields, requestId: action.id, previousReply: action.previousReply, previousEmail: action.previousEmail,
-              });
-              pending.current = undefined;
-              setText(""); selection.clear();
-              await onChanged();
-              setNotice(tr("返信を受け付けました。"));
-            } finally { sending.current = false; }
-          });
-        }}
-      >
-        <label>
-          {tr("返信内容")}<textarea
-            aria-label={tr("返信内容")}
-            required
-            rows={4}
-            maxLength={5000}
-            disabled={busy}
-            value={text}
-            onChange={(event) => setText(event.target.value)}
-            placeholder={tr("お客様への返信を入力してください")}
-          />
-        </label>
-        <InquiryFilePicker selection={selection} disabled={busy} />
-        <p className="small muted">{tr("返信先：")}{inquiry.email}</p>
-        <button className="primary" disabled={busy || !text.trim()}>
-          {busy ? tr("保存しています…") : tr("メールで返信")}
-        </button>
-      </form>}
+      <InquiryRecordForm shopId={shopId} inquiry={inquiry} onChanged={onChanged} onReload={onReload} disabled={busy} onBusyChange={setBusy} />
     </article>
   );
 }

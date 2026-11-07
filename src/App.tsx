@@ -1,4 +1,4 @@
-import { InquiryFilePicker, readInquiryFiles, useInquiryFiles } from "./InquiryFiles";
+import { InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 import { serviceName } from "../shared/brand";
 import { Brand } from "./Brand";
 import { Pagination, usePagination } from "./Pagination";
@@ -1824,7 +1824,7 @@ export function PublicShop({
                 inquirySending.current = true;
                 run(async () => {
                   try {
-                    const fields = { name, message, ...await readInquiryFiles(inquiryFiles.files) };
+                    const fields = { name, message, ...await inquiryFiles.read() };
                     const serialized = JSON.stringify(fields);
                     const requestId = inquiryPending.current?.serialized === serialized ? inquiryPending.current.requestId : createRequestId();
                     inquiryPending.current = { serialized, requestId };

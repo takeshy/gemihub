@@ -4,7 +4,7 @@ import { inquiryChannelLabel } from "../server/inquiries";
 import type { Inquiry } from "./App";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
-import { InquiryFilePicker, readInquiryFiles, useInquiryFiles } from "./InquiryFiles";
+import { InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 
 export function InquiryCreate({ shopId, customer, onCreated }: { shopId: string; customer?: { name: string; email: string; phone?: string }; onCreated: (inquiry: Inquiry) => Promise<void> }) {
   const api = useApi();
@@ -23,7 +23,7 @@ export function InquiryCreate({ shopId, customer, onCreated }: { shopId: string;
       saving.current = true; setBusy(true); setError("");
       void (async () => {
         try {
-          const payload = { ...fields, ...await readInquiryFiles(selection.files) };
+          const payload = { ...fields, ...await selection.read() };
           const serialized = JSON.stringify(payload);
           const requestId = pending.current?.serialized === serialized ? pending.current.requestId : createRequestId(); pending.current = { serialized, requestId };
           const result = await api<{ inquiry: Inquiry }>(`/api/shops/${shopId}/inquiries`, { ...payload, requestId });

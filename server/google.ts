@@ -218,8 +218,9 @@ export async function sendMail(
     });
     content = `${headers}Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n--${boundary}\r\n${[textPart, ...parts].join(`\r\n--${boundary}\r\n`)}\r\n--${boundary}--\r\n`;
   }
-  const raw = Buffer.from(content).toString("base64url");
-  await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+  // Attachments exceed the JSON endpoint's size limit, so they use the upload endpoint.
+  if (attachments.length) await gmail.users.messages.send({ userId: "me", media: { mimeType: "message/rfc822", body: content } });
+  else await gmail.users.messages.send({ userId: "me", requestBody: { raw: Buffer.from(content).toString("base64url") } });
 }
 
 export async function syncPostFiles(

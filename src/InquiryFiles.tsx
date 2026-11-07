@@ -6,9 +6,22 @@ import { CustomerFile } from "./CustomerNotes";
 
 export function useInquiryFiles() {
   const [files, setFiles] = useState<File[]>([]);
-  return { files, setFiles, clear: () => setFiles([]) };
+  const snapshot = useRef<{ files: File[]; contents: ReturnType<typeof readInquiryFiles> } | undefined>(undefined);
+  return {
+    files, setFiles,
+    clear: () => { snapshot.current = undefined; setFiles([]); },
+    /** A retry after a lost response resends the same bytes, so it keeps its request ID even if the file changed on disk. */
+    read: () => {
+      if (snapshot.current?.files !== files) {
+        const contents = readInquiryFiles(files);
+        contents.catch(() => { snapshot.current = undefined; });
+        snapshot.current = { files, contents };
+      }
+      return snapshot.current.contents;
+    },
+  };
 }
-export async function readInquiryFiles(files: File[]): Promise<{ files?: InquiryFileInput[] }> {
+async function readInquiryFiles(files: File[]): Promise<{ files?: InquiryFileInput[] }> {
   if (!files.length) return {};
   return { files: await Promise.all(files.map(async file => ({ name: file.name, mimeType: file.type || "application/octet-stream", data: await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();

@@ -27,3 +27,14 @@ export const Manual: Story = { name: "手動で新規作成・メールなしの
 
 export const Attachments: Story = { name: "お客様と社内メモの添付", args: { scenario: "inquiries-attachments" }, play: History.play };
 export const Archive: Story = { name: "古い完了案件を期間指定で表示", args: { scenario: "inquiries-archive" }, play: Board.play };
+
+export const Email: Story = {
+  name: "対応の種類を切り替えてメール送信",
+  args: { scenario: "crm-inquiry" },
+  play: async ({ canvasElement }) => {
+    const form = within(await within(canvasElement).findByRole("form", { name: tr("対応を記録する") }));
+    await userEvent.selectOptions(await form.findByRole("combobox", { name: tr("対応の種類") }), "email");
+    await userEvent.type(await form.findByRole("textbox", { name: tr("対応内容") }), tr("ご来店時にお色をご相談しましょう。"));
+    (await form.findByRole("button", { name: tr("送信して保存") })).scrollIntoView({ block: "center" });
+  },
+};

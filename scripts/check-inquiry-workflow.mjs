@@ -29,6 +29,32 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 await mkdir('tmp/inquiry-workflow', { recursive: true });
 let browser, app, store;
 const sent = [];
+async function verifyDraftSwitch(record, label) {
+  const type = record.getByRole('combobox', { name: label('対応の種類'), exact: true });
+  const content = record.getByRole('textbox', { name: label('対応内容'), exact: true });
+  const picker = record.locator('.inquiry-file-picker');
+  await type.selectOption('note');
+  await content.fill('Keep this internal draft private');
+  await picker.locator('input[type=file]').setInputFiles({ name: 'private-draft.txt', mimeType: 'text/plain', buffer: Buffer.from('Private draft bytes') });
+  await type.selectOption('email');
+  await expect(content).toHaveValue('');
+  await expect(picker.locator('li')).toHaveCount(0);
+  await content.fill('Keep this email draft');
+  await picker.locator('input[type=file]').setInputFiles({ name: 'email-draft.txt', mimeType: 'text/plain', buffer: Buffer.from('Email draft bytes') });
+  await type.selectOption('phone');
+  await expect(content).toHaveValue('Keep this internal draft private');
+  await expect(picker).toContainText('private-draft.txt');
+  await expect(record.getByRole('button', { name: label('記録を追加'), exact: true })).toBeVisible();
+  await type.selectOption('email');
+  await expect(content).toHaveValue('Keep this email draft');
+  await expect(picker).toContainText('email-draft.txt');
+  await expect(record.getByRole('button', { name: label('送信して保存'), exact: true })).toBeVisible();
+  // Clear only the test drafts, leaving the actual workflow free to choose its own files.
+  await picker.locator('button').click(); await content.fill('');
+  await type.selectOption('note');
+  await picker.locator('button').click(); await content.fill('');
+  await type.selectOption('email');
+}
 try {
   browser = await chromium.launch({ headless: true, executablePath: process.env.CHROMIUM || '/usr/bin/chromium-browser', args: ['--no-sandbox'] });
   for (const language of ['ja', 'en']) {
@@ -108,10 +134,13 @@ try {
       const download = page.waitForEvent('download');
       await detail.getByRole('button', { name: 'initial.txt' + label(' をダウンロード'), exact: true }).click();
       assert.equal((await download).suggestedFilename(), 'initial.txt');
-      await expect(detail.getByRole('button', { name: label('メールで返信'), exact: true })).toHaveCount(0);
+      await expect(detail.getByRole('button', { name: label('送信して保存'), exact: true })).toHaveCount(0);
       const record = detail.getByRole('form', { name: label('対応を記録する'), exact: true });
+      await expect(record.locator('option[value=email]')).toHaveAttribute('disabled', '');
+      await expect(detail.locator('.inquiry-reply-form')).toHaveCount(0);
+      await expect(record.getByRole('textbox')).toHaveCount(1);
       for (const [kind, text] of [['phone', 'Phone response'], ['note', 'Private note'], ['customer', 'Customer follow-up']]) {
-        await record.getByLabel(label('記録の種類'), { exact: true }).selectOption(kind);
+        await record.getByLabel(label('対応の種類'), { exact: true }).selectOption(kind);
         await record.getByRole('textbox', { name: label('対応内容'), exact: true }).fill(text);
         await record.locator('input[type=file]').setInputFiles({ name: `${kind}.txt`, mimeType: 'text/plain', buffer: Buffer.from('Private ' + kind) });
         await record.getByRole('button', { name: label('記録を追加'), exact: true }).click();
@@ -120,17 +149,24 @@ try {
       await detail.locator('.inquiry-contact summary').click();
       await detail.getByLabel(label('メールアドレス（任意）'), { exact: true }).fill('workflow@example.com');
       await detail.getByRole('button', { name: label('連絡先を保存'), exact: true }).click();
-      await expect(detail.getByRole('button', { name: label('メールで返信'), exact: true })).toBeVisible();
+      await record.getByLabel(label('対応の種類'), { exact: true }).selectOption('email');
+      await expect(detail.getByRole('button', { name: label('送信して保存'), exact: true })).toBeVisible();
+      await verifyDraftSwitch(record, label);
       await detail.getByRole('combobox', { name: label('対応状況'), exact: true }).selectOption('waiting');
       for (const text of ['First email reply', 'Second email reply']) {
-        await detail.getByRole('textbox', { name: label('返信内容'), exact: true }).fill(text);
-        await detail.getByRole('form', { name: label('メールで返信'), exact: true }).locator('input[type=file]').setInputFiles({ name: 'reply.txt', mimeType: 'text/plain', buffer: Buffer.from('Reply attachment') });
-        await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
+        await detail.getByRole('textbox', { name: label('対応内容'), exact: true }).fill(text);
+        await detail.getByRole('form', { name: label('対応を記録する'), exact: true }).locator('input[type=file]').setInputFiles({ name: 'reply.txt', mimeType: 'text/plain', buffer: Buffer.from('Reply attachment') });
+        await detail.getByRole('button', { name: label('送信して保存'), exact: true }).click();
         await expect(detail.locator('.inquiry-history')).toContainText(text);
       }
       await expect(detail.locator('.inquiry-history .inquiry-entry')).toHaveCount(5);
       await expect(detail.getByRole('combobox', { name: label('対応状況'), exact: true })).toHaveValue('waiting');
-      await shot('10-inquiry-reply', detail.locator('.inquiry-history'));
+      await shot('10-inquiry-reply', record);
+      await open('email');
+      const emailStory = page.getByRole('form', { name: label('対応を記録する'), exact: true });
+      await expect(emailStory.getByRole('combobox', { name: label('対応の種類'), exact: true })).toHaveValue('email');
+      await expect(emailStory.getByRole('textbox', { name: label('対応内容'), exact: true })).toHaveValue(label('ご来店時にお色をご相談しましょう。'));
+      await expect(emailStory.getByRole('button', { name: label('送信して保存'), exact: true })).toBeEnabled();
       assert.deepEqual(errors, []);
       await context.close();
       console.log(`${language}/${width}: kanban pagination and movement, manual phone reception, internal/incoming records, contact edits and two email replies passed`);
@@ -143,7 +179,7 @@ try {
   const shop = await store.createShop('workflow-owner@example.com');
   shop.published = structuredClone(sample); shop.publication = 'public'; shop.google = { folderId: 'folder', specId: 'spec', historyId: 'history' }; await store.saveShop(shop);
   await store.put('user', shop.owner, { email: shop.owner, name: 'Owner', role: 'owner', shopId: shop.id, refreshToken: encrypt('test-token') });
-  mock.method(google, 'gmail', () => ({ users: { messages: { send: async input => { sent.push(Buffer.from(input.requestBody.raw, 'base64url').toString()); } } } }));
+  mock.method(google, 'gmail', () => ({ users: { messages: { send: async input => { sent.push(input.media?.body ?? Buffer.from(input.requestBody.raw, 'base64url').toString()); } } } }));
   app = createApp(store); await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));
   const actualOrigin = `http://127.0.0.1:${app.address().port}`; process.env.APP_ORIGIN = actualOrigin;
   for (const [language, width] of [['ja', 1280], ['en', 390]]) {
@@ -166,12 +202,13 @@ try {
     const detail = page.getByRole('region', { name: label('お問い合わせの詳細'), exact: true });
     await expect(detail).toBeVisible(); assert.equal(sent.length, language === 'ja' ? 0 : 2);
     const record = detail.getByRole('form', { name: label('対応を記録する'), exact: true });
-    await record.getByLabel(label('記録の種類'), { exact: true }).selectOption('phone');
+    await record.getByLabel(label('対応の種類'), { exact: true }).selectOption('phone');
     await record.getByRole('textbox', { name: label('対応内容'), exact: true }).fill('Actual phone record');
     await record.locator('input[type=file]').setInputFiles({ name: 'actual-private.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual private attachment') });
     await record.getByRole('button', { name: label('記録を追加'), exact: true }).click();
     await expect(detail.locator('.inquiry-history')).toContainText('Actual phone record');
-    const replyDraft = detail.getByRole('textbox', { name: label('返信内容'), exact: true });
+    await verifyDraftSwitch(record, label);
+    const replyDraft = record.getByRole('textbox', { name: label('対応内容'), exact: true });
     await replyDraft.fill('Keep this draft when the recipient is missing');
     const replyPattern = '**/inquiries/*/reply';
     await page.route(replyPattern, async route => {
@@ -179,7 +216,7 @@ try {
       await route.continue({ postData: JSON.stringify(oldClientReply) });
     });
     const rejectedReply = page.waitForResponse(response => response.url().endsWith('/reply'));
-    await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
+    await detail.getByRole('button', { name: label('送信して保存'), exact: true }).click();
     assert.equal((await rejectedReply).status(), 409);
     await expect(replyDraft).toHaveValue('Keep this draft when the recipient is missing');
     await expect(detail.getByRole('alert')).toContainText(label('返信先が更新されています。最新の状態を確認してください。'));
@@ -188,11 +225,23 @@ try {
     await expect(detail.getByRole('alert')).toHaveCount(0);
     await expect(replyDraft).toHaveValue('Keep this draft when the recipient is missing');
     for (const text of ['Actual first email', 'Actual second email']) {
-      await detail.getByRole('textbox', { name: label('返信内容'), exact: true }).fill(text);
-      await detail.getByRole('form', { name: label('メールで返信'), exact: true }).locator('input[type=file]').setInputFiles({ name: 'actual-reply.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual reply attachment') });
+      await detail.getByRole('textbox', { name: label('対応内容'), exact: true }).fill(text);
+      await detail.getByRole('form', { name: label('対応を記録する'), exact: true }).locator('input[type=file]').setInputFiles({ name: 'actual-reply.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual reply attachment') });
+      const beforeSend = sent.length;
+      if (text === 'Actual first email') await page.route(replyPattern, async route => { await route.fetch(); await route.abort(); }, { times: 1 });
       const replyRequest = page.waitForRequest(request => request.url().endsWith('/reply'));
-      await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
-      assert.equal((await replyRequest).postDataJSON().previousEmail, `workflow-${language}@example.com`);
+      await detail.getByRole('button', { name: label('送信して保存'), exact: true }).click();
+      const firstRequest = (await replyRequest).postDataJSON();
+      assert.equal(firstRequest.previousEmail, `workflow-${language}@example.com`);
+      if (text === 'Actual first email') {
+        await expect(record.getByRole('alert')).toBeVisible();
+        await expect(replyDraft).toHaveValue(text);
+        await expect(record.locator('.inquiry-file-picker')).toContainText('actual-reply.txt');
+        const retried = page.waitForRequest(request => request.url().endsWith('/reply'));
+        await record.getByRole('button', { name: label('送信して保存'), exact: true }).click();
+        assert.deepEqual((await retried).postDataJSON(), firstRequest);
+      }
+      await expect.poll(() => sent.length).toBe(beforeSend + 1);
       await expect(detail.locator('.inquiry-history')).toContainText(text);
     }
     const q = (await store.records('inquiry', shop)).find(q => q.email === `workflow-${language}@example.com`);
@@ -213,8 +262,14 @@ try {
     const inquiriesList = page.getByRole('region', { name: label('お問い合わせ一覧'), exact: true });
     const completedToggle = inquiriesList.getByRole('checkbox', { name: label('対応済みも表示する'), exact: true });
     await expect(completedToggle).toBeChecked();
+    const olderHint = inquiriesList.getByText(label('古い完了済みのレコードを表示するには期間指定してください。'), { exact: true });
+    await expect(olderHint).toBeVisible();
+    await completedToggle.uncheck();
+    await expect(olderHint).toHaveCount(0);
+    await completedToggle.check();
     await inquiriesList.getByRole('button', { name: label('カンバン表示'), exact: true }).click();
     await expect(completedToggle).toHaveCount(0);
+    await expect(olderHint).toBeVisible();
     const actualBoard = page.getByLabel(label('お問い合わせカンバン'), { exact: true });
     const actualColumn = status => actualBoard.getByRole('region', { name: label('{0}のお問い合わせ').replace('{0}', label(status)), exact: true });
     const card = column => actualColumn(column).locator('.inquiry-board-card', { hasText: `Actual ${language}` });
@@ -248,8 +303,28 @@ try {
     const phoneInquiry = phoneResponses.locator('[data-inquiry-id]');
     await expect(phoneInquiry).toHaveCount(1);
     await expect(phoneInquiry).toBeFocused();
-    await expect(phoneInquiry.getByRole('button', { name: label('メールで返信'), exact: true })).toHaveCount(0);
+    await expect(phoneInquiry.getByRole('button', { name: label('送信して保存'), exact: true })).toHaveCount(0);
+    await expect(phoneInquiry.locator('option[value=email]')).toHaveAttribute('disabled', '');
     await expect(phoneInquiry).toContainText('Inquiry for a phone customer');
+
+    // A response lost after the server accepted the upload must not create a second inquiry, even if the file then changes on disk.
+    await page.goto(`${actualOrigin}/?shop=${shop.id}&tab=inquiries&lang=${language}`);
+    const retryList = page.getByRole('region', { name: label('お問い合わせ一覧'), exact: true });
+    await retryList.getByRole('button', { name: label('お問い合わせを新規作成'), exact: true }).click();
+    const retryForm = retryList.getByRole('form', { name: label('お問い合わせを新規作成'), exact: true });
+    const retryName = `Retried ${language}`, diskFile = `tmp/inquiry-workflow/retry-${language}.txt`;
+    await writeFile(diskFile, 'first bytes');
+    await retryForm.getByLabel(label('お客様の氏名'), { exact: true }).fill(retryName);
+    await retryForm.getByLabel(label('お問い合わせ内容'), { exact: true }).fill('Lost response');
+    await retryForm.locator('input[type=file]').setInputFiles(diskFile);
+    const createPattern = '**/api/shops/*/inquiries';
+    await page.route(createPattern, async route => { await route.fetch(); await route.abort(); }, { times: 1 });
+    await retryForm.getByRole('button', { name: label('お問い合わせを作成'), exact: true }).click();
+    await expect(retryForm.getByRole('alert')).toBeVisible();
+    await writeFile(diskFile, 'changed bytes on disk');
+    await retryForm.getByRole('button', { name: label('お問い合わせを作成'), exact: true }).click();
+    await expect(page.getByRole('region', { name: label('お問い合わせの詳細'), exact: true })).toBeVisible();
+    assert.equal((await store.records('inquiry', shop)).filter(inquiry => inquiry.name === retryName).length, 1);
     assert.deepEqual(errors, []); await context.close();
     console.log(`${language}/${width}: real API creation, internal history, Gmail delivery, durable reload, CRM deep link, stale board recovery and independent list filters passed`);
   }

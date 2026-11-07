@@ -137,8 +137,9 @@ try {
   await capture("10-inquiries.jpg", ".inquiries-list");
   await page.getByRole("link", { name: "山田 花子のお問い合わせを開く" }).click();
   await page.locator('[data-inquiry-id="guest-inquiry"]').waitFor();
+  await page.locator('[data-inquiry-id="guest-inquiry"]').getByRole("combobox", { name: "対応の種類", exact: true }).selectOption("email");
   await page.locator('[data-inquiry-id="guest-inquiry"]')
-    .getByRole("textbox", { name: "返信内容" })
+    .getByRole("textbox", { name: "対応内容" })
     .fill(
       "もちろんです。当日、お好みやお仕事に合わせて一緒にお色を選びましょう。ご来店をお待ちしております。",
     );

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { addCustomerNote } from "../server/customer-notes.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -212,6 +212,11 @@ test("CRM API is scoped to operators and shop; notes persist, reject stale edits
     }
   } finally { release(); await holding; }
   assert.equal((await request(filePath, "staff")).body.data, input.files[0].data);
+  assert.equal(note.attachments[0].sha256, createHash("sha256").update(Buffer.from(input.files[0].data, "base64")).digest("hex"));
+  const storedFile = await store.get<Record<string, unknown>>("demoCustomerFile", note.attachments[0].id);
+  await store.put("demoCustomerFile", note.attachments[0].id, { ...storedFile, data: Buffer.alloc(note.attachments[0].size, 0x78).toString("base64") });
+  assert.equal((await request(filePath, "staff")).status, 409, "customer notes also reject same-size content changes");
+  await store.put("demoCustomerFile", note.attachments[0].id, storedFile);
   assert.equal((await request(`${notePath}/files/missing`)).status, 404);
   assert.equal((await request(`${base}/only%40example.com/notes/${note.id}/files/${note.attachments[0].id}`)).status, 404);
   for (const id of denied) {
@@ -283,10 +288,13 @@ test("CRM attachment retry reuses journaled file IDs and never duplicates a note
   const input = { requestId: randomUUID(), text: "添付つき", files: [{ name: "note.txt", mimeType: "text/plain", data: "aGk=" }] };
   await assert.rejects(() => addCustomerNote(store, shop, "alice@example.com", shop.owner, input, files, "token"), /interrupted/);
   assert.equal((await store.records<CustomerNote>("customerNote", shop)).length, 0);
+  const [journal] = await store.entries<{ attachments: CustomerNote["attachments"] }>("customerNoteUpload");
+  await store.put("customerNoteUpload", journal.id, { ...journal.value, attachments: journal.value.attachments.map(({ sha256: _checksum, ...file }) => file) });
   const note = await addCustomerNote(store, shop, "alice@example.com", shop.owner, input, files, "token");
   assert.equal(reservations, 1);
   assert.deepEqual(uploaded, ["reserved-0", "reserved-0"]);
   assert.equal(note.attachments[0].id, "reserved-0");
+  assert.equal(note.attachments[0].sha256, createHash("sha256").update(Buffer.from(input.files[0].data, "base64")).digest("hex"));
   await addCustomerNote(store, shop, "alice@example.com", shop.owner, input, files, "token");
   assert.equal(uploaded.length, 2);
   assert.equal((await store.records<CustomerNote>("customerNote", shop)).length, 1);
