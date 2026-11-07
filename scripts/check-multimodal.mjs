@@ -154,10 +154,7 @@ try {
     await page.getByLabel("ここをどう変えたいですか").fill("ここを『季節のアトリエ』に変えて");
     await capture("22-pen.jpg", ".annotation-canvas");
     await page.locator(".visual-chat-panel").getByRole("button", {name: "送信", exact: true}).click();
-    await page.getByLabel("変更する対象を確認").waitFor();
-    assert.equal(await page.getByRole("button", {name: "この箇所を修正する"}).isEnabled(), false);
-    await page.getByLabel("変更する対象を確認").selectOption("name");
-    await page.getByRole("button", {name: "この箇所を修正する"}).click();
+    assert.equal(await page.locator(".visual-chat-confirmation").count(),0);
     await page.getByRole("dialog", { name: "修正案を比較", exact: true }).getByRole("button", { name: "OK", exact: true }).click();
     await page.getByText("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。", {exact: false}).waitFor();
     await page.locator(".local-preview-screen").getByRole("heading", {name: "季節のアトリエ", exact: true}).waitFor();

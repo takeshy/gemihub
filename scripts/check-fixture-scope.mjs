@@ -59,7 +59,7 @@ try {
     await expect(field('予約のお名前')).toHaveCount(0);
     await apply(); assert.equal(new URL(page.url()).searchParams.get('screen'), 'reserve');
     const initial = (await read()).fixtures;
-    for (const screen of ['お店のこと', 'ヘッダー', 'フッター', '全体の枠', 'FAQ']) {
+    for (const screen of ['お店のこと', 'ページ全体', 'FAQ']) {
       await choose(screen); await expect(samples).toHaveCount(0);
     }
     await choose('ブログ一覧'); await openSamples();

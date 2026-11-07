@@ -2564,7 +2564,7 @@ pre {
 .screen-name-list strong { font-size: 14px; }
 .screen-name-list span { font-size: 12px; color: var(--muted); }
 .theme-preview { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #fff; pointer-events: none; }
-.theme-placeholder { margin: 20px; min-height: 180px; display: grid; place-items: center; border: 2px dashed currentColor; border-radius: 12px; opacity: .55; text-align: center; padding: 16px; }
+.theme-placeholder { gap: 12px; margin: 20px; min-height: 180px; display: grid; place-items: center; border: 2px dashed currentColor; border-radius: 12px; opacity: .55; text-align: center; padding: 16px; }
 .theme-placeholder span { font-size: 14px; }
 .public-shop.custom-theme { max-width: none; padding: 0; }
 .design-root main { min-height: 0; }

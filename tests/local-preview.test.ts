@@ -88,6 +88,7 @@ test("local pen changes stay drafts; stale releases fail and retries publish onc
   const shop = await store.createShop("owner@example.com");
   let badProposal = false;
   const intelligence = {
+    async visualReview() { return { approved: true, issues: [] }; },
     async propose(_text: string, current: ShopConfig | null) {
       const config = structuredClone(current || sample);
       config.name = "ペンで変更した店名";

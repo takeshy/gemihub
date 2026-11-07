@@ -11,7 +11,7 @@ import { digest } from '../server/auth.ts';
 process.env.DEMO_MODE = 'true';
 delete process.env.GOOGLE_CLOUD_PROJECT;
 const store = new Store(':memory:');
-const server = createApp(store, { ...intelligence,
+const server = createApp(store, { ...intelligence, visualReview: async () => ({approved:true,issues:[]}),
   async identifyVisual(_media, targets, instruction, screen) {
     const target = /配置/.test(instruction) ? `screen:${screen.id}` : 'copy:recentPosts';
     assert.ok(targets.some(candidate => candidate.id === target), `the AI can select ${target}`);
@@ -56,8 +56,6 @@ try {
     const chat = page.getByRole('complementary', { name: '画面の修正チャット' });
     await chat.getByRole('textbox', { name: 'ここをどう変えたいですか', exact: true }).fill('「お店からのお便り」を「アトリエからのお知らせ」に変えてください。');
     await chat.getByRole('button', { name: '送信', exact: true }).click();
-    await expect(chat.getByLabel('変更する対象を確認')).toHaveValue('copy:recentPosts');
-    await chat.getByRole('button', { name: 'この箇所を修正する', exact: true }).click();
     await page.getByRole('dialog', { name: '修正案を比較', exact: true }).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(preview.getByRole('heading', { name: 'アトリエからのお知らせ', exact: true })).toBeVisible();
     assert.equal((await store.shop(shop.id)).published.appearance?.copy, undefined, 'the edit stays unpublished');
@@ -66,8 +64,6 @@ try {
     await page.getByRole('button', { name: '次の状態に進む', exact: true }).click();
     await chat.getByRole('textbox', { name: 'ここをどう変えたいですか', exact: true }).fill('マイページの配置をゆったりさせて、歓迎の見出しを追加してください。');
     await chat.getByRole('button', { name: '送信', exact: true }).click();
-    await expect(chat.getByLabel('変更する対象を確認')).toHaveValue('screen:mine');
-    await chat.getByRole('button', { name: 'この箇所を修正する', exact: true }).click();
     await page.getByRole('dialog', { name: '修正案を比較', exact: true }).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(preview.getByRole('heading', { name: 'ようこそアトリエへ', exact: true })).toBeVisible();
     await expect(preview.getByRole('heading', { name: 'アトリエからのお知らせ', exact: true })).toBeVisible();

@@ -14,7 +14,7 @@ process.env.DEMO_MODE='true';delete process.env.GOOGLE_CLOUD_PROJECT;
 const store=new Store(':memory:');let reviews=0;
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 const withLogo=(theme,id)=>({...theme,headerHtml:theme.headerHtml.replace('<header class="theme-masthead">',`<header class="theme-masthead"><img data-image-id="${id}" alt="Shop logo" style="width:60px;height:60px">`)});
-const server=createApp(store,{...intelligence,initialTheme:async(input,context)=>{
+const server=createApp(store,{...intelligence, visualReview: async () => ({approved:true,issues:[]}),initialTheme:async(input,context)=>{
   let attempt=0;
   return createInitialTheme(input,context,async call=>{
     if(!call.purpose){attempt++;return JSON.stringify({...withLogo(exampleTheme,input.images[0].id),css:exampleTheme.css+` .theme-heading h1 {letter-spacing:${input.request.includes('calmer')?'.02em':'.08em'}}`});}

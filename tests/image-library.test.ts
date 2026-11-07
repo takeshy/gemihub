@@ -36,6 +36,7 @@ test("Private memo images stay on customer pages and out of managed inputs; sele
   await store.put("customerNote", "foreign", { ...note, id: "foreign", shopId: other.id });
   let proposedImages: RequestImage[] = [], pageImages: RequestImage[] = [], questionImages: RequestImage[] = [], calls = 0, inject = false;
   const server = createApp(store, {
+    async visualReview() { return { approved: true, issues: [] }; },
     propose: async (_text, current, _email, _demo, images = []) => { calls++; proposedImages = images; const config = structuredClone(current || sample); config.header.imageId = inject ? foreign.imageId : images[0]?.id; config.header.imageUrl = ""; return { config, summary: ["画像変更"] }; },
     proposeArticle, identifyVisual,
     explainSystem: async (_text, _config, _demo, context) => { questionImages = context?.images || []; return { answer: "選択画像を確認", changeRequest: true }; },

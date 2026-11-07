@@ -116,6 +116,9 @@ import {
   explainSystem,
 } from "./ai.ts";
 import { shopSystem, systemSvg } from "./shop-system.ts";
+import { visualMessagesSchema, withVisualConversation } from "../shared/visual-conversation.ts";
+import { generateReviewedVisual, reviewRenderedVisual, type VisualReviewInput } from "./visual-review.ts";
+import { visualPreviewOptionsSchema } from "./visual-browser.ts";
 import {
   mediaSchema,
   visualTargets,
@@ -139,7 +142,7 @@ import {
 } from "./post-domain.ts";
 import { liveValue, updateLiveValue, type LiveSection } from "./live-settings.ts";
 import { editorIndex, contentHash } from "./editor-sync.ts";
-import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema } from "./page-ai.ts";
+import { createPageWithAI, mergePageWithAI, messageSchema, profileSchema, themeProfileSchema } from "./page-ai.ts";
 import { pageSchema, headerPartSchema, footerPartSchema } from "./pages.ts";
 import { buildStorefront, canonicalBase, storefrontAssetName, storefrontAssetObject, storefrontAssetType, storefrontFile, storefrontGarbage, storefrontObject, storefrontRenderer, storefrontRetainedReleases, storefrontShell, writeStorefront, type StorefrontRelease } from "./storefront-build.tsx";
 import { bucketStorefrontFiles, memoryStorefrontFiles, type StorefrontFiles } from "./storefront-files.ts";
@@ -175,7 +178,7 @@ type Plan = {
   approved: boolean;
   requiresSetup?: boolean;
   themeRunId?: string;
-  themeReview?: { attempts: number; approved: boolean };
+  themeReview?: { attempts: number; approved: boolean; rendered?: boolean };
   chat?: ChatReference;
   local?: boolean;
   scope?: ReleaseScope;
@@ -260,6 +263,7 @@ export function createApp(
     settings?: typeof proposeSettings;
     phoneRules?: typeof proposePhoneRules;
     visualAppearance?: typeof proposeVisualAppearance;
+    visualReview?: typeof reviewRenderedVisual;
   } = { propose, proposeArticle, identifyVisual, explainSystem, visualAppearance: proposeVisualAppearance },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
@@ -544,6 +548,16 @@ export function createApp(
     if (facts.articles) config = { ...config, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...config.appearance, articles: facts.articles } };
     config = initialIntroductionPages(config, facts.introductions);
     return JSON.stringify(config) === JSON.stringify(plan.config) ? plan : { ...plan, config, summary: planSummary(null, config) };
+  }
+  async function reviewVisual(shop: Shop, input: Omit<VisualReviewInput, "renderImages">) {
+    const wholeFrame = input.screen === "theme" || input.screen === "initial-theme";
+    const frameIds = (config: ShopConfig) => [...themeImageIds(config.appearance?.theme), ...(config.header.imageId ? [config.header.imageId] : [])];
+    const required = new Set(wholeFrame ? [...frameIds(input.before), ...frameIds(input.after)] : [...managedImageIds(input.before), ...managedImageIds(input.after), ...(input.preview?.fixtures?.posts.flatMap(post => postImageIds(post.body)) || [])]);
+    const renderImages = Object.fromEntries(input.images.filter(image => required.has(image.id)).map(image => [image.id, { mimeType: image.mimeType, data: image.data }]));
+    const ids = [...required].filter(id => !renderImages[id]);
+    const token = !store.memory && ids.length ? await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")) : "";
+    for (const id of ids) renderImages[id] = await readMenuImage(store, shop, id, crmFiles, token, "display");
+    return (intelligence.visualReview || reviewRenderedVisual)({ ...input, renderImages });
   }
   async function enqueue(
     shop: Shop,
@@ -909,7 +923,7 @@ export function createApp(
     retireDesignVersions(fresh);
     await timed("storefront", () => savePublicShop(fresh));
     await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError);
-    if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
+    if (!plan.scope || plan.scope.kind === "shared" || plan.scope.kind === "theme" || plan.scope.kind === "content") await enqueue(fresh, "posts");
     // The public release and the complete design snapshot are committed. Article exports retry in the durable worker.
     return { ok: true, url: `/s/${fresh.slug}` };
   }
@@ -2370,6 +2384,83 @@ export function createApp(
             await store.put("postMetadata",id,{hash,metadata});return json(res,metadata);
           });
         }
+        // Browser capture and model calls must not hold the ordinary shop-operation lock.
+        if (method === "POST" && (action === "visual/propose" || /^plans\/[^/]+\/theme$/.test(action))) {
+          return await store.locked(`visual-generation:${shop.id}:${action}`, async () => {
+            const fresh = await store.locked(shop.id, async () => {
+              const latest = (await store.shop(shop.id))!;
+              await assertOperator(user, latest); assertOwner(user, latest);
+              return latest;
+            });
+            const initialThemeRoute = action.match(/^plans\/([^/]+)\/theme$/);
+            if (initialThemeRoute && method === "POST") {
+              assertOwner(user, fresh);
+              const storedOriginal = await store.get<Plan>("plan", initialThemeRoute[1]);
+              if (!storedOriginal || storedOriginal.shopId !== fresh.id || !storedOriginal.requiresSetup || fresh.published || fresh.publishingPlanId || storedOriginal.base !== fresh.revision) fail(409, tr("初回テーマの確認画面を開き直してください。"));
+              const original = await initialPlanFacts(storedOriginal, fresh);
+              const input = z.object({ instruction: z.string().trim().min(1).max(4000), messages: visualMessagesSchema.default([]), preview: visualPreviewOptionsSchema.optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema }).parse(await body(req, 12000000));
+              if (input.media.data.length > 5600000) fail(400, tr("4MB以下の PNG を指定してください"));
+              const conversationKey = `:render-review-v1:${digest(JSON.stringify([input.messages, input.preview]))}`;
+              const id = digest(`${fresh.id}:theme-correction:${original.id}:${input.instruction}:${input.imageIds.join(",")}:${digest(input.media.data)}${conversationKey}`);
+              const completed = await store.get<Plan>("plan", id);
+              if (completed) return json(res, { plan: await initialPlanFacts(completed, fresh) });
+              const previous = original.themeRunId ? await store.get<ThemeRun>("initialThemeRun", original.themeRunId) : undefined;
+              const chat = original.chat ? await readConversation(store, fresh, user!.email, original.chat.id) : undefined;
+              const ids = [...new Set([...(previous?.imageIds || (chat ? await conversationImageIds(store, fresh, chat, []) : themeImageIds(original.config.appearance?.theme))), ...input.imageIds])];
+              const images = await readRequestImages(store, fresh, ids, crmFiles, store.memory || !ids.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
+              const state = await store.get<ThemeRun>("initialThemeRun", id);
+              const base = structuredClone(original.config);
+              const request = `${previous?.request || (chat ? conversationContext(chat).map(m => `${m.role}: ${m.text}`).join("\n") : original.request || "")}\nCurrent accepted theme: ${JSON.stringify(original.config.appearance?.theme || null)}\nCorrection: ${withVisualConversation(input.instruction, input.messages)}`;
+              const reviewed = await (intelligence.initialTheme || createInitialTheme)({ config: base, request, images, screen: input.media }, { state, save: next => store.put("initialThemeRun", id, next), reviewRendered: candidate => reviewVisual(fresh, { before: base, after: candidate, instruction: input.instruction, target: "theme", screen: "initial-theme", messages: input.messages, preview: input.preview, images }) });
+              const config = shopSchema.parse({ ...base, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...base.appearance, theme: reviewed.candidate } });
+              validateProposedImages(config, original.config, images);
+              if (!reviewed.renderedReview?.approved) fail(422, tr("修正後の画面の自動レビューが完了しませんでした。依頼の内容は保持しています。もう一度お試しください。"));
+              const plan: Plan = { ...original, id, config, themeRunId: id, themeReview: { attempts: reviewed.attempts, approved: true, rendered: true }, createdAt: Date.now(), summary: planSummary(null, config), approved: false };
+              await store.locked(shop.id, async () => {
+                const latest = await store.shop(shop.id);
+                if (!latest || latest.revision !== original.base || latest.published || latest.publishingPlanId) fail(409, tr("初回テーマの確認画面を開き直してください。"));
+                assertOwner(user, latest);
+                await store.put("plan", id, plan);
+                if (chat && original.chat) {
+                  const currentChat = await readConversation(store, latest, user!.email, original.chat.id);
+                  const reply = currentChat.messages.find(m => m.role === "assistant" && m.requestId === original.chat!.requestId);
+                  if (reply) await store.put("shopChatMessage", reply.id, { ...reply, detail: { ...reply.detail, planId: id } });
+                }
+              });
+              return json(res, { plan });
+            }
+            if (action === "visual/propose" && method === "POST") {
+              assertOwner(user, fresh);
+              if (fresh.publishingPlanId) fail(409, tr("公開処理が完了してからお試しください"));
+              const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), messages: visualMessagesSchema.optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000));
+              if (input.applied && !input.revision) fail(400, tr("変更対象を選び直してください"));
+              const visual = await store.get<VisualRequest>("visual", input.id);
+              const source = fresh.published ? await effective(fresh) : null;
+              if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
+                fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
+              const current = input.revision ? validateVisualChange(visual.config, input.revision, input.target) : visual.config;
+              const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
+              // Earlier requests are already in `revision`; repeating them as new work would apply relative changes twice.
+              const instruction = input.applied ? `Already applied to the current draft; do not apply these again:\n${input.applied}\n\nNew request:\n${input.instruction}` : input.instruction;
+              const messages = input.messages ?? visual.messages ?? [];
+              const proposed = await generateReviewedVisual(async (feedback, previous) => {
+                const repair = feedback.length ? `\n\nRepair the previous candidate to satisfy the ORIGINAL request and these rendered-screen review issues. Do not repeat relative edits already present in the candidate.\n${JSON.stringify(feedback)}` : "";
+                const base = previous?.config || current;
+                const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:")) && intelligence.visualAppearance
+                  ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages })
+                  : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, withVisualConversation(instruction + repair, messages)), base, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, base.region, {}, input.media);
+                validateProposedImages(next.config, visual.config, images);
+                return { config: validateVisualChange(visual.config, next.config, input.target) };
+              }, proposal => reviewVisual(fresh, { before: current, after: proposal.config, instruction, target: input.target, screen: visual.screen || (input.target.startsWith("part:") ? input.target.slice(5) : input.target.startsWith("page:") ? `page:${input.target.split(":")[1]}` : "reserve"), messages, preview: visual.preview, images }));
+              await store.locked(shop.id, async () => {
+                const latest = await store.shop(shop.id);
+                if (!latest || latest.publishingPlanId || latest.revision !== visual.base || JSON.stringify(latest.published ? await effective(latest) : null) !== JSON.stringify(visual.source)) fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
+                assertOwner(user, latest);
+              });
+              return json(res, { ...proposed, summary: planSummary(visual.config, proposed.config) });
+            }
+          });
+        }
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
           await assertOperator(user, fresh);
@@ -2381,7 +2472,7 @@ export function createApp(
             // Read-only: retired versions are trashed by the next publish/restore, not while holding the lock here.
             // A screen's history lists only versions whose state of that screen differs from now.
             let retained = (fresh.designVersions || []).slice(0, 10);
-            if (fresh.published && target && retained.some(version => !version.fingerprints)) {
+            if (fresh.published && target && retained.some(version => target.kind === "theme" ? !version.fingerprints?.theme : !version.fingerprints)) {
               // Without a connection the older versions just stay unlisted for this screen; the history itself still loads.
               const token = await ownerToken(fresh);
               if (token || demoEnabled()) retained = await indexedDesignVersions(retained, token ? driveDesignVersions(token) : demoDesignVersions(store));
@@ -2482,35 +2573,6 @@ export function createApp(
             res.setHeader("X-Content-Type-Options", "nosniff");
             res.end(content);
             return;
-          }
-          const initialThemeRoute = action.match(/^plans\/([^/]+)\/theme$/);
-          if (initialThemeRoute && method === "POST") {
-            assertOwner(user, fresh);
-            const storedOriginal = await store.get<Plan>("plan", initialThemeRoute[1]);
-            if (!storedOriginal || storedOriginal.shopId !== fresh.id || !storedOriginal.requiresSetup || fresh.published || fresh.publishingPlanId || storedOriginal.base !== fresh.revision) fail(409, tr("初回テーマの確認画面を開き直してください。"));
-            const original = await initialPlanFacts(storedOriginal, fresh);
-            const input = z.object({ instruction: z.string().trim().min(1).max(4000), imageIds: requestImageIdsSchema.default([]), media: mediaSchema }).parse(await body(req, 12000000));
-            if (input.media.data.length > 5600000) fail(400, tr("4MB以下の PNG を指定してください"));
-            const id = digest(`${fresh.id}:theme-correction:${original.id}:${input.instruction}:${input.imageIds.join(",")}:${digest(input.media.data)}`);
-            const completed = await store.get<Plan>("plan", id);
-            if (completed) return json(res, { plan: await initialPlanFacts(completed, fresh) });
-            const previous = original.themeRunId ? await store.get<ThemeRun>("initialThemeRun", original.themeRunId) : undefined;
-            const chat = original.chat ? await readConversation(store, fresh, user!.email, original.chat.id) : undefined;
-            const ids = [...new Set([...(previous?.imageIds || (chat ? await conversationImageIds(store, fresh, chat, []) : themeImageIds(original.config.appearance?.theme))), ...input.imageIds])];
-            const images = await readRequestImages(store, fresh, ids, crmFiles, store.memory || !ids.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
-            const state = await store.get<ThemeRun>("initialThemeRun", id);
-            const base = structuredClone(original.config);
-            const request = `${previous?.request || (chat ? conversationContext(chat).map(m => `${m.role}: ${m.text}`).join("\n") : original.request || "")}\nCurrent accepted theme: ${JSON.stringify(original.config.appearance?.theme || null)}\nCorrection: ${input.instruction}`;
-            const reviewed = await (intelligence.initialTheme || createInitialTheme)({ config: base, request, images, screen: input.media }, { state, save: next => store.put("initialThemeRun", id, next) });
-            const config = shopSchema.parse({ ...base, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...base.appearance, theme: reviewed.candidate } });
-            validateProposedImages(config, original.config, images);
-            const plan: Plan = { ...original, id, config, themeRunId: id, themeReview: { attempts: reviewed.attempts, approved: true }, createdAt: Date.now(), summary: planSummary(null, config), approved: false };
-            await store.put("plan", id, plan);
-            if (chat && original.chat) {
-              const reply = chat.messages.find(m => m.role === "assistant" && m.requestId === original.chat!.requestId);
-              if (reply) await store.put("shopChatMessage", reply.id, { ...reply, detail: { ...reply.detail, planId: id } });
-            }
-            return json(res, { plan });
           }
           const libraryRoute = action.match(/^images(?:\/([a-f0-9]{64})(?:\/(rename|archive))?)?$/);
           if (libraryRoute && (method === "GET" || method === "POST")) {
@@ -2615,7 +2677,7 @@ export function createApp(
           if (action === "local-editor/merge" && method === "POST") {
             assertOwner(user, fresh);
             const input = z.object({ scope: releaseScopeSchema, baseline: z.unknown(), localValue: z.unknown(), expectedRemote: z.unknown() }).parse(await body(req, 1500000));
-            const outputSchema = input.scope.kind === "page" ? pageSchema.nullable() : input.scope.kind === "part" ? (input.scope.part === "header" ? headerPartSchema : footerPartSchema) : profileSchema;
+            const outputSchema = input.scope.kind === "page" ? pageSchema.nullable() : input.scope.kind === "part" ? (input.scope.part === "header" ? headerPartSchema : footerPartSchema) : input.scope.kind === "theme" ? themeProfileSchema : profileSchema;
             const valueSchema = outputSchema.nullable();
             const baseline = valueSchema.parse(input.baseline), localValue = valueSchema.parse(input.localValue), expectedRemote = valueSchema.parse(input.expectedRemote);
             const current = fresh.published ? await effective(fresh) : null;
@@ -2631,25 +2693,6 @@ export function createApp(
             assertOwner(user, fresh);
             const source = fresh.published ? await effective(fresh) : null;
             return json(res, { base: fresh.revision, source, lastPublishedPlanId: fresh.lastPublishedPlanId, config: source || fresh.draft || { ...structuredClone(sample), notificationEmail: user!.email } });
-          }
-          if (action === "visual/propose" && method === "POST") {
-            assertOwner(user, fresh);
-            const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000));
-            if (input.applied && !input.revision) fail(400, tr("変更対象を選び直してください"));
-            const visual = await store.get<VisualRequest>("visual", input.id);
-            const source = fresh.published ? await effective(fresh) : null;
-            if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
-              fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
-            const current = input.revision ? validateVisualChange(visual.config, input.revision, input.target) : visual.config;
-            const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
-            // Earlier requests are already in `revision`; repeating them as new work would apply relative changes twice.
-            const instruction = input.applied ? `Already applied to the current draft; do not apply these again:\n${input.applied}\n\nNew request:\n${input.instruction}` : input.instruction;
-            const proposed = (input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:")) && intelligence.visualAppearance
-              ? await intelligence.visualAppearance(current, instruction, images, { target: input.target, media: input.media })
-              : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, instruction), current, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, current.region, {}, input.media);
-            validateProposedImages(proposed.config, visual.config, images);
-            const config = validateVisualChange(visual.config, proposed.config, input.target);
-            return json(res, { config, summary: planSummary(visual.config, config) });
           }
           if (action === "staff-accounts" && method === "GET") {
             assertOwner(user, fresh);
@@ -2793,9 +2836,11 @@ export function createApp(
               .object({
                 media: mediaSchema,
                 instruction: z.string().trim().min(1).max(4000),
+                messages: visualMessagesSchema.default([]),
+                preview: visualPreviewOptionsSchema.optional(),
                 planId: z.string().optional(),
                 displayed: shopSchema,
-                local: z.object({ base: z.number().int(), source: shopSchema.nullable(), pageId: z.string().optional(), part: z.enum(["header", "footer"]).optional() }).optional(),
+                local: z.object({ base: z.number().int(), source: shopSchema.nullable(), pageId: z.string().optional(), part: z.enum(["header", "footer"]).optional(), theme: z.boolean().optional() }).optional(),
                 screen: z.object({ id: z.string().max(200), label: z.string().max(200), file: z.string().max(300) }).optional(),
               })
               .parse(await body(req, 12000000));
@@ -2807,7 +2852,7 @@ export function createApp(
             const source = fresh.published ? await effective(fresh) : null;
             let config = source;
             if (input.local) {
-              const scope = input.local.part ? { kind: "part" as const, part: input.local.part } : input.local.pageId ? { kind: "page" as const, pageId: input.local.pageId } : { kind: "shared" as const };
+              const scope = input.local.theme ? { kind: "theme" as const } : input.local.part ? { kind: "part" as const, part: input.local.part } : input.local.pageId ? { kind: "page" as const, pageId: input.local.pageId } : { kind: "shared" as const };
               if (input.planId || !same(scopedSource(input.local.source, scope), scopedSource(source, scope)))
                 fail(409, tr("本番の内容が変わりました。最新の内容を取り込んでください"));
               config = input.displayed;
@@ -2833,24 +2878,19 @@ export function createApp(
                 tr("画面の設定が古くなっています。開き直して印をつけてください"),
               );
             if (input.local?.pageId && !config.pages.some(p => p.id === input.local!.pageId)) fail(400, tr("対象ページがありません"));
-            const targets = visualTargets(config).filter(t => !input.local || (input.local.part ? t.id === `part:${input.local.part}` || input.local.part === "header" && headerCopyKeys.some(key => t.id === `copy:${key}`) : input.local.pageId
+            const targets = visualTargets(config).filter(t => !input.local || (input.local.theme ? t.id === "theme" : input.local.part ? t.id === `part:${input.local.part}` || input.local.part === "header" && headerCopyKeys.some(key => t.id === `copy:${key}`) : input.local.pageId
               ? t.id.startsWith(`page:${input.local.pageId}:`)
-              : !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:") && !headerCopyKeys.some(key => t.id === `copy:${key}`)));
+              : t.id !== "theme" && !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:") && !headerCopyKeys.some(key => t.id === `copy:${key}`)));
             const availableTargets = targets.filter(t => !t.id.startsWith("screen:") || !input.screen || t.id === `screen:${input.screen.id}`);
             const result = await intelligence.identifyVisual(
               input.media,
               availableTargets,
               input.instruction,
               input.screen,
+              input.messages,
             );
-            const candidates = availableTargets.filter((t) => result.ids.includes(t.id));
-            if (!candidates.length)
-              fail(
-                400,
-                result.explanation +
-                  tr(" 変更したい箇所を依頼文で具体的に伝えるか、赤いペンで囲んでください。") +
-                  (input.local && !input.local.part && !input.local.pageId ? tr(" ナビゲーションの文言やヘッダー・フッターの内容は、ツリーの「ヘッダー」「フッター」から修正できます。") : ""),
-              );
+            const candidates = result.ids.flatMap(id => availableTargets.filter(target => target.id === id)).slice(0, 1);
+            if (!candidates.length) return json(res, { id: "", candidates: [], explanation: result.explanation });
             const visual: VisualRequest = {
               id: randomUUID(),
               shopId: fresh.id,
@@ -2858,6 +2898,9 @@ export function createApp(
               source,
               config,
               candidates,
+              messages: input.messages,
+              screen: input.local?.theme ? "theme" : input.local?.part || (input.local?.pageId ? `page:${input.local.pageId}` : input.screen?.id),
+              preview: input.preview,
               createdAt: Date.now(),
             };
             await store.put("visual", visual.id, visual);

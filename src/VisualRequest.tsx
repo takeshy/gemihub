@@ -9,6 +9,8 @@ import type { Plan } from "./App";
 import { submitOnShortcut } from "./submit-shortcut";
 import { MenuImage } from "./MenuImage";
 import { VisualChangeReview } from "./VisualChangeReview";
+import type { VisualMessage } from "../shared/visual-conversation";
+import type { VisualPreviewOptions } from "../shared/visual-review";
 
 // Capture the rendered page with its computed styles, without granting screen sharing.
 // Cross-origin images without CORS are represented by their labelled image frame.
@@ -66,9 +68,9 @@ export async function capturePage(root: HTMLElement) {
 }
 type Identified = { id: string; explanation: string; candidates: { id: string; label: string }[] };
 type Revision = { config: ShopConfig; plan?: Plan };
-export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, historyHost, initialPlan, onPlan, renderPreview, disabled = false}: {
+export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, historyHost, initialPlan, onPlan, renderPreview, reviewPreview, disabled = false}: {
   shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
-  local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer" };
+  local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer"; theme?: boolean };
   screen?: { id: string; label: string; file: string };
   onLocalChange: (config: ShopConfig) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -80,6 +82,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   onPlan?: (plan: Plan) => void;
   disabled?: boolean;
   renderPreview?: (config: ShopConfig) => React.ReactNode;
+  reviewPreview?: VisualPreviewOptions;
 }) {
   const api = useApi();
   const [open, setOpen] = useState(false);
@@ -92,10 +95,10 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
   const [marked, setMarked] = useState(false);
-  const [messages, setMessages] = useState<{ role: "user" | "assistant"; text: string; imageIds?: string[] }[]>([]);
+  const [messages, setMessages] = useState<(VisualMessage & { imageIds?: string[] })[]>([]);
   const [result, setResult] = useState<Identified & { before: ShopConfig; key: string; scope: string }>();
   const [target, setTarget] = useState("");
-  const [proposal, setProposal] = useState<{ config: ShopConfig; before: ShopConfig; summary: string[]; context: string; key: string; scope: string }>();
+  const [proposal, setProposal] = useState<{ config: ShopConfig; before: ShopConfig; summary: string[]; visualReview?: { approved: boolean; attempts: number }; context: string; key: string; scope: string }>();
   const submittedMedia = useRef<{ mimeType: "image/png"; data: string } | undefined>(undefined);
   const canvas = useRef<HTMLCanvasElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -103,7 +106,6 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   const drawing = useRef(false);
   const alive = useRef(true);
   const pendingContext = useRef("");
-  const submitted = useRef("");
   const failed = useRef<string | undefined>(undefined);
   const stopDictation = useRef<(() => void) | null>(null);
   const scopeKey = JSON.stringify({ shopId, base: local.base, source: local.source, screen: screen?.id });
@@ -133,7 +135,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
     const index = history.index + offset;
     if (index < 0 || index >= history.entries.length) return;
     const revision = structuredClone(history.entries[index]);
-    stopDictation.current?.(); clearCapture(); setError(""); pendingContext.current = ""; submitted.current = ""; failed.current = undefined;
+    stopDictation.current?.(); clearCapture(); setError(""); pendingContext.current = ""; failed.current = undefined;
     setHistory(current => ({ ...current, index }));
     if (revision.plan) onPlan?.(revision.plan); else onLocalChange(revision.config);
   }
@@ -168,6 +170,8 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   async function submitRequest(input = instruction) {
     const text = input.trim(); if (locked || !text) return;
     stopDictation.current?.();
+    // A failed send is already visible in the log, but remains the current instruction on retry.
+    const previousMessages = (failed.current === text && messages.at(-1)?.role === "user" ? messages.slice(0, -1) : messages).map(({ role, text }) => ({ role, text }));
     if (failed.current !== text) append({ role: "user", text, imageIds: [...imageIds] });
     setInstruction(""); setResult(undefined); setTarget("");
     await run(async () => {
@@ -177,19 +181,25 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         const media = { mimeType: "image/png" as const, data: source.split(",")[1] };
         submittedMedia.current = media;
         if (initialPlan) {
-          const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlan.id}/theme`, { instruction: text, imageIds, media });
+          const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlan.id}/theme`, { instruction: text, messages: previousMessages, preview: reviewPreview, imageIds, media });
           if (!alive.current) return;
           remember({ config: response.plan.config, plan: response.plan });
           onPlan?.(response.plan); clearCapture(); setImageIds([]); pendingContext.current = "";
           append({ role: "assistant", text: tr("画面イメージを更新しました。確認してください。") });
         } else {
           const combined = [pendingContext.current, text].filter(Boolean).join("\n\n").slice(-4000);
-          const response = await api<Identified>(`/api/shops/${shopId}/visual/identify`, { media, instruction: combined, displayed: config, local, ...(screen ? { screen } : {}) });
+          const response = await api<Identified>(`/api/shops/${shopId}/visual/identify`, { media, instruction: combined, messages: previousMessages, preview: reviewPreview, displayed: config, local, ...(screen ? { screen } : {}) });
           if (!alive.current) return;
-          pendingContext.current = combined; submitted.current = combined;
+          pendingContext.current = combined;
           // The server generates from this exact config, so later edits must invalidate the proposal.
-          setResult({ ...response, before: structuredClone(config), key: currentKey, scope: scopeKey }); if (response.candidates.length === 1) setTarget(response.candidates[0].id);
           append({ role: "assistant", text: response.explanation });
+          const selected = response.candidates[0]?.id;
+          if (selected) {
+            setResult({ ...response, before: structuredClone(config), key: currentKey, scope: scopeKey }); setTarget(selected);
+            const proposed = await api<{ config: ShopConfig; summary: string[]; visualReview: { approved: boolean; attempts: number } }>(`/api/shops/${shopId}/visual/propose`, { id: response.id, target: selected, instruction: combined, imageIds, media });
+            if (!alive.current) return;
+            setProposal({ ...proposed, before: structuredClone(config), context: combined, key: currentKey, scope: scopeKey });
+          }
         }
         failed.current = undefined;
       } catch (e) { failed.current = text; if (alive.current) setInstruction(current => current || text); throw e; }
@@ -231,13 +241,8 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       <div className="visual-chat-view">{historyControls}<button type="button" className="text-button" disabled={locked} onClick={() => image ? clearCapture() : void capture()}>{image ? tr("画面を操作する") : tr("赤ペンで囲む")}</button></div>
       <div ref={log} className="chat-log visual-chat-log" role="log" aria-label={tr("画面の修正の会話")} aria-live="polite">
         {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}><b>{message.role === "user" ? tr("あなた") : "AI"}</b><div className="pre-wrap">{message.text}</div>{!!message.imageIds?.length && <div className="chat-message-images">{message.imageIds.map((id, i) => <MenuImage key={id} imageId={id} imageBase={`/api/shops/${shopId}/menu-images`} name={tr("添付画像{0}", i + 1)} className="chat-message-image" />)}</div>}</article>)}
-        {result && <div className="notice visual-chat-confirmation"><label>{tr("変更する対象を確認")}<select disabled={locked} value={target} onChange={event => setTarget(event.target.value)}><option value="">{tr("対象を選んでください")}</option>{result.candidates.map(candidate => <option key={candidate.id} value={candidate.id}>{candidate.label}</option>)}</select></label><button disabled={locked || !target} onClick={() => void run(async () => {
-          const proposed = await api<{ config: ShopConfig; summary: string[] }>(`/api/shops/${shopId}/visual/propose`, { id: result.id, target, instruction: submitted.current, imageIds, media: submittedMedia.current });
-          if (!alive.current) return;
-          setProposal({ ...proposed, before: result.before, context: submitted.current, key: result.key, scope: result.scope });
-        })}>{tr("この箇所を修正する")}</button></div>}
         {error && <p className="alert" role="alert">{error}</p>}
-        {busy && <p role="status">{tr("修正を確認しています…")}</p>}
+        {busy && <p role="status">{tr("修正案を作成し、画面をAIで確認しています…")}</p>}
       </div>
       <form className="chat-composer" aria-label={tr("ペンで囲んだ箇所への依頼")} onSubmit={event => { event.preventDefault(); void submitRequest(); }}>
         <textarea ref={composer} aria-label={tr("ここをどう変えたいですか")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event => submitOnShortcut(event)} rows={3} maxLength={4000} disabled={locked} value={instruction} onChange={event => setInstruction(event.target.value)} placeholder={tr("ここを『季節を楽しむネイル』に変えて")} />
@@ -248,7 +253,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         </div>
       </form>
     </aside>, document.body)}
-    {proposal && <VisualChangeReview before={renderPreview?.(proposal.before)} after={renderPreview?.(proposal.config)} summary={proposal.summary} busy={locked} canAccept={proposalIsCurrent} error={proposalIsCurrent ? error : tr("編集中の内容が変わりました。修正案をキャンセルして依頼し直してください。")} onCancel={() => {
+    {proposal && <VisualChangeReview reviewed={proposal.visualReview?.approved} before={renderPreview?.(proposal.before)} after={renderPreview?.(proposal.config)} summary={proposal.summary} busy={locked} canAccept={proposalIsCurrent} error={proposalIsCurrent ? error : tr("編集中の内容が変わりました。修正案をキャンセルして依頼し直してください。")} onCancel={() => {
       discardProposal();
       append({ role: "assistant", text: tr("修正案をキャンセルしました。変更前の内容を保持しています。") });
     }} onAccept={() => {
@@ -260,7 +265,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       if (!result || !proposalIsCurrent) return false;
       let success = false;
       await run(async () => {
-        const next = await api<{ config: ShopConfig; summary: string[] }>(`/api/shops/${shopId}/visual/propose`, { id: result.id, target, instruction, applied: proposal.context, imageIds, media: submittedMedia.current, revision: proposal.config });
+        const next = await api<{ config: ShopConfig; summary: string[]; visualReview: { approved: boolean; attempts: number } }>(`/api/shops/${shopId}/visual/propose`, { id: result.id, target, instruction, messages: messages.map(({ role, text }) => ({ role, text })), applied: proposal.context, imageIds, media: submittedMedia.current, revision: proposal.config });
         if (!alive.current) return;
         setProposal({ ...proposal, ...next, context: [proposal.context, instruction].join("\n\n").slice(-4000) });
         append({ role: "user", text: instruction });

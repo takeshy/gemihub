@@ -17,6 +17,20 @@ import { designOf, restoreDesign } from "../server/design-versions.ts";
 import { ChromePreview } from "../src/SiteChrome.tsx";
 
 const theme = { headerHtml: '<header><h1>Original headline</h1><slot name="navigation"></slot></header>', bodyHtml: '<main><slot name="content"></slot></main>', footerHtml: '<footer><slot name="content"></slot></footer>', css: 'h1{color:#193e32}' };
+test("visual generation receives both sides of the conversation as context, with current changes taking priority", async () => {
+  const messages = [{ role: "user" as const, text: "Keep the current colors." }, { role: "assistant" as const, text: "The earlier edit was accepted." }];
+  const { config } = await proposeVisualAppearance(structuredClone(sample), "Make that heading shorter", [], {
+    messages, target: "copy:recentPosts", generate: async request => {
+      const input = JSON.parse(request.contents[0].parts![0].text!);
+      assert.deepEqual(input.previousMessages, messages);
+      assert.equal(input.instruction, "Make that heading shorter");
+      assert.match(request.system, /not a list of changes to execute again/);
+      assert.match(request.system, /current displayed configuration is authoritative/);
+      return JSON.stringify({ appearance: { copy: { recentPosts: "News" } } });
+    },
+  });
+  assert.equal(config.appearance!.copy!.recentPosts, "News");
+});
 test("header edits receive the annotated screen and publish/restore their HTML, CSS and navigation together", async () => {
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme, copy: { navReserve: "Reserve", recentPosts: "News" } } };
   const headerHtml = theme.headerHtml.replace("Original headline", "Revised headline");
@@ -139,7 +153,7 @@ test("empty part CSS equals unset CSS, and clearing it removes the key", () => {
 
 test("the appearance target cannot change header-owned copy", async () => {
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", copy: { navReserve: "Reserve" } } };
-  await assert.rejects(proposeVisualAppearance(current, "Rename", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) }), /ツリーの「ヘッダー」「フッター」から修正/);
+  await assert.rejects(proposeVisualAppearance(current, "Rename", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) }), /「ページ全体」から修正/);
   const { config } = await proposeVisualAppearance(current, "Colour", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { accent: "rose", copy: { recentPosts: "News" } } }) });
   assert.equal(config.appearance!.accent, "rose");
   assert.equal(config.appearance!.copy!.navReserve, "Reserve");
@@ -149,7 +163,7 @@ test("the appearance target cannot change header or footer theme parts, which th
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: { ...theme, headerCss: "h1{color:red}" } } };
   const revised = theme.headerHtml.replace("Original headline", "Revised");
   for (const patch of [{ headerHtml: revised }, { headerCss: "h1{color:blue}" }, { headerCss: "" }, { footerHtml: '<footer class="x"><slot name="content"></slot></footer>' }, { footerCss: "p{color:red}" }])
-    await assert.rejects(proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: patch } }) }), /別に比較・反映するため[\s\S]*ツリーの「ヘッダー」「フッター」から修正/, JSON.stringify(patch));
+    await assert.rejects(proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: patch } }) }), /別に比較・反映するため[\s\S]*「ページ全体」から修正/, JSON.stringify(patch));
   const { config } = await proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: { css: "p{color:green}" } } }) });
   assert.equal(scopedConfig(current, config, { kind: "shared" }).appearance!.theme!.css, "p{color:green}");
   assert.equal(config.appearance!.theme!.headerCss, "h1{color:red}");

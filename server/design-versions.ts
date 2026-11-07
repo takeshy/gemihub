@@ -10,7 +10,7 @@ import { clients, createFolder, readDriveText, trashFile } from "./google.ts";
 import type { Shop, Store } from "./store.ts";
 import { managedImageIds } from "./image-references.ts";
 import { screenIds } from "../shared/screens.ts";
-import { partValue, replacePart } from "./pages.ts";
+import { partValue, replacePart, themeValue, replaceTheme } from "./pages.ts";
 import { forEachConcurrent } from "./concurrency.ts";
 
 // An allowlist: operational settings and all business records can never enter a version.
@@ -35,15 +35,18 @@ export const designTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("screen"), screen: z.enum(screenIds) }),
   z.object({ kind: z.literal("page"), pageId: z.string().min(1).max(200) }),
   z.object({ kind: z.literal("part"), part: z.enum(["header", "footer"]) }),
+  z.object({ kind: z.literal("theme") }),
 ]);
 export type DesignTarget = z.infer<typeof designTargetSchema>;
-export const targetKey = (target?: DesignTarget) => !target ? "all" : target.kind === "screen" ? `screen:${target.screen}` : target.kind === "page" ? `page:${target.pageId}` : `part:${target.part}`;
+export const targetKey = (target?: DesignTarget) => !target ? "all" : target.kind === "theme" ? "theme" : target.kind === "screen" ? `screen:${target.screen}` : target.kind === "page" ? `page:${target.pageId}` : `part:${target.part}`;
 export function parseTargetKey(key: string): DesignTarget {
+  if (key === "theme") return { kind: "theme" };
   const [kind, ...rest] = key.split(":"), value = rest.join(":");
   return designTargetSchema.parse(kind === "screen" ? { kind, screen: value } : kind === "page" ? { kind, pageId: value } : { kind, part: value });
 }
 /** The target's value in a design; undefined means the target does not exist (a page that was not created yet). */
 function targetValue(design: PublishedDesign, target: DesignTarget): unknown {
+  if (target.kind === "theme") return themeValue(design);
   if (target.kind === "screen") return design.screens?.[target.screen] ?? null;
   if (target.kind === "part") return partValue(design, target.part);
   return design.pages.find(page => page.id === target.pageId);
@@ -51,7 +54,7 @@ function targetValue(design: PublishedDesign, target: DesignTarget): unknown {
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("base64url").slice(0, 22);
 export function designFingerprints(config: ShopConfig | PublishedDesign): Record<string, string> {
   const design = designSchema.parse(config);
-  const targets: DesignTarget[] = [...screenIds.map(screen => ({ kind: "screen" as const, screen })), { kind: "part", part: "header" }, { kind: "part", part: "footer" }, ...design.pages.map(page => ({ kind: "page" as const, pageId: page.id }))];
+  const targets: DesignTarget[] = [{ kind: "theme" }, ...screenIds.map(screen => ({ kind: "screen" as const, screen })), { kind: "part", part: "header" }, { kind: "part", part: "footer" }, ...design.pages.map(page => ({ kind: "page" as const, pageId: page.id }))];
   return Object.fromEntries(targets.map(target => [targetKey(target), hash(targetValue(design, target))]));
 }
 // An archive never changes, so its index can be cached by manifest for the life of the process.
@@ -64,7 +67,7 @@ const legacyIndexLimit = 1000;
  */
 export async function indexedDesignVersions(versions: DesignVersion[], storage: Pick<DesignVersionStorage, "readDesign">): Promise<DesignVersion[]> {
   return Promise.all(versions.map(async version => {
-    if (version.fingerprints) return version;
+    if (version.fingerprints?.theme) return version;
     let fingerprints = legacyIndex.get(version.manifestId);
     if (!fingerprints) {
       try { fingerprints = designFingerprints(await storage.readDesign(version)); }
@@ -91,6 +94,7 @@ export function versionsFor<T extends DesignVersion>(versions: T[], current: Sho
   });
 }
 export function targetLabel(target: DesignTarget, design: PublishedDesign) {
+  if (target.kind === "theme") return tr("ページ全体");
   if (target.kind === "part") return target.part === "header" ? tr("ヘッダー") : tr("フッター");
   if (target.kind === "page") return design.pages.find(page => page.id === target.pageId)?.title || tr("ページ");
   return { reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ") }[target.screen];
@@ -100,6 +104,7 @@ export function restoreDesign(current: ShopConfig, design: PublishedDesign, targ
   const saved = designSchema.parse(design);
   if (target) {
     const next = structuredClone(current);
+    if (target.kind === "theme") return shopSchema.parse(replaceTheme(next, themeValue(saved)));
     if (target.kind === "screen") {
       const screens = { ...(current.screens || {}) };
       const value = saved.screens?.[target.screen];

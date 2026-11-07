@@ -27,11 +27,35 @@ export type ShopPage = z.infer<typeof pageSchema>;
 export const releaseScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("page"), pageId: z.string().min(1) }),
   z.object({ kind: z.literal("shared") }),
+  z.object({ kind: z.literal("theme") }),
+  z.object({ kind: z.literal("content") }),
   z.object({ kind: z.literal("part"), part: z.enum(["header", "footer"]) }),
 ]);
 export type ReleaseScope = z.infer<typeof releaseScopeSchema>;
 export const same = (a: unknown, b: unknown) => stableJson(a) === stableJson(b);
 export const pageValue = (config: ShopConfig | null, id: string) => config?.pages.find(p => p.id === id) || null;
+/** The whole-page frame owns presentation, never business facts or article feature switches. */
+export function themeValue(config: Pick<ShopConfig, "header" | "footer" | "appearance">) {
+  const current: NonNullable<ShopConfig["appearance"]> = config.appearance || defaultAppearance;
+  const { articles: _, copy, ...rest } = current;
+  const headerCopy = Object.fromEntries(headerCopyKeys.filter(key => copy?.[key] !== undefined).map(key => [key, copy![key]]));
+  const appearance: Omit<NonNullable<ShopConfig["appearance"]>, "articles"> = { ...rest, ...(Object.keys(headerCopy).length ? { copy: headerCopy } : {}) };
+  return { header: config.header, footer: config.footer, appearance: { ...appearance, theme: appearance.theme || standardTheme } };
+}
+export function replaceTheme(config: ShopConfig, value: unknown): ShopConfig {
+  if (!value) return config;
+  const incoming = value as ReturnType<typeof themeValue>;
+  const copy = { ...config.appearance?.copy };
+  for (const key of headerCopyKeys) { if (incoming.appearance.copy?.[key] !== undefined) copy[key] = incoming.appearance.copy[key]; else delete copy[key]; }
+  const { copy: _copy, ...design } = incoming.appearance;
+  const appearance = same(incoming.appearance, themeValue(config).appearance) ? config.appearance : { ...design, ...(Object.keys(copy).length ? { copy } : {}), ...(config.appearance?.articles ? { articles: config.appearance.articles } : {}) };
+  if (appearance && !config.appearance?.articles) delete (appearance as NonNullable<ShopConfig["appearance"]>).articles;
+  return { ...config, header: incoming.header, footer: incoming.footer, appearance };
+}
+/** Content edits cannot publish an unrelated whole-page frame draft. */
+export function replaceContent(config: ShopConfig, value: unknown): ShopConfig {
+  return replaceTheme(replaceShared(config, value), themeValue(config));
+}
 export function partValue(config: Pick<ShopConfig, "header" | "footer" | "appearance">, part: "header" | "footer") {
   const copy = Object.fromEntries(headerCopyKeys.filter(key => config.appearance?.copy?.[key] !== undefined).map(key => [key, config.appearance!.copy![key]]));
   return { ...config[part], themeHtml: (config.appearance?.theme || standardTheme)[themeHtmlKey(part)],
@@ -90,6 +114,7 @@ export function replaceShared(config: ShopConfig, value: unknown): ShopConfig {
 }
 export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
   if (!config) return null;
+  if (scope.kind === "theme") return themeValue(config);
   if (scope.kind === "part") return partValue(config, scope.part);
   if (scope.kind === "page") return pageValue(config, scope.pageId);
   const { header: _header, footer: _footer, pages: _, menus: _m, staff: _s, hours: _h, rules: _r, region: _region, ...shared } = config;
@@ -98,9 +123,15 @@ export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
   const copy = { ...appearance.copy };
   for (const key of headerCopyKeys) delete copy[key];
   if (Object.keys(copy).length) sharedAppearance.copy = copy; else delete sharedAppearance.copy;
+  if (scope.kind === "content") return { ...shared, appearance: { ...defaultAppearance, ...(Object.keys(copy).length ? { copy } : {}), ...(config.appearance?.articles ? { articles: config.appearance.articles } : {}) } };
   return { ...shared, appearance: { ...sharedAppearance, theme: { ...standardTheme, bodyHtml: appearance.theme?.bodyHtml || standardTheme.bodyHtml, css: appearance.theme?.css || "" } } };
 }
 export function scopedConfig(current: ShopConfig | null, local: ShopConfig, scope: ReleaseScope): ShopConfig {
+  if (scope.kind === "content") return replaceContent(current || local, scopedSource(local, scope));
+  if (scope.kind === "theme") {
+    if (!current) throw Object.assign(new Error(tr("先にお店の共通設定を本番に反映してください")), { status: 409 });
+    return replaceTheme(current, themeValue(local));
+  }
   if (scope.kind === "shared") return replaceShared(current || { ...local, appearance: undefined, pages: [], header: { ...defaultHeader }, footer: { ...defaultFooter } }, scopedSource(local, scope));
   if (!current) throw Object.assign(new Error(tr("先にお店の共通設定を本番に反映してください")), { status: 409 });
   if (scope.kind === "part") return replacePart(current, scope.part, partValue(local, scope.part));
@@ -114,11 +145,17 @@ export function rebaseDraft(before: ShopConfig | null, local: ShopConfig, publis
   let config = structuredClone(published);
   let source = structuredClone(published);
   if (scope.kind !== "shared" && !same(scopedSource(local, { kind: "shared" }), scopedSource(before, { kind: "shared" }))) {
-    config = replaceShared(config, scopedSource(local, { kind: "shared" }));
-    if (before) source = replaceShared(source, scopedSource(before, { kind: "shared" }));
+    if (scope.kind === "content") {
+      config = replaceTheme(config, themeValue(local));
+      if (before) source = replaceTheme(source, themeValue(before));
+    } else {
+      config = replaceShared(config, scopedSource(local, { kind: "shared" }));
+      if (before) source = replaceShared(source, scopedSource(before, { kind: "shared" }));
+      if (scope.kind === "theme") { config = replaceTheme(config, themeValue(published)); source = replaceTheme(source, themeValue(published)); }
+    }
   }
   for (const part of ["header", "footer"] as const) {
-    if (!(scope.kind === "part" && scope.part === part) && !same(partValue(local, part), before && partValue(before, part))) {
+    if (scope.kind !== "theme" && !(scope.kind === "part" && scope.part === part) && !same(partValue(local, part), before && partValue(before, part))) {
       config = replacePart(config, part, partValue(local, part));
       source = replacePart(source, part, partValue(before || published, part));
     }

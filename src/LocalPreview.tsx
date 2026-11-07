@@ -2,6 +2,7 @@ import { tr } from "../shared/i18n";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChromeEditor, ChromePreview } from "./SiteChrome";
+import { ThemePreview } from "./ScreenGallery";
 import { ScreenTree } from "./ScreenTree";
 import { SyncPreview } from "./SyncPreview";
 import { syncStatus, replaceScope, type SyncStatus } from "./editor-sync";
@@ -9,7 +10,7 @@ import type { EditorIndex } from "../server/editor-index-schema";
 import { ApiProvider, useApi } from "./api";
 import { PublicShop, type Workspace, type Session } from "./App";
 import { PageEditor } from "./PageEditor";
-import { ScreenDesignEditor, ThemeDesignEditor } from "./DesignEditor";
+import { ScreenDesignEditor, ThemeDesignEditor, WholeThemeDesignEditor } from "./DesignEditor";
 import { screenIds, type ScreenId } from "../shared/screens";
 import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, type ReleaseScope, type ShopPage } from "../server/pages";
 import { FixtureEditor } from "./FixtureEditor";
@@ -162,7 +163,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     if (!draft || !index) return;
     let active = true;
     const ids = [...new Set([...draft.config.pages, ...draft.source?.pages || [], ...index.pages].map(p => p.id))];
-    void Promise.all([syncStatus(draft, index, { kind: "shared" }).then(status => ["shared", status] as const), ...["header", "footer"].map(part => syncStatus(draft, index, { kind: "part", part: part as "header" | "footer" }).then(status => [`part:${part}`, status] as const)), ...ids.map(id => syncStatus(draft, index, { kind: "page", pageId: id }).then(status => [id, status] as const))]).then(entries => { if (active) setStatuses(Object.fromEntries(entries)); }).catch(() => { if (active) setError(tr("状態の比較に失敗しました。ページを再読み込みしてください。")); });
+    void Promise.all([syncStatus(draft, index, { kind: "content" }).then(status => ["content", status] as const), syncStatus(draft, index, { kind: "theme" }).then(status => ["theme", status] as const), ...["header", "footer"].map(part => syncStatus(draft, index, { kind: "part", part: part as "header" | "footer" }).then(status => [`part:${part}`, status] as const)), ...ids.map(id => syncStatus(draft, index, { kind: "page", pageId: id }).then(status => [id, status] as const))]).then(entries => { if (active) setStatuses(Object.fromEntries(entries)); }).catch(() => { if (active) setError(tr("状態の比較に失敗しました。ページを再読み込みしてください。")); });
     return () => { active = false; };
   }, [draft, index]);
   useEffect(() => {
@@ -178,13 +179,13 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   }, [draft, busy, conflict, key]);
   const mock = useMemo(() => draft ? createPreviewClient(draft.config, draft.fixtures, shop.id, (imageId, view) => api(`/api/shops/${shop.id}/menu-images/${imageId}${view ? `?view=${view}` : ""}`)) : undefined, [draft?.config, draft?.fixtures, shop.id]);
   const session: Session = { demo: false, user: { name: draft?.fixtures.customerName || tr("サンプルのお客様"), email: "sample@example.com", role: "customer", shopId: shop.id } };
-  const scope: ReleaseScope = draft?.pending?.scope || (screen.startsWith("page:") ? { kind: "page", pageId: screen.slice(5) } : screen.startsWith("part:") ? { kind: "part", part: screen === "part:footer" ? "footer" : "header" } : { kind: "shared" });
+  const scope: ReleaseScope = draft?.pending?.scope || (screen.startsWith("page:") ? { kind: "page", pageId: screen.slice(5) } : screen.startsWith("part:") ? { kind: "part", part: screen === "part:footer" ? "footer" : "header" } : screen === "theme" ? { kind: "theme" } : { kind: "content" });
   let releaseConfig = draft?.config;
   try { if (draft) releaseConfig = scopedConfig(draft.source, draft.config, scope); } catch { releaseConfig = undefined; }
   const summary = draft && releaseConfig ? planSummary(draft.source, releaseConfig) : [];
   const selectedPage = draft && scope.kind === "page" ? pageValue(draft.config, scope.pageId) : undefined;
   const allPages = draft ? [...draft.config.pages, ...(index?.pages || []).filter(p => !draft.config.pages.some(local => local.id === p.id)), ...(draft.source?.pages || []).filter(p => !draft.config.pages.some(local => local.id === p.id) && !index?.pages.some(remote => remote.id === p.id))] : [];
-  const status = statuses[scope.kind === "page" ? scope.pageId : scope.kind === "part" ? `part:${scope.part}` : "shared"];
+  const status = statuses[scope.kind === "page" ? scope.pageId : scope.kind === "part" ? `part:${scope.part}` : scope.kind === "theme" ? "theme" : scope.kind === "content" ? "content" : "shared"];
   // Use the tree's comparison with production, not the order of keys in a cached snapshot.
   const hasChanges = (status === "local" || status === "conflict") && summary.length > 0;
   useEffect(() => {
@@ -233,6 +234,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     setPreviewApplied(value => value + 1);
   }
   async function choose(value: string, articleKey?: string, fromLocation = false) {
+    if (value.startsWith("part:")) value = "theme";
     const [category, article] = value.split(":");
     if ((category === "blogs" || category === "announcements") && !articleKinds(latestDraft.current?.config).includes(category)) return;
     const firstArticle = latestDraft.current?.fixtures.posts.find(post => post.category === category);
@@ -242,7 +244,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       if (onScreenChange) onScreenChange(value, requestedArticle); else activate?.();
     }
     const version = ++selectionVersion.current;
-    const target: ReleaseScope = value.startsWith("page:") ? { kind: "page", pageId: value.slice(5) } : value.startsWith("part:") ? { kind: "part", part: value === "part:footer" ? "footer" : "header" } : { kind: "shared" };
+    const target: ReleaseScope = value.startsWith("page:") ? { kind: "page", pageId: value.slice(5) } : value.startsWith("part:") ? { kind: "part", part: value === "part:footer" ? "footer" : "header" } : value === "theme" ? { kind: "theme" } : { kind: "content" };
     // Cached screens switch without a network round trip; polling and publication still check remote changes.
     const currentIndex = index;
     const currentDraft = latestDraft.current;
@@ -304,7 +306,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     const current = latestDraft.current || draft;
     // A second fetch may finish after the user has chosen an image or edited this scope.
     if (!same(scopedSource(current.config, target), scopedSource(draft.config, target))) return;
-    const source = target.kind === "shared" && remote === null ? null : replaceScope(current.source || { ...current.config, pages: [] }, target, remote);
+    const source = (target.kind === "shared" || target.kind === "content") && remote === null ? null : replaceScope(current.source || { ...current.config, pages: [] }, target, remote);
     const config = replaceScope(current.config, target, chosen);
     const downloaded = target.kind === "page" ? [...new Set([...(current.downloaded || []), target.pageId])] : current.downloaded;
     const backups = backup ? [...(current.backups || []), { at: new Date().toISOString(), scope: target, baseline: scopedSource(current.source, target), localValue: scopedSource(current.config, target), remoteValue: remote }].slice(-20) : current.backups;
@@ -384,7 +386,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   const automaticFetch = useRef("");
   useEffect(() => {
     if (!draft || !index || busy || draft.pending || conflict || !["remote", "unfetched"].includes(status || "")) return;
-    const token = scope.kind === "page" ? `${scope.pageId}:${index.pages.find(p => p.id === scope.pageId)?.hash || "deleted"}` : scope.kind === "part" ? `part:${scope.part}:${index.parts[scope.part]}` : `shared:${index.sharedHash}`;
+    const token = scope.kind === "page" ? `${scope.pageId}:${index.pages.find(p => p.id === scope.pageId)?.hash || "deleted"}` : scope.kind === "part" ? `part:${scope.part}:${index.parts[scope.part]}` : scope.kind === "theme" ? `theme:${index.themeHash}` : scope.kind === "content" ? `content:${index.contentHash}` : `shared:${index.sharedHash}`;
     if (automaticFetch.current === token) return;
     automaticFetch.current = token;
     const updated = status === "remote";
@@ -398,10 +400,10 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   const hideFooter = screen === "theme" ? visibility[screen]?.footer === true : visibility[screen]?.footer !== false;
   const screenPage = scope.kind === "page" ? allPages.find(p => p.id === scope.pageId) : undefined;
   const samples = draft ? fixtureScope(draft.config, screen, route.articleKey, draft.fixtures) : undefined;
-  const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("全体の枠") : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
+  const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("ページ全体") : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
   // The exported file that renders this screen, so the pen request names the screen even without marks.
   // Each screen restores only its own design; article screens have none of their own (use the whole-design history).
-  const historyTarget = scope.kind === "page" ? `page:${scope.pageId}` : scope.kind === "part" ? `part:${scope.part}` : (screenIds as readonly string[]).includes(screen) ? `screen:${screen}` : undefined;
+  const historyTarget = scope.kind === "theme" ? "theme" : scope.kind === "page" ? `page:${scope.pageId}` : scope.kind === "part" ? `part:${scope.part}` : (screenIds as readonly string[]).includes(screen) ? `screen:${screen}` : undefined;
   const screenFile = scope.kind === "page" ? `web/pages/${screenPage?.slug || scope.pageId}.html` : scope.kind === "part" ? `web/parts/${scope.part}.html` : `web/index.html#${screen}`;
   const tree = <ScreenTree draft={draft} index={index} statuses={statuses} selected={active ? screen : ""} disabled={busy || !!draft?.pending || !!conflict} onChoose={value => void run(async () => choose(value))} />;
   return <div className="local-preview preview-first">
@@ -409,7 +411,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     <div className="editor-toolbar">
       <div><strong>{screenLabel}</strong>{hasChanges && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? tr("変更あり") : tr("未保存")}</span>}</div>
       <div className="editor-tools"><span ref={setPenHost} />
-        {scope.kind !== "part" && <details ref={displayMenu} className="preview-display-menu"><summary><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 16h18" /></svg>{tr("表示")}</summary><div>
+        {scope.kind !== "part" && scope.kind !== "theme" && <details ref={displayMenu} className="preview-display-menu"><summary><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 16h18" /></svg>{tr("表示")}</summary><div>
           <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.header !== true : visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />{tr("ヘッダーを表示")}</label>
           <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.footer !== true : visibility[screen]?.footer === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />{tr("フッターを表示")}</label>
           <p>{tr("この画面のプレビューだけに適用")}</p>
@@ -467,7 +469,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
-      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
@@ -476,7 +478,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
           setNotice(tr("リンク先は試す画面では開きません。サイドバーの画面ツリーから選択してください。"));
         }
       }}>
-        {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
+        {scope.kind === "theme" ? <ThemePreview config={draft.config} shopId={shop.id} /> : scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
           <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={hideHeader} hideFooter={hideFooter} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
@@ -489,9 +491,9 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       </div>}
     </>}    {draft && !conflict && <div className="panel editor-secondary">
       {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダー") : tr("フッター")}{tr("の内容を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
-      {scope.kind === "shared" && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={applyDesign} /></fieldset></details>}
+      {(scope.kind === "shared" || scope.kind === "content") && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={applyDesign} /></fieldset></details>}
       {scope.kind === "part" && <details key={`part-html:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダーの HTML を編集") : tr("フッターの HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={JSON.stringify([scope.part, (draft.config.appearance?.theme || standardTheme)[themeHtmlKey(scope.part)], draft.config.appearance?.theme?.[`${scope.part}Css`]])} part={scope.part} config={draft.config} shopId={shop.id} onChange={applyDesign} openFrame={() => void run(async () => choose("theme"))} /></fieldset></details>}
-      {screen === "theme" && <fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`body:${draft.config.appearance?.theme?.bodyHtml}:${draft.config.appearance?.theme?.css}`} part="body" config={draft.config} shopId={shop.id} onChange={applyDesign} /></fieldset>}
+      {screen === "theme" && <details><summary>{tr("ページ全体の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><WholeThemeDesignEditor key={JSON.stringify(draft.config.appearance?.theme)} config={draft.config} shopId={shop.id} onChange={applyDesign} /></fieldset></details>}
       {scope.kind === "page" && <details key={`page:${scope.pageId}`}><summary>{tr("このページの内容を編集")}</summary>
         {scope.kind === "page" && <>
           {!draft.source && <p className="notice">{tr("追加ページを公開する前に、予約画面などを選んでお店の共通設定を反映してください。")}</p>}
@@ -538,7 +540,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       </div>
     </dialog>, document.body)}
     {draft && createPortal(<dialog ref={releaseReview} className="editor-release-dialog" aria-label={tr("本番への反映内容")} onClose={() => setReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
-      <h3 ref={releaseHeading} tabIndex={-1}>{tr("本番への反映内容：")}{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || tr("ページ削除") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("全体の枠") : tr("お店の共通設定")}</h3><ul>{summary.map(s => <li key={s}>{s}</li>)}</ul>
+      <h3 ref={releaseHeading} tabIndex={-1}>{tr("本番への反映内容：")}{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || tr("ページ削除") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("ページ全体") : tr("お店の共通設定")}</h3><ul>{summary.map(s => <li key={s}>{s}</li>)}</ul>
       <details><summary>{tr("設定の変更前と変更後")}</summary><div className="local-diff"><pre>{JSON.stringify(draft.source, null, 2)}</pre><pre>{JSON.stringify(draft.config, null, 2)}</pre></div></details>
       <p>{tr("選んだページ（または共通設定）だけを本番に反映します。他のページのローカル編集と、サンプルデータは含みません。")}</p>
       {error && <p className="alert" role="alert">{error}</p>}

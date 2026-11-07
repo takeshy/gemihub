@@ -9,7 +9,7 @@ import { ChromePreview, ThemeBody } from "./SiteChrome";
 import { hasThemeFrame } from "../shared/theme-editing";
 import { articleKinds } from "../shared/article-features";
 
-export type PreviewScreen = { id: string; name: string; description: string; pane?: string; category?: "blogs" | "announcements"; article?: boolean; pageSlug?: string };
+export type PreviewScreen = { id: string; name: string; description: string; pane?: string; category?: "blogs" | "announcements"; article?: boolean; articleKey?: string; pageSlug?: string };
 export function previewScreens(config: ShopConfig): PreviewScreen[] {
   return ([
     { id: "reserve", name: tr("予約"), description: tr("メニュー・担当者・日時を選んで予約"), pane: "reserve" },
@@ -32,7 +32,7 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
   const [route, setRoute] = useState<{ pane?: string; category?: "blogs" | "announcements"; articleKey?: string; pageSlug?: string }>();
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
-  const article = fixtures.posts.find(post => post.category === screen.category);
+  const article = fixtures.posts.find(post => post.category === screen.category && (!screen.articleKey || postKey(post) === screen.articleKey));
   const currentId=route ? route.pageSlug ? `page:${config.pages.find(page=>page.slug===route.pageSlug)?.id}` : route.category ? `${route.category}${route.articleKey?":article":""}` : route.pane || "about" : screen.id;
   const currentName=previewScreens(config).find(item=>item.id===currentId)?.name || screen.name;
   const currentArticleKey=route ? route.articleKey : screen.article&&article ? postKey(article) : undefined;
@@ -57,18 +57,23 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
  * the theme (header, footer, colours and layout) with placeholder content instead of screen captures.
  */
 export function ScreenGallery({ config, shopId, themeRef }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null> }) {
-  const accent = config.appearance?.accent || "sage";
-  const layout = config.appearance?.layout || "standard";
   return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}>
     <h4>{tr("用意する画面")}</h4>
     <ul className="screen-name-list">{previewScreens(config).map(screen => <li key={screen.id}><strong>{screen.name}</strong><span>{screen.description}</span></li>)}</ul>
     <p className="small muted">{tr("全画面に共通のヘッダー・フッターが付きます。")}</p>
     <h4>{tr("ページの雰囲気")}</h4>
     <p className="small muted">{tr("色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。")}</p>
-    <div className="theme-preview" ref={themeRef} inert aria-hidden="true">
-      <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/menu-images`} />
-      <div className={`public-shop accent-${accent} layout-${layout}${hasThemeFrame(config.appearance?.theme)?" custom-theme":""}`}><ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><div className="theme-placeholder"><span>{tr("ここに各種画面の内容が入ります")}</span></div></ThemeBody></div>
-      <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/menu-images`} />
-    </div>
+    <ThemePreview config={config} shopId={shopId} themeRef={themeRef} />
   </section>;
+}
+
+/** A complete frame, with unmistakably dummy content instead of a working booking screen. */
+export function ThemePreview({ config, shopId, themeRef }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null> }) {
+  const accent = config.appearance?.accent || "sage";
+  const layout = config.appearance?.layout || "standard";
+  return <div className="theme-preview" ref={themeRef} inert aria-label={tr("ページ全体の見本")}>
+      <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/menu-images`} />
+      <div className={`public-shop accent-${accent} layout-${layout}${hasThemeFrame(config.appearance?.theme)?" custom-theme":""}`}><ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><div className="theme-placeholder"><strong>{tr("Dummy（仮の内容）")}</strong><span>{tr("ここに各ページの内容が入ります")}</span><small>{tr("予約やお問い合わせなどの内容は、それぞれの画面で編集できます。")}</small></div></ThemeBody></div>
+      <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/menu-images`} />
+    </div>;
 }

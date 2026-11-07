@@ -65,7 +65,7 @@ export type Plan = {
   summary: string[];
   approved: boolean;
   requiresSetup?: boolean;
-  themeReview?: { attempts: number; approved: boolean };
+  themeReview?: { attempts: number; approved: boolean; rendered?: boolean };
   chat?: ChatReference;
   base: number;
 };

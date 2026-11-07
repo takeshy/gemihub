@@ -761,6 +761,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
     }
     else if (action === `/api/shops/${shop.id}/local-editor/index`) result = {
       base: shop.revision, published: !!shop.published, lastPublishedPlanId: shop.lastPublishedPlanId,
+      contentHash: await fingerprint(scopedSource(shop.published, { kind: "content" })),
+      themeHash: await fingerprint(scopedSource(shop.published, { kind: "theme" })),
       sharedHash: await fingerprint(scopedSource(shop.published, { kind: "shared" })),
       parts: { header: await fingerprint(scopedSource(shop.published, { kind: "part", part: "header" })), footer: await fingerprint(scopedSource(shop.published, { kind: "part", part: "footer" })) },
       pages: await Promise.all((shop.published?.pages || []).map(async p => ({ id: p.id, title: p.title, slug: p.slug, hash: await fingerprint(p) }))),
@@ -788,10 +790,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
         if (field === "body") page.body = tr("<h2>ペンで変更した内容</h2><p>ローカルのページ本文を更新しました。</p>");
         else page.title = tr("ペンで変更したページ");
       } else if (input.target === "part:header") next.header.title = tr("季節を楽しむアトリエ");
+      else if (input.target === "theme") { next.header.title = tr("季節を楽しむアトリエ"); next.footer.text = tr("お会いできる日を楽しみにしています。"); }
       else if (input.target === "part:footer") next.footer.text = tr("お会いできる日を楽しみにしています。");
       else if (input.target === "name") next.name = tr("季節のアトリエ");
       else next.description = tr("季節を楽しむ、小さなネイルサロン。");
-      result = { config: next, summary: [tr("選んだ対象をローカルで変更")] };
+      result = { config: next, summary: [tr("選んだ対象をローカルで変更")], visualReview: {approved:true,attempts:1} };
     }
     else if (action === `/api/shops/${shop.id}/access`) {
       result = trafficFixture(Number(url.searchParams.get("days") || 30) as ArticleAccessDays, scenario === "crm-empty" ? "empty" : "ready", regionOf(config).country === "US" ? "USD" : "JPY", url.searchParams.get("unit") || "day");
@@ -898,7 +901,8 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
       visualConfig = structuredClone((input.displayed || config) as typeof config);
       const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;
-      if (part) result = { id: "story-visual", explanation: tr("共通パーツの変更対象を確認してください。"), candidates: [{ id: `part:${part}`, label: part === "header" ? tr("共通ヘッダー") : tr("共通フッター") }] };
+      if ((input.local as {theme?:boolean})?.theme) result = {id:"story-visual",explanation:tr("ページ全体の見た目をまとめて修正します。"),candidates:[{id:"theme",label:tr("ページ全体")}]};
+      else if (part) result = { id: "story-visual", explanation: tr("共通パーツの変更対象を確認してください。"), candidates: [{ id: `part:${part}`, label: part === "header" ? tr("共通ヘッダー") : tr("共通フッター") }] };
       else if (/お便り|ニュース|news|updates/i.test(String(input.instruction))) result = { id: "story-visual", explanation: tr("お便りの見出しを変更できます。内容を確認してください。"), candidates: [{ id: "copy:recentPosts", label: tr("画面の文言：{0}", storefrontText(visualConfig, "recentPosts")) }] };
       else if (/配置|layout/i.test(String(input.instruction)) && ["about", "reserve", "mine", "contact"].includes(String((input.screen as { id?: string })?.id))) {
         const id = (input.screen as { id: string }).id;

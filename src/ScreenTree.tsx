@@ -14,13 +14,13 @@ export function ScreenTree({ draft, index, statuses, selected, disabled, onChoos
   };
   const pages = [...(draft?.config.pages || []), ...(index?.pages || []).filter(p => !draft?.config.pages.some(l => l.id === p.id)), ...(draft?.source?.pages || []).filter(p => !draft?.config.pages.some(l => l.id === p.id) && !index?.pages.some(l => l.id === p.id))];
   const groups = [
-    { label: tr("共通パーツ"), items: [["part:header", tr("ヘッダー")], ["part:footer", tr("フッター")], ["theme", tr("全体の枠")]] },
     { label: tr("予約・お店の情報"), items: [["mine", tr("マイページ")], ["reserve", tr("予約")], ["about", tr("お店のこと")], ["contact", tr("お問い合わせ")]] },
     { label: articles.length === 1 ? articles[0] === "blogs" ? tr("ブログ") : tr("お知らせ") : tr("ブログ・お知らせ"), items: [["blogs", tr("ブログ一覧")], ["blogs:article", tr("ブログ記事")], ["announcements", tr("お知らせ一覧")], ["announcements:article", tr("お知らせ記事")]].filter(([id]) => articles.some(category => id === category || id === `${category}:article`)) },
     { label: tr("追加ページ"), items: pages.map(p => [`page:${p.id}`, p.title]) },
   ];
-  return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => {
-    const status = statuses[id.startsWith("page:") ? id.slice(5) : id.startsWith("part:") ? id : "shared"];
+  const item = (id: string, label: string) => {
+    const status = statuses[id === "theme" ? "theme" : id.startsWith("page:") ? id.slice(5) : "content"];
     return <button key={id} role="treeitem" aria-selected={selected === id} disabled={disabled} onClick={() => onChoose(id)}><span className="tree-name">{label}</span>{status && ["local", "remote", "conflict"].includes(status) && <span className={`sync-badge sync-${status}`} title={badges[status as "local" | "remote" | "conflict"].title}>{badges[status as "local" | "remote" | "conflict"].label}</span>}</button>;
-  })}</div></details>)}</div>;
+  };
+  return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{item("theme", tr("ページ全体"))}{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => item(id, label))}</div></details>)}</div>;
 }

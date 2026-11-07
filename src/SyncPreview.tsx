@@ -2,6 +2,7 @@ import { tr } from "../shared/i18n";
 import React, { useEffect, useMemo, useRef } from "react";
 import { ApiProvider, useApi } from "./api";
 import { ChromePreview } from "./SiteChrome";
+import { ThemePreview } from "./ScreenGallery";
 import { PublicShop, type Session } from "./App";
 import { replaceScope } from "./editor-sync";
 import { createPreviewClient, type Fixtures } from "./local-preview";
@@ -36,5 +37,6 @@ export function SyncPreview({ config, value, scope, fixtures, shopId, route, hid
   if (value === null) return <p className="notice">{tr("この側では")}{scope.kind === "page" ? tr("ページが削除されています（または未作成）") : tr("お店が未公開です")}。</p>;
   // The frame scrolls; only its content is inert (read-only), since an inert element cannot be scrolled.
   if (scope.kind === "part") return <div ref={frame} className="comparison-preview" tabIndex={0}><div inert><ChromePreview config={previewConfig} part={scope.part} imageBase={`/api/shops/${shopId}/images`} /></div></div>;
+  if (scope.kind === "theme") return <div ref={frame} className="comparison-preview" tabIndex={0}><ThemePreview config={previewConfig} shopId={shopId} /></div>;
   return <div ref={frame} className={`comparison-preview${scope.kind === "page" ? " comparison-preview-page" : ""}`} tabIndex={0}><div inert><ApiProvider value={mock}><PublicShop key={JSON.stringify([previewConfig, fixtures, route])} session={session} slug="local-preview" search="" initialPane={route?.pane || "reserve"} category={route?.category} articleKey={route?.articleKey} hideHeader={hideHeader} hideFooter={hideFooter} pageSlug={scope.kind === "page" ? (value as ShopPage).slug : undefined} busy={false} run={async fn => { try { await fn(); } catch { /* Read-only comparison. */ } }} notify={() => {}} navigate={() => {}} /></ApiProvider></div></div>;
 }

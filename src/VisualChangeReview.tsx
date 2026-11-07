@@ -3,10 +3,11 @@ import { createPortal } from "react-dom";
 import { tr } from "../shared/i18n";
 import { useComparisonScroll } from "./comparison-scroll";
 
-export function VisualChangeReview({ before, after, summary, busy, error, canAccept = true, onAccept, onCancel, onRefine }: {
+export function VisualChangeReview({ before, after, summary, busy, error, canAccept = true, reviewed = false, onAccept, onCancel, onRefine }: {
   before: React.ReactNode; after: React.ReactNode; summary: string[]; busy: boolean; error: string;
   onAccept: () => void; onCancel: () => void; onRefine: (instruction: string) => Promise<boolean>;
   canAccept?: boolean;
+  reviewed?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -22,6 +23,7 @@ export function VisualChangeReview({ before, after, summary, busy, error, canAcc
   }}>
     <h2 id="visual-review-heading" ref={heading} tabIndex={-1}>{tr("修正案を比較")}</h2>
     <p>{tr("変更前と修正案を見比べてください。「OK」でローカルに採用します。本番への反映は別の操作です。")}</p>
+    {reviewed && <p className="small muted">{tr("修正後のPC・スマートフォンの画面をAIで確認しました。")}</p>}
     {!!summary.length && <ul>{summary.map((line, index) => <li key={index}>{line}</li>)}</ul>}
     <div className="conflict-columns" onScrollCapture={syncScroll}>
       <section aria-label={tr("変更前")}><h3>{tr("変更前")}</h3>{before}</section>

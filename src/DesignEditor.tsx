@@ -93,7 +93,7 @@ export function ThemeDesignEditor({ config, part, shopId, onChange, openFrame }:
     setError(""); onChange({ ...config, appearance: { ...(config.appearance || defaultAppearance), theme: parsed.data } });
   }
   return <div className="design-editor">
-    <p className="small muted">{part === "body" ? tr("全画面に共通する枠の HTML と、ヘッダー・フッターにも使う共通 CSS を編集します。") : tr("このパーツの HTML と専用 CSS を編集します。共通 CSS は「全体の枠」で編集できます。")}</p>
+    <p className="small muted">{part === "body" ? tr("ページ中央の枠の HTML と、ページ全体に使う CSS を編集します。") : tr("ページの上部または下部の HTML と、その部分の CSS を編集します。")}</p>
     <SlotList allowed={part === "header" ? ["title", "subtitle", "details", "image", "navigation"] : ["content"]} required={part === "header" ? ["navigation"] : ["content"]} />
     <CodeArea label={part === "header" ? tr("ヘッダーの HTML") : part === "footer" ? tr("フッターの HTML") : tr("全体の枠の HTML")} value={html} onChange={setHtml} rows={part === "header" ? 8 : 5} shopId={shopId} />
     <CodeArea label={part === "body" ? tr("全体の CSS（ヘッダー・枠・フッター共通）") : part === "header" ? tr("ヘッダー専用の CSS") : tr("フッター専用の CSS")} value={css} onChange={setCss} rows={12} />
@@ -108,5 +108,31 @@ export function ThemeDesignEditor({ config, part, shopId, onChange, openFrame }:
       }}>{tr("標準の表示に戻す")}</button>}
       <button type="button" className="primary" onClick={() => apply()}>{tr("プレビューに反映")}</button>
     </div>
+  </div>;
+}
+
+/** One draft and one apply action for the complete frame. */
+export function WholeThemeDesignEditor({ config, shopId, onChange }: { config: ShopConfig; shopId: string; onChange: (config: ShopConfig) => void }) {
+  const [theme, setTheme] = useState<Theme>(() => structuredClone(config.appearance?.theme || standardTheme));
+  const [error, setError] = useState("");
+  const set = (key: keyof Theme, value: string) => setTheme(current => ({ ...current, [key]: value }));
+  function apply(value = theme) {
+    const parsed = themeSchema.safeParse(compactTheme(value));
+    if (!parsed.success) { setError(parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(" / ")); return; }
+    setError(""); onChange({ ...config, appearance: { ...(config.appearance || defaultAppearance), theme: parsed.data } });
+  }
+  return <div className="design-editor">
+    <p>{tr("ページの上部・中央の枠・下部をまとめて編集します。中央には各画面の内容が入ります。")}</p>
+    <CodeArea label={tr("ヘッダーの HTML")} value={theme.headerHtml} onChange={value => set("headerHtml", value)} rows={8} shopId={shopId} />
+    <CodeArea label={tr("全体の枠の HTML")} value={theme.bodyHtml} onChange={value => set("bodyHtml", value)} rows={5} shopId={shopId} />
+    <CodeArea label={tr("フッターの HTML")} value={theme.footerHtml} onChange={value => set("footerHtml", value)} rows={5} shopId={shopId} />
+    <CodeArea label={tr("全体の CSS（ヘッダー・枠・フッター共通）")} value={theme.css} onChange={value => set("css", value)} rows={10} />
+    <CodeArea label={tr("ヘッダー専用の CSS")} value={theme.headerCss || ""} onChange={value => set("headerCss", value)} rows={5} />
+    <CodeArea label={tr("フッター専用の CSS")} value={theme.footerCss || ""} onChange={value => set("footerCss", value)} rows={5} />
+    <p className="small muted">{rules()}</p>
+    {error && <p className="alert" role="alert">{error}</p>}
+    <div className="actions"><button type="button" onClick={() => {
+      if (window.confirm(tr("ページ全体の HTML と CSS を標準に戻しますか？"))) { setTheme(structuredClone(standardTheme)); apply(standardTheme); }
+    }}>{tr("標準の表示に戻す")}</button><button type="button" className="primary" onClick={() => apply()}>{tr("プレビューに反映")}</button></div>
   </div>;
 }

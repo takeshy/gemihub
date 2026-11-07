@@ -161,7 +161,7 @@ test("removed uploads, image identification, ambiguous target selection, explana
   const preview = await request(base + "/visual/identify", visual, owner);
   assert.equal(preview.status, 200);
   assert.deepEqual(screens.at(-1), visual.screen, "the screen name and file reach the AI, so a request without marks can be located");
-  assert.equal(preview.body.candidates.length, 2);
+  assert.equal(preview.body.candidates.length, 1);
   const input = {
     text: visual.instruction,
     visual: { id: preview.body.id, target: "name" },
@@ -231,10 +231,10 @@ test("removed uploads, image identification, ambiguous target selection, explana
   const live = { ...visual };
   delete (live as Partial<typeof live>).planId;
   ids = [];
-  assert.equal(
-    (await request(base + "/visual/identify", live, owner)).status,
-    400,
-  );
+  const clarification = await request(base + "/visual/identify", live, owner);
+  assert.equal(clarification.status, 200);
+  assert.deepEqual(clarification.body.candidates, []);
+  assert.equal(clarification.body.id, "", "a clarification creates no editable target or proposal");
   ids = ["name"];
   const identified = await request(base + "/visual/identify", live, owner);
   const change = await request(

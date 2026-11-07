@@ -52,8 +52,8 @@ try {
       if (screen && screen !== 'ai') {
         await page.locator('.local-preview-screen').waitFor();
         await page.locator('.mobile-menu-toggle').click();
-        await page.getByRole('treeitem', { name: label(screen === 'header' ? 'ヘッダー' : '全体の枠'), exact: true }).click();
-        if (screen === 'header') await page.locator('summary').filter({ hasText: label('ヘッダーの HTML を編集') }).click();
+        await page.getByRole('treeitem', { name: label('ページ全体'), exact: true }).click();
+        await page.locator('summary').filter({ hasText: label('ページ全体の HTML を編集') }).click();
         await page.locator('textarea.code-input').first().waitFor();
       }
       await page.evaluate(() => {

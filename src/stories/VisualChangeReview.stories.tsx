@@ -16,7 +16,7 @@ function ReviewExample({ failed = false }: { failed?: boolean }) {
   } }));
   const preview = (config: typeof before) => <div className="comparison-preview"><div inert><ChromePreview config={config} part="header" /></div></div>;
   return <main><button onClick={() => setOpen(true)}>{tr("修正案を比較")}</button>{preview(before)}
-    {open && <VisualChangeReview before={preview(before)} after={preview(after)} summary={[tr("共通ヘッダー")]} busy={false} error={failed ? tr("操作できませんでした") : ""}
+    {open && <VisualChangeReview reviewed before={preview(before)} after={preview(after)} summary={[tr("共通ヘッダー")]} busy={false} error={failed ? tr("操作できませんでした") : ""}
       onAccept={() => { setBefore(after); setOpen(false); }} onCancel={() => setOpen(false)} onRefine={async () => {
         setAfter(current => ({ ...current, appearance: { ...current.appearance, theme: { ...current.appearance.theme, headerCss: ".public-nav{gap:32px;padding:24px}" } } })); return true;
       }} />}
