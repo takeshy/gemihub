@@ -133,6 +133,8 @@ Check that the certificate is `ACTIVE` and `shared-apps-gemihub-web` is healthy.
 
 After initial validation, configure `repository` and review/apply the plan to trigger Cloud Build on pushes to the chosen branch. `cloudbuild.yaml` builds an image, calls `deploy.py --app gemihub-web` over IAP, and saves the manifest in Secret Manager. The app uses container port `8080` for compatibility with the shared deployer.
 
+`infra/deploy-vm.sh` prepares the SSH known-host directory and checks authentication before deployment. SSH connection failures (exit 255) retry the check at most three times; the remote deployment runs once. Each build uses its own key, which expires after ten minutes and is removed on exit. A failed remote deployment is reported without retrying it.
+
 ```sh
 cd /path/to/omaiweb
 npm ci --ignore-scripts
