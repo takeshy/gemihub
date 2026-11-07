@@ -998,7 +998,7 @@ export function createApp(
             if (input.staffId && held.staffId !== input.staffId) fail(409, tr("空き枠の担当が変わりました。空き状況を確認し直してください。"));
             if (dateIn(held.start, timeZone) !== today() || Date.parse(held.start) <= Date.now()) fail(409, tr("現金のお客様への差し替えは、当日の開始前の予約だけです"));
             const booking: Booking = {
-              id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: "",
+              id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: input.message || "",
               menuId: held.menuId, price: fromMinor(transfer.price, transfer.currency),
               ...(held.optionIds?.length ? { optionIds: held.optionIds, items: held.items } : {}),
               staffId: held.staffId, start: held.start, end: held.end, status: "active", createdAt: now, updatedBy: actor, updatedAt: now,
@@ -1007,16 +1007,16 @@ export function createApp(
               await store.saveBooking(booking);
               if (!customerEmail) await ensurePhoneCustomer(store, fresh.id, input.name, caller, actor);
             }, now);
-            const refundAmount = fromMinor(transfer.price, transfer.currency);
+            const refundAmount = fromMinor(transfer.price, transfer.currency), note = input.message ? tr("\nメッセージ: {0}", input.message) : "";
             await notify(fresh, freshConfig, freshConfig.notificationEmail, tr("AI電話で当日の譲渡枠に現金予約が入りました"),
-              tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n元の予約者への返金: {5}\nお客様が来店しなかった場合、この返金額 {5} は店負担となります。", input.name, new Date(held.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, held.staffId), bookingMenuName(freshConfig, held), formatMinor(transfer.price, transfer.currency, intlLocale()), formatMinor(transfer.price, transfer.currency, intlLocale())), []).catch(reportError);
+              tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n元の予約者への返金: {5}\nお客様が来店しなかった場合、この返金額 {5} は店負担となります。", input.name, new Date(held.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, held.staffId), bookingMenuName(freshConfig, held), formatMinor(transfer.price, transfer.currency, intlLocale()), formatMinor(transfer.price, transfer.currency, intlLocale())) + note, []).catch(reportError);
             return resultOf(freshConfig, booking, { refundAmount, currency: transfer.currency });
           }
           const date = requestedDate(dateIn(input.start, timeZone));
           const slot = (await availableSlots(store, fresh, phoneRules(freshConfig), date, input.menuId, input.staffId, calendar, undefined, input.optionIds || [])).find(item => item.start === input.start);
           if (!slot) fail(409, tr("この時間は予約できません。空き状況を更新してください"));
           const booking: Booking = {
-            id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: "",
+            id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: input.message || "",
             menuId: input.menuId, price: selection!.price, ...(selection!.optionIds.length ? { optionIds: selection!.optionIds, items: selection!.items } : {}),
             ...slot!, status: "active", createdAt: now, updatedBy: actor, updatedAt: now,
           };
@@ -1026,7 +1026,7 @@ export function createApp(
           });
           logs.activity(fresh.id, customerKey, "booking_completed", booking.id);
           await notify(fresh, freshConfig, freshConfig.notificationEmail, tr("AI電話で現金予約を受け付けました"),
-            tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n折り返し先: {5}", input.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, booking.staffId), bookingMenuName(freshConfig, booking), formatMoney(booking.price, currencyOf(regionOf(freshConfig)), intlLocale()), caller), []).catch(reportError);
+            tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n折り返し先: {5}", input.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, booking.staffId), bookingMenuName(freshConfig, booking), formatMoney(booking.price, currencyOf(regionOf(freshConfig)), intlLocale()), caller) + (input.message ? tr("\nメッセージ: {0}", input.message) : ""), []).catch(reportError);
           return resultOf(freshConfig, booking);
         });
       },

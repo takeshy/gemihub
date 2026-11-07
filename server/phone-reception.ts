@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket, type RawData } from "ws";
 import { z } from "zod";
 import { intlLocale, tr, type Locale } from "../shared/i18n.ts";
 import { regionOf } from "../shared/region.ts";
-import { spokenPhoneNumber, type PhoneSettings } from "../shared/phone.ts";
+import type { PhoneSettings } from "../shared/phone.ts";
 export * from "../shared/phone.ts";
 import type { ShopConfig } from "./domain.ts";
 import { requestLocale } from "./i18n.ts";
@@ -127,7 +127,6 @@ export class TwilioAudioBridge {
 export type PhoneCallerFacts = {
   config: ShopConfig;
   settings: PhoneSettings;
-  caller: string;
   callerName?: string;
   today: string;
   now: string;
@@ -144,10 +143,11 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
   const hours = config.hours;
   return [
     tr("あなたは「{0}」の電話受付AIです。お客様の用件を短く聞き、落ち着いて丁寧に日本語で話してください。", config.name),
-    tr("通話相手の発信者番号は {0} です。番号は相手に言わせず、こちらから読み上げて確認してください。折り返し・確認の連絡先はこの番号を使います。", spokenPhoneNumber(facts.caller)),
+    tr("発信者番号はサーバーが記録し、折り返し先にも使います。番号を聞いたり読み上げたりしないでください。"),
     facts.callerName ? tr("この番号のお客様は「{0}」として記録があります。名前を聞くときの参考にしてください。", facts.callerName) : "",
     tr("事実は下の店舗情報だけを根拠にしてください。書かれていないことを推測して答えないでください。営業時間・場所・メニューと料金は、この情報から答えられる範囲でその場で答えてかまいません。それ以外の問い合わせは、名前と用件を聞いて create_inquiry を呼び、あとで折り返すことを伝えてください。"),
-    tr("予約は、メニューを聞き、check_availability で空き時間を確認してから候補を2〜3個伝えてください。日時が決まったら名前を必ず聞き、発信者番号を読み上げて確認し、メニュー・日時・来店時の現金払いであることを復唱してから create_booking を呼んでください。予約IDは自分で作らず、必ずツールの結果を使ってください。"),
+    tr("予約は、メニューを聞き、check_availability で空き時間を確認してから候補を2〜3個伝えてください。日時が決まったら名前を必ず聞き、お店に伝えておきたいことがないか尋ねてください。そのあとメニュー・日時・お名前・来店時の現金払いであることを復唱して了承を得てから create_booking を呼び、伝えたいことがあれば message に入れてください。予約IDは自分で作らず、必ずツールの結果を使ってください。"),
+    tr("create_booking が ok: true を返したら、確定した日時とメニューを伝えて予約が完了したことを確認し、ほかにご用件がないか尋ねてください。なければお礼を言って finish_call を呼んでください。"),
     config.rules.payment?.enabled
       ? tr("この店は前払いを使います。電話で現金予約できるのは今日の残り枠だけです。今日より後の希望には、オンライン予約を案内してください。")
       : tr("この店は前払いを使いません。予約可能期間内なら今日より後の日も電話で予約できます。"),
@@ -185,6 +185,7 @@ export const phoneTools = (): FunctionDeclaration[] => [
       staffId: { type: Type.STRING, description: tr("スタッフID（任意）") },
       optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("追加メニューID（任意）") },
       transferId: { type: Type.STRING, description: tr("当日分の譲渡枠を使う場合、check_availability が返した transferId") },
+      message: { type: Type.STRING, description: tr("お店に伝えておきたいこと（任意）") },
     }, required: ["name", "menuId", "start"] },
   },
   {
@@ -218,7 +219,7 @@ export type PhoneInquiryResult = { ok: true; inquiryId: string };
 export type PhoneCancelResult = { ok: boolean; message: string; choices?: { id: string; start: string; menuName: string }[] };
 export type PhoneHost = {
   availability(input: { date?: string; menuId: string; staffId?: string; optionIds?: string[] }): Promise<PhoneAvailability>;
-  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; transferId?: string }, actionId?: string): Promise<PhoneBookingResult>;
+  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; transferId?: string; message?: string }, actionId?: string): Promise<PhoneBookingResult>;
   inquire(input: { name: string; reason: string }): Promise<PhoneInquiryResult>;
   cancel(input: { start?: string }): Promise<PhoneCancelResult>;
   recordCall(result: PhoneCallRecord): Promise<void>;
@@ -359,7 +360,7 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         return { ...result };
       }
       if (name === "create_booking") {
-        const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), transferId: z.string().optional() }).parse(args || {});
+        const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), transferId: z.string().optional(), message: z.string().trim().max(2000).optional() }).parse(args || {});
         const result = await access.host.book(input, actionId);
         outcome = "booking"; bookingId = result.bookingId; settled = true; failure = undefined;
         return { ...result };
@@ -402,7 +403,7 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       outputAudioTranscription: {},
       contextWindowCompression: { triggerTokens: "24000", slidingWindow: { targetTokens: "12000" } },
       systemInstruction: phoneInstruction({
-        config: access.config, settings: access.settings, caller: access.caller, callerName: access.callerName,
+        config: access.config, settings: access.settings, callerName: access.callerName,
         today: new Intl.DateTimeFormat("en-CA", { timeZone: regionOf(access.config).timeZone }).format(new Date()),
         now: new Date().toLocaleString(intlLocale(), { timeZone: regionOf(access.config).timeZone, timeZoneName: "short" }),
         timeZone: regionOf(access.config).timeZone,

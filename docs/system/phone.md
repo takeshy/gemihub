@@ -21,11 +21,11 @@ AI phone reception lets a shop answer calls while the owner is working. Twilio s
 
 1. Withheld, anonymous and public/unknown caller IDs, including their numeric keypad spellings such as `+266696687`, are ended with a short request to call back with caller ID. They never reach Gemini and the outcome is logged.
 2. The AI answers with the shop name and asks whether the call is about a booking or another matter.
-3. For a booking it asks the menu, calls `check_availability`, offers real slots, asks the name, reads the caller ID back for confirmation, repeats the menu, time and cash payment, then calls `create_booking`.
+3. For a booking it asks the menu, calls `check_availability`, offers real slots, asks the name and whether there is anything to pass on to the shop, repeats the menu, time, name and cash payment for the caller's agreement, then calls `create_booking`. A message becomes the booking's message and appears in the owner notification. After the booking succeeds, the AI states the confirmed date, time and menu and asks whether there is anything else before ending the call.
 4. For a simple question it answers from the published record only: opening hours, address, menus and prices. Anything else becomes an inquiry: the AI asks the name and reason, calls `create_inquiry`, and tells the caller the shop will call back.
 5. If listening fails, the AI stops guessing, takes a name and reason and creates an inquiry.
 
-The caller never has to say their number. The caller ID becomes the callback number and the CRM key.
+The caller never has to say their number, and the AI neither asks for it nor reads it aloud. The caller ID becomes the callback number and the CRM key.
 
 # Booking rules
 

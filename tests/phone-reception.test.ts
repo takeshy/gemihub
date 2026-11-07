@@ -405,6 +405,22 @@ test("long inquiry transcripts are retained in ordered interactions within the l
   assert.equal([...history.body[0].interactions].sort(newestInteractionFirst).map((entry: any) => entry.text).join(""), `お客様: ${text}\nAI: 確認します`);
 });
 
+test("the caller's message reaches the booking and the owner without reading the number aloud", async t => {
+  const f = await fixture(t);
+  f.shop.google = { folderId: "folder" } as typeof f.shop.google;
+  await f.store.saveShop(f.shop);
+  const ws = await f.stream("CA-NOTE");
+  await f.waitFor(() => !!f.liveParameters());
+  const instruction = f.liveParameters().config.systemInstruction;
+  assert.ok(!instruction.includes("0312345678"), "the model does not need the number");
+  assert.match(instruction, /伝えておきたいこと/);
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
+  const booked = await f.invoke("book", "create_booking", { name: "Hanako", menuId: "simple", start: `${day}T10:00:00+09:00`, message: "爪が弱いです" });
+  assert.equal((await f.store.get<Booking>("booking", booked.bookingId))!.message, "爪が弱いです");
+  assert.ok((await f.store.records<any>("job", f.shop)).some(job => /爪が弱いです/.test(job.body)));
+  ws.close();
+});
+
 test("a booking succeeds when the model rewrites the offered start", async t => {
   const f = await fixture(t), ws = await f.stream("CA-REWRITE");
   const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo"), iso = new Date(`${day}T10:00:00+09:00`).toISOString();

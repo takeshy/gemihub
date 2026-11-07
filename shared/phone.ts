@@ -73,7 +73,3 @@ export function samePhoneNumber(a: string | null | undefined, b: string | null |
   const left = comparablePhone(a || ""), right = comparablePhone(b || "");
   return !!left && left === right;
 }
-/** The caller ID read back to the caller, digit groups separated for clarity. */
-export function spokenPhoneNumber(caller: string) {
-  return caller.replace(/\D/g, "").split("").join(" ");
-}
