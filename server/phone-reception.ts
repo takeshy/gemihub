@@ -1,14 +1,16 @@
+import { AsyncResource } from "node:async_hooks";
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, Server } from "node:http";
-import { GoogleGenAI, Modality, Type, type FunctionDeclaration, type FunctionResponse, type LiveConnectParameters, type Session as LiveSession } from "@google/genai";
-import { WebSocketServer, WebSocket } from "ws";
+import { GoogleGenAI, Modality, Type, type FunctionDeclaration, type FunctionResponse, type LiveConnectParameters, type LiveServerMessage, type Session as LiveSession } from "@google/genai";
+import { WebSocketServer, WebSocket, type RawData } from "ws";
 import { z } from "zod";
-import { tr } from "../shared/i18n.ts";
+import { intlLocale, tr, type Locale } from "../shared/i18n.ts";
 import { regionOf } from "../shared/region.ts";
 import { spokenPhoneNumber, type PhoneSettings } from "../shared/phone.ts";
 export * from "../shared/phone.ts";
 import type { ShopConfig } from "./domain.ts";
+import { requestLocale } from "./i18n.ts";
 
 // AI phone reception through Twilio Programmable Voice. Twilio streams 8 kHz μ-law audio over a
 // WebSocket; this module converts it to 16 kHz PCM for Gemini Live and back to μ-law for Twilio.
@@ -160,7 +162,8 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
     })),
   ].filter(Boolean).join("\n");
 }
-export const phoneTools: FunctionDeclaration[] = [
+// A function because the descriptions follow the shop's language, known only per call.
+export const phoneTools = (): FunctionDeclaration[] => [
   {
     name: "check_availability",
     description: tr("指定した日付・メニューの空き時間と、当日分の譲渡枠（割引枠）を調べる。空き状況を推測してはいけない。"),
@@ -204,7 +207,6 @@ export const phoneTools: FunctionDeclaration[] = [
     parameters: { type: Type.OBJECT, properties: {} },
   },
 ];
-export const phoneToolNames = phoneTools.map(tool => tool.name);
 
 // ---- Phone stream -----------------------------------------------------------------------------
 export type PhoneSlot = { start: string; end: string; staffId: string; staffName?: string; label?: string };
@@ -227,7 +229,7 @@ export type PhoneCallRecord = {
 };
 export type PhoneAccess = {
   shopId: string; callSid: string; caller: string; config: ShopConfig; settings: PhoneSettings;
-  callerName?: string; host: PhoneHost;
+  locale: Locale; callerName?: string; host: PhoneHost;
 };
 export type PhoneAuthorizer = (url: URL) => Promise<PhoneAccess | undefined>;
 export type PhoneConnector = (parameters: LiveConnectParameters) => Promise<LiveSession>;
@@ -248,7 +250,8 @@ export function createPhoneUpgrade(authorize: PhoneAuthorizer, connector: PhoneC
     void (async () => {
       const access = phoneLiveConfigured() && twilioCredentials().token.trim() ? await authorize(url).catch(() => undefined) : undefined;
       if (!access) { socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); socket.destroy(); return; }
-      sockets.handleUpgrade(req, socket, head, ws => { void converse(ws, access, connector).catch(error => { console.warn(JSON.stringify({ event: "phone_stream_failed", shopId: access.shopId })); ws.close(1011, tr("通話を続けられませんでした")); void access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: "error", transcript: "", turns: [], startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) }).catch(() => undefined); }); });
+      // Closing the socket lets converse() finalize the call, so a failure is recorded once.
+      sockets.handleUpgrade(req, socket, head, ws => requestLocale.run(access.locale, () => { void converse(ws, access, connector).catch(() => { console.warn(JSON.stringify({ event: "phone_stream_failed", shopId: access.shopId })); ws.close(1011, tr("通話を続けられませんでした")); }); }));
     })().catch(() => socket.destroy());
     return true;
   };
@@ -259,6 +262,8 @@ export function attachPhoneReception(server: Server, authorize: PhoneAuthorizer,
   server.on("upgrade", (req, socket, head) => { dispatch(req, socket, head); });
 }
 
+/** After the audio should have played, how long to wait for the farewell, Gemini or Twilio. */
+const finishGraceMs = 5000;
 async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConnector) {
   const bridge = new TwilioAudioBridge();
   const startedAt = new Date().toISOString();
@@ -269,16 +274,28 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
   let outcome: PhoneCallRecord["outcome"] = "ended", bookingId: string | undefined, inquiryId: string | undefined, failure: string | undefined;
   const pendingInput: string[] = [], pendingMedia: string[] = [];
   const pendingTools = new Set<Promise<unknown>>();
-  let finishRequested = false, finalTurnReady = false, finishMark = "", markSequence = 0;
+  let finishRequested = false, finalTurnReady = false, finishMark = "", markSequence = 0, playbackUntil = 0, finishTimer: NodeJS.Timeout | undefined;
   const markPlayback = () => {
     if (!finishRequested || !finalTurnReady || !streamSid || finishMark) return;
     finishMark = `phone-finish-${++markSequence}`;
     send({ event: "mark", streamSid, mark: { name: finishMark } });
   };
   const send = (value: unknown) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(value)); };
+  // Neither Gemini's last turn nor Twilio's mark is guaranteed, so a finished call has a deadline.
+  const armFinishDeadline = () => {
+    clearTimeout(finishTimer);
+    if (!finishRequested) return;
+    finishTimer = setTimeout(() => { void finish(); }, Math.max(0, playbackUntil - Date.now()) + finishGraceMs);
+    finishTimer.unref();
+  };
   const media = (payload: string) => {
+    // Twilio plays 8,000 one-byte samples per second.
+    playbackUntil = Math.max(Date.now(), playbackUntil) + Buffer.byteLength(payload, "base64") / 8;
+    armFinishDeadline();
     if (!streamSid) { pendingMedia.push(payload); return; }
     send({ event: "media", streamSid, media: { payload } });
+    // Audio generated after the mark must play too, so the mark moves behind it.
+    if (finishMark) { finishMark = ""; markPlayback(); }
   };
   const startGreeting = () => {
     if (!live || !started || greetingSent) return;
@@ -290,21 +307,22 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
   };
   const finish = async (error?: string) => {
     if (finished) return;
-    finished = true; stopped = true; clearTimeout(greetingTimer); clearTimeout(limit);
+    finished = true; stopped = true; clearTimeout(greetingTimer); clearTimeout(limit); clearTimeout(finishTimer);
     if (live) { try { live.close(); } catch { /* already closed */ } live = undefined; }
     // A disconnected caller must not leave a committed operation out of the final record.
     await Promise.allSettled([...pendingTools]);
     if (heard.trim() || spoken.trim()) transcript.push(`${tr("お客様")}: ${heard.trim()}\n${tr("AI")}: ${spoken.trim()}`);
     await access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: error ? "error" : outcome, transcript: transcript.join("\n"), turns, startedAt, endedAt: new Date().toISOString(), ...(bookingId ? { bookingId } : {}), ...(inquiryId ? { inquiryId } : {}), ...(error ? { error } : {}) }).catch(() => undefined);
-    ws.close(1000, tr("通話を終了しました"));
+    ws.close(error ? 1011 : 1000, tr("通話を終了しました"));
   };
   const limit = setTimeout(() => { void finish(); }, 15 * 60000);
   limit.unref();
-  ws.on("close", () => { if (!finished) void finish(); else { stopped = true; clearTimeout(limit); } });
-  ws.on("error", () => { if (!finished) void finish(tr("通話が切断されました")); });
+  // Socket and Gemini events start outside this call's async context, so they are bound to its locale.
+  ws.on("close", AsyncResource.bind(() => { if (!finished) void finish(); else { stopped = true; clearTimeout(limit); } }));
+  ws.on("error", AsyncResource.bind(() => { if (!finished) void finish(tr("通話が切断されました")); }));
   // Twilio sends `start` and media immediately after the socket opens. Listen before the
   // Gemini connection finishes and buffer audio, otherwise the first words are lost.
-  ws.on("message", raw => {
+  ws.on("message", AsyncResource.bind((raw: RawData) => {
     try {
       const input = JSON.parse(raw.toString());
       if (stopped) return;
@@ -326,7 +344,7 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       if (input.event === "stop") void finish();
       if (input.event === "mark" && finishMark && input.mark?.name === finishMark) void finish();
     } catch { /* Ignore malformed Twilio frames instead of dropping the call. */ }
-  });
+  }));
 
   const handleTool = async (name: string, args: Record<string, unknown> | undefined, actionId?: string): Promise<Record<string, unknown>> => {
     try {
@@ -354,9 +372,6 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       }
       if (name === "finish_call") {
         if (outcome === "ended") outcome = transcript.length || heard.trim() ? "answered" : "ended";
-        // Gemini will generate the farewell after this tool response. Mark its completed turn
-        // and wait until Twilio acknowledges that all preceding audio has played.
-        finishRequested = true; finalTurnReady = false;
         return { ok: true };
       }
       return { error: tr("この操作は利用できません") };
@@ -367,7 +382,7 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
     }
   };
 
-  live = await connector({
+  try { live = await connector({
     model: process.env.PHONE_LIVE_MODEL || process.env.VERTEX_LIVE_MODEL!,
     config: {
       responseModalities: [Modality.AUDIO],
@@ -377,13 +392,13 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       systemInstruction: phoneInstruction({
         config: access.config, settings: access.settings, caller: access.caller, callerName: access.callerName,
         today: new Intl.DateTimeFormat("en-CA", { timeZone: regionOf(access.config).timeZone }).format(new Date()),
-        now: new Date().toLocaleString("ja-JP", { timeZone: regionOf(access.config).timeZone, timeZoneName: "short" }),
+        now: new Date().toLocaleString(intlLocale(), { timeZone: regionOf(access.config).timeZone, timeZoneName: "short" }),
         timeZone: regionOf(access.config).timeZone,
       }),
-      tools: [{ functionDeclarations: phoneTools }],
+      tools: [{ functionDeclarations: phoneTools() }],
     },
     callbacks: {
-      onmessage: message => {
+      onmessage: AsyncResource.bind((message: LiveServerMessage) => {
         if (stopped) return;
         const content = message.serverContent;
         if (content?.inputTranscription?.text) { heard += content.inputTranscription.text; }
@@ -391,7 +406,8 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         if (content?.interrupted) {
           // A clear also acknowledges marks for audio that was discarded, not played.
           // Let the resumed conversation request a new farewell before hanging up.
-          finishRequested = false; finalTurnReady = false; finishMark = "";
+          finishRequested = false; finalTurnReady = false; finishMark = ""; playbackUntil = 0;
+          armFinishDeadline();
           send({ event: "clear", streamSid });
         }
         for (const part of content?.modelTurn?.parts || []) if (part.inlineData?.data) media(bridge.fromGemini(part.inlineData.data));
@@ -407,15 +423,23 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         const operation = Promise.all(calls.map(async (call): Promise<FunctionResponse> => ({
           id: call.id, name: call.name, response: await handleTool(call.name || "", call.args as Record<string, unknown> | undefined, call.id),
         }))).then(functionResponses => {
-          if (!stopped) live?.sendToolResponse({ functionResponses });
+          if (stopped) return;
+          live?.sendToolResponse({ functionResponses });
+          // Only a turn completed after this response can be the farewell; an earlier one is stale.
+          // The mark on that turn then waits for Twilio to play all preceding audio.
+          if (calls.some(call => call.name === "finish_call")) { finishRequested = true; finalTurnReady = false; finishMark = ""; armFinishDeadline(); }
         });
         pendingTools.add(operation);
         void operation.finally(() => pendingTools.delete(operation)).catch(() => undefined);
-      },
-      onerror: () => { failure = tr("音声接続が中断しました"); void finish(failure); },
-      onclose: () => { live = undefined; if (!finished) void finish(failure); },
+      }),
+      onerror: AsyncResource.bind(() => { failure = tr("音声接続が中断しました"); void finish(failure); }),
+      onclose: AsyncResource.bind(() => { live = undefined; if (!finished) void finish(failure); }),
     },
-  });
+  }); } catch (error) {
+    console.warn(JSON.stringify({ event: "phone_stream_failed", shopId: access.shopId }));
+    await finish(error instanceof Error ? error.message : String(error));
+    return;
+  }
   if (stopped) { try { live.close(); } catch { /* already closed */ } return; }
   for (const data of pendingInput.splice(0)) live.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } });
   startGreeting();

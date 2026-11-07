@@ -3835,5 +3835,6 @@
   "応答": "Answered",
   "非通知": "Withheld",
   "時間外": "Closed",
-  "エラー": "Error"
+  "エラー": "Error",
+  "キャンセル期限を過ぎているため、電話ではキャンセルできません。名前と用件を聞いて create_inquiry で残してください。": "The cancellation deadline has passed, so this booking cannot be cancelled by phone. Ask for the caller's name and reason and record them with create_inquiry."
 }

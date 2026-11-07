@@ -56,7 +56,7 @@ test("a phone booking takes today's slot, bypassing online cut-offs, and records
   const saved = await f.call(`${f.base}/phone`, f.input(at));
   assert.equal(saved.status, 200);
   const booking: Booking = saved.body.booking;
-  assert.equal(booking.customer, "tel:0312345678"); assert.equal(booking.phone, "03-1234-5678"); assert.equal(booking.payment, undefined); assert.equal(booking.price, f.menu.price);
+  assert.equal(booking.customer, "tel:+81312345678"); assert.equal(booking.phone, "03-1234-5678"); assert.equal(booking.payment, undefined); assert.equal(booking.price, f.menu.price);
   assert.ok(!(await f.call(`${f.base}/phone-slots?menu=${f.menu.id}`)).body.slots.some((slot: { start: string }) => slot.start === at), "the slot is taken");
 });
 
@@ -104,7 +104,7 @@ test("phone customers accumulate visits under one number, receive no mail and ca
   const f = await fixture(t);
   const booking: Booking = (await f.call(`${f.base}/phone`, f.input(start(today, "13:00")))).body.booking;
   const customers = ((await f.call(`/api/shops/${f.shop.id}/customers`)).body as CustomerSummary[]).filter(customer => customer.phone);
-  assert.deepEqual(customers.map(customer => [customer.email, customer.name, customer.phone]), [["tel:0312345678", "Hanako", "03-1234-5678"]]);
+  assert.deepEqual(customers.map(customer => [customer.email, customer.name, customer.phone]), [["tel:+81312345678", "Hanako", "03-1234-5678"]]);
   assert.equal((await f.call(`/api/shops/${f.shop.id}/customers/${encodeURIComponent(customers[0].email)}`)).body.history.length, 1);
   await f.store.put("shop", f.shop.id, { ...(await f.store.shop(f.shop.id))!, google: { folderId: "folder" } });
   const queued: string[] = [];
@@ -123,12 +123,12 @@ test("a customer can be registered by name and phone alone, and later bookings j
   assert.equal((await f.call(`${customers}/phone`, { name: "Taro", phone: "090-1234-5678" }, "alice")).status, 403);
   const listed = await phoneList();
   assert.deepEqual(listed.map(customer => [customer.name, customer.visitCount]), [["Taro", 0]], "listed before any booking");
-  assert.equal(phoneKey("090 1234 5678"), "tel:09012345678");
+  assert.equal(phoneKey("090 1234 5678"), "tel:+819012345678");
   await f.call(`${f.base}/phone`, { ...f.input(start(today, "13:00")), name: "Taro Y", phone: "090-1234-5678" });
   const [customer, ...others] = await phoneList();
   assert.deepEqual(others, [], "punctuation and width do not split a customer");
   assert.equal(customer.name, "Taro Y");
-  const record = await f.store.get<CustomerRecord>("customer", `${f.shop.id}:tel:09012345678`);
+  const record = await f.store.get<CustomerRecord>("customer", `${f.shop.id}:tel:+819012345678`);
   assert.equal(record!.phone, "090-1234-5678");
   t.mock.timers.setTime(now + 2 * 86400000);
   await f.store.put("session", digest("owner"), { user: { email: f.shop.owner, name: "owner", role: "owner", shopId: f.shop.id }, expires: now + 3 * 86400000 });
@@ -175,11 +175,11 @@ test("the shop replaces a listed slot with a cash customer and raises the holder
   assert.equal((await f.replace({ phone: "------" })).status, 400, "punctuation alone is not a phone number");
   const requestId = randomUUID(), done = await f.replace({ requestId });
   assert.equal(done.status, 200, JSON.stringify(done.body));
-  assert.equal(done.body.booking.price, price); assert.equal(done.body.booking.customer, "tel:0312345678"); assert.equal(done.body.booking.start, f.at);
+  assert.equal(done.body.booking.price, price); assert.equal(done.body.booking.customer, "tel:+81312345678"); assert.equal(done.body.booking.start, f.at);
   assert.equal((await f.replace({ requestId })).body.booking.id, done.body.booking.id, "a retry returns the same booking");
   assert.deepEqual(f.refunds, [price], "refunded once, at the promised amount rather than the 0 for cancelling");
   const bookings = await f.store.bookings(f.shop.id);
-  assert.deepEqual(bookings.map(b => [b.customer, b.status]).sort(), [["alice@example.com", "cancelled"], ["tel:0312345678", "active"]]);
+  assert.deepEqual(bookings.map(b => [b.customer, b.status]).sort(), [["alice@example.com", "cancelled"], ["tel:+81312345678", "active"]]);
   assert.equal(bookings.find(b => b.customer === "alice@example.com")!.payment!.cancellation!.amount, price);
   assert.equal((await f.replace()).status, 409, "the listing is closed");
   const mine = (await f.call(`/api/public/${f.shop.slug}/transfers/mine`, undefined, "alice")).body;

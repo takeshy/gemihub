@@ -4,6 +4,7 @@ import { memberProfile, type MemberProfile } from "./customer-profile.ts";
 import type { Booking } from "./domain.ts";
 import type { Store } from "./store.ts";
 import { dateIn, zonedDate } from "../shared/region.ts";
+import { comparablePhone } from "../shared/phone.ts";
 import type { InquiryChannel, InquiryInteraction } from "./inquiries.ts";
 
 export const customerPeriods = [
@@ -119,20 +120,24 @@ export type CustomerDetail = CustomerSummary & {
   profile?: MemberProfile;
 };
 export const normalizeEmail = (email: string) => email.trim().toLowerCase();
-// Width and punctuation vary as numbers are typed in, so the key keeps only what identifies the line.
+// Width, punctuation and domestic or international form vary, so the key keeps only what identifies the line.
 export const phoneCustomerSchema = z.object({
   name: z.string().trim().min(1).max(100),
   phone: z.string().transform(value => value.normalize("NFKC").trim()).pipe(z.string()
     .regex(/^[0-9+()\- ]{6,20}$/, { error: () => tr("電話番号を確認してください") })
     .refine(value => value.replace(/\D/g, "").length >= 6, { error: () => tr("電話番号を確認してください") })),
 });
-export const phoneKey = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+export const phoneKey = (phone: string) => `tel:${comparablePhone(phone)}`;
 /** A customer known by name and phone only. They hold no account, so they receive no email. */
-export async function savePhoneCustomer(store: Store, shopId: string, name: string, phone: string, by: string, customerKey = phoneKey(phone)) {
-  const email = customerKey, id = `${shopId}:${email}`, at = new Date().toISOString();
+export async function savePhoneCustomer(store: Store, shopId: string, name: string, phone: string, by: string) {
+  const email = phoneKey(phone), id = `${shopId}:${email}`, at = new Date().toISOString();
   const previous = await store.get<CustomerRecord & { createdAt?: string }>("customer", id);
   await store.put("customer", id, { ...previous, shopId, email, name, phone, createdAt: previous?.createdAt || at, updatedBy: by, updatedAt: at });
   return email;
+}
+/** Records a caller without replacing what staff entered: a name heard on a call may be mistaken. */
+export async function ensurePhoneCustomer(store: Store, shopId: string, name: string, phone: string, by: string) {
+  if (!await store.get("customer", `${shopId}:${phoneKey(phone)}`)) await savePhoneCustomer(store, shopId, name, phone, by);
 }
 const timestamp = (value: string) => Date.parse(value) || 0;
 const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;

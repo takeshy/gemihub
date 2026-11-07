@@ -12,10 +12,16 @@ export type InquiryChannel = z.infer<typeof inquiryChannelSchema>;
 export type InquiryInteraction = {
   id: string; shopId: string; inquiryId: string; kind: InquiryChannel; text: string;
   at: string; by?: string; legacy?: boolean;
+  /** Position within a transcript split across entries that share one `at`. */
+  part?: number;
   delivery?: "queued" | "sent" | "retrying" | "simulated" | "failed";
   to?: string;
   attachments?: CustomerAttachment[];
 };
+/** Time order flips between views, but the parts of one transcript always read from the start. */
+export const compareInteractionParts = (a: InquiryInteraction, b: InquiryInteraction) => (a.part || 0) - (b.part || 0) || a.id.localeCompare(b.id);
+export const oldestInteractionFirst = (a: InquiryInteraction, b: InquiryInteraction) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0) || compareInteractionParts(a, b);
+export const newestInteractionFirst = (a: InquiryInteraction, b: InquiryInteraction) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0) || compareInteractionParts(a, b);
 export const inquiryStatusLabel = (status: InquiryStatus) => ({ new: tr("未対応"), in_progress: tr("対応中"), waiting: tr("確認待ち"), completed: tr("対応済み") })[status];
 export const inquiryChannelLabel = (kind: InquiryChannel) => ({ customer: tr("お客様からの連絡"), phone: tr("電話対応"), note: tr("社内メモ"), email: tr("メール返信") })[kind];
 export const inquiryStatus = (inquiry: { status: string }): InquiryStatus =>

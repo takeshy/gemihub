@@ -37,7 +37,7 @@ for(const language of ['ja','en'])for(const width of [1280,390]){
  await form.getByRole('button',{name:label('電話予約を登録する'),exact:true}).click();
  await expect(form.getByRole('status')).toBeVisible();
  await expect(page.locator('.booking-card').filter({hasText:'Hanako'})).toContainText('03-1234-5678');
- const bookings=await store.bookings(shop.id);assert.equal(bookings.length,1);assert.equal(bookings[0].customer,'tel:0312345678');assert.equal(bookings[0].phone,'03-1234-5678');
+ const bookings=await store.bookings(shop.id);assert.equal(bookings.length,1);assert.equal(bookings[0].customer,'tel:+81312345678');assert.equal(bookings[0].phone,'03-1234-5678');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
  await page.screenshot({path:`tmp/phone-booking/saved-${language}-${width}.png`,fullPage:true});
  await page.goto(`${origin}/?tab=customers&shop=${shop.id}&lang=${language}`);

@@ -34,27 +34,39 @@ export function withinPhoneHours(settings: PhoneSettings, now = new Date(), time
   const get = (type: string) => parts.find(part => part.type === type)?.value || "";
   const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(get("weekday"));
   if (weekday < 0) return true;
-  if (settings.hours.weekdays && !settings.hours.weekdays.includes(weekday)) return false;
-  const time = `${get("hour")}:${get("minute")}`;
-  return time >= settings.hours.start && time < settings.hours.end;
+  const { start, end, weekdays } = settings.hours, time = `${get("hour")}:${get("minute")}`;
+  // Hours such as 22:00-02:00 cross midnight; the early morning belongs to the day they started.
+  const overnight = start > end, afterMidnight = overnight && time < end;
+  if (weekdays && !weekdays.includes(afterMidnight ? (weekday + 6) % 7 : weekday)) return false;
+  return overnight ? afterMidnight || time >= start : time >= start && time < end;
 }
 
 const anonymousCallers = new Set(["anonymous", "restricted", "unavailable", "private", "blocked", "unknown"]);
+// Keypad spellings of ANONYMOUS, RESTRICTED, BLOCKED, UNKNOWN and UNAVAILABLE. Carriers can present
+// these in place of a withheld number, so they must never identify a customer.
+const withheldCallerDigits = new Set(["266696687", "7378742833", "2562533", "8656696", "86282452253"]);
 /** Returns the caller ID in a usable form, or undefined for withheld/blocked callers. */
 export function callerNumber(from: string | null | undefined): string | undefined {
   const value = (from || "").trim();
   if (!value || anonymousCallers.has(value.toLowerCase())) return undefined;
   const digits = value.replace(/\D/g, "");
-  return digits.length >= 6 && digits.length <= 15 ? digits : undefined;
+  if (withheldCallerDigits.has(digits) || digits.length < 6 || digits.length > 15) return undefined;
+  // The + is what separates an international number from a national one.
+  return value.startsWith("+") ? `+${digits}` : digits;
 }
 export const normalizeNumber = (value: string | null | undefined) => (value || "").replace(/\D/g, "");
 /** Canonical forms for the supported shop countries, Japan and the US/NANP. */
-function comparablePhone(value: string) {
-  const digits = normalizeNumber(value.normalize("NFKC"));
+export function comparablePhone(value: string) {
+  const text = value.normalize("NFKC").trim();
+  let digits = normalizeNumber(text), international = text.startsWith("+");
+  // 00 is the international dialling prefix, as in 0081...
+  if (!international && digits.startsWith("00")) { digits = digits.slice(2); international = true; }
+  // +81-90-... is also commonly written with the domestic trunk zero: +81-090-...
+  if (/^810[1-9]\d{8,9}$/.test(digits)) digits = `81${digits.slice(3)}`;
   if (/^81[1-9]\d{8,9}$/.test(digits)) return `+${digits}`;
-  if (/^0[1-9]\d{8,9}$/.test(digits)) return `+81${digits.slice(1)}`;
   if (/^1[2-9]\d{9}$/.test(digits)) return `+${digits}`;
-  if (!value.trim().startsWith("+") && /^[2-9]\d{9}$/.test(digits)) return `+1${digits}`;
+  if (!international && /^0[1-9]\d{8,9}$/.test(digits)) return `+81${digits.slice(1)}`;
+  if (!international && /^[2-9]\d{9}$/.test(digits)) return `+1${digits}`;
   return digits ? `+${digits}` : "";
 }
 export function samePhoneNumber(a: string | null | undefined, b: string | null | undefined) {

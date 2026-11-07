@@ -3,7 +3,7 @@ import { z } from "zod";
 import { tr } from "../shared/i18n.ts";
 import { inquiryFilesInputSchema } from "../shared/inquiry-files.ts";
 import { digest } from "./auth.ts";
-import { inquiryStatus, inquiryStatusSchema, manualInquirySchema, publicInquirySchema, inquiryInteractionSchema, type InquiryInteraction } from "./inquiries.ts";
+import { inquiryStatus, inquiryStatusSchema, manualInquirySchema, oldestInteractionFirst, publicInquirySchema, inquiryInteractionSchema, type InquiryInteraction } from "./inquiries.ts";
 import type { Inquiry, CustomerAttachment } from "./customers.ts";
 import { checkedFileSizes } from "./customer-files.ts";
 import { prepareInquiryFiles, reservePublicInquiry, uploadedInquiryFiles, type InquiryFileStorage } from "./inquiry-files.ts";
@@ -17,7 +17,7 @@ export async function readInquiries(store: Store, shop: Shop, history = true): P
   const [inquiries, entries] = await Promise.all([store.records<Inquiry>("inquiry", shop), store.records<InquiryInteraction>("inquiryInteraction", shop)]);
   const threads = new Map<string, InquiryInteraction[]>();
   for (const entry of entries) { const thread = threads.get(entry.inquiryId) || []; thread.push(entry); threads.set(entry.inquiryId, thread); }
-  return inquiries.map(inquiry => ({ ...inquiry, interactions: (threads.get(inquiry.id) || []).sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0) || a.id.localeCompare(b.id)) }));
+  return inquiries.map(inquiry => ({ ...inquiry, interactions: (threads.get(inquiry.id) || []).sort(oldestInteractionFirst) }));
 }
 /** Undelivered replies follow contact corrections; an empty result means there is no address left to send to. */
 export async function inquiryMailRecipient(store: Store, shop: Shop, interactionId: string) {
@@ -67,8 +67,8 @@ export async function stageInquiryFiles(store: Store, shop: Shop, id: string | u
 }
 type InquiryMail = { to: string; subject: string; body: string; inquiryInteractionId: string; attachments?: CustomerAttachment[] };
 /** Caller holds the shop lock and has staged attachments; the record and mail intent commit atomically.
- * interactionAt is a trusted server timestamp, allowing ordered chunks of one phone transcript. */
-export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>, interactionAt = new Date().toISOString()) {
+ * interactionAt and interactionPart are trusted server values that keep one phone transcript in order. */
+export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>, interactionAt = new Date().toISOString(), interactionPart?: number) {
   if (!id) {
     const input = manualInquirySchema.parse(data), inquiryId = digest(`${shop.id}:manual-inquiry:${input.requestId}`), hash = digest(JSON.stringify(input));
     const receipt = await store.get<{ hash: string }>("inquiryCreateRequest", inquiryId);
@@ -119,7 +119,7 @@ export async function writeInquiry(store: Store, shop: Shop, actor: string, id: 
       q.reply = input.text; q.emailHistory = true; setStatus(q, ("status" in input ? input.status : undefined) || inquiryStatus(q));
       await store.put("inquiry", q.id, q);
     }
-    const entry: InquiryInteraction = { id: requestKey, shopId: shop.id, inquiryId: q.id, kind: email ? "email" : "kind" in input ? input.kind : "note", text: input.text, at: interactionAt, by: actor, ...(attachments.length ? { attachments } : {}), ...(email ? { delivery: shop.judge || (store.memory && !shop.google) ? "simulated" : "queued", to: q.email } : {}) };
+    const entry: InquiryInteraction = { id: requestKey, shopId: shop.id, inquiryId: q.id, kind: email ? "email" : "kind" in input ? input.kind : "note", text: input.text, at: interactionAt, ...(interactionPart === undefined ? {} : { part: interactionPart }), by: actor, ...(attachments.length ? { attachments } : {}), ...(email ? { delivery: shop.judge || (store.memory && !shop.google) ? "simulated" : "queued", to: q.email } : {}) };
     await store.put("inquiryInteraction", entry.id, entry);
     if (email) await enqueue({ to: q.email, subject: tr("{0} からの返信", shop.published?.name || shop.draft?.name || ""), body: input.text, inquiryInteractionId: entry.id, ...(attachments.length ? { attachments } : {}) }, digest(`${requestKey}:mail`));
     await store.put("inquiryEntryRequest", requestKey, { shopId: shop.id, inquiryId: q.id, hash, done: true }); return { ok: true };

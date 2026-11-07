@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { tr } from "../shared/i18n";
-import { inquiryChannelLabel, type InquiryChannel, type InquiryInteraction } from "../server/inquiries";
+import { inquiryChannelLabel, newestInteractionFirst, type InquiryChannel, type InquiryInteraction } from "../server/inquiries";
 import type { Inquiry } from "./App";
 import { useApi } from "./api";
 import { useShopDisplay } from "./money";
@@ -12,7 +12,7 @@ export function InquiryHistory({ inquiry, shopId }: { inquiry: Inquiry; shopId: 
   const { shopTime } = useShopDisplay();
   const entries = [...(inquiry.interactions || [])];
   if (inquiry.reply && !entries.some(entry => entry.kind === "email")) entries.unshift({ id: "legacy-reply", shopId: "", inquiryId: inquiry.id, kind: "email", text: inquiry.reply, at: "", legacy: true });
-  entries.sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0) || a.id.localeCompare(b.id));
+  entries.sort(newestInteractionFirst);
   const pagination = usePagination(entries, `${inquiry.id}:${entries.length}`);
   const delivery = (entry: InquiryInteraction) => entry.delivery === "sent" ? tr("送信済み") : entry.delivery === "retrying" ? tr("送信を再試行中") : entry.delivery === "simulated" ? tr("デモのため送信しません") : entry.delivery === "queued" ? tr("送信待ち") : entry.delivery === "failed" ? tr("送信できませんでした") : "";
   // Undelivered replies follow the inquiry's current address, so show where they will actually go.
