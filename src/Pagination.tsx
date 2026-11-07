@@ -21,7 +21,7 @@ export function usePagination<T>(items: readonly T[], resetKey: string, pageSize
       list?.scrollIntoView({ block: "start" });
     });
   };
-  return { items: items.slice(page * pageSize, (page + 1) * pageSize), page, pageCount, pageSize, total: items.length, goTo, listProps: { id, tabIndex: -1 } };
+  return { items: items.slice(page * pageSize, (page + 1) * pageSize), page, pageCount, pageSize, total: items.length, goTo, listProps: { id, tabIndex: -1, style: { scrollMarginTop: "6rem" } } };
 }
 
 type PaginationState = Pick<ReturnType<typeof usePagination>, "page" | "pageCount" | "pageSize" | "total" | "goTo" | "listProps">;

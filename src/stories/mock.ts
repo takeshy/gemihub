@@ -7,7 +7,7 @@ import { tr, listSeparator } from "../../shared/i18n";
 import { simulatePayment, simulateCancellation } from "../payment-mock";
 import { defaultRefundTiers, refundQuote, policyText } from "../../server/payment-domain";
 import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../server/post-images";
-import { inquiryStatus } from "../../server/inquiries";
+import { inquiryStatus, inquiryStatuses } from "../../server/inquiries";
 import { answeredFinalDetails, initialSetupDemoReply, initialInterviewFacts, openingQuestions } from "../../server/request-intent";
 import { initialIntroductionPages } from "../../shared/initial-pages";
 import { exampleTheme } from "./themes";
@@ -128,6 +128,10 @@ export type Scenario =
   | "changes"
   | "bookings"
   | "inquiries"
+  | "inquiries-board"
+  | "inquiries-history"
+  | "inquiries-manual"
+  | "inquiries-board-long"
   | "staff-login"
   | "calendar-disconnected"
   | "owner-only"
@@ -218,7 +222,7 @@ export function scenarioProps(scenario: Scenario) {
           bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
           "crm-pagination": "customers", "crm-inquiry-long": "customers", "crm-list-long": "customers", "bookings-long": "bookings", "inquiries-long": "inquiries", "blog-long": "blog",
           "crm-list": "customers", "crm-detail": "customers", "crm-activity-long": "customers", "crm-inquiry": "customers", "crm-empty": "customers", "crm-images": "customers", "crm-images-empty": "customers",
-          inquiries: "inquiries",
+          inquiries: "inquiries", "inquiries-board": "inquiries", "inquiries-history": "inquiries", "inquiries-manual": "inquiries", "inquiries-board-long": "inquiries",
           "staff-login": "staff",
           "calendar-disconnected": "staff",
           "owner-only": "staff",
@@ -416,6 +420,17 @@ export function createMockClient(scenario: Scenario): ApiClient {
       { id: "closed-unreplied", email: "midori@example.com", name: tr("佐藤 みどり"), message: tr("電話で教えていただいた件です。ありがとうございました。"), reply: "", status: "completed", at: new Date(Date.now() - 3 * 86400000).toISOString() },
     );
   }
+  if (scenario.startsWith("inquiries-") && scenario !== "inquiries-long") {
+    shop.inquiries.push(...Array.from({ length: scenario === "inquiries-board-long" ? 44 : 7 }, (_, index) => ({
+      id: `support-${index}`, email: index % 2 ? "guest@example.com" : "", phone: index % 2 ? "" : "03-1234-5678", createdBy: shop.owner,
+      name: index % 2 ? tr("山田 花子") : tr("佐藤 みどり"), subject: tr("ご来店前のご相談"), source: "phone" as const,
+      message: tr("電話で教えていただいた件です。ありがとうございました。"), reply: "", status: inquiryStatuses[index % inquiryStatuses.length],
+      at: new Date(Date.now() - index * 3600000).toISOString(),
+      interactions: index === 0 ? Array.from({ length: 13 }, (_, entry) => ({ id: `support-entry-${entry}`, shopId: shop.id, inquiryId: "support-0", kind: (["phone", "note", "customer"] as const)[entry % 3], text: tr("ご来店時にお色をご相談しましょう。"), at: new Date(Date.now() - entry * 60000).toISOString(), by: shop.owner })) : [],
+    })));
+  }
+  const manualInquiryRequests = new Map<string, { serialized: string; inquiry: Inquiry }>();
+  const interactionRequests = new Map<string, string>();
   const inquiryRequests = new Map<string, { text: string; previousReply: unknown }>();
   const customerNotes: CustomerNote[] = [];
   const customerFileData = new Map<string, string>();
@@ -959,6 +974,30 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/invite`) {
       shop.members.push({ email: String(input.email), accepted: false });
       result = { ok: true };
+    } else if (action === `/api/shops/${shop.id}/inquiries` && data === undefined) result = shop.inquiries;
+    else if (action === `/api/shops/${shop.id}/inquiries`) {
+      const serialized = JSON.stringify(input), requestId = String(input.requestId), previous = manualInquiryRequests.get(requestId);
+      if (previous && previous.serialized !== serialized) throw new Error(tr("お問い合わせの内容が変わっています。新しい操作として作成してください。"));
+      if (previous) result = { inquiry: previous.inquiry };
+      else {
+        const inquiry: Inquiry = { id: createRequestId(), shopId: shop.id, name: String(input.name), email: String(input.email || "").toLowerCase(), phone: String(input.phone || ""), subject: String(input.subject || ""), message: String(input.message), source: input.source as Inquiry["source"], reply: "", status: "new", at: new Date().toISOString(), createdBy: shop.owner, interactions: [] };
+        shop.inquiries.push(inquiry); manualInquiryRequests.set(requestId, { serialized, inquiry }); result = { inquiry };
+      }
+    } else if (action.includes("/inquiries/") && action.endsWith("/contact")) {
+      const q = shop.inquiries.find(inquiry => inquiry.id === action.split("/").at(-2));
+      if (!q || !q.createdBy) throw new Error(tr("お問い合わせがありません"));
+      if (q.email !== input.previousEmail || (q.phone || "") !== input.previousPhone) throw new Error(tr("連絡先が更新されています。最新の状態を確認してください。"));
+      q.email = String(input.email); q.phone = String(input.phone); result = { ok: true };
+    } else if (action.includes("/inquiries/") && action.endsWith("/interactions")) {
+      const q = shop.inquiries.find(inquiry => inquiry.id === action.split("/").at(-2));
+      if (!q) throw new Error(tr("お問い合わせがありません"));
+      const key = `${q.id}:${input.requestId}`, serialized = JSON.stringify(input), previous = interactionRequests.get(key);
+      if (previous && previous !== serialized) throw new Error(tr("記録の内容が変わっています。新しい操作として保存してください。"));
+      if (!previous) {
+        q.interactions ||= []; q.interactions.push({ id: String(input.requestId), shopId: shop.id, inquiryId: q.id, kind: input.kind as "phone" | "customer" | "note", text: String(input.text), by: shop.owner, at: new Date().toISOString() });
+        interactionRequests.set(key, serialized);
+      }
+      result = { ok: true };
     } else if (action.endsWith("/reply")) {
       const q = shop.inquiries.find((q) => q.id === action.split("/").at(-2));
       if (!q) throw new Error(tr("お問い合わせがありません"));
@@ -966,7 +1005,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (previous && (previous.text !== input.text || previous.previousReply !== input.previousReply)) throw new Error(tr("返信内容が変わっています。入力し直してください"));
       if (!previous) {
         if (input.previousReply !== undefined && input.previousReply !== q.reply) throw new Error(tr("他の担当者が返信しています。最新の状態を確認してください"));
+        if (input.previousEmail === undefined || input.previousEmail !== q.email) throw new Error(tr("返信先が更新されています。最新の状態を確認してください。"));
         if (!String(input.text).trim()) throw new Error(tr("返信内容を入力してください"));
+        q.interactions ||= [];
+        if (q.reply && !q.interactions.some(entry => entry.kind === "email")) q.interactions.push({ id: `${q.id}-legacy`, shopId: shop.id, inquiryId: q.id, kind: "email", text: q.reply, at: "", legacy: true });
+        q.interactions.push({ id: String(input.requestId || createRequestId()), shopId: shop.id, inquiryId: q.id, kind: "email", text: String(input.text).trim(), at: new Date().toISOString(), by: shop.owner, to: q.email, delivery: "sent" });
         q.reply = String(input.text).trim();
         q.status = inquiryStatus(q);
         if (input.requestId) inquiryRequests.set(String(input.requestId), { text: String(input.text), previousReply: input.previousReply });
@@ -975,7 +1018,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     } else if (action.includes("/inquiries/") && action.endsWith("/status")) {
       const q = shop.inquiries.find(q => q.id === action.split("/").at(-2));
       if (!q) throw new Error(tr("お問い合わせがありません"));
-      if (!["in_progress", "completed"].includes(String(input.status))) throw new Error(tr("対応状況を選択してください"));
+      if (!inquiryStatuses.includes(input.status as typeof inquiryStatuses[number])) throw new Error(tr("対応状況を選択してください"));
       if (input.previousStatus && input.previousStatus !== inquiryStatus(q) && input.status !== inquiryStatus(q)) throw new Error(tr("対応状況が更新されています。最新の状態を確認してください"));
       q.status = String(input.status);
       result = { ok: true };

@@ -20,3 +20,4 @@ bin/
 *.tfvars
 *.tfvars.json
 infra/backend.hcl
+.claude/

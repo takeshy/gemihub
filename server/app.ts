@@ -22,7 +22,8 @@ import { articleFiles, articleToolContext } from "./article-files.ts";
 import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts";
 import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } from "./post-metadata.ts";
 import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } from "./staff-accounts.ts";
-import { inquiryStatus, inquiryStatusSchema } from "./inquiries.ts";
+import type { InquiryInteraction } from "./inquiries.ts";
+import { inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, writeInquiry } from "./inquiry-service.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
@@ -192,6 +193,7 @@ type Job = {
   locale?: "ja" | "en";
   reminder?: BookingReminder;
   wishId?: string;
+  inquiryInteractionId?: string;
 };
 async function body(req: IncomingMessage, limit = 65536) {
   const chunks: Buffer[] = [];
@@ -349,8 +351,8 @@ export function createApp(
           ...(booking.payment ? { paid: booking.payment.amount, refund: booking.payment.cancellation ? { amount: booking.payment.cancellation.amount, status: booking.payment.cancellation.status } : undefined } : {}),
           ...(booking.transfers?.length ? { transfers: booking.transfers.map(entry => ({ at: entry.at, from: entry.from.name, to: entry.to.name, price: entry.price, discountPercent: entry.discountPercent, refundToPreviousHolder: { amount: entry.refund.amount, status: entry.refund.status } })) } : {}),
         }));
-        if (kind === "inquiries") return (await inquiries(shop)).map(inquiry => ({ at: inquiry.at, name: inquiry.name, email: inquiry.email, status: inquiry.status, message: inquiry.message.slice(0, 500), replied: !!inquiry.reply }));
-        return customerSummaries(aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, undefined, await store.records<import("./customers.ts").CustomerRecord>("customer", shop)));
+        if (kind === "inquiries") return (await inquiries(shop)).map(inquiry => ({ at: inquiry.at, name: inquiry.name, email: inquiry.email, phone: inquiry.phone, subject: inquiry.subject, status: inquiry.status, message: inquiry.message.slice(0, 500), replied: !!inquiry.reply, interactions: inquiry.interactions?.slice(-20).map(entry => ({ kind: entry.kind, at: entry.at, text: entry.text.slice(0, 500), delivery: entry.delivery })), historyTruncated: (inquiry.interactions?.length || 0) > 20 }));
+        return customerSummaries(aggregateCustomers(await store.bookings(shop.id), await inquiries(shop, false), await store.records<CustomerNote>("customerNote", shop), now, undefined, await store.records<import("./customers.ts").CustomerRecord>("customer", shop)));
       },
     };
   }
@@ -371,11 +373,11 @@ export function createApp(
   const assertOwner = (user: User | undefined, shop: Shop) => {
     if (isArchivedShop(shop) || user?.authMethod === "email" || user?.email !== shop.owner) fail(403, tr("店主のみ利用できます"));
   };
-  const inquiries = (shop: Shop) => store.records<Inquiry>("inquiry", shop);
-  const customersFor = async (shop: Shop, url: URL) => {
+  const inquiries = (shop: Shop, history = true) => readInquiries(store, shop, history);
+  const customersFor = async (shop: Shop, url: URL, history = true) => {
     const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
     const now = new Date();
-    return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
+    return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop, history), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
   };
   // The owner answering the phone may take today's remaining slots, whatever online cut-offs apply.
   const phoneRules = (config: ShopConfig): ShopConfig => ({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } });
@@ -552,6 +554,14 @@ export function createApp(
     if (!shop.google) return;
     const token = await ownerToken(shop);
     if (!token) return;
+    // Delivery state is informational: a failed save must not change whether mail is resent or stop later jobs.
+    const markDelivery = async (id: string | undefined, delivery: NonNullable<InquiryInteraction["delivery"]>, to?: string) => {
+      if (!id) return;
+      try {
+        const entry = await store.get<InquiryInteraction>("inquiryInteraction", id);
+        if (entry?.shopId === shop.id) await store.put("inquiryInteraction", entry.id, { ...entry, delivery, ...(to ? { to } : {}) });
+      } catch (error) { reportError(error); }
+    };
     let reminderState: Promise<[Booking[], Set<string>]> | undefined;
     for (const job of (await store.list<Job>("job")).filter(
       // Post pages wait for an in-flight publish/restore; mail is never held back by it.
@@ -576,11 +586,27 @@ export function createApp(
           if (job.type === "posts") {
             const posts=await postsFor(shop);
             await syncPostFiles(shop,posts,token,async()=>await store.saveShop(shop),config=>menuImageSnapshot(store,shop,config,crmFiles,token,publishedPostImageIds(posts)),job.postId);
-          } else await sendMail(token, job.to!, job.subject!, job.body!, job.cc);
+          } else {
+            const to = job.inquiryInteractionId ? await inquiryMailRecipient(store, shop, job.inquiryInteractionId) : job.to!;
+            if (!to) {
+              await markDelivery(job.inquiryInteractionId, "failed");
+              await store.delete("job", job.id);
+              return;
+            }
+            await sendMail(token, to, job.subject!, job.body!, job.cc);
+            await markDelivery(job.inquiryInteractionId, "sent", to);
+          }
           await store.delete("job", job.id);
         } catch (err) {
           job.error = err instanceof Error ? err.message : tr("連携エラー");
           job.attempts++;
+          if (job.inquiryInteractionId && job.attempts >= maxInquiryMailAttempts) {
+            reportError(err);
+            await markDelivery(job.inquiryInteractionId, "failed");
+            await store.delete("job", job.id);
+            return;
+          }
+          await markDelivery(job.inquiryInteractionId, "retrying");
           await store.put("job", job.id, job);
         }
       });
@@ -1598,6 +1624,22 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (action === "inquiries" && method === "GET") return json(res, await inquiries(shop));
+        const inquiryWrite = action.match(/^inquiries(?:\/([^/]+)\/(reply|status|interactions|contact))?$/);
+        if (inquiryWrite && method === "POST") {
+          const input = await body(req);
+          const result = await store.locked(shop.id, async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            await assertOperator(user, fresh);
+            return writeInquiry(store, fresh, user!.email, inquiryWrite[1], inquiryWrite[2] || "create", input, async (mail, id) => {
+              // Other mail is dropped without Google; a reply must fail visibly, and this rolls back its record.
+              if (!fresh.google && !fresh.judge && !store.memory) fail(503, tr("店主の Google 再接続が必要です"));
+              await enqueue(fresh, "mail", mail, id);
+            });
+          });
+          if (inquiryWrite[2] === "reply") await flushMail(shop);
+          return json(res, result);
+        }
         if (/^coupons(?:\/|$)/.test(action)) {
           assertOwner(user, shop);
           if (action === "coupons/propose" && method === "POST") {
@@ -1759,7 +1801,7 @@ export function createApp(
         const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
         // CRM reads must not wait for AI, publication or reconciliation writers.
         if (customerRoute && method === "GET") {
-          const customers = await customersFor(shop, url);
+          const customers = await customersFor(shop, url, !!customerRoute[1]);
           if (!customerRoute[1]) return json(res, customerSummaries(customers));
           const email = normalizeEmail(decodeURIComponent(customerRoute[1]));
           const customer = customers.find(customer => customer.email === email) || fail(404, tr("お客様が見つかりません"));
@@ -2820,28 +2862,6 @@ export function createApp(
               }
             }
           }
-          const inquiryAction=action.match(/^inquiries\/([^/]+)\/(reply|status)$/);
-          if(inquiryAction&&method==="POST"){
-            const q=(await inquiries(fresh)).find(q=>q.id===inquiryAction[1]&&q.shopId===fresh.id)||fail(404,tr("お問い合わせがありません"));
-            if(inquiryAction[2]==="status"){
-              const input=z.object({status:inquiryStatusSchema,previousStatus:inquiryStatusSchema.optional()}).parse(await body(req));
-              const current=inquiryStatus(q);
-              if(input.previousStatus&&input.previousStatus!==current&&input.status!==current)fail(409,tr("対応状況が更新されています。最新の状態を確認してください"));
-              q.status=input.status;await store.put("inquiry",q.id,q);return json(res,{ok:true});
-            }
-            const input=z.object({text:z.string().trim().min(1).max(5000),requestId:z.uuid().optional(),previousReply:z.string().max(5000).optional(),status:inquiryStatusSchema.optional()}).parse(await body(req));
-            const key=digest(`${fresh.id}:${q.id}:${input.requestId||randomUUID()}`);
-            const hash=digest(JSON.stringify({text:input.text,previousReply:input.previousReply??null,status:input.status??null}));
-            const operation=await store.get<{hash:string;done:boolean}>("inquiryReplyRequest",key);
-            if(operation&&operation.hash!==hash)fail(409,tr("返信内容が変わっています。入力し直してください"));
-            if(operation?.done){await flushMail(fresh);return json(res,{ok:true});}
-            if(input.previousReply!==undefined&&q.reply!==input.previousReply&&!(operation&&q.reply===input.text))fail(409,tr("他の担当者が返信しています。最新の状態を確認してください"));
-            await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:false});
-            q.reply=input.text;q.status=input.status||inquiryStatus(q);await store.put("inquiry",q.id,q);
-            await enqueue(fresh,"mail",{to:q.email,subject:tr("{0} からの返信", fresh.published!.name),body:input.text},digest(`${key}:mail`));
-            await store.put("inquiryReplyRequest",key,{shopId:fresh.id,inquiryId:q.id,hash,done:true});
-            await flushMail(fresh);return json(res,{ok:true});
-          }
           if (action === "invite" && method === "POST") {
             assertOwner(user, fresh);
             const { email } = z
@@ -3428,7 +3448,8 @@ export function createApp(
               email: u.email,
               ...input,
               reply: "",
-              status: "in_progress",
+              status: "new",
+              source: "customer",
               at: new Date().toISOString(),
             };
             await store.put("inquiry", q.id, q);

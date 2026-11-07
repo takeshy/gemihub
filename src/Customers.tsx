@@ -9,7 +9,8 @@ import { CustomerImageGallery } from "./CustomerImages";
 import { CustomerActivityHistory } from "./CustomerActivity";
 import { CustomerNoteComposer, CustomerNoteCard } from "./CustomerNotes";
 import { CustomerInquiry } from "./Inquiries";
-import { inquiryReplied, inquiryStatus } from "../server/inquiries";
+import { InquiryCreate } from "./InquiryCreate";
+import { inquiryStatus, inquiryStatusLabel, inquiryReplyLabel } from "../server/inquiries";
 import { useApi } from "./api";
 import { Pagination, usePagination } from "./Pagination";
 
@@ -138,6 +139,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
   const [inquiryFocus, setInquiryFocus] = useState<{ id: string }>();
   const inquiryNodes = useRef(new Map<string, HTMLDivElement>());
   const focusedInquiry = useRef("");
+  const [newInquiry, setNewInquiry] = useState("");
   const focusInquiry = (id: string) => {
     const index = inquiryEvents.findIndex(event => event.inquiry.id === id);
     if (index < 0) return;
@@ -157,6 +159,9 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
     node.scrollIntoView({ block: "start", behavior: "smooth" });
     node.focus({ preventScroll: true });
   }, [inquiryFocus, inquiryPages.page, imagesOpen]);
+  useEffect(() => {
+    if (newInquiry && inquiryEvents.some(event => event.inquiry.id === newInquiry)) { focusInquiry(newInquiry); setNewInquiry(""); }
+  }, [newInquiry, customer]);
   const reloadInquiries = async () => {
     const result = await api<CustomerDetail>(`${base}${rangeQuery}`);
     setCustomer(result);
@@ -188,6 +193,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
         </details>}
       </section>}
       <section className="panel customer-inquiries" aria-label={tr("お問い合わせへの対応")}><h2>{tr("お問い合わせへの対応")}</h2><p className="small muted">{tr("返信はお客様のメールへ送信します。返信の有無と対応状況は別々に管理します。対応が終わったら「対応済み」に変更してください。")}</p>
+        <InquiryCreate shopId={shopId} customer={{ name: customer.name, email: customer.email, phone: customer.phone }} onCreated={async inquiry => { await reloadInquiries(); setNewInquiry(inquiry.id); }} />
         {!inquiryEvents.length && <p className="empty">{tr("この期間のお問い合わせはありません。")}</p>}
         <div {...inquiryPages.listProps}>{inquiryEvents.map(event => <div key={event.inquiry.id} hidden={!inquiryPages.items.includes(event)} data-inquiry-id={event.inquiry.id} className="customer-inquiry-target" tabIndex={-1} ref={node => { if (node) inquiryNodes.current.set(event.inquiry.id,node); else inquiryNodes.current.delete(event.inquiry.id); }}><CustomerInquiry shopId={shopId} inquiry={event.inquiry} onChanged={reloadInquiries} onReload={reloadInquiries}/></div>)}</div>
         <Pagination pagination={inquiryPages} label={tr("お問い合わせへの対応")} />
@@ -207,7 +213,7 @@ function CustomerProfile({ shopId, email, initialImages, config, rangeQuery, ran
             <p><span className={`status ${event.booking.status}`}>{event.booking.status === "active" && Date.parse(event.booking.end) <= Date.now() ? tr("来店済み") : status[event.booking.status]}</span>　{yen(event.booking.price)}</p>
             {event.booking.message && <p className="customer-message"><b>{tr("予約時のメッセージ")}</b><br />{event.booking.message}</p>}
             <p className="small muted">{tr("担当：")}{bookingStaffName(config, event.booking.staffId)} {tr(" · 終了 ")}{when(event.booking.end)}</p>
-          </> : <><h3>{tr("お問い合わせ · ")}{inquiryStatus(event.inquiry) === "completed" ? tr("対応済み") : tr("対応中")} · {inquiryReplied(event.inquiry) ? tr("返信済み") : tr("未返信")}</h3><p className="inquiry-message-preview">{event.inquiry.message}</p><button onClick={() => focusInquiry(event.inquiry.id)}>{tr("お問い合わせの対応を見る")}</button></>}
+          </> : <><h3>{tr("お問い合わせ · ")}{inquiryStatusLabel(inquiryStatus(event.inquiry))} · {inquiryReplyLabel(event.inquiry)}</h3><p className="inquiry-message-preview">{event.inquiry.message}</p><button onClick={() => focusInquiry(event.inquiry.id)}>{tr("お問い合わせの対応を見る")}</button></>}
         </li>)}</ol>
         <Pagination pagination={timelinePages} label={tr("お客様のタイムライン")} />
       </div>

@@ -4,6 +4,7 @@ import { memberProfile, type MemberProfile } from "./customer-profile.ts";
 import type { Booking } from "./domain.ts";
 import type { Store } from "./store.ts";
 import { dateIn, zonedDate } from "../shared/region.ts";
+import type { InquiryChannel, InquiryInteraction } from "./inquiries.ts";
 
 export const customerPeriods = [
   { value: "all", get label() { return tr("全期間"); } },
@@ -46,6 +47,13 @@ export type Inquiry = {
   reply: string;
   status: string;
   at: string;
+  phone?: string;
+  subject?: string;
+  source?: InquiryChannel;
+  createdBy?: string;
+  interactions?: InquiryInteraction[];
+  /** Set once replies are recorded as interactions, so later replies need no legacy-history check. */
+  emailHistory?: boolean;
 };
 export type CustomerRecord = Partial<MemberProfile> & {
   shopId: string;
@@ -144,9 +152,12 @@ export function aggregateCustomers(
     groups.set(key, history);
   }
   for (const booking of bookings) add(booking.customer, { kind: "booking", at: booking.start, booking });
-  for (const inquiry of inquiries) add(inquiry.email, { kind: "inquiry", at: inquiry.at, inquiry });
-  const profiles = new Map(records.flatMap(record => { const profile = memberProfile(record); return profile ? [[normalizeEmail(record.email), profile] as const] : []; }));
   const phoneRecords = new Map(records.flatMap(record => record.phone ? [[normalizeEmail(record.email), record] as const] : []));
+  for (const inquiry of inquiries) {
+    const phoneCustomer = inquiry.phone ? phoneKey(inquiry.phone) : "";
+    add(inquiry.email || (phoneRecords.has(phoneCustomer) ? phoneCustomer : ""), { kind: "inquiry", at: inquiry.at, inquiry });
+  }
+  const profiles = new Map(records.flatMap(record => { const profile = memberProfile(record); return profile ? [[normalizeEmail(record.email), profile] as const] : []; }));
   for (const email of [...profiles.keys(), ...phoneRecords.keys()]) if (!groups.has(email)) groups.set(email, []);
   const notesByEmail = new Map<string, CustomerNote[]>();
   for (const note of notes.filter(note => note.status === "active")) {
