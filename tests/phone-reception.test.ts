@@ -563,10 +563,10 @@ test("an English shop answers calls in English from the webhook through the live
   await f.waitFor(() => !!f.liveParameters());
   const config = f.liveParameters().config;
   assert.doesNotMatch(config.systemInstruction.split("\n")[0], /[ぁ-ん]/);
-  assert.match(config.systemInstruction, /Existing bookings cannot be changed or cancelled by phone/);
+  assert.match(config.systemInstruction, /Guide callers with online bookings to change or cancel them online/);
   assert.doesNotMatch(config.tools[0].functionDeclarations[0].description, /[ぁ-ん]/);
   const response = await f.invoke("cancel", "cancel_booking", {});
-  assert.equal(response.error, "This action is unavailable", "tool results keep the shop's language outside the upgrade request");
+  assert.equal(response.message, "No cash booking was found for this number. Change or cancel online bookings online.", "tool results keep the shop's language outside the upgrade request");
   ws.close();
 });
 
@@ -627,21 +627,53 @@ test("a repeated booking or inquiry under a new tool-call ID stays one record", 
   ws.close();
 });
 
-test("a matching caller can leave a cancellation request without changing the booking", async t => {
-  const f = await fixture(t), caller = "0312345678", ws = await f.stream("CA-CANCEL", caller);
+test("a matching caller can confirm and cancel one of their cash bookings", async t => {
+  const f = await fixture(t), bookingCall = await f.stream("CA-BOOK-TO-CANCEL", "0312345678");
   const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
-  const booked = await f.invoke("book", "create_booking", { name: "Taro", menuId: "simple", start: `${day}T10:00:00+09:00` });
-  assert.equal(booked.ok, true);
-  const config = f.liveParameters().config;
-  assert.match(config.systemInstruction, /電話では既存の予約を変更・キャンセルできません/);
-  assert.equal(config.tools[0].functionDeclarations.some((tool: { name: string }) => tool.name === "cancel_booking"), false);
-  assert.deepEqual(await f.invoke("cancel", "cancel_booking", { start: booked.start }), { error: "この操作は利用できません" });
+  const book = (hour: string) => f.invoke(`book-${hour}`, "create_booking", { name: "Taro", menuId: "simple", start: `${day}T${hour}:00:00+09:00` });
+  const first = await book("10"), second = await book("12");
+  assert.equal(first.ok, true);
+  assert.equal(second.ok, true);
+  bookingCall.close();
 
-  const reason = `${day} 10時の予約のキャンセル希望`;
-  const inquiry = await f.invoke("ask", "create_inquiry", { name: "Taro", reason });
-  assert.equal(inquiry.ok, true);
-  assert.equal((await f.store.get<Inquiry>("inquiry", inquiry.inquiryId))!.message, reason);
-  assert.equal((await f.store.get<Booking>("booking", booked.bookingId))!.status, "active");
+  const ws = await f.stream("CA-CANCEL", "+81312345678");
+  const matches = await f.invoke("lookup", "cancel_booking", { start: day });
+  assert.equal(matches.ok, false);
+  assert.deepEqual(matches.choices.map((choice: { bookingId: string }) => choice.bookingId).sort(), [first.bookingId, second.bookingId].sort());
+  assert.ok((await f.store.bookings(f.shop.id)).every(booking => booking.status === "active"));
+
+  const confirmation = { bookingId: first.bookingId, start: `${day}T10:00:00+09:00` };
+  const cancelled = await f.invoke("confirm", "cancel_booking", confirmation);
+  assert.equal(cancelled.ok, true);
+  assert.equal(cancelled.bookingId, first.bookingId);
+  assert.deepEqual(await f.invoke("retry", "cancel_booking", confirmation), cancelled);
+  assert.equal((await f.store.get<Booking>("booking", first.bookingId))!.status, "cancelled");
+  assert.equal((await f.store.get<Booking>("booking", second.bookingId))!.status, "active");
+  const availability = await f.invoke("check", "check_availability", { date: day, menuId: "simple" });
+  assert.ok(availability.slots.some((slot: { start: string }) => slot.start === first.start), "cancellation releases the slot");
+  ws.close();
+  const logs = () => f.store.queryShopLogs(f.shop.id, new Date(Date.now() - 60000).toISOString(), new Date(Date.now() + 60000).toISOString(), 100, undefined, { kind: "phone" });
+  await f.waitFor(async () => (await logs()).some(log => log.callId === "CA-CANCEL" && log.outcome === "cancelled" && log.bookingId === first.bookingId));
+});
+
+test("phone cancellation respects the caller number, booking type and shop deadline", async t => {
+  const f = await fixture(t), caller = "0312345678";
+  const place = (id: string, startsIn: number, phone?: string, payment?: Booking["payment"]) => {
+    const start = new Date(Date.now() + startsIn).toISOString();
+    return f.store.saveBooking({ id, shopId: f.shop.id, customer: "taro@example.com", name: "Taro", phone, payment, message: "", menuId: "simple", price: 5500, staffId: "owner", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: new Date().toISOString() });
+  };
+  await place("other-caller", 3 * 86400000, "03-1111-2222");
+  await place("online", 3 * 86400000);
+  await place("prepaid", 3 * 86400000, caller, { provider: "paypal", environment: "sandbox", orderId: "order", captureId: "capture", amount: 5500, currency: "JPY", policy: [{ hoursBefore: 0, percent: 0 }] });
+  await place("past", -86400000, caller);
+  await place("past-deadline", 3600000, caller);
+  const ws = await f.stream("CA-REJECT-CANCEL", caller);
+  const lookup = await f.invoke("lookup", "cancel_booking", {});
+  assert.deepEqual(lookup.choices.map((choice: { bookingId: string }) => choice.bookingId), ["past-deadline"]);
+  for (const bookingId of ["other-caller", "online", "prepaid", "past", "past-deadline"]) {
+    assert.equal((await f.invoke(bookingId, "cancel_booking", { bookingId })).ok, false);
+    assert.equal((await f.store.get<Booking>("booking", bookingId))!.status, "active");
+  }
   ws.close();
 });
 

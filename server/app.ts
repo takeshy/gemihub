@@ -1017,6 +1017,42 @@ export function createApp(
         sendNow();
         return { ok: true, inquiryId: inquiry.id };
       },
+      async cancel(input) {
+        const actor = `phone-ai:${callSid}`;
+        const result = await store.locked(bookingLockKey(shop.id), async () => {
+          const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+          const published = fresh.published || fail(409, tr("先にお店を公開してください"));
+          const now = new Date();
+          const start = input.start && instantOf(input.start);
+          const candidates = (await store.bookings(fresh.id)).filter(booking =>
+            !booking.payment && samePhoneNumber(booking.phone, caller) &&
+            (!input.start || booking.start === start || dateIn(booking.start, timeZone) === input.start) &&
+            (input.bookingId ? booking.id === input.bookingId : booking.status === "active" && Date.parse(booking.start) > now.getTime()));
+          if (!candidates.length) return { ok: false as const, message: tr("この番号で受け付けた現金予約が見つかりません。オンライン予約の変更・キャンセルはオンラインでお願いします。") };
+          if (!input.bookingId) return {
+            ok: false as const, message: tr("キャンセルする予約の日時とメニューを確認し、お客様の了承を得てください。"),
+            choices: candidates.map(booking => ({ bookingId: booking.id, start: booking.start, menuName: bookingMenuName(published, booking), staffName: bookingStaffName(published, booking.staffId) })),
+          };
+          const booking = candidates[0];
+          const cancelled = { ok: true as const, bookingId: booking.id, message: tr("予約をキャンセルしました。返金はありません。") };
+          if (booking.status === "cancelled" && booking.updatedBy === actor) return cancelled;
+          if (booking.status !== "active" || Date.parse(booking.start) <= now.getTime()) return { ok: false as const, message: tr("この予約はすでに処理済みです。") };
+          if (Date.parse(booking.start) - now.getTime() < published.rules.cancelHours * 3600000) return {
+            ok: false as const, message: tr("キャンセル期限を過ぎているため、電話ではキャンセルできません。名前と用件を聞いて create_inquiry で残してください。"),
+          };
+          booking.status = "cancelled"; booking.updatedBy = actor; booking.updatedAt = now.toISOString();
+          await store.transaction(async () => {
+            await store.saveBooking(booking);
+            await syncCouponUse(store, booking);
+            await notify(fresh, published, published.notificationEmail, tr("AI電話で現金予約のキャンセルを受け付けました"),
+              tr("{0} 様\n{1}\nこの予約はキャンセルされました。返金はありません。", booking.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" })), []).catch(reportError);
+          });
+          logs.activity(fresh.id, booking.customer, "booking_cancelled", booking.id);
+          return cancelled;
+        });
+        if (result.ok) sendNow();
+        return result;
+      },
       async recordCall(result) {
         logs.forShop(shop.id, () => logs.record({
           kind: "phone", ok: result.outcome !== "error", operation: "phone_call",
@@ -1042,7 +1078,7 @@ export function createApp(
             }, async () => undefined, result.endedAt, position)).catch(reportError);
           }
         }
-        if (result.outcome === "error" || (result.outcome !== "booking" && result.outcome !== "inquiry" && result.outcome !== "answered")) {
+        if (result.outcome !== "booking" && result.outcome !== "inquiry" && result.outcome !== "answered" && result.outcome !== "cancelled") {
           await notify(shop, config, config.notificationEmail, tr("AI電話で対応できなかった着信がありました"),
             tr("発信者: {0}\n結果: {1}\n{2}", caller, result.outcome, [result.error, result.transcript.slice(0, 500)].filter(Boolean).join("\n")), []).catch(reportError);
           sendNow();
