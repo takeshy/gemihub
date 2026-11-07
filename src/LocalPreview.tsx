@@ -15,6 +15,7 @@ import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, t
 import { FixtureEditor } from "./FixtureEditor";
 import { fixtureScope, fixturePostEntries, hasFixtureFields } from "./fixture-scope";
 import { VisualRequest } from "./VisualRequest";
+import { useComparisonScroll } from "./comparison-scroll";
 import { DesignVersionHistory } from "./DesignVersionHistory";
 import { regionOf } from "../shared/region";
 import { shopSchema, planSummary, bookingStaff, type ShopConfig } from "../server/domain";
@@ -326,14 +327,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     await adopt(target, value, value);
   }
   // Keep the local and remote previews at the same position, so the same part of the screen is compared.
-  const syncingScroll = useRef(false);
-  function syncComparisonScroll(event: React.UIEvent<HTMLElement>) {
-    const source = event.target as HTMLElement;
-    if (syncingScroll.current || !source.classList.contains("comparison-preview")) return;
-    syncingScroll.current = true;
-    for (const other of event.currentTarget.querySelectorAll<HTMLElement>(".comparison-preview")) if (other !== source) other.scrollTop = source.scrollTop;
-    requestAnimationFrame(() => { syncingScroll.current = false; });
-  }
+  const syncComparisonScroll = useComparisonScroll();
   async function compareConflict(target: ReleaseScope = scope) {
     if (!draft) return;
     const [value, remoteSnapshot] = await Promise.all([remoteValue(target), api<Snapshot>(`/api/shops/${shop.id}/local-editor/shared`)]);
@@ -473,7 +467,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
-      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
@@ -496,7 +490,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     </>}    {draft && !conflict && <div className="panel editor-secondary">
       {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダー") : tr("フッター")}{tr("の内容を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
       {scope.kind === "shared" && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={applyDesign} /></fieldset></details>}
-      {scope.kind === "part" && <details key={`part-html:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダーの HTML を編集") : tr("フッターの HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`${scope.part}:${(draft.config.appearance?.theme || standardTheme)[themeHtmlKey(scope.part)]}`} part={scope.part} config={draft.config} shopId={shop.id} onChange={applyDesign} openFrame={() => void run(async () => choose("theme"))} /></fieldset></details>}
+      {scope.kind === "part" && <details key={`part-html:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダーの HTML を編集") : tr("フッターの HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={JSON.stringify([scope.part, (draft.config.appearance?.theme || standardTheme)[themeHtmlKey(scope.part)], draft.config.appearance?.theme?.[`${scope.part}Css`]])} part={scope.part} config={draft.config} shopId={shop.id} onChange={applyDesign} openFrame={() => void run(async () => choose("theme"))} /></fieldset></details>}
       {screen === "theme" && <fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`body:${draft.config.appearance?.theme?.bodyHtml}:${draft.config.appearance?.theme?.css}`} part="body" config={draft.config} shopId={shop.id} onChange={applyDesign} /></fieldset>}
       {scope.kind === "page" && <details key={`page:${scope.pageId}`}><summary>{tr("このページの内容を編集")}</summary>
         {scope.kind === "page" && <>

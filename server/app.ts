@@ -1,4 +1,5 @@
 import { googleCallbackPath } from "../shared/brand.ts";
+import { headerCopyKeys } from "../shared/storefront-copy.ts";
 import { forEachConcurrent } from "./concurrency.ts";
 import { shopExport, exportRows, exportCsv, exportColumns, type ExportTable } from "./data-export.ts";
 import { proposeSettings, settingsChanges, type SettingsProposal } from "./settings-ai.ts";
@@ -2593,15 +2594,19 @@ export function createApp(
           }
           if (action === "visual/propose" && method === "POST") {
             assertOwner(user, fresh);
-            const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000), imageIds: requestImageIdsSchema.default([]) }).parse(await body(req));
+            const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000));
+            if (input.applied && !input.revision) fail(400, tr("変更対象を選び直してください"));
             const visual = await store.get<VisualRequest>("visual", input.id);
             const source = fresh.published ? await effective(fresh) : null;
             if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
               fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
+            const current = input.revision ? validateVisualChange(visual.config, input.revision, input.target) : visual.config;
             const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
-            const proposed = (input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:")) && intelligence.visualAppearance
-              ? await intelligence.visualAppearance(visual.config, input.instruction, images, { target: input.target })
-              : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, input.instruction), visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images);
+            // Earlier requests are already in `revision`; repeating them as new work would apply relative changes twice.
+            const instruction = input.applied ? `Already applied to the current draft; do not apply these again:\n${input.applied}\n\nNew request:\n${input.instruction}` : input.instruction;
+            const proposed = (input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:")) && intelligence.visualAppearance
+              ? await intelligence.visualAppearance(current, instruction, images, { target: input.target, media: input.media })
+              : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, instruction), current, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, current.region, {}, input.media);
             validateProposedImages(proposed.config, visual.config, images);
             const config = validateVisualChange(visual.config, proposed.config, input.target);
             return json(res, { config, summary: planSummary(visual.config, config) });
@@ -2788,9 +2793,9 @@ export function createApp(
                 tr("画面の設定が古くなっています。開き直して印をつけてください"),
               );
             if (input.local?.pageId && !config.pages.some(p => p.id === input.local!.pageId)) fail(400, tr("対象ページがありません"));
-            const targets = visualTargets(config).filter(t => !input.local || (input.local.part ? t.id === `part:${input.local.part}` : input.local.pageId
+            const targets = visualTargets(config).filter(t => !input.local || (input.local.part ? t.id === `part:${input.local.part}` || input.local.part === "header" && headerCopyKeys.some(key => t.id === `copy:${key}`) : input.local.pageId
               ? t.id.startsWith(`page:${input.local.pageId}:`)
-              : !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:")));
+              : !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:") && !headerCopyKeys.some(key => t.id === `copy:${key}`)));
             const availableTargets = targets.filter(t => !t.id.startsWith("screen:") || !input.screen || t.id === `screen:${input.screen.id}`);
             const result = await intelligence.identifyVisual(
               input.media,
@@ -2803,7 +2808,8 @@ export function createApp(
               fail(
                 400,
                 result.explanation +
-                  tr(" 変更したい箇所を依頼文で具体的に伝えるか、赤いペンで囲んでください。"),
+                  tr(" 変更したい箇所を依頼文で具体的に伝えるか、赤いペンで囲んでください。") +
+                  (input.local && !input.local.part && !input.local.pageId ? tr(" ナビゲーションの文言やヘッダー・フッターの内容は、ツリーの「ヘッダー」「フッター」から修正できます。") : ""),
               );
             const visual: VisualRequest = {
               id: randomUUID(),

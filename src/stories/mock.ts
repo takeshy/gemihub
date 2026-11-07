@@ -749,7 +749,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     }
     else if (action === `/api/shops/${shop.id}/local-editor`) result = { base: shop.revision, source: shop.published, config: shop.published || config, lastPublishedPlanId: shop.lastPublishedPlanId };
     else if (action === `/api/shops/${shop.id}/visual/propose`) {
-      const next = structuredClone(visualConfig) as typeof config;
+      const next = structuredClone(input.revision || visualConfig) as typeof config;
       if (input.target === "copy:recentPosts") next.appearance = { accent: "sage", layout: "standard", imageUrl: "", ...next.appearance, copy: { ...next.appearance?.copy, recentPosts: tr("お店の最新ニュース") } };
       else if (String(input.target).startsWith("screen:")) {
         const id = String(input.target).slice(7) as ScreenId;

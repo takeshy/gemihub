@@ -11,4 +11,13 @@ export const standardTheme: Theme = {
 export const defaultAppearance = { accent: "sage" as const, layout: "standard" as const, imageUrl: "" };
 export type ThemePart = "header" | "body" | "footer";
 export const themeHtmlKey = (part: ThemePart) => `${part}Html` as const;
+/** Empty part CSS means "unset"; keeping "" would look like a change to an identical part. */
+export function compactTheme<T extends Partial<Theme>>(theme: T): T {
+  const next = { ...theme };
+  if (!next.headerCss) delete next.headerCss;
+  if (!next.footerCss) delete next.footerCss;
+  return next;
+}
+/** The eyebrow belongs to the standard header fragment; a custom fragment replaces it. */
+export const showsHeaderEyebrow = (theme?: Theme) => !theme || theme.headerHtml === standardTheme.headerHtml;
 export const hasThemeFrame = (theme?: Theme) => !!theme && (theme.bodyHtml !== standardTheme.bodyHtml || theme.css !== "");

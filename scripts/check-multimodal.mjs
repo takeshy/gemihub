@@ -158,6 +158,7 @@ try {
     assert.equal(await page.getByRole("button", {name: "この箇所を修正する"}).isEnabled(), false);
     await page.getByLabel("変更する対象を確認").selectOption("name");
     await page.getByRole("button", {name: "この箇所を修正する"}).click();
+    await page.getByRole("dialog", { name: "修正案を比較", exact: true }).getByRole("button", { name: "OK", exact: true }).click();
     await page.getByText("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。", {exact: false}).waitFor();
     await page.locator(".local-preview-screen").getByRole("heading", {name: "季節のアトリエ", exact: true}).waitFor();
     assert.equal(await page.getByRole("heading", {name: "差分プランを作成しました"}).count(), 0);

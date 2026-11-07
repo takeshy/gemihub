@@ -110,24 +110,27 @@ export function presentationSlots(design: Presentation | undefined, allowed: str
 }
 
 const html = z.string().min(1).max(20000);
-export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHtml: html, css: z.string().max(12000) }).superRefine((theme, ctx) => {
+type ThemeCss = { css: string; headerCss?: string; footerCss?: string };
+// Validation and rendering must see the same stylesheet for a part.
+const themePartCss = (theme: ThemeCss, part: "header" | "body" | "footer") => [theme.css, part === "header" ? theme.headerCss : part === "footer" ? theme.footerCss : ""].filter(Boolean).join("\n");
+export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHtml: html, css: z.string().max(12000), headerCss: z.string().max(12000).optional(), footerCss: z.string().max(12000).optional() }).superRefine((theme, ctx) => {
   const parts = [
-    [theme.headerHtml, ["title", "subtitle", "details", "image", "navigation"], ["navigation"]],
-    [theme.bodyHtml, ["content"], ["content"]],
-    [theme.footerHtml, ["content"], ["content"]],
+    ["header", theme.headerHtml, ["title", "subtitle", "details", "image", "navigation"], ["navigation"]],
+    ["body", theme.bodyHtml, ["content"], ["content"]],
+    ["footer", theme.footerHtml, ["content"], ["content"]],
   ] as const;
-  for (const [index, [html, allowed, required]] of parts.entries()) {
+  for (const [part, html, allowed, required] of parts) {
     try {
-      const compiled = compilePresentation({ html, css: theme.css });
+      const compiled = compilePresentation({ html, css: themePartCss(theme, part) });
       if (!compiled.slots.every(slot => (allowed as readonly string[]).includes(slot)) || !required.every(slot => compiled.slots.includes(slot)))
         throw new Error(`Allowed slots: ${allowed.join(", ")}; required slots: ${required.join(", ")}; received: ${compiled.slots.join(", ")}.`);
     } catch (error) {
-      ctx.addIssue({ code: "custom", path: [(["headerHtml", "bodyHtml", "footerHtml"] as const)[index]], message: error instanceof Error ? error.message : String(error) });
+      ctx.addIssue({ code: "custom", path: [`${part}Html`], message: error instanceof Error ? error.message : String(error) });
     }
   }
 });
 export type Theme = z.infer<typeof themeSchema>;
-export const themePart = (theme: Theme | undefined, part: "header" | "body" | "footer"): Presentation | undefined => theme ? { html: theme[`${part}Html`], css: theme.css } : undefined;
+export const themePart = (theme: Theme | undefined, part: "header" | "body" | "footer"): Presentation | undefined => theme ? { html: theme[`${part}Html`], css: themePartCss(theme, part) } : undefined;
 export const themeImageIds = (theme?: Theme) => theme ? [...new Set((["header", "body", "footer"] as const).flatMap(part => compilePresentation(themePart(theme, part)!).imageIds))] : [];
 export function inlineThemeImages(theme: Theme, images: Record<string, { mimeType: string; data: string }>): Theme {
   const inline = (html: string) => {

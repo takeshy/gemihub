@@ -1878,6 +1878,17 @@ pre {
 .sync-local { background: #fcf2d9; color: #78530f; }
 .sync-conflict { background: #fbe3df; color: #9d3025; }
 .conflict-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.visual-change-review { width: min(1280px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 24px; border: 1px solid var(--line); border-radius: 16px; color: var(--ink); background: var(--paper, #fffdf8); overflow: auto; }
+.visual-change-review::backdrop { background: #18392c99; }
+.visual-change-review h2 { margin-top: 0; }
+.visual-change-review .conflict-columns > section { min-width: 0; }
+.visual-change-review .comparison-preview { max-height: 52dvh; background: white; }
+.visual-review-refine { display: grid; gap: 12px; margin-top: 18px; }
+.visual-review-refine label { display: grid; gap: 8px; }
+.visual-review-refine textarea { width: 100%; box-sizing: border-box; }
+.visual-review-refine button { justify-self: start; }
+.visual-review-actions { position: sticky; bottom: -24px; padding: 16px 0; margin-bottom: -24px; background: var(--paper, #fffdf8); border-top: 1px solid var(--line); justify-content: flex-end; }
+@media (max-width: 760px) { .visual-change-review { padding: 16px; } .visual-review-actions { bottom: -16px; margin-bottom: -16px; } }
 .comparison-preview { max-height: 65vh; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
 .comparison-preview .salon-hero { padding: 24px 16px; }
 .comparison-preview .reservation-layout { display: block; }

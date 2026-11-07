@@ -11,10 +11,10 @@ import { requestLocale } from '../server/i18n.ts';
 
 process.env.DEMO_MODE='true';delete process.env.GOOGLE_CLOUD_PROJECT;
 const catalog=JSON.parse(await readFile('shared/en.json','utf8'));
-const store=new Store(':memory:');const identified=[];
+const store=new Store(':memory:');const identified=[];let annotated;
 const server=createApp(store,{...intelligence,
   async identifyVisual(media,targets,instruction){
-    assert.equal(media.mimeType,'image/png');assert.ok(targets.some(target=>target.id==='description'));identified.push(instruction);
+    annotated=media;assert.equal(media.mimeType,'image/png');assert.ok(targets.some(target=>target.id==='description'));assert.ok(!targets.some(target=>target.id==='copy:navReserve'),'the shared scope cannot publish header-owned copy');identified.push(instruction);
     const japanese=/ください|します/.test(instruction),followUp=/Keep the current colors|今の色/.test(instruction);
     const tagline=japanese?(instruction.includes('落ち着いた美しいネイル')?'落ち着いた美しいネイル':instruction.includes('次のお気に入りネイル')?'次のお気に入りネイル':'季節を楽しむネイル'):(instruction.includes('Calm, beautiful nails')?'Calm, beautiful nails':instruction.includes('Your next favorite nails')?'Your next favorite nails':'Nails for every season');
     const explanation=japanese
@@ -22,7 +22,8 @@ const server=createApp(store,{...intelligence,
       : followUp?`I’ll keep the colors and change only the tagline to “${tagline}”.`:`Change only the circled tagline to “${tagline}”. Confirm below.`;
     return{ids:['description'],explanation};
   },
-  async propose(text,current){
+  async propose(text,current,_email,_demo,_images,_region,_themeContext,media){
+    assert.deepEqual(media,annotated,'text-target generation receives the annotated screen too');
     const description=text.includes('Calm, beautiful nails')?'Calm, beautiful nails':text.includes('落ち着いた美しいネイル')?'落ち着いた美しいネイル':text.includes('Your next favorite nails')?'Your next favorite nails':text.includes('次のお気に入りネイル')?'次のお気に入りネイル':text.includes('Nails for every season')?'Nails for every season':'季節を楽しむネイル';
     const config={...structuredClone(current),description};return{config,summary:planSummary(current,config)};
   }
@@ -99,7 +100,7 @@ try{
   const replies=await chat.locator('.chat-message-assistant').allTextContents();assert.notEqual(replies[0],replies[1],'the follow-up acknowledges the color constraint');
   await page.screenshot({path:`tmp/side-chat/normal-confirm-${language}-${width}.png`,fullPage:true});
   if(process.env.UPDATE_MANUAL==='1'&&width===1280)await page.screenshot({path:`public/manual/${language==='en'?'en/':''}22-pen.jpg`,type:'jpeg',quality:86});
-  await chat.getByRole('button',{name:label('この箇所を修正する'),exact:true}).click();
+  await chat.getByRole('button',{name:label('この箇所を修正する'),exact:true}).click();await page.getByRole('dialog',{name:label('修正案を比較'),exact:true}).getByRole('button',{name:'OK',exact:true}).click();
   await expect(preview).toBeVisible();await expect(canvas).toHaveCount(0);await expect(chat).toBeVisible();
   await expect(preview.locator('.capture-tagline p')).toHaveText(firstTagline);
   await expect(back).toBeEnabled();await expect(forward).toBeDisabled();const callsBeforeHistory=identified.length;
@@ -109,7 +110,7 @@ try{
   await input.fill(language==='ja'?'紹介文は「次のお気に入りネイル」にします。':'Use “Your next favorite nails” as the tagline instead.');await input.press('Control+Enter');
   await expect(chat.locator('.chat-message-user')).toHaveCount(3);await expect(chat.locator('.chat-message-assistant')).toHaveCount(4);
   assert.doesNotMatch(identified.at(-1),/Nails for every season|季節を楽しむネイル|Keep the current colors|今の色/,'completed requests are not repeated in the next edit');
-  await chat.getByRole('button',{name:label('この箇所を修正する'),exact:true}).click();
+  await chat.getByRole('button',{name:label('この箇所を修正する'),exact:true}).click();await page.getByRole('dialog',{name:label('修正案を比較'),exact:true}).getByRole('button',{name:'OK',exact:true}).click();
   await expect(preview.locator('.capture-tagline p')).toHaveText(secondTagline);await expect(chat.locator('.chat-message-assistant')).toHaveCount(5);
   assert.deepEqual((await store.shop(shop.id)).published,shop.published,'chat edits stay unpublished');
   assert.ok(await page.evaluate(expected=>Object.values(localStorage).some(value=>{try{return JSON.parse(value).config?.description===expected;}catch{return false;}}),secondTagline));
@@ -117,7 +118,7 @@ try{
   await forward.click();await expect(preview.locator('.capture-tagline p')).toHaveText(secondTagline);
   await back.click();const thirdTagline=language==='en'?'Calm, beautiful nails':'落ち着いた美しいネイル';
   await input.fill(language==='ja'?'紹介文を「落ち着いた美しいネイル」にしてください。':'Use “Calm, beautiful nails” as the tagline.');await input.press('Control+Enter');
-  await expect(chat.locator('.chat-message-assistant')).toHaveCount(6);await chat.getByRole('button',{name:label('この箇所を修正する'),exact:true}).click();
+  await expect(chat.locator('.chat-message-assistant')).toHaveCount(6);await chat.getByRole('button',{name:label('この箇所を修正する'),exact:true}).click();await page.getByRole('dialog',{name:label('修正案を比較'),exact:true}).getByRole('button',{name:'OK',exact:true}).click();
   await expect(preview.locator('.capture-tagline p')).toHaveText(thirdTagline);await expect(forward).toBeDisabled();
   await back.click();await expect(preview.locator('.capture-tagline p')).toHaveText(firstTagline);await forward.click();await expect(preview.locator('.capture-tagline p')).toHaveText(thirdTagline);
   assert.deepEqual((await store.shop(shop.id)).published,shop.published,'history navigation and branching do not publish');

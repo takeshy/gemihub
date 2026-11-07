@@ -58,6 +58,7 @@ try {
     await chat.getByRole('button', { name: '送信', exact: true }).click();
     await expect(chat.getByLabel('変更する対象を確認')).toHaveValue('copy:recentPosts');
     await chat.getByRole('button', { name: 'この箇所を修正する', exact: true }).click();
+    await page.getByRole('dialog', { name: '修正案を比較', exact: true }).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(preview.getByRole('heading', { name: 'アトリエからのお知らせ', exact: true })).toBeVisible();
     assert.equal((await store.shop(shop.id)).published.appearance?.copy, undefined, 'the edit stays unpublished');
     await page.getByRole('button', { name: '前の状態に戻る', exact: true }).click();
@@ -67,6 +68,7 @@ try {
     await chat.getByRole('button', { name: '送信', exact: true }).click();
     await expect(chat.getByLabel('変更する対象を確認')).toHaveValue('screen:mine');
     await chat.getByRole('button', { name: 'この箇所を修正する', exact: true }).click();
+    await page.getByRole('dialog', { name: '修正案を比較', exact: true }).getByRole('button', { name: 'OK', exact: true }).click();
     await expect(preview.getByRole('heading', { name: 'ようこそアトリエへ', exact: true })).toBeVisible();
     await expect(preview.getByRole('heading', { name: 'アトリエからのお知らせ', exact: true })).toBeVisible();
     await expect(preview.getByRole('heading', { name: 'あなたのご予約', exact: true })).toBeVisible();

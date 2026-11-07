@@ -1,15 +1,16 @@
 import { tr } from "../shared/i18n.ts";
 import { z } from "zod";
 import type { ShopConfig } from "./domain.ts";
-import { defaultAppearance, standardTheme, themeHtmlKey } from "../shared/theme-editing.ts";
+import { compactTheme, defaultAppearance, standardTheme, themeHtmlKey } from "../shared/theme-editing.ts";
 import type { Theme } from "../shared/presentation.ts";
 import { stableJson } from "../shared/stable-json.ts";
+import { headerCopyKeys, storefrontCopySchema, type StorefrontCopy } from "../shared/storefront-copy.ts";
 export const defaultHeader = { title: "", subtitle: "", imageUrl: "", showDetails: true, showNavigation: true };
 export const defaultFooter = { text: "", alignment: "center" as const };
 export const headerSchema = z.object({ title: z.string().max(100), subtitle: z.string().max(1500), imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ }).max(2048)]), imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(), showDetails: z.boolean(), showNavigation: z.boolean() });
 export const footerSchema = z.object({ text: z.string().max(4000), alignment: z.enum(["left", "center"]) });
-export const headerPartSchema = headerSchema.extend({ themeHtml: z.string().min(1).max(20000).optional() });
-export const footerPartSchema = footerSchema.extend({ themeHtml: z.string().min(1).max(20000).optional() });
+export const headerPartSchema = headerSchema.extend({ themeHtml: z.string().min(1).max(20000).optional(), themeCss: z.string().max(12000).optional(), copy: storefrontCopySchema.optional() });
+export const footerPartSchema = footerSchema.extend({ themeHtml: z.string().min(1).max(20000).optional(), themeCss: z.string().max(12000).optional() });
 export const pageSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]+$/).max(80),
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80),
@@ -32,25 +33,53 @@ export type ReleaseScope = z.infer<typeof releaseScopeSchema>;
 export const same = (a: unknown, b: unknown) => stableJson(a) === stableJson(b);
 export const pageValue = (config: ShopConfig | null, id: string) => config?.pages.find(p => p.id === id) || null;
 export function partValue(config: Pick<ShopConfig, "header" | "footer" | "appearance">, part: "header" | "footer") {
-  return { ...config[part], themeHtml: (config.appearance?.theme || standardTheme)[themeHtmlKey(part)] };
+  const copy = Object.fromEntries(headerCopyKeys.filter(key => config.appearance?.copy?.[key] !== undefined).map(key => [key, config.appearance!.copy![key]]));
+  return { ...config[part], themeHtml: (config.appearance?.theme || standardTheme)[themeHtmlKey(part)],
+    ...(config.appearance?.theme?.[`${part}Css`] ? { themeCss: config.appearance.theme[`${part}Css`] } : {}),
+    ...(part === "header" && Object.keys(copy).length ? { copy } : {}) };
 }
 export function replacePart(config: ShopConfig, part: "header" | "footer", value: unknown): ShopConfig {
   const parsed = (part === "header" ? headerPartSchema : footerPartSchema).parse(value);
-  const { themeHtml, ...content } = parsed;
+  const { themeHtml, themeCss, ...rest } = parsed;
+  const { copy, ...content } = rest as typeof rest & { copy?: StorefrontCopy };
   const next = { ...config, [part]: content };
-  if (themeHtml !== undefined && (config.appearance?.theme || themeHtml !== standardTheme[themeHtmlKey(part)])) {
-    next.appearance = { ...(config.appearance || defaultAppearance), theme: { ...(config.appearance?.theme || standardTheme), [themeHtmlKey(part)]: themeHtml } };
+  if (themeHtml !== undefined && (config.appearance?.theme || themeCss || themeHtml !== standardTheme[themeHtmlKey(part)])) {
+    const theme = { ...(config.appearance?.theme || standardTheme), [themeHtmlKey(part)]: themeHtml };
+    if (themeCss) theme[`${part}Css`] = themeCss; else delete theme[`${part}Css`];
+    next.appearance = { ...(config.appearance || defaultAppearance), theme };
+  }
+  if (part === "header") {
+    const merged = { ...next.appearance?.copy };
+    for (const key of headerCopyKeys) { if (copy?.[key] !== undefined) merged[key] = copy[key]; else delete merged[key]; }
+    if (!same(next.appearance?.copy || {}, merged)) {
+      if (Object.keys(merged).length) next.appearance = { ...(next.appearance || defaultAppearance), copy: merged };
+      else if (next.appearance?.copy) { next.appearance = { ...next.appearance }; delete next.appearance.copy; }
+    }
   }
   return next;
 }
-// Shared edits own the frame and common CSS; each part owns its own HTML.
+/** The header owns navigation copy: other scopes keep the owner's values, set or unset. */
+export function withHeaderCopy<T extends { copy?: StorefrontCopy }>(appearance: T, owner: StorefrontCopy | undefined): T {
+  const next = { ...appearance };
+  const copy = { ...appearance.copy };
+  for (const key of headerCopyKeys) { if (owner?.[key] !== undefined) copy[key] = owner[key]; else delete copy[key]; }
+  if (Object.keys(copy).length) next.copy = copy; else delete next.copy;
+  return next;
+}
+/** Parts own their HTML and CSS: a shared edit can change only the frame and common CSS of a theme. */
+export function withPartTheme<T extends { theme?: Theme }>(appearance: T, owner: Theme | undefined): T {
+  if (!appearance.theme) return appearance;
+  const { headerHtml, footerHtml, headerCss, footerCss } = owner || standardTheme;
+  return { ...appearance, theme: compactTheme({ ...appearance.theme, headerHtml, footerHtml, headerCss, footerCss }) };
+}
+// Shared edits own the frame and common CSS; parts own their HTML/CSS, and the header owns navigation copy.
 export function replaceShared(config: ShopConfig, value: unknown): ShopConfig {
   if (value === null) return config;
   const shared = value as Partial<ShopConfig>;
   const appearance: NonNullable<ShopConfig["appearance"]> = shared.appearance || defaultAppearance;
   const incoming = appearance.theme || standardTheme;
   const theme: Theme = { ...(config.appearance?.theme || standardTheme), bodyHtml: incoming.bodyHtml, css: incoming.css };
-  const nextAppearance: NonNullable<ShopConfig["appearance"]> = { ...appearance };
+  const nextAppearance = withHeaderCopy(appearance, config.appearance?.copy);
   delete nextAppearance.theme;
   if (config.appearance?.theme || theme.bodyHtml !== standardTheme.bodyHtml || theme.css !== standardTheme.css) nextAppearance.theme = theme;
   const next = { ...config, ...shared, appearance: !config.appearance && same(nextAppearance, defaultAppearance) ? undefined : nextAppearance };
@@ -65,7 +94,11 @@ export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
   if (scope.kind === "page") return pageValue(config, scope.pageId);
   const { header: _header, footer: _footer, pages: _, menus: _m, staff: _s, hours: _h, rules: _r, region: _region, ...shared } = config;
   const appearance: NonNullable<ShopConfig["appearance"]> = config.appearance || defaultAppearance;
-  return { ...shared, appearance: { ...appearance, theme: { ...standardTheme, bodyHtml: appearance.theme?.bodyHtml || standardTheme.bodyHtml, css: appearance.theme?.css || "" } } };
+  const sharedAppearance = { ...appearance };
+  const copy = { ...appearance.copy };
+  for (const key of headerCopyKeys) delete copy[key];
+  if (Object.keys(copy).length) sharedAppearance.copy = copy; else delete sharedAppearance.copy;
+  return { ...shared, appearance: { ...sharedAppearance, theme: { ...standardTheme, bodyHtml: appearance.theme?.bodyHtml || standardTheme.bodyHtml, css: appearance.theme?.css || "" } } };
 }
 export function scopedConfig(current: ShopConfig | null, local: ShopConfig, scope: ReleaseScope): ShopConfig {
   if (scope.kind === "shared") return replaceShared(current || { ...local, appearance: undefined, pages: [], header: { ...defaultHeader }, footer: { ...defaultFooter } }, scopedSource(local, scope));

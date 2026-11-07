@@ -10,17 +10,59 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { StaticStorefront } from "../src/StaticStorefront.tsx";
 import { renderHomeWithPosts } from "../server/post-renderer.tsx";
 import { sampleFixtures } from "../src/local-preview.ts";
+import { scopedConfig, scopedSource } from "../server/pages.ts";
+import { standardTheme } from "../shared/theme-editing.ts";
+import { themePart } from "../shared/presentation.ts";
+import { designOf, restoreDesign } from "../server/design-versions.ts";
+import { ChromePreview } from "../src/SiteChrome.tsx";
 
 const theme = { headerHtml: '<header><h1>Original headline</h1><slot name="navigation"></slot></header>', bodyHtml: '<main><slot name="content"></slot></main>', footerHtml: '<footer><slot name="content"></slot></footer>', css: 'h1{color:#193e32}' };
+test("header edits receive the annotated screen and publish/restore their HTML, CSS and navigation together", async () => {
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme, copy: { navReserve: "Reserve", recentPosts: "News" } } };
+  const headerHtml = theme.headerHtml.replace("Original headline", "Revised headline");
+  const media = { mimeType: "image/png" as const, data: "aGVsbG8=" };
+  const { config } = await proposeVisualAppearance(current, "Change the circled menu", [], {
+    target: "part:header", media, generate: async request => {
+      assert.deepEqual(request.contents[0].parts!.at(-1), { inlineData: media });
+      return JSON.stringify({ header: { title: "Heading" }, appearance: { theme: { headerHtml, headerCss: '.public-nav{gap:24px}' }, copy: { navReserve: "Book now" } } });
+    },
+  });
+  assert.equal(config.appearance!.copy!.recentPosts, "News");
+  assert.equal(themePart(config.appearance!.theme, "footer")!.css, theme.css);
+  assert.match(themePart(config.appearance!.theme, "header")!.css, /gap:24px/);
+  assert.deepEqual(scopedSource(config, { kind: "shared" }), scopedSource(current, { kind: "shared" }));
+  assert.deepEqual(scopedConfig(current, config, { kind: "part", part: "header" }), config);
+  assert.deepEqual(scopedConfig(current, config, { kind: "shared" }), current);
+  assert.deepEqual(restoreDesign(config, designOf(current), { kind: "part", part: "header" }), current);
+  for (const mutate of [
+    (c: typeof config) => { c.rules.interval = 60; },
+    (c: typeof config) => { c.menus[0].price++; },
+    (c: typeof config) => { c.appearance!.theme!.css += "p{color:red}"; },
+    (c: typeof config) => { c.appearance!.theme!.footerHtml = '<footer>Changed<slot name="content"></slot></footer>'; },
+    (c: typeof config) => { c.appearance!.copy!.recentPosts = "Other"; },
+  ]) { const next = structuredClone(config); mutate(next); assert.throws(() => validateVisualChange(current, next, "part:header"), /指定箇所以外/); }
+  const standard = { ...structuredClone(sample), appearance: undefined };
+  const customized = await proposeVisualAppearance(standard, "Change header spacing", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { theme: { headerCss: "header{padding:24px}" } } }) });
+  assert.equal(customized.config.appearance!.theme!.bodyHtml, standardTheme.bodyHtml);
+  assert.match(renderToStaticMarkup(createElement(ChromePreview, { config: customized.config, part: "header" })), /A LITTLE MOMENT, JUST FOR YOU\./);
+  const cleared = await proposeVisualAppearance(customized.config, "Remove header styles", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { theme: { headerCss: "" } } }) });
+  assert.equal(cleared.config.appearance!.theme!.headerCss, undefined);
+  const navigationOnly = await proposeVisualAppearance(standard, "Rename navigation", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) });
+  assert.equal(navigationOnly.config.appearance!.copy!.navReserve, "Book");
+  assert.equal(navigationOnly.config.appearance!.theme, undefined);
+  const emptyCopy = { ...standard, appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", copy: {} } };
+  assert.equal(validateVisualChange(emptyCopy, { ...emptyCopy, header: { ...emptyCopy.header, title: "Heading" } }, "part:header").header.title, "Heading");
+  await assert.rejects(proposeVisualAppearance(standard, "Restyle navigation", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { theme: { headerCss: 'header{background:url(https://example.com/track)}' } } }) }));
+});
 test("a partial visual proposal preserves the rest of the theme and all business data", async () => {
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme } };
-  const headerHtml = theme.headerHtml.replace("Original headline", "Your moment of calm.");
-  const {config, summary} = await proposeVisualAppearance(current, "Change the headline", [], {generate:async () => JSON.stringify({appearance:{theme:{headerHtml}}})});
-  assert.equal(config.appearance!.theme!.headerHtml, headerHtml);
-  assert.deepEqual({...config.appearance!.theme,headerHtml:theme.headerHtml}, theme);
+  const bodyHtml = theme.bodyHtml.replace("<main>", '<main class="calm">');
+  const {config, summary} = await proposeVisualAppearance(current, "Change the frame", [], {generate:async () => JSON.stringify({appearance:{theme:{bodyHtml}}})});
+  assert.equal(config.appearance!.theme!.bodyHtml, bodyHtml);
+  assert.deepEqual({...config.appearance!.theme,bodyHtml:theme.bodyHtml}, theme);
   assert.deepEqual({...config,appearance:current.appearance}, current);
   assert.ok(summary.length);
-  assert.equal(current.appearance.theme.headerHtml, theme.headerHtml);
+  assert.equal(current.appearance.theme.bodyHtml, theme.bodyHtml);
 });
 test("visual proposals reject payment changes, unsafe HTML and incomplete new themes", async () => {
   const current = {...structuredClone(sample),appearance:{accent:"sage" as const,layout:"standard" as const,imageUrl:"",theme}};
@@ -70,4 +112,51 @@ test("copy and screen proposals reject changes outside the selected target and p
   assert.throws(() => validateVisualChange(current, { ...config, rules: { ...config.rules, interval: 60 } }, "screen:mine"));
   const withImage = { ...config, screens: { mine: { ...design, html: design.html + `<img data-image-id="${"e".repeat(64)}" alt="Photo">` } } };
   assert.throws(() => validateProposedImages(withImage, current, []), /画像/);
+});
+
+test("a header proposal that restates the standard theme stays valid on a shop without a theme", async () => {
+  const current = { ...structuredClone(sample), appearance: undefined };
+  const generate = (patch: unknown) => async () => JSON.stringify(patch);
+  const copied = await proposeVisualAppearance(current, "Rename", [], { target: "part:header", generate: generate({ appearance: { copy: { navReserve: "Book" }, theme: { headerHtml: standardTheme.headerHtml, headerCss: "" } } }) });
+  assert.equal(copied.config.appearance!.copy!.navReserve, "Book");
+  assert.equal(copied.config.appearance!.theme, undefined);
+  const unchanged = await proposeVisualAppearance(current, "Nothing", [], { target: "part:header", generate: generate({ appearance: { theme: { headerHtml: standardTheme.headerHtml } } }) });
+  assert.equal(unchanged.config.appearance, undefined);
+  const styled = await proposeVisualAppearance(current, "Gap", [], { target: "part:header", generate: generate({ appearance: { theme: { headerCss: ".public-nav{gap:8px}" } } }) });
+  assert.equal(styled.config.appearance!.theme!.headerCss, ".public-nav{gap:8px}");
+  await assert.rejects(proposeVisualAppearance(current, "Frame", [], { target: "part:header", generate: generate({ appearance: { theme: { bodyHtml: '<main class="x"><slot name="content"></slot></main>' } } }) }), /指定箇所以外/);
+});
+
+test("empty part CSS equals unset CSS, and clearing it removes the key", () => {
+  const appearance = { accent: "sage" as const, layout: "standard" as const, imageUrl: "" };
+  const unset = { ...structuredClone(sample), appearance: { ...appearance, theme } };
+  const empty = { ...structuredClone(sample), appearance: { ...appearance, theme: { ...theme, headerCss: "" } } };
+  const styled = { ...structuredClone(sample), appearance: { ...appearance, theme: { ...theme, headerCss: "h1{color:red}" } } };
+  const scope = { kind: "part" as const, part: "header" as const };
+  assert.deepEqual(scopedSource(empty, scope), scopedSource(unset, scope));
+  assert.deepEqual(scopedConfig(styled, empty, scope).appearance!.theme, theme);
+});
+
+test("the appearance target cannot change header-owned copy", async () => {
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", copy: { navReserve: "Reserve" } } };
+  await assert.rejects(proposeVisualAppearance(current, "Rename", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) }), /指定箇所以外/);
+  const { config } = await proposeVisualAppearance(current, "Colour", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { accent: "rose", copy: { recentPosts: "News" } } }) });
+  assert.equal(config.appearance!.accent, "rose");
+  assert.equal(config.appearance!.copy!.navReserve, "Reserve");
+});
+
+test("the appearance target cannot change header or footer theme parts, which the shared scope cannot publish", async () => {
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: { ...theme, headerCss: "h1{color:red}" } } };
+  const revised = theme.headerHtml.replace("Original headline", "Revised");
+  for (const patch of [{ headerHtml: revised }, { headerCss: "h1{color:blue}" }, { headerCss: "" }, { footerHtml: '<footer class="x"><slot name="content"></slot></footer>' }, { footerCss: "p{color:red}" }])
+    await assert.rejects(proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: patch } }) }), /指定箇所以外/, JSON.stringify(patch));
+  const { config } = await proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: { css: "p{color:green}" } } }) });
+  assert.equal(scopedConfig(current, config, { kind: "shared" }).appearance!.theme!.css, "p{color:green}");
+  assert.equal(config.appearance!.theme!.headerCss, "h1{color:red}");
+});
+
+test("the eyebrow is a text target exactly when the header fragment shows it", () => {
+  const eyebrow = (appearanceTheme: typeof theme) => visualTargets({ ...structuredClone(sample), appearance: { accent: "sage", layout: "standard", imageUrl: "", theme: appearanceTheme } }).some(target => target.id === "copy:headerEyebrow");
+  assert.equal(eyebrow({ ...standardTheme, css: "h1{color:red}" }), true);
+  assert.equal(eyebrow(theme), false);
 });
