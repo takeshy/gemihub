@@ -992,6 +992,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       if (previous && (previous.text !== input.text || previous.previousReply !== input.previousReply)) throw new Error(tr("返信内容が変わっています。入力し直してください"));
       if (!previous) {
         if (input.previousReply !== undefined && input.previousReply !== q.reply) throw new Error(tr("他の担当者が返信しています。最新の状態を確認してください"));
+        if (input.previousEmail === undefined || input.previousEmail !== q.email) throw new Error(tr("返信先が更新されています。最新の状態を確認してください。"));
         if (!String(input.text).trim()) throw new Error(tr("返信内容を入力してください"));
         q.interactions ||= [];
         if (q.reply && !q.interactions.some(entry => entry.kind === "email")) q.interactions.push({ id: `${q.id}-legacy`, shopId: shop.id, inquiryId: q.id, kind: "email", text: q.reply, at: "", legacy: true });

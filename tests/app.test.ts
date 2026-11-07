@@ -179,14 +179,14 @@ test("approval, retired preview routes, publication, customer authorization, con
   assert.equal(inquiry.status, 200);
   const q = (
     await store.list<{
-      id: string;
+      id: string; email: string;
     }>("inquiry")
   )[0];
   assert.equal(
     (
       await request(
         `/api/shops/${shop.id}/inquiries/${q.id}/reply`,
-        { text: "お待ちしています" },
+        { text: "お待ちしています", previousEmail: q.email },
         bob,
       )
     ).status,

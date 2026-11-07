@@ -11,7 +11,7 @@ import { InquiryHistory, InquiryRecordForm, InquiryContact } from "./InquiryHist
 import "./Inquiries.css";
 import {
   filterInquiries,
-  inquiryReplied, inquiryReplyLabel,
+  inquiryReplyLabel, inquiryReplyState,
   inquiryStatus,
   inquiryStatusLabel, inquiryStatuses, inquiryChannelLabel,
   type InquiryStatus,
@@ -36,7 +36,11 @@ export function Inquiries({
     try {
       await api(`/api/shops/${shopId}/inquiries/${inquiry.id}/status`, { status, previousStatus: inquiryStatus(inquiry) });
       await reload();
-    } catch (error) { setError(error instanceof Error ? error.message : tr("対応状況を変更できませんでした。")); }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : tr("対応状況を変更できませんでした。"));
+      // A rejected move usually means this board is stale; if this refresh also fails, the next move retries it.
+      await reload().catch(() => {});
+    }
     finally { moveBusy.current = false; setMoving(false); }
   }
   const { shopTime, displayTimeZone } = useShopDisplay();
@@ -48,9 +52,9 @@ export function Inquiries({
     [to, setTo] = useState("");
   const validRange = !from || !to || from <= to;
   const visible = validRange
-    ? filterInquiries(inquiries, { showCompleted, query, reply, from, to }, displayTimeZone())
+    ? filterInquiries(inquiries, { showCompleted: view === "board" || showCompleted, query, reply, from, to }, displayTimeZone())
     : [];
-  const pagination = usePagination(visible, JSON.stringify([shopId, showCompleted, query, reply, from, to]));
+  const pagination = usePagination(visible, JSON.stringify([shopId, view, showCompleted, query, reply, from, to]));
   const selected = inquiries.find(inquiry => inquiry.id === selectedId);
   const refresh = async () => { await reload(); };
   if (selected) return <section className="panel inquiry-detail" aria-label={tr("お問い合わせの詳細")}>
@@ -64,7 +68,7 @@ export function Inquiries({
       <InquiryCreate shopId={shopId} onCreated={async inquiry => { await reload(); setSelectedId(inquiry.id); }} />
       <div className="inquiry-view-switch" role="group" aria-label={tr("お問い合わせの表示方法")}>
         <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}>{tr("一覧表示")}</button>
-        <button type="button" aria-pressed={view === "board"} onClick={() => { setView("board"); setShowCompleted(true); }}>{tr("カンバン表示")}</button>
+        <button type="button" aria-pressed={view === "board"} onClick={() => setView("board")}>{tr("カンバン表示")}</button>
       </div>
       {error && <p className="alert" role="alert">{error}</p>}
       <p>
@@ -104,13 +108,13 @@ export function Inquiries({
           />
         </label>
       </div>
-      <label className="inquiry-completed-toggle">
+      {view === "list" && <label className="inquiry-completed-toggle">
         <input
           type="checkbox"
           checked={showCompleted}
           onChange={(event) => setShowCompleted(event.target.checked)}
         />
-        {tr("対応済みも表示する")}</label>
+        {tr("対応済みも表示する")}</label>}
       {!validRange && (
         <p className="alert" role="alert">
           {tr("終了日は開始日以降にしてください。")}</p>
@@ -128,7 +132,7 @@ export function Inquiries({
         <div {...pagination.listProps} className="inquiry-list-items">{pagination.items.map(inquiry => <InquiryCard key={inquiry.id} inquiry={inquiry} shopId={shopId} when={when} open={() => setSelectedId(inquiry.id)} />)}</div>
         <Pagination pagination={pagination} label={tr("お問い合わせ一覧")} />
       </> : <div className="inquiry-board" aria-label={tr("お問い合わせカンバン")}>
-        {inquiryStatuses.map(status => <InquiryColumn key={status} status={status} inquiries={visible} shopId={shopId} resetKey={JSON.stringify([showCompleted, query, reply, from, to])} when={when} open={setSelectedId} move={move} busy={moving} />)}
+        {inquiryStatuses.map(status => <InquiryColumn key={status} status={status} inquiries={visible} shopId={shopId} resetKey={JSON.stringify([query, reply, from, to])} when={when} open={setSelectedId} move={move} busy={moving} />)}
       </div>}
     </section>
   );
@@ -139,7 +143,7 @@ function InquiryCard({ inquiry, shopId, when, open }: { inquiry: Inquiry; shopId
     {inquiry.subject && <h3>{inquiry.subject}</h3>}
     <span className="small muted">{inquiry.email || inquiry.phone || tr("連絡先未登録")}</span>
     <p className="inquiry-message-preview">{inquiry.message}</p>
-    <div className="inquiry-badges"><span className={`pill inquiry-status-${inquiryStatus(inquiry)}`}>{inquiryStatusLabel(inquiryStatus(inquiry))}</span><span className="pill">{inquiryReplyLabel(inquiry)}</span></div>
+    <div className="inquiry-badges"><span className={`pill inquiry-status-${inquiryStatus(inquiry)}`}>{inquiryStatusLabel(inquiryStatus(inquiry))}</span><span className={`pill inquiry-reply-${inquiryReplyState(inquiry)}`}>{inquiryReplyLabel(inquiry)}</span></div>
     <span className="inquiry-open">{inquiry.email ? tr("お客様の詳細で対応する →") : tr("やりとりを開く →")}</span>
   </>;
   return inquiry.email ? <a className="inquiry-list-item" data-customer-inquiry-link aria-label={tr("{0}のお問い合わせを開く", inquiry.name)} href={`/?${new URLSearchParams({ shop: shopId, customer: inquiry.email, inquiry: inquiry.id })}`}>{content}</a>
@@ -193,7 +197,7 @@ export function CustomerInquiry({
     [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const pending = useRef<
-    { text: string; id: string; previousReply: string } | undefined
+    { text: string; id: string; previousReply: string; previousEmail: string } | undefined
   >(undefined);
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -217,9 +221,7 @@ export function CustomerInquiry({
       <p className="small muted">{inquiry.source && inquiryChannelLabel(inquiry.source)}{inquiry.phone && tr(" · 電話：{0}", inquiry.phone)}</p>
       <p className="customer-message">{inquiry.message}</p>
       <div className="inquiry-badges">
-        <span
-          className={`pill ${inquiryReplied(inquiry) ? "inquiry-replied" : "inquiry-unreplied"}`}
-        >
+        <span className={`pill inquiry-reply-${inquiryReplyState(inquiry)}`}>
           {inquiryReplyLabel(inquiry)}
         </span>
         <label>
@@ -280,6 +282,7 @@ export function CustomerInquiry({
                   text: value,
                   id: createRequestId(),
                   previousReply: inquiry.reply,
+                  previousEmail: inquiry.email,
                 };
           pending.current = action;
           void run(async () => {
@@ -287,6 +290,7 @@ export function CustomerInquiry({
               text: value,
               requestId: action.id,
               previousReply: action.previousReply,
+              previousEmail: action.previousEmail,
             });
             pending.current = undefined;
             setText("");

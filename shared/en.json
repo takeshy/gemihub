@@ -3475,5 +3475,7 @@
   "電話・社内メモ・メールを区別して、やりとりの履歴を残します。": "Keep phone calls, internal notes and email as distinct conversation entries.",
   "4列のカンバンで対応状況を管理します。各列のページ切替と選択操作はスマートフォンでも利用できます。": "Manage status in four kanban columns. Column pagination and status selectors work on smartphones too.",
   "電話だけの相談も、メールを送らずに手動で受け付けられます。": "Manually record a phone inquiry without sending email.",
-  "ドラッグして対応状況を変更": "Drag to change status"
+  "ドラッグして対応状況を変更": "Drag to change status",
+  "返信先が更新されています。最新の状態を確認してください。": "The recipient has changed. Check the latest status.",
+  "送信できませんでした": "Not delivered"
 }

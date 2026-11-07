@@ -2376,9 +2376,12 @@ pre {
 .inquiry-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .inquiry-badges label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .inquiry-badges select { width: auto; }
-.inquiry-status-in_progress, .inquiry-unreplied { background: #fff1d7; color: #754700; }
+.inquiry-status-new { background: #e3eefb; color: #1c4a7a; }
+.inquiry-status-waiting { background: #efe8f8; color: #55347f; }
+.inquiry-status-in_progress, .inquiry-reply-unreplied, .inquiry-reply-queued, .inquiry-reply-retrying { background: #fff1d7; color: #754700; }
 .inquiry-status-completed { background: #e9eeeb; color: #43584b; }
-.inquiry-replied { background: #e5f2e7; color: #215b32; }
+.inquiry-reply-replied, .inquiry-reply-simulated { background: #e5f2e7; color: #215b32; }
+.inquiry-reply-failed { background: #fbe6e4; color: #8a2a20; }
 .inquiry-open { margin-left: auto; font-size: 13px; color: #325c36; }
 .customer-basic-info { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; padding: 20px; background: #f4f7f1; border-radius: 12px; }
 .customer-basic-info dt { font-size: 12px; color: #657465; margin-bottom: 6px; }

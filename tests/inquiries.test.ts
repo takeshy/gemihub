@@ -1,14 +1,17 @@
 import { google } from "googleapis";
 import { encrypt } from "../server/google.ts";
-import { test, mock } from "node:test";
+import { test, mock, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import {
   filterInquiries,
+  inquiryReplyState,
   inquiryStatus,
   type InquiryFilter,
+  type InquiryInteraction,
 } from "../server/inquiries.ts";
+import { maxInquiryMailAttempts } from "../server/inquiry-service.ts";
 import { createApp } from "../server/app.ts";
 import { Store, type User } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
@@ -150,7 +153,7 @@ test("inquiry responses and status are independent, scoped to operators, durable
   const reply = {
     requestId: randomUUID(),
     text: "写真をお持ちください",
-    previousReply: "",
+    previousReply: "", previousEmail: question.email,
   };
   for (const id of ["customer", "invited", "revoked", "other", "anonymous"]) {
     assert.equal(
@@ -248,7 +251,7 @@ test("inquiry responses and status are independent, scoped to operators, durable
   const secondReply = {
     requestId: randomUUID(),
     text: "追加のご案内です",
-    previousReply: reply.text,
+    previousReply: reply.text, previousEmail: question.email,
   };
   assert.equal((await post(`${base}/question/reply`, secondReply)).status, 200);
   assert.equal((await store.list("job")).length, 2);
@@ -337,7 +340,7 @@ test("an accepted inquiry reply sends its queued email before removing the mail 
       body: JSON.stringify({
         text: "ご相談ありがとうございます",
         requestId: randomUUID(),
-        previousReply: "",
+        previousReply: "", previousEmail: question.email,
       }),
     },
   );
@@ -346,7 +349,7 @@ test("an accepted inquiry reply sends its queued email before removing the mail 
   assert.ok(sent[0].includes(`To: ${question.email}`));
   assert.equal((await store.list("job")).length, 0);
   assert.equal((await store.records<import("../server/inquiries.ts").InquiryInteraction>("inquiryInteraction", shop))[0].delivery, "sent");
-  const retryInput = { text: "A second email", requestId: randomUUID(), previousReply: "ご相談ありがとうございます" };
+  const retryInput = { text: "A second email", requestId: randomUUID(), previousReply: "ご相談ありがとうございます", previousEmail: question.email };
   const retry = () => fetch(`${origin}/api/shops/${shop.id}/inquiries/${question.id}/reply`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" }, body: JSON.stringify(retryInput) });
   mailFailure = true; assert.equal((await retry()).status, 200);
   assert.equal((await store.list("job")).length, 1);
@@ -412,11 +415,11 @@ test("manual inquiries keep phone, customer and internal history, scoped retries
   assert.equal((await request("/public/contact", contact)).status, 403, "verified public addresses cannot be replaced");
   assert.equal((await request(`/${id}/status`, { status: "waiting", previousStatus: "new" })).status, 200);
   assert.equal((await request(`/${id}/status`, { status: "completed", previousStatus: "new" })).status, 409);
-  const email = { requestId: randomUUID(), text: "email one", previousReply: "" };
+  const email = { requestId: randomUUID(), text: "email one", previousReply: "", previousEmail: "guest@example.com" };
   assert.equal((await request(`/${id}/reply`, email)).status, 200);
   assert.equal((await request(`/${id}/reply`, email)).status, 200);
   assert.equal((await store.list("job")).length, 1);
-  assert.equal((await request(`/${id}/reply`, { requestId: randomUUID(), text: "email two", previousReply: "email one" })).status, 200);
+  assert.equal((await request(`/${id}/reply`, { requestId: randomUUID(), text: "email two", previousReply: "email one", previousEmail: "guest@example.com" })).status, 200);
   rows = (await request("")).body;
   const saved = rows.find(row => row.id === id)!;
   assert.equal(saved.status, "waiting", "email does not move kanban state");
@@ -444,7 +447,7 @@ test("legacy reply retries stay idempotent and later emails preserve the previou
   const queue = async (mail: unknown) => { sent.push(mail); };
   await writeInquiry(store, shop, shop.owner, question.id, "reply", input, queue);
   assert.equal(sent.length, 0, "retry from an older client never queues the original email twice");
-  await writeInquiry(store, shop, shop.owner, question.id, "reply", { requestId: randomUUID(), text: "new reply", previousReply: "old reply" }, queue);
+  await writeInquiry(store, shop, shop.owner, question.id, "reply", { requestId: randomUUID(), text: "new reply", previousReply: "old reply", previousEmail: question.email }, queue);
   const rows = await readInquiries(store, shop); assert.equal(rows[0].interactions!.length, 2);
   const legacy = rows[0].interactions!.find(entry => entry.legacy)!; assert.equal(legacy.text, "old reply"); assert.equal(legacy.at, "");
 });
@@ -454,7 +457,7 @@ test("an inquiry email and its retry receipt roll back when durable queueing fai
   const store = new Store(":memory:"); t.after(() => store.close());
   const shop = await store.createShop("atomic-support@example.com"); shop.published = structuredClone(sample); await store.saveShop(shop);
   await store.put("inquiry", question.id, { ...question, shopId: shop.id });
-  const input = { requestId: randomUUID(), text: "message", previousReply: "" };
+  const input = { requestId: randomUUID(), text: "message", previousReply: "", previousEmail: question.email };
   await assert.rejects(writeInquiry(store, shop, shop.owner, question.id, "reply", input, async () => { throw new Error("queue unavailable"); }), /queue unavailable/);
   assert.equal((await store.get<Inquiry>("inquiry", question.id))!.reply, "");
   assert.equal((await store.records("inquiryInteraction", shop)).length, 0);
@@ -462,4 +465,195 @@ test("an inquiry email and its retry receipt roll back when durable queueing fai
   let queued = 0;
   await writeInquiry(store, shop, shop.owner, question.id, "reply", input, async () => { queued++; });
   assert.equal(queued, 1); assert.equal((await store.records("inquiryInteraction", shop)).length, 1);
+});
+
+async function startReplyApp(t: TestContext, owner: string, connected = true) {
+  process.env.DEMO_MODE = "true";
+  const store = new Store(":memory:");
+  const shop = await store.createShop(owner);
+  shop.published = structuredClone(sample);
+  if (connected) shop.google = { folderId: "folder", specId: "spec", historyId: "history" };
+  await store.saveShop(shop);
+  await store.put("user", shop.owner, { email: shop.owner, name: "Owner", role: "owner", refreshToken: encrypt("test-refresh-token") });
+  await store.put("session", digest("owner"), { user: { email: shop.owner, name: "Owner", role: "owner" }, expires: Date.now() + 600000 });
+  await store.put("inquiry", question.id, { ...question, shopId: shop.id, createdBy: shop.owner });
+  const sent: string[] = [];
+  const mail = { fail: false };
+  mock.method(google, "gmail", (() => ({ users: { messages: { async send(input: { requestBody: { raw: string } }) {
+    if (mail.fail) throw new Error("Temporary Gmail failure");
+    sent.push(Buffer.from(input.requestBody.raw, "base64url").toString());
+  } } } })) as any);
+  const server = createApp(store);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  process.env.APP_ORIGIN = origin;
+  t.after(async () => {
+    mock.restoreAll();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await store.close();
+  });
+  const post = async (tail: string, data: unknown) => (await fetch(`${origin}/api/shops/${shop.id}/inquiries/${question.id}/${tail}`, {
+    method: "POST",
+    headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })).status;
+  const entries = () => store.records<InquiryInteraction>("inquiryInteraction", shop);
+  const failDelivery = (delivery: InquiryInteraction["delivery"]) => {
+    const put = store.put.bind(store);
+    mock.method(store, "put", async (kind: string, id: string, value: { delivery?: string }) => {
+      if (kind === "inquiryInteraction" && value.delivery === delivery) throw new Error("Delivery state unavailable");
+      return put(kind, id, value);
+    });
+  };
+  return { store, shop, sent, mail, post, entries, failDelivery };
+}
+const emailReply = (changes = {}) => ({ requestId: randomUUID(), text: "ご連絡ありがとうございます", previousReply: "", previousEmail: question.email, ...changes });
+
+test("a reply is rejected when the recipient changed after the operator reviewed it", async t => {
+  const { store, sent, post, entries } = await startReplyApp(t, "recipient-owner@example.com");
+  assert.equal(await post("reply", emailReply({ previousEmail: "reviewed@example.com" })), 409);
+  assert.equal((await store.list("job")).length, 0);
+  assert.equal((await entries()).length, 0);
+  assert.equal((await store.get<Inquiry>("inquiry", question.id))!.reply, "");
+  assert.equal(await post("reply", emailReply()), 200);
+  assert.equal(sent.length, 1);
+});
+
+test("a new reply cannot omit the reviewed recipient, before or after a contact correction", async t => {
+  const { store, sent, post, entries } = await startReplyApp(t, "required-recipient@example.com");
+  const { previousEmail: _reviewed, ...oldClientReply } = emailReply();
+  assert.equal(await post("reply", oldClientReply), 409);
+  assert.equal(await post("contact", { email: "corrected@example.com", phone: "", previousEmail: question.email, previousPhone: "" }), 200);
+  assert.equal(await post("reply", oldClientReply), 409);
+  assert.equal(await post("reply", { ...oldClientReply, previousEmail: question.email }), 409);
+  assert.equal((await store.list("job")).length, 0);
+  assert.equal((await store.list("inquiryEntryRequest")).length, 0);
+  assert.equal((await entries()).length, 0);
+  assert.equal((await store.get<Inquiry>("inquiry", question.id))!.reply, "");
+  assert.equal(sent.length, 0);
+  assert.equal(await post("reply", { ...oldClientReply, previousEmail: "corrected@example.com" }), 200);
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0].includes("To: corrected@example.com"));
+});
+
+test("a previously accepted history-era request still replays without previousEmail", async t => {
+  const { store, shop, sent, post, entries } = await startReplyApp(t, "accepted-recipient@example.com");
+  const { previousEmail: _reviewed, ...oldClientReply } = emailReply();
+  const requestKey = digest(`${shop.id}:${question.id}:${oldClientReply.requestId}`);
+  const hash = digest(JSON.stringify({ action: "reply", text: oldClientReply.text, previousReply: oldClientReply.previousReply }));
+  await store.put("inquiryEntryRequest", requestKey, { shopId: shop.id, inquiryId: question.id, hash, done: true });
+  await store.put("inquiry", question.id, { ...question, shopId: shop.id, createdBy: shop.owner, reply: oldClientReply.text });
+  await store.put("inquiryInteraction", requestKey, { id: requestKey, shopId: shop.id, inquiryId: question.id, kind: "email", text: oldClientReply.text, at: new Date().toISOString(), to: question.email, delivery: "queued" } satisfies InquiryInteraction);
+  const jobId = digest(`${requestKey}:mail`);
+  await store.put("job", jobId, { id: jobId, shopId: shop.id, type: "mail", to: question.email, subject: "Previously accepted reply", body: oldClientReply.text, inquiryInteractionId: requestKey, attempts: 0 });
+  assert.equal(await post("contact", { email: "corrected@example.com", phone: "", previousEmail: question.email, previousPhone: "" }), 200);
+  assert.equal(await post("reply", oldClientReply), 200);
+  assert.equal(await post("reply", oldClientReply), 200);
+  assert.equal(await post("reply", { ...oldClientReply, text: "changed payload" }), 409);
+  const saved = await entries();
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].delivery, "sent");
+  assert.equal(saved[0].to, "corrected@example.com");
+  assert.equal((await store.list("job")).length, 0);
+  assert.equal(sent.length, 1, "a legacy retry delivers the existing job without adding another reply");
+});
+
+test("mail accepted by Gmail is never resent when its delivery state cannot be saved", async t => {
+  const { store, sent, post, failDelivery } = await startReplyApp(t, "sent-owner@example.com");
+  failDelivery("sent");
+  const reply = emailReply();
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(sent.length, 1);
+  assert.equal((await store.list("job")).length, 0);
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(sent.length, 1);
+});
+
+test("a failed delivery-state save does not stop the remaining mail jobs", async t => {
+  const { store, shop, mail, post, failDelivery } = await startReplyApp(t, "queue-owner@example.com");
+  mail.fail = true;
+  const reply = emailReply();
+  assert.equal(await post("reply", reply), 200);
+  await store.put("job", "later-job", { id: "later-job", shopId: shop.id, type: "mail", to: "later@example.com", subject: "s", body: "b", attempts: 0 });
+  failDelivery("retrying");
+  assert.equal(await post("reply", reply), 200);
+  assert.deepEqual((await store.list<{ attempts: number }>("job")).map(job => job.attempts), [2, 1]);
+});
+
+test("a corrected contact redirects undelivered replies and history shows the real recipient", async t => {
+  const { store, sent, mail, post, entries } = await startReplyApp(t, "contact-owner@example.com");
+  mail.fail = true;
+  const reply = emailReply();
+  assert.equal(await post("reply", reply), 200);
+  assert.equal((await entries())[0].delivery, "retrying");
+  assert.equal(await post("contact", { email: "fixed@example.com", phone: "", previousEmail: question.email, previousPhone: "" }), 200);
+  mail.fail = false;
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(sent.length, 1);
+  assert.ok(sent[0].includes("To: fixed@example.com"));
+  assert.ok(!sent[0].includes(question.email));
+  const [entry] = await entries();
+  assert.equal(entry.to, "fixed@example.com");
+  assert.equal(entry.delivery, "sent");
+  assert.equal((await store.list("job")).length, 0);
+});
+
+test("a removed contact stops undelivered replies instead of sending to the old address", async t => {
+  const { store, sent, mail, post, entries } = await startReplyApp(t, "removed-owner@example.com");
+  mail.fail = true;
+  const reply = emailReply();
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(await post("contact", { email: "", phone: "03-1234-5678", previousEmail: question.email, previousPhone: "" }), 200);
+  mail.fail = false;
+  assert.equal(await post("reply", reply), 200);
+  assert.equal(sent.length, 0);
+  assert.equal((await store.list("job")).length, 0);
+  assert.equal((await entries())[0].delivery, "failed");
+});
+
+test("a permanently failing reply stops retrying and is shown as undelivered", async t => {
+  const { store, mail, post, entries } = await startReplyApp(t, "attempts-owner@example.com");
+  mail.fail = true;
+  const reply = emailReply();
+  assert.equal(await post("reply", reply), 200);
+  const [job] = await store.list<{ id: string; attempts: number }>("job");
+  await store.put("job", job.id, { ...job, attempts: maxInquiryMailAttempts - 1 });
+  assert.equal(await post("reply", reply), 200);
+  assert.equal((await store.list("job")).length, 0);
+  const rows = [{ reply: reply.text, interactions: await entries() }];
+  assert.equal(rows[0].interactions[0].delivery, "failed");
+  assert.equal(inquiryReplyState(rows[0]), "failed");
+});
+
+test("a shop without Google reports a demo reply instead of leaving it queued forever", async t => {
+  const { store, sent, post, entries } = await startReplyApp(t, "offline-owner@example.com", false);
+  assert.equal(await post("reply", emailReply()), 200);
+  assert.equal((await store.list("job")).length, 0);
+  assert.equal(sent.length, 0);
+  assert.equal((await entries())[0].delivery, "simulated");
+});
+
+test("only the first reply scans history to preserve a legacy reply", async t => {
+  const { writeInquiry, readInquiries } = await import("../server/inquiry-service.ts");
+  const store = new Store(":memory:"); t.after(() => store.close());
+  const shop = await store.createShop("scan-owner@example.com"); shop.published = structuredClone(sample); await store.saveShop(shop);
+  await store.put("inquiry", question.id, { ...question, shopId: shop.id, reply: "old reply" });
+  const records = mock.method(store, "records");
+  const scans = () => records.mock.calls.filter(call => call.arguments[0] === "inquiryInteraction").length;
+  const send = (text: string, previousReply: string) => writeInquiry(store, shop, shop.owner, question.id, "reply", { requestId: randomUUID(), text, previousReply, previousEmail: question.email }, async () => {});
+  await send("second", "old reply");
+  assert.equal(scans(), 1);
+  await send("third", "second");
+  assert.equal(scans(), 1);
+  assert.equal(await readInquiries(store, shop, false).then(rows => rows[0].interactions), undefined);
+  assert.equal(scans(), 1, "summaries that discard history do not read it");
+  assert.deepEqual((await readInquiries(store, shop))[0].interactions!.map(entry => entry.text).sort(), ["old reply", "second", "third"]);
+});
+
+test("reply badges follow the latest email delivery", () => {
+  const entry = (delivery: InquiryInteraction["delivery"]): InquiryInteraction => ({ id: "e", shopId: "s", inquiryId: "q", kind: "email", text: "t", at: "2026-10-01T00:00:00Z", delivery });
+  assert.equal(inquiryReplyState({ reply: "" }), "unreplied");
+  assert.equal(inquiryReplyState({ reply: "t" }), "replied");
+  assert.equal(inquiryReplyState({ reply: "t", interactions: [entry("sent")] }), "replied");
+  for (const delivery of ["queued", "retrying", "simulated", "failed"] as const) assert.equal(inquiryReplyState({ reply: "t", interactions: [entry(delivery)] }), delivery);
 });

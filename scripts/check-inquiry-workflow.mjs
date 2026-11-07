@@ -150,9 +150,27 @@ try {
     await record.getByRole('textbox', { name: label('対応内容'), exact: true }).fill('Actual phone record');
     await record.getByRole('button', { name: label('記録を追加'), exact: true }).click();
     await expect(detail.locator('.inquiry-history')).toContainText('Actual phone record');
+    const replyDraft = detail.getByRole('textbox', { name: label('返信内容'), exact: true });
+    await replyDraft.fill('Keep this draft when the recipient is missing');
+    const replyPattern = '**/inquiries/*/reply';
+    await page.route(replyPattern, async route => {
+      const { previousEmail: _reviewed, ...oldClientReply } = route.request().postDataJSON();
+      await route.continue({ postData: JSON.stringify(oldClientReply) });
+    });
+    const rejectedReply = page.waitForResponse(response => response.url().endsWith('/reply'));
+    await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
+    assert.equal((await rejectedReply).status(), 409);
+    await expect(replyDraft).toHaveValue('Keep this draft when the recipient is missing');
+    await expect(detail.getByRole('alert')).toContainText(label('返信先が更新されています。最新の状態を確認してください。'));
+    await page.unroute(replyPattern);
+    await detail.getByRole('button', { name: label('最新の状態を確認'), exact: true }).click();
+    await expect(detail.getByRole('alert')).toHaveCount(0);
+    await expect(replyDraft).toHaveValue('Keep this draft when the recipient is missing');
     for (const text of ['Actual first email', 'Actual second email']) {
       await detail.getByRole('textbox', { name: label('返信内容'), exact: true }).fill(text);
+      const replyRequest = page.waitForRequest(request => request.url().endsWith('/reply'));
       await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
+      assert.equal((await replyRequest).postDataJSON().previousEmail, `workflow-${language}@example.com`);
       await expect(detail.locator('.inquiry-history')).toContainText(text);
     }
     const q = (await store.records('inquiry', shop)).find(q => q.email === `workflow-${language}@example.com`);
@@ -164,8 +182,35 @@ try {
     await expect(target).toBeFocused(); await expect(target.locator('.inquiry-history .inquiry-entry')).toHaveCount(3);
     await expect(target.locator('.inquiry-history')).toContainText('Actual first email');
     await expect(target.locator('.inquiry-history')).toContainText('Actual second email');
+
+    await page.goto(`${actualOrigin}/?shop=${shop.id}&tab=inquiries&lang=${language}`);
+    const inquiriesList = page.getByRole('region', { name: label('お問い合わせ一覧'), exact: true });
+    const completedToggle = inquiriesList.getByRole('checkbox', { name: label('対応済みも表示する'), exact: true });
+    await expect(completedToggle).not.toBeChecked();
+    await inquiriesList.getByRole('button', { name: label('カンバン表示'), exact: true }).click();
+    await expect(completedToggle).toHaveCount(0);
+    const actualBoard = page.getByLabel(label('お問い合わせカンバン'), { exact: true });
+    const actualColumn = status => actualBoard.getByRole('region', { name: label('{0}のお問い合わせ').replace('{0}', label(status)), exact: true });
+    const card = column => actualColumn(column).locator('.inquiry-board-card', { hasText: `Actual ${language}` });
+    await expect(card('未対応')).toHaveCount(1);
+    assert.notEqual(await card('未対応').locator('.inquiry-status-new').evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)');
+    assert.notEqual(await card('未対応').locator('.inquiry-reply-replied').evaluate(node => getComputedStyle(node).backgroundColor), 'rgba(0, 0, 0, 0)');
+    let workspaceReads = 0;
+    page.on('request', request => { if (new URL(request.url()).pathname === '/api/workspace') workspaceReads++; });
+    // Another operator moves the inquiry while this board is open.
+    await store.put('inquiry', q.id, { ...(await store.get('inquiry', q.id)), status: 'waiting' });
+    await card('未対応').getByRole('combobox').selectOption('completed');
+    await expect(inquiriesList.getByRole('alert')).toBeVisible();
+    await expect(card('確認待ち')).toHaveCount(1);
+    await expect(card('未対応')).toHaveCount(0);
+    await card('確認待ち').getByRole('combobox').selectOption('completed');
+    await expect(card('対応済み')).toHaveCount(1);
+    assert.equal(workspaceReads, 0, 'board changes refresh inquiries without reloading the workspace');
+    await inquiriesList.getByRole('button', { name: label('一覧表示'), exact: true }).click();
+    await expect(completedToggle).not.toBeChecked();
+    await expect(inquiriesList.locator('.inquiry-list-item', { hasText: `Actual ${language}` })).toHaveCount(0);
     assert.deepEqual(errors, []); await context.close();
-    console.log(`${language}/${width}: real API creation, internal history, Gmail delivery, durable reload and CRM deep link passed`);
+    console.log(`${language}/${width}: real API creation, internal history, Gmail delivery, durable reload, CRM deep link, stale board recovery and independent list filters passed`);
   }
   assert.equal(sent.length, 4);
 } finally {

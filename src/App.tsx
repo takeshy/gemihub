@@ -373,6 +373,10 @@ function Dashboard({
     setLoaded(true);
     return w.shops;
   }
+  async function reloadInquiries(shopId: string) {
+    const inquiries = await api<Inquiry[]>(`/api/shops/${shopId}/inquiries`);
+    setShops(current => current.map(item => item.id === shopId ? { ...item, inquiries } : item));
+  }
   useEffect(() => {
     run(async () => {
       await load();
@@ -575,7 +579,7 @@ function Dashboard({
                 {view === "bookings" && (
                   <Reservations shop={shop} run={run} reload={load} />
                 )}
-                {view === "customers" && <Customers key={`${shop.id}:${initialCustomer}:${initialCustomerImages}:${initialInquiryId}`} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={load} />}
+                {view === "customers" && <Customers key={`${shop.id}:${initialCustomer}:${initialCustomerImages}:${initialInquiryId}`} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={()=>reloadInquiries(shop.id)} />}
                 {view === "blog" && (
                   <BlogEditor
                     shop={shop}
@@ -586,7 +590,7 @@ function Dashboard({
                     demo={session.demo}
                   />
                 )}
-                {!creating && <div hidden={view!=="inquiries"}><Inquiries key={shop.id} shopId={shop.id} inquiries={shop.inquiries} reload={load}/></div>}
+                {!creating && <div hidden={view!=="inquiries"}><Inquiries key={shop.id} shopId={shop.id} inquiries={shop.inquiries} reload={()=>reloadInquiries(shop.id)}/></div>}
                 {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {view === "settings" && (
                   <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />

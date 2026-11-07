@@ -13,7 +13,9 @@ export function InquiryHistory({ inquiry }: { inquiry: Inquiry }) {
   if (inquiry.reply && !entries.some(entry => entry.kind === "email")) entries.unshift({ id: "legacy-reply", shopId: "", inquiryId: inquiry.id, kind: "email", text: inquiry.reply, at: "", legacy: true });
   entries.sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0) || a.id.localeCompare(b.id));
   const pagination = usePagination(entries, `${inquiry.id}:${entries.length}`);
-  const delivery = (entry: InquiryInteraction) => entry.delivery === "sent" ? tr("送信済み") : entry.delivery === "retrying" ? tr("送信を再試行中") : entry.delivery === "simulated" ? tr("デモのため送信しません") : entry.delivery === "queued" ? tr("送信待ち") : "";
+  const delivery = (entry: InquiryInteraction) => entry.delivery === "sent" ? tr("送信済み") : entry.delivery === "retrying" ? tr("送信を再試行中") : entry.delivery === "simulated" ? tr("デモのため送信しません") : entry.delivery === "queued" ? tr("送信待ち") : entry.delivery === "failed" ? tr("送信できませんでした") : "";
+  // Undelivered replies follow the inquiry's current address, so show where they will actually go.
+  const recipient = (entry: InquiryInteraction) => entry.delivery === "queued" || entry.delivery === "retrying" ? inquiry.email : entry.to;
   return <section className="inquiry-history" aria-label={tr("やりとりの履歴")}>
     <h4>{tr("やりとりの履歴")}</h4><p className="small muted">{tr("新しい順に表示します。社内メモや電話対応の記録は、お客様へ送信されません。")}</p>
     {!entries.length && <p className="empty">{tr("まだ追加のやりとりはありません。")}</p>}
@@ -22,7 +24,7 @@ export function InquiryHistory({ inquiry }: { inquiry: Inquiry }) {
       {entry.legacy && <p className="small muted">{tr("履歴機能の追加前に保存された最新の返信です。")}</p>}
       <p className="customer-message">{entry.text}</p>
       {entry.by && <p className="small muted">{tr("記録者：{0}", entry.by)}</p>}
-      {entry.to && <p className="small muted">{tr("返信先：")}{entry.to}</p>}
+      {recipient(entry) && <p className="small muted">{tr("返信先：")}{recipient(entry)}</p>}
       {delivery(entry) && <span className="pill">{delivery(entry)}</span>}
     </li>)}</ol>
     <Pagination pagination={pagination} label={tr("やりとりの履歴")} />

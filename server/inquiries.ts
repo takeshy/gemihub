@@ -9,7 +9,7 @@ export type InquiryChannel = z.infer<typeof inquiryChannelSchema>;
 export type InquiryInteraction = {
   id: string; shopId: string; inquiryId: string; kind: InquiryChannel; text: string;
   at: string; by?: string; legacy?: boolean;
-  delivery?: "queued" | "sent" | "retrying" | "simulated";
+  delivery?: "queued" | "sent" | "retrying" | "simulated" | "failed";
   to?: string;
 };
 export const inquiryStatusLabel = (status: InquiryStatus) => ({ new: tr("未対応"), in_progress: tr("対応中"), waiting: tr("確認待ち"), completed: tr("対応済み") })[status];
@@ -27,10 +27,13 @@ export const manualInquirySchema = z.object({
 export const inquiryInteractionSchema = z.object({ requestId: z.uuid(), kind: z.enum(["phone", "customer", "note"]), text: z.string().trim().min(1).max(5000) }).strict();
 export const inquiryReplied = (inquiry: { reply: string }) =>
   !!inquiry.reply.trim();
-export function inquiryReplyLabel(inquiry: { reply: string; interactions?: InquiryInteraction[] }) {
+type InquiryReplySource = { reply: string; interactions?: InquiryInteraction[] };
+export function inquiryReplyState(inquiry: InquiryReplySource) {
   const latest = (inquiry.interactions || []).filter(entry => entry.kind === "email").sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0))[0];
-  return latest?.delivery === "queued" ? tr("送信待ち") : latest?.delivery === "retrying" ? tr("送信を再試行中") : latest?.delivery === "simulated" ? tr("デモのため送信しません") : inquiryReplied(inquiry) ? tr("返信済み") : tr("未返信");
+  if (latest?.delivery && latest.delivery !== "sent") return latest.delivery;
+  return inquiryReplied(inquiry) ? "replied" : "unreplied";
 }
+export const inquiryReplyLabel = (inquiry: InquiryReplySource) => ({ queued: tr("送信待ち"), retrying: tr("送信を再試行中"), simulated: tr("デモのため送信しません"), failed: tr("送信できませんでした"), replied: tr("返信済み"), unreplied: tr("未返信") })[inquiryReplyState(inquiry)];
 export type InquiryFilter = {
   showCompleted: boolean;
   query: string;

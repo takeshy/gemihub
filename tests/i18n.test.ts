@@ -109,7 +109,7 @@ test("queued replies retain the initiating language when delivery is deferred", 
   const server=createApp(store); await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));
   const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN=origin;
   t.after(async()=>{await new Promise<void>(resolve=>server.close(()=>resolve()));await store.close();});
-  const response=await fetch(`${origin}/api/shops/${shop.id}/inquiries/question/reply`,{method:"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json","X-Gemihub-Language":"en"},body:JSON.stringify({text:"Thank you for your message",requestId:randomUUID(),previousReply:""})});
+  const response=await fetch(`${origin}/api/shops/${shop.id}/inquiries/question/reply`,{method:"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json","X-Gemihub-Language":"en"},body:JSON.stringify({text:"Thank you for your message",requestId:randomUUID(),previousReply:"",previousEmail:"guest@example.com"})});
   assert.equal(response.status,200);
   const jobs=await store.list<{locale:string;subject:string}>("job");
   assert.equal(jobs.length,1);assert.equal(jobs[0].locale,"en");assert.match(jobs[0].subject,/Reply from/);
