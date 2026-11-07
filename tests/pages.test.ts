@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { sample, shopSchema, planSummary } from "../server/domain.ts";
-import { scopedConfig, rebaseDraft, scopedSource, same, type ShopPage } from "../server/pages.ts";
+import { scopedConfig, rebaseDraft, scopedSource, replaceShared, same, type ShopPage } from "../server/pages.ts";
 import { artifacts } from "../server/artifacts.ts";
 import { renderCustomPage } from "../server/page-renderer.tsx";
 import { validateVisualChange } from "../server/visual.ts";
@@ -18,6 +18,19 @@ import { sampleFixtures } from "../src/local-preview.ts";
 import { designOf, restoreDesign } from "../server/design-versions.ts";
 const page = (id: string): ShopPage => ({ id, slug: id, title: id, navigationLabel: id, body: "## ご案内\n\n内容", layout: "standard", imageUrl: "" });
 process.env.DEMO_MODE = "true";
+
+test("shared comparisons and restores clear absent optional designs while retaining the common business data", () => {
+  const before = shopSchema.parse({ ...sample, screens: undefined, map: undefined, ownerBooking: undefined });
+  const local = shopSchema.parse({ ...before, screens: { mine: { html: '<h2>Local only</h2><slot name="mypage"></slot>', css: "" } }, map: { enabled: true, query: "Local place" }, ownerBooking: true });
+  local.menus[0].name = "Current menu";
+  const restored = replaceShared(local, scopedSource(before, { kind: "shared" }));
+  assert.equal(restored.screens, undefined);
+  assert.equal(restored.map, undefined);
+  assert.equal(restored.ownerBooking, undefined);
+  assert.equal(restored.menus[0].name, "Current menu");
+  assert.deepEqual(restored.staff, local.staff);
+  assert.deepEqual(restored.rules, local.rules);
+});
 
 test("part HTML and the shared frame/CSS publish independently and retain unfinished edits", async () => {
   const before = shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, theme: themeStarter } });

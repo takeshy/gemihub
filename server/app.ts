@@ -2592,8 +2592,8 @@ export function createApp(
             if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
               fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
             const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
-            const proposed = input.target === "appearance" && intelligence.visualAppearance
-              ? await intelligence.visualAppearance(visual.config, input.instruction, images)
+            const proposed = (input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:")) && intelligence.visualAppearance
+              ? await intelligence.visualAppearance(visual.config, input.instruction, images, { target: input.target })
               : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, input.instruction), visual.config, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images);
             validateProposedImages(proposed.config, visual.config, images);
             const config = validateVisualChange(visual.config, proposed.config, input.target);
@@ -2784,13 +2784,14 @@ export function createApp(
             const targets = visualTargets(config).filter(t => !input.local || (input.local.part ? t.id === `part:${input.local.part}` : input.local.pageId
               ? t.id.startsWith(`page:${input.local.pageId}:`)
               : !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:")));
+            const availableTargets = targets.filter(t => !t.id.startsWith("screen:") || !input.screen || t.id === `screen:${input.screen.id}`);
             const result = await intelligence.identifyVisual(
               input.media,
-              targets,
+              availableTargets,
               input.instruction,
               input.screen,
             );
-            const candidates = targets.filter((t) => result.ids.includes(t.id));
+            const candidates = availableTargets.filter((t) => result.ids.includes(t.id));
             if (!candidates.length)
               fail(
                 400,

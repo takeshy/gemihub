@@ -1,3 +1,5 @@
+import { storefrontText } from "../../shared/storefront-copy";
+import { screenStarter, type ScreenId } from "../../shared/screens";
 import { dateIn, regionOf, zonedDate } from "../../shared/region";
 import { analyticsFixture, trafficFixture } from "./booking-analytics-fixtures";
 import type { ArticleAccessDays } from "../../shared/article-access";
@@ -748,7 +750,13 @@ export function createMockClient(scenario: Scenario): ApiClient {
     else if (action === `/api/shops/${shop.id}/local-editor`) result = { base: shop.revision, source: shop.published, config: shop.published || config, lastPublishedPlanId: shop.lastPublishedPlanId };
     else if (action === `/api/shops/${shop.id}/visual/propose`) {
       const next = structuredClone(visualConfig) as typeof config;
-      if (String(input.target).startsWith("page:")) {
+      if (input.target === "copy:recentPosts") next.appearance = { accent: "sage", layout: "standard", imageUrl: "", ...next.appearance, copy: { ...next.appearance?.copy, recentPosts: tr("お店の最新ニュース") } };
+      else if (String(input.target).startsWith("screen:")) {
+        const id = String(input.target).slice(7) as ScreenId;
+        const design = next.screens?.[id] || screenStarter(id);
+        next.screens = { ...next.screens, [id]: { ...design, css: design.css + " section { gap: 24px; }" } };
+      }
+      else if (String(input.target).startsWith("page:")) {
         const [, id, field] = String(input.target).split(":");
         const page = next.pages.find(p => p.id === id)!;
         if (field === "body") page.body = tr("<h2>ペンで変更した内容</h2><p>ローカルのページ本文を更新しました。</p>");
@@ -865,6 +873,11 @@ export function createMockClient(scenario: Scenario): ApiClient {
       visualConfig = structuredClone((input.displayed || config) as typeof config);
       const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;
       if (part) result = { id: "story-visual", explanation: tr("共通パーツの変更対象を確認してください。"), candidates: [{ id: `part:${part}`, label: part === "header" ? tr("共通ヘッダー") : tr("共通フッター") }] };
+      else if (/お便り|ニュース|news|updates/i.test(String(input.instruction))) result = { id: "story-visual", explanation: tr("お便りの見出しを変更できます。内容を確認してください。"), candidates: [{ id: "copy:recentPosts", label: tr("画面の文言：{0}", storefrontText(visualConfig, "recentPosts")) }] };
+      else if (/配置|layout/i.test(String(input.instruction)) && ["about", "reserve", "mine", "contact"].includes(String((input.screen as { id?: string })?.id))) {
+        const id = (input.screen as { id: string }).id;
+        result = { id: "story-visual", explanation: tr("この画面の配置を変更できます。"), candidates: [{ id: `screen:${id}`, label: tr("画面の見出し・案内文・画像・配置：{0}", id) }] };
+      }
       else if (visualConfig.pages.length && /ページ|page/i.test(String(input.instruction))) {
         const pageId = (input.local as { pageId?: string } | undefined)?.pageId;
         const page = visualConfig.pages.find(p => p.id === pageId) || visualConfig.pages.at(-1)!;

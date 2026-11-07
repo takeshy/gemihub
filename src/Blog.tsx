@@ -1,3 +1,4 @@
+import { storefrontText } from "../shared/storefront-copy";
 import { Pagination, usePagination } from "./Pagination";
 import { tr } from "../shared/i18n";
 import { useShopDisplay } from "./money";
@@ -552,17 +553,19 @@ export function RecentPosts({
   basePath,
   navigate,
   archive = "blogs",
+  config,
 }: {
   posts: PostSummary[];
   basePath: string;
   navigate: Navigate;
   archive?: PostCategory;
+  config?: import("../server/domain").ShopConfig;
 }) {
   if (!posts.length) return null;
   return (
     <section className="panel recent-posts">
       <div className="section-top">
-        <h2>{tr("お店からのお便り")}</h2>
+        <h2>{storefrontText(config, "recentPosts")}</h2>
         <a
           data-article-link
           href={`${basePath}/${archive}`}
@@ -601,11 +604,13 @@ export function PublicBlog({
   category,
   articleKey,
   navigate,
+  config,
 }: {
   baseApi: string;
   basePath: string;
   category: PostCategory;
   articleKey?: string;
+  config?: import("../server/domain").ShopConfig;
   navigate: Navigate;
 }) {
   const api = useApi();
@@ -693,11 +698,11 @@ export function PublicBlog({
       <span className="eyebrow">
         {category === "blogs" ? "SHOP JOURNAL" : "NEWS"}
       </span>
-      <h2>{postLabel(category)}</h2>
+      <h2>{storefrontText(config, category === "blogs" ? "navBlogs" : "navAnnouncements")}</h2>
       <p className="muted">
         {category === "blogs"
-          ? tr("お店の日々や、季節のおすすめをお届けします。")
-          : tr("お店からの大切なご案内です。")}
+          ? storefrontText(config, "blogsIntro")
+          : storefrontText(config, "announcementsIntro")}
       </p>
       {!result ? (
         <p>{tr("記事を読み込んでいます…")}</p>

@@ -1,3 +1,4 @@
+import { storefrontText } from "../shared/storefront-copy";
 import { InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 import { serviceName } from "../shared/brand";
 import { Brand } from "./Brand";
@@ -1558,6 +1559,7 @@ export function PublicShop({
   };
   const mineNews = () => (
             <RecentPosts
+              config={c}
               posts={(data.recentPosts || []).filter(post=>articleKinds(c).includes(post.category))}
               archive={articleKinds(c)[0]}
               basePath={basePath}
@@ -1572,7 +1574,7 @@ export function PublicShop({
   const mineMember = () => isCustomer ? <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div> : null;
   const minePanel = () => (
             <div className="panel">
-              <h2>{tr("あなたのご予約")}</h2>
+              <h2>{storefrontText(c, "mineBookings")}</h2>
               {checkouts.map(checkout => <div className="booking-card" key={checkout.id}>
                 <div><h3>{when(checkout.start)}</h3><p>{yen(checkout.amount, checkout.currency || "JPY")}・{checkout.review ? tr("お店での支払い確認が必要です。お問い合わせください。") : tr("支払い手続き中・予約はまだ確定していません")}</p></div>
                 <div className="actions">
@@ -1658,8 +1660,8 @@ export function PublicShop({
             <div className="reservation-layout">
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
-                <h2>{tr("自分のための、ひとときを。")}</h2>
-                <h3 ref={couponBookingHeading} tabIndex={-1}>{tr("01 メニューを選ぶ")}</h3>
+                <h2>{storefrontText(c, "bookingTitle")}</h2>
+                <h3 ref={couponBookingHeading} tabIndex={-1}>{storefrontText(c, "bookingMenu")}</h3>
                 <div className="menu-options">
                   {c.menus
                     .filter((m) => m.active && !m.optionFor)
@@ -1686,7 +1688,7 @@ export function PublicShop({
                     ))}
                 </div>
                 {!!allowedOptions.length && <fieldset className="booking-options"><legend>{tr("追加メニュー（任意）")}</legend><p className="small muted">{tr("選んだ追加メニューの料金と所要時間を合算して空き時間を確認します。同じグループは1つまで選べます。")}</p>{allowedOptions.map(option => <label className="booking-option" key={option.id}><input type="checkbox" checked={optionIds.includes(option.id)} disabled={busy} onChange={event => setOptionIds(current => event.target.checked ? [...current.filter(id => !option.optionGroup || c.menus.find(menu => menu.id === id)?.optionGroup !== option.optionGroup), option.id] : current.filter(id => id !== option.id))}/><MenuImage imageId={option.imageId} imageBase={`${base}/images`} name={option.name} className="booking-option-image"/><span><b>{option.name}</b><small>{yen(option.price)} · {option.duration}{tr("分")}</small></span></label>)}</fieldset>}
-                <h3>{c.staff.some(person => person.id !== ownerStaffId) ? tr("02 スタッフと日時") : tr("02 日時")}</h3>
+                <h3>{storefrontText(c, c.staff.some(person => person.id !== ownerStaffId) ? "bookingStaffTime" : "bookingTime")}</h3>
                 {c.staff.some(person => person.id !== ownerStaffId) && <Field label={tr("スタッフ")}>
                   <select
                     value={staff}
@@ -1738,7 +1740,7 @@ export function PublicShop({
                     {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}{" "}<button type="button" onClick={()=>setAutomaticDate(true)}>{tr("予約できる最初の日を探す")}</button></p>
                 )}
                 {isCustomer && !!selection && <WaitlistRequest base={base} config={c} date={date} menuId={menu} optionIds={optionIds} staffId={staff} busy={busy} run={run} notify={notify} reload={loadMine} />}
-                <h3>{tr("03 予約内容を確認")}</h3>
+                <h3>{storefrontText(c, "bookingConfirm")}</h3>
                 {selection && <div className="booking-mobile-summary"><p>{selection.base.name}</p>{!!selection.options.length && <ul>{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)}</li>)}</ul>}<p><b className="price">{yen(totalPrice)}</b> · {tr("合計 {0}分", selection.duration)}</p><p>{selected ? when(selected) : tr("日時をお選びください")}</p></div>}
                 <Field label={tr("お名前")}>
                   <input
@@ -1800,7 +1802,7 @@ export function PublicShop({
               </div>
               <div className="panel booking-summary">
                 <span className="line-flower">✳</span>
-                <h3>{tr("ご予約内容")}</h3>
+                <h3>{storefrontText(c, "bookingSummary")}</h3>
                 <p>{c.menus.find((m) => m.id === menu)?.name}</p>
                 {!!selection?.options.length && <ul className="booking-option-summary">{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)} · {option.duration}{tr("分")}</li>)}</ul>}
                 <p className="price">
@@ -1841,7 +1843,7 @@ export function PublicShop({
                 });
               }}
             >
-              <h2>{tr("お問い合わせ")}</h2>
+              <h2>{storefrontText(c, "contactTitle")}</h2>
               <Field label={tr("お名前")}>
                 <input
                   required
@@ -1876,10 +1878,10 @@ export function PublicShop({
       {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
       <nav className="public-nav">
-        {(session.user ? [["mine", tr("マイページ")],
-          ["reserve", tr("ご予約")],
-          ["about", tr("お店のこと")],
-          ["contact", tr("お問い合わせ")]] : [["about", tr("お店のこと")], ["reserve", tr("ご予約")], ["contact", tr("お問い合わせ")]]).map(([id, label]) => (
+        {(session.user ? [["mine", storefrontText(c, "navMine")],
+          ["reserve", storefrontText(c, "navReserve")],
+          ["about", storefrontText(c, "navAbout")],
+          ["contact", storefrontText(c, "navContact")]] : [["about", storefrontText(c, "navAbout")], ["reserve", storefrontText(c, "navReserve")], ["contact", storefrontText(c, "navContact")]]).map(([id, label]) => (
           <button
             className={!category && !pageSlug && pane === id ? "active" : ""}
             onClick={() =>
@@ -1897,7 +1899,7 @@ export function PublicShop({
               className={category === cat ? "active" : ""}
               onClick={() => navigate(`${basePath}/${cat}`)}
             >
-              {cat === "blogs" ? tr("ブログ") : tr("お知らせ")}
+              {storefrontText(c, cat === "blogs" ? "navBlogs" : "navAnnouncements")}
             </button>
           ))}
         {c.pages.map(page => <button key={page.id} className={pageSlug === page.slug ? "active" : ""} onClick={() => navigate(`${basePath}/pages/${page.slug}`)}>{page.navigationLabel}</button>)}
@@ -1913,6 +1915,7 @@ export function PublicShop({
         c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
       ) : category && articleKinds(c).includes(category) ? (
         <PublicBlog
+          config={c}
           baseApi={base}
           basePath={basePath}
           category={category}

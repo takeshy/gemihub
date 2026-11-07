@@ -1,3 +1,4 @@
+import { storefrontText } from "../shared/storefront-copy";
 import { hoursText } from "../server/domain";
 import { tr, listSeparator } from "../shared/i18n";
 import React from "react";
@@ -18,7 +19,7 @@ export function SiteHeader({ config: c, children, actions, imageBase, imageSuffi
   const hero = c.header.imageId && resolvedImages?.[c.header.imageId] ? <span className="managed-hero-image"><img src={resolvedImages[c.header.imageId]} alt={tr("{0}の画像", tr("お店の紹介"))} /></span> : c.header.imageId && imageBase ? <MenuImage imageId={c.header.imageId} imageBase={imageBase} suffix={imageSuffix} name={tr("お店の紹介")} className="managed-hero-image" /> : image ? <img className="salon-image" src={image} alt={tr("お店の紹介画像")} /> : <span className="hero-flower">✳</span>;
   if (c.appearance?.theme && (c.appearance.theme.headerHtml !== standardTheme.headerHtml || c.appearance.theme.css)) return <>{actions}<Presentation design={themePart(c.appearance.theme, "header")} slots={{ title, subtitle, details, image: hero, navigation: c.header.showNavigation ? children : null }} fallback={null} imageBase={imageBase} imageSuffix={imageSuffix} resolvedImages={resolvedImages} /></>;
   return <header className="site-header">{actions}<section className="salon-hero">
-    <span className="eyebrow">A LITTLE MOMENT, JUST FOR YOU.</span>
+    <span className="eyebrow">{storefrontText(c, "headerEyebrow")}</span>
     <h1>{c.header.title || c.name}</h1><p>{c.header.subtitle || c.description}</p>
     {c.header.showDetails && <div className="salon-details"><span>◷ {hoursText(c)}</span><span>{tr("定休日：")}{c.hours.closedWeekdays.map(d => tr("{0}曜", days()[d])).join(listSeparator()) || tr("なし")}</span></div>}
     {c.header.imageId && imageBase ? <MenuImage imageId={c.header.imageId} imageBase={imageBase} suffix={imageSuffix} name={tr("お店の紹介")} className="managed-hero-image" /> : image ? <img className="salon-image" src={image} alt={tr("お店の紹介画像")} /> : <span className="hero-flower">✳</span>}

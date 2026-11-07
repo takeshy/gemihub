@@ -30,6 +30,7 @@
     "check:fixture-scope": "node --import tsx scripts/check-fixture-scope.mjs",
     "check:mobile-inputs": "node scripts/check-mobile-inputs.mjs",
     "check:assistant-markdown": "node --import tsx scripts/check-assistant-markdown.mjs",
+    "check:visual-copy": "node --import tsx scripts/check-visual-copy.mjs",
     "check:visual-chat": "node --import tsx scripts/check-visual-chat.mjs",
     "check:chat": "node scripts/check-chat.mjs",
     "check:chat-failures": "node scripts/check-chat-failures.mjs",

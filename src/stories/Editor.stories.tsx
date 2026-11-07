@@ -1,3 +1,4 @@
+import { tr } from "../../shared/i18n";
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { Screen } from "./Screen";
@@ -21,6 +22,31 @@ export const ScreenEditingChat: Story = {
   name: "画面を見ながら赤ペンとチャットで修正",
   args: { scenario: "local-editor" },
   play: openEditingChat,
+};
+
+export const NewsHeadingChat: Story = {
+  name: "お便りの見出しを修正チャットで変更",
+  args: { scenario: "local-editor" },
+  play: async ({ canvasElement }) => {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const button = [...canvasElement.querySelectorAll<HTMLButtonElement>('button[role="treeitem"]')].find(button => button.querySelector(".tree-name")?.textContent === tr("マイページ"));
+      if (button) { button.click(); break; }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    await openEditingChat({ canvasElement });
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const composer = document.querySelector<HTMLTextAreaElement>(".visual-chat-panel textarea");
+      if (composer && !composer.disabled) {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, tr("お便りの見出しを『お店の最新ニュース』に変えてください。"));
+        composer.dispatchEvent(new Event("input", { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 50));
+        composer.form?.requestSubmit();
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw new Error("The editing chat composer did not appear");
+  },
 };
 
 export const LocalEditorNew: Story = {

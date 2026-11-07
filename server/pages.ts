@@ -53,7 +53,11 @@ export function replaceShared(config: ShopConfig, value: unknown): ShopConfig {
   const nextAppearance: NonNullable<ShopConfig["appearance"]> = { ...appearance };
   delete nextAppearance.theme;
   if (config.appearance?.theme || theme.bodyHtml !== standardTheme.bodyHtml || theme.css !== standardTheme.css) nextAppearance.theme = theme;
-  return { ...config, ...shared, appearance: !config.appearance && same(nextAppearance, defaultAppearance) ? undefined : nextAppearance };
+  const next = { ...config, ...shared, appearance: !config.appearance && same(nextAppearance, defaultAppearance) ? undefined : nextAppearance };
+  // A scope is a complete value. An omitted optional setting means the default,
+  // so a comparison or restore must not retain the other side's custom screen.
+  for (const key of ["map", "screens", "ownerBooking"] as const) if (shared[key] === undefined) delete next[key];
+  return next;
 }
 export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
   if (!config) return null;

@@ -5,6 +5,7 @@ import type { BookingTransfer } from "./transfer-domain.ts";
 import { pageSchema, headerSchema, footerSchema, defaultHeader, defaultFooter } from "./pages.ts";
 import { regionSchema, regionOf, currencyOf, validPrice, toMinor, fromMinor, dateIn, zonedDate, weekdayOf } from "../shared/region.ts";
 import { themeSchema, compilePresentation } from "../shared/presentation.ts";
+import { storefrontCopySchema } from "../shared/storefront-copy.ts";
 import { screensSchema } from "../shared/screens.ts";
 import { stableJson } from "../shared/stable-json.ts";
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -19,6 +20,7 @@ export const shopSchema = z
       layout: z.enum(["standard", "compact"]),
       imageUrl: z.union([z.literal(""), z.url({protocol: /^https$/}).max(2048)]),
       theme: themeSchema.optional(),
+      copy: storefrontCopySchema.optional(),
       articles: z.object({ blogs: z.boolean(), announcements: z.boolean() }).optional(),
     }).optional(),
     notificationEmail: z.email(),

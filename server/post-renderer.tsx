@@ -1,3 +1,4 @@
+import { storefrontText } from "../shared/storefront-copy.ts";
 import { localizeShell } from "../shared/html.ts";
 import { tr } from "../shared/i18n.ts";
 import React from "react";
@@ -16,8 +17,8 @@ import {
   type PostSummary,
 } from "./post-domain.ts";
 import type { ShopConfig } from "./domain.ts";
-const recentMarkup = (posts: PostSummary[], base: string) =>
-  tr("<!-- recent-articles:start --><section class=\"recent-posts\"><h2>お店からのお便り</h2><ul>{0}</ul></section><!-- recent-articles:end -->", posts.map((p) => `<li><time>${p.date}</time> <span>${postLabel(p.category)}</span> <a href="${escapeHtml(postPath(base, p))}">${escapeHtml(p.title)}</a></li>`).join(""));
+const recentMarkup = (posts: PostSummary[], base: string, config?: ShopConfig) =>
+  tr("<!-- recent-articles:start --><section class=\"recent-posts\"><h2>{0}</h2><ul>{1}</ul></section><!-- recent-articles:end -->", escapeHtml(storefrontText(config, "recentPosts")), posts.map((p) => `<li><time>${p.date}</time> <span>${postLabel(p.category)}</span> <a href="${escapeHtml(postPath(base, p))}">${escapeHtml(p.title)}</a></li>`).join(""));
 export function renderHomeWithPosts(
   config: ShopConfig,
   shell: string,
@@ -27,7 +28,7 @@ export function renderHomeWithPosts(
   const page = renderShop(config, shell);
   return page.replace(
     "</noscript>",
-    () => `${recentMarkup(posts.slice(0, 5), base)}</noscript>`,
+    () => `${recentMarkup(posts.slice(0, 5), base, config)}</noscript>`,
   );
 }
 export function renderArticle(post: PublicPost, shell: string, base = "", images?:Record<string,import("./menu-image-domain.ts").MenuImageData>) {

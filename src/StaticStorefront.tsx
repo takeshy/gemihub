@@ -1,3 +1,4 @@
+import { storefrontText } from "../shared/storefront-copy";
 import React from "react";
 import { SiteHeader, SiteFooter, ThemeBody } from "./SiteChrome";
 import { hasThemeFrame } from "../shared/theme-editing";
@@ -23,11 +24,11 @@ const link = (path: string) => `${path}${path.includes("?") ? "&" : "?"}lang=${g
 
 function Navigation({ config: c, base }: { config: ShopConfig; base: string }) {
   return <nav className="public-nav">
-    <a href={link(base || "/")}>{tr("お店のこと")}</a>
-    <a href={link(`${base || "/"}?pane=reserve`)}>{tr("ご予約")}</a>
-    <a href={link(`${base || "/"}?pane=mine`)}>{tr("マイページ")}</a>
-    <a href={link(`${base || "/"}?pane=contact`)}>{tr("お問い合わせ")}</a>
-    {articleKinds(c).map(kind => <a key={kind} href={link(`${base}/${kind}`)}>{postLabel(kind)}</a>)}
+    <a href={link(base || "/")}>{storefrontText(c, "navAbout")}</a>
+    <a href={link(`${base || "/"}?pane=reserve`)}>{storefrontText(c, "navReserve")}</a>
+    <a href={link(`${base || "/"}?pane=mine`)}>{storefrontText(c, "navMine")}</a>
+    <a href={link(`${base || "/"}?pane=contact`)}>{storefrontText(c, "navContact")}</a>
+    {articleKinds(c).map(kind => <a key={kind} href={link(`${base}/${kind}`)}>{storefrontText(c, kind === "blogs" ? "navBlogs" : "navAnnouncements")}</a>)}
     {c.pages.map(page => <a key={page.id} href={link(`${base}/pages/${page.slug}`)}>{page.navigationLabel}</a>)}
   </nav>;
 }
@@ -39,8 +40,8 @@ export function StaticStorefront({ config: c, view, base, provisional = false, i
   const path = staticViewPath(view);
   const resolved = imageSources;
   let content: React.ReactNode;
-  if (view.kind === "home") content = <><ShopAbout config={c} imageSources={imageSources} />{!!view.posts.length && <section className="recent-posts"><h2>{tr("お店からのお便り")}</h2><PostList posts={view.posts.slice(0, 5)} base={base} /></section>}</>;
-  else if (view.kind === "archive") content = <section className="panel post-archive"><h2>{postLabel(view.category)}</h2><PostList posts={view.posts.filter(post => post.category === view.category)} base={base} /></section>;
+  if (view.kind === "home") content = <><ShopAbout config={c} imageSources={imageSources} />{!!view.posts.length && <section className="recent-posts"><h2>{storefrontText(c, "recentPosts")}</h2><PostList posts={view.posts.slice(0, 5)} base={base} /></section>}</>;
+  else if (view.kind === "archive") content = <section className="panel post-archive"><h2>{storefrontText(c, view.category === "blogs" ? "navBlogs" : "navAnnouncements")}</h2><PostList posts={view.posts.filter(post => post.category === view.category)} base={base} /></section>;
   else if (view.kind === "article") content = <div className="panel article-page"><a href={link(`${base}/${view.post.category}`)}>{postLabel(view.post.category)}{tr("一覧")}</a><PostContent post={view.post} imageSources={imageSources} /></div>;
   else content = <CustomPage page={view.page} resolvedImages={resolved} />;
   return <>

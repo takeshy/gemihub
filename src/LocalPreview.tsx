@@ -383,6 +383,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       if (updated) setNotice(tr("本番で更新された内容を取り込みました。このブラウザに未反映の変更はなかったので、そのまま最新にしました。"));
     });
   }, [status, screen, index, busy, !!draft?.pending, !!conflict]);
+  const hideHeader = screen === "theme" ? visibility[screen]?.header === true : visibility[screen]?.header !== false;
+  const hideFooter = screen === "theme" ? visibility[screen]?.footer === true : visibility[screen]?.footer !== false;
   const screenPage = scope.kind === "page" ? allPages.find(p => p.id === scope.pageId) : undefined;
   const samples = draft ? fixtureScope(draft.config, screen, route.articleKey, draft.fixtures) : undefined;
   const screenLabel = scope.kind === "page" ? screenPage?.title || tr("ページ") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("全体の枠") : ({ reserve: tr("予約"), about: tr("お店のこと"), mine: tr("マイページ"), contact: tr("お問い合わせ"), blogs: tr("ブログ一覧"), "blogs:article": tr("ブログ記事"), announcements: tr("お知らせ一覧"), "announcements:article": tr("お知らせ記事") } as Record<string, string>)[screen] || screen;
@@ -434,7 +436,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         </div>}
     {conflict && draft && <section className="panel conflict-dialog" role="dialog" aria-modal="true" aria-label={tr("ローカルとリモートの競合")}>
       <h2>{tr("競合を比較して解決")}</h2><p>{tr("採用しても本番には反映されません。解決前の内容はこのブラウザに控えを残します。")}</p>
-      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル")}</h3><SyncPreview config={draft.config} value={conflict.localValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /></div><div><h3>{tr("リモート")}</h3><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.remoteValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /></div></div>
+      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル")}</h3><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.localValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div><div><h3>{tr("リモート")}</h3><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.remoteValue} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div></div>
       <div className="actions">
         <button disabled={busy} onClick={() => void run(async () => resolveConflict("local"))}>{tr("ローカルを採用")}</button>
         <button disabled={busy} onClick={() => void run(async () => resolveConflict("remote"))}>{tr("リモートを採用")}</button>
@@ -444,12 +446,13 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         })}>{tr("AIで結合案を作る")}</button>
         <button disabled={busy} onClick={() => setConflict(undefined)}>{tr("比較を閉じる")}</button>
       </div>
-      {conflict.proposed !== undefined && <div><h3>{tr("AIの結合案")}</h3><p>{conflict.explanation}</p><SyncPreview config={draft.config} value={conflict.proposed} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} /><button className="primary" disabled={busy} onClick={() => void run(async () => resolveConflict("merged"))}>{tr("結合案をローカルに採用")}</button></div>}
+      {conflict.proposed !== undefined && <div><h3>{tr("AIの結合案")}</h3><p>{conflict.explanation}</p><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.proposed} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /><button className="primary" disabled={busy} onClick={() => void run(async () => resolveConflict("merged"))}>{tr("結合案をローカルに採用")}</button></div>}
     </section>}
     {comparing && status === "local" && draft && !conflict && !draft.pending && <section className="panel conflict-dialog" aria-label={tr("変更内容の比較")}>
-      <h2>{tr("変更内容の比較")}</h2><p>{tr("この画面のローカル編集と、いまの本番を並べて表示します。比較しても何も変更しません。")}</p>
+      <h2>{tr("変更内容の比較")}</h2><p>{tr("編集後と反映前を、同じ画面・同じサンプルデータで比較します。比較しても何も変更しません。")}</p>
       {summary.length > 0 && <ul className="check-list">{summary.map(item => <li key={item}>{item}</li>)}</ul>}
-      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル（編集後）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} /></div><div><h3>{tr("本番（反映前）")}</h3><SyncPreview config={draft.source || draft.config} value={scopedSource(draft.source, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} /></div></div>
+      {/* Apply each side to the same context: business settings and other parts are not this edit. */}
+      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル（編集後）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div><div><h3>{tr("本番（反映前）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.source, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div></div>
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
@@ -463,7 +466,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         }
       }}>
         {scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
-          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={screen === "theme" ? visibility[screen]?.header === true : visibility[screen]?.header !== false} hideFooter={screen === "theme" ? visibility[screen]?.footer === true : visibility[screen]?.footer !== false} busy={busy} run={run} notify={setNotice} navigate={href => {
+          <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={hideHeader} hideFooter={hideFooter} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
             const pageMatch = url.pathname.match(/^\/s\/local-preview\/pages\/([^/]+)$/);
