@@ -930,6 +930,8 @@ export function createApp(
     const customerEmail = customerKey.startsWith("tel:") ? undefined : customerKey;
     const timeZone = regionOf(config).timeZone;
     const today = () => dateIn(new Date(), timeZone);
+    // Mail goes out right away, but the caller never waits on Gmail. The scheduled run retries a failure.
+    const sendNow = () => { void flushMail(shop).catch(reportError); };
     // The model may rewrite the start it was given, with an offset or as shop-local time.
     const instantOf = (value: string) => {
       const local = value.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/);
@@ -940,47 +942,30 @@ export function createApp(
       const allowed = config.rules.payment?.enabled ? today() : requested || today();
       return z.iso.date().safeParse(allowed).success ? allowed : today();
     };
-    const resultOf = (fresh: ShopConfig, booking: Booking, transfer?: { refundAmount: number; currency: string }) => ({
+    const resultOf = (fresh: ShopConfig, booking: Booking) => ({
       ok: true as const, bookingId: booking.id, start: booking.start, menuName: bookingMenuName(fresh, booking),
       staffName: bookingStaffName(fresh, booking.staffId), price: booking.price, currency: currencyOf(regionOf(fresh)), cash: true as const,
-      ...(transfer ? { transfer } : {}),
     });
     return {
       async availability(input) {
         if (!settings.cashBookings) fail(409, tr("電話での現金予約は現在受け付けていません。オンライン予約をご案内ください。"));
         const date = requestedDate(input.date);
         const slots = await availableSlots(store, shop, phoneRules(config), date, input.menuId, input.staffId, calendar, undefined, input.optionIds || []);
-        const transferSlots = [];
-        if (date === today()) {
-          for (const transfer of await transfers.forShop(shop.id)) {
-            if (transfer.phase !== "listed" || Date.parse(transfer.deadline) <= Date.now()) continue;
-            const held = (await store.get<Checkout>("checkout", transfer.bookingId))?.booking;
-            if (!held || held.status !== "active" || held.menuId !== input.menuId || dateIn(held.start, timeZone) !== date || Date.parse(held.start) <= Date.now()) continue;
-            if (input.staffId && held.staffId !== input.staffId) continue;
-            if ((input.optionIds || []).length && JSON.stringify([...(held.optionIds || [])].sort()) !== JSON.stringify([...(input.optionIds || [])].sort())) continue;
-            transferSlots.push({
-              id: transfer.id, start: held.start, end: held.end, staffId: held.staffId, menuName: bookingMenuName(config, held),
-              price: fromMinor(transfer.price, transfer.currency), currency: transfer.currency, discountPercent: transfer.discountPercent,
-              refundAmount: fromMinor(transfer.price, transfer.currency), label: new Date(held.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }),
-            });
-          }
-        }
         return {
           date, today: today(), prepayment: !!config.rules.payment?.enabled,
           slots: slots.map(slot => ({ ...slot, staffName: bookingStaffName(config, slot.staffId), label: new Date(slot.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }) })),
-          transferSlots,
         };
       },
       async book(requested, actionId) {
         const input = { ...requested, start: instantOf(requested.start) };
         if (!settings.cashBookings) fail(409, tr("電話での現金予約は現在受け付けていません。オンライン予約をご案内ください。"));
-        return store.locked(bookingLockKey(shop.id), async () => {
+        const result = await store.locked(bookingLockKey(shop.id), async () => {
           const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
           const freshConfig = fresh.published || fail(409, tr("先にお店を公開してください"));
           const selection = menuSelection(freshConfig, input.menuId, input.optionIds || []);
           if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
           const sameOptions = (booking: Booking) => JSON.stringify([...(booking.optionIds || [])].sort()) === JSON.stringify([...(input.optionIds || [])].sort());
-          const details = JSON.stringify([input.name, input.menuId, input.start, input.staffId || "", [...(input.optionIds || [])].sort(), input.transferId || ""]);
+          const details = JSON.stringify([input.name, input.menuId, input.start, input.staffId || "", [...(input.optionIds || [])].sort()]);
           const requestKey = `phone-ai:${callSid}:${actionId || digest(details)}`;
           const id = digest(`${fresh.id}:${requestKey}`), existing = await store.get<Booking>("booking", id);
           if (existing) {
@@ -991,27 +976,6 @@ export function createApp(
           const repeated = (await store.bookings(fresh.id)).find(booking => booking.status === "active" && booking.requestKey?.startsWith(`phone-ai:${callSid}:`) && booking.name === input.name && booking.menuId === input.menuId && booking.start === input.start && (!input.staffId || booking.staffId === input.staffId) && sameOptions(booking));
           if (repeated) return resultOf(freshConfig, repeated);
           const now = new Date().toISOString(), actor = `phone-ai:${callSid}`;
-          if (input.transferId) {
-            const transfer = (await transfers.forShop(fresh.id)).find(item => item.id === input.transferId) || fail(404, tr("この空き枠の受付は終了しています"));
-            const held = (await store.get<Checkout>("checkout", transfer.bookingId))?.booking || fail(404, tr("予約がありません"));
-            if (held.menuId !== input.menuId || held.start !== input.start) fail(409, tr("空き枠の内容が変わりました。空き状況を確認し直してください。"));
-            if (input.staffId && held.staffId !== input.staffId) fail(409, tr("空き枠の担当が変わりました。空き状況を確認し直してください。"));
-            if (dateIn(held.start, timeZone) !== today() || Date.parse(held.start) <= Date.now()) fail(409, tr("現金のお客様への差し替えは、当日の開始前の予約だけです"));
-            const booking: Booking = {
-              id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: input.message || "",
-              menuId: held.menuId, price: fromMinor(transfer.price, transfer.currency),
-              ...(held.optionIds?.length ? { optionIds: held.optionIds, items: held.items } : {}),
-              staffId: held.staffId, start: held.start, end: held.end, status: "active", createdAt: now, updatedBy: actor, updatedAt: now,
-            };
-            await transfers.replace(transfer, actor, id, async () => {
-              await store.saveBooking(booking);
-              if (!customerEmail) await ensurePhoneCustomer(store, fresh.id, input.name, caller, actor);
-            }, now);
-            const refundAmount = fromMinor(transfer.price, transfer.currency), note = input.message ? tr("\nメッセージ: {0}", input.message) : "";
-            await notify(fresh, freshConfig, freshConfig.notificationEmail, tr("AI電話で当日の譲渡枠に現金予約が入りました"),
-              tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n元の予約者への返金: {5}\nお客様が来店しなかった場合、この返金額 {5} は店負担となります。", input.name, new Date(held.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, held.staffId), bookingMenuName(freshConfig, held), formatMinor(transfer.price, transfer.currency, intlLocale()), formatMinor(transfer.price, transfer.currency, intlLocale())) + note, []).catch(reportError);
-            return resultOf(freshConfig, booking, { refundAmount, currency: transfer.currency });
-          }
           const date = requestedDate(dateIn(input.start, timeZone));
           const slot = (await availableSlots(store, fresh, phoneRules(freshConfig), date, input.menuId, input.staffId, calendar, undefined, input.optionIds || [])).find(item => item.start === input.start);
           if (!slot) fail(409, tr("この時間は予約できません。空き状況を更新してください"));
@@ -1029,6 +993,8 @@ export function createApp(
             tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n折り返し先: {5}", input.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, booking.staffId), bookingMenuName(freshConfig, booking), formatMoney(booking.price, currencyOf(regionOf(freshConfig)), intlLocale()), caller) + (input.message ? tr("\nメッセージ: {0}", input.message) : ""), []).catch(reportError);
           return resultOf(freshConfig, booking);
         });
+        sendNow();
+        return result;
       },
       async inquire(input) {
         // The same message within one call is one inquiry, whatever tool-call ID repeats it.
@@ -1048,31 +1014,8 @@ export function createApp(
         if (repeated) return { ok: true, inquiryId: inquiry.id };
         await notify(shop, config, config.notificationEmail, tr("AI電話でお問い合わせを受け付けました"),
           tr("{0} 様\n折り返し先: {1}\n用件: {2}\nあとで折り返してください。", input.name, caller, input.reason), []).catch(reportError);
+        sendNow();
         return { ok: true, inquiryId: inquiry.id };
-      },
-      async cancel(input) {
-        const timeZone = regionOf(config).timeZone;
-        // The number proves the caller, whichever customer record holds the booking. Past bookings are visits.
-        const candidates = (await store.bookings(shop.id)).filter(booking => booking.status === "active" && !booking.payment && samePhoneNumber(booking.phone, caller) && Date.parse(booking.start) > Date.now() && (!input.start || booking.start === instantOf(input.start) || dateIn(booking.start, timeZone) === input.start));
-        if (!candidates.length) return { ok: false, message: tr("この番号で受け付けた現金予約が見つかりません。オンライン予約の変更・キャンセルはオンラインでお願いします。") };
-        if (candidates.length > 1) return { ok: false, message: tr("同じ番号の現金予約が複数あります。日時を確認してください。"), choices: candidates.map(booking => ({ id: booking.id, start: booking.start, menuName: bookingMenuName(config, booking) })) };
-        const target = candidates[0];
-        return store.locked(bookingLockKey(shop.id), async () => {
-          const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
-          const current = (await store.bookings(fresh.id)).find(booking => booking.id === target.id) || fail(404, tr("予約がありません"));
-          if (current.status !== "active") return { ok: false, message: tr("この予約はすでに処理済みです。") };
-          if (Date.parse(current.start) - Date.now() < (fresh.published || config).rules.cancelHours * 3600000) return { ok: false, message: tr("キャンセル期限を過ぎているため、電話ではキャンセルできません。名前と用件を聞いて create_inquiry で残してください。") };
-          const now = new Date().toISOString();
-          current.status = "cancelled"; current.updatedBy = `phone-ai:${callSid}`; current.updatedAt = now;
-          await store.transaction(async () => {
-            await store.saveBooking(current);
-            await syncCouponUse(store, current);
-            await notify(fresh, fresh.published || config, fresh.published?.notificationEmail || config.notificationEmail, tr("AI電話で現金予約のキャンセルを受け付けました"),
-              tr("{0} 様\n{1}\nこの予約はキャンセルされました。返金はありません。", current.name, new Date(current.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" })), []).catch(reportError);
-          });
-          logs.activity(fresh.id, current.customer, "booking_cancelled", current.id);
-          return { ok: true, message: tr("予約をキャンセルしました。返金はありません。") };
-        });
       },
       async recordCall(result) {
         logs.forShop(shop.id, () => logs.record({
@@ -1099,9 +1042,10 @@ export function createApp(
             }, async () => undefined, result.endedAt, position)).catch(reportError);
           }
         }
-        if (result.outcome === "error" || (result.outcome !== "booking" && result.outcome !== "inquiry" && result.outcome !== "answered" && result.outcome !== "cancelled")) {
+        if (result.outcome === "error" || (result.outcome !== "booking" && result.outcome !== "inquiry" && result.outcome !== "answered")) {
           await notify(shop, config, config.notificationEmail, tr("AI電話で対応できなかった着信がありました"),
             tr("発信者: {0}\n結果: {1}\n{2}", caller, result.outcome, [result.error, result.transcript.slice(0, 500)].filter(Boolean).join("\n")), []).catch(reportError);
+          sendNow();
         }
       },
     };

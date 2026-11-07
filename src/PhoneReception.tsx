@@ -36,7 +36,7 @@ export function PhoneReception({ shop, reload }: { shop: Workspace; reload: () =
     <label className="checkbox"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings({ ...settings, enabled: event.target.checked })} />{tr("AI電話受付を有効にする")}</label>
     <label>{tr("Twilioの電話番号（E.164）")}<input value={settings.twilioNumber} placeholder="+819012345678" onChange={event => setSettings({ ...settings, twilioNumber: event.target.value })} /></label>
     <label className="checkbox"><input type="checkbox" checked={settings.cashBookings} onChange={event => setSettings({ ...settings, cashBookings: event.target.checked })} />{tr("電話で現金の当日予約を受け付ける")}</label>
-    <p className="small muted">{tr("前払いを使う店では今日の残り枠だけ、前払いを使わない店では予約可能期間内の任意の日を受け付けます。当日分の譲渡枠は、来店がなかった場合の返金額が店負担になることを確認してから提示します。")}</p>
+    <p className="small muted">{tr("前払いを使う店では今日の残り枠だけ、前払いを使わない店では予約可能期間内の任意の日を受け付けます。当日分の譲渡枠は電話では扱いません。")}</p>
     <fieldset>
       <legend>{tr("AIが応答する時間帯")}</legend>
       <label className="checkbox"><input type="checkbox" checked={useHours} onChange={event => { setUseHours(event.target.checked); if (event.target.checked) changeHours({}); else setSettings({ ...settings, hours: undefined }); }} />{tr("時間帯を指定する（指定しない場合は常に応答）")}</label>

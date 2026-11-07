@@ -146,6 +146,7 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
     tr("発信者番号はサーバーが記録し、折り返し先にも使います。番号を聞いたり読み上げたりしないでください。"),
     facts.callerName ? tr("この番号のお客様は「{0}」として記録があります。名前を聞くときの参考にしてください。", facts.callerName) : "",
     tr("事実は下の店舗情報だけを根拠にしてください。書かれていないことを推測して答えないでください。営業時間・場所・メニューと料金は、この情報から答えられる範囲でその場で答えてかまいません。それ以外の問い合わせは、名前と用件を聞いて create_inquiry を呼び、あとで折り返すことを伝えてください。"),
+    tr("電話では既存の予約を変更・キャンセルできません。オンライン予約ならオンラインでの手続きを案内してください。電話予約や予約方法が不明な場合は、お名前と予約日時を聞き、変更・キャンセルの希望を create_inquiry で店に伝えてください。問い合わせを記録したことと、予約がそのままであることを伝えてください。"),
     tr("予約は、メニューを聞き、check_availability で空き時間を確認してから候補を2〜3個伝えてください。日時が決まったら名前を必ず聞き、お店に伝えておきたいことがないか尋ねてください。そのあとメニュー・日時・お名前・来店時の現金払いであることを復唱して了承を得てから create_booking を呼び、伝えたいことがあれば message に入れてください。予約IDは自分で作らず、必ずツールの結果を使ってください。"),
     tr("create_booking が ok: true を返したら、確定した日時とメニューを伝えて予約が完了したことを確認し、ほかにご用件がないか尋ねてください。なければお礼を言って finish_call を呼んでください。"),
     config.rules.payment?.enabled
@@ -167,7 +168,7 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
 export const phoneTools = (): FunctionDeclaration[] => [
   {
     name: "check_availability",
-    description: tr("指定した日付・メニューの空き時間と、当日分の譲渡枠（割引枠）を調べる。空き状況を推測してはいけない。"),
+    description: tr("指定した日付・メニューの空き時間を調べる。空き状況を推測してはいけない。"),
     parameters: { type: Type.OBJECT, properties: {
       date: { type: Type.STRING, description: tr("YYYY-MM-DD。省略時は今日") },
       menuId: { type: Type.STRING, description: tr("店舗情報のメニューID") },
@@ -184,7 +185,6 @@ export const phoneTools = (): FunctionDeclaration[] => [
       start: { type: Type.STRING, description: tr("開始日時のISO 8601（check_availability が返した start をそのまま使う）") },
       staffId: { type: Type.STRING, description: tr("スタッフID（任意）") },
       optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("追加メニューID（任意）") },
-      transferId: { type: Type.STRING, description: tr("当日分の譲渡枠を使う場合、check_availability が返した transferId") },
       message: { type: Type.STRING, description: tr("お店に伝えておきたいこと（任意）") },
     }, required: ["name", "menuId", "start"] },
   },
@@ -197,13 +197,6 @@ export const phoneTools = (): FunctionDeclaration[] => [
     }, required: ["name", "reason"] },
   },
   {
-    name: "cancel_booking",
-    description: tr("同じ発信者番号で受け付けた現金予約をキャンセルする。オンライン予約のキャンセルは受け付けず、オンラインでの手順を案内する。"),
-    parameters: { type: Type.OBJECT, properties: {
-      start: { type: Type.STRING, description: tr("キャンセルする予約の開始日時（任意。省略時は対象を確認する）") },
-    } },
-  },
-  {
     name: "finish_call",
     description: tr("話が終わったので通話を終了する。お礼を言ってから呼ぶ。"),
     parameters: { type: Type.OBJECT, properties: {} },
@@ -212,20 +205,17 @@ export const phoneTools = (): FunctionDeclaration[] => [
 
 // ---- Phone stream -----------------------------------------------------------------------------
 export type PhoneSlot = { start: string; end: string; staffId: string; staffName?: string; label?: string };
-export type PhoneTransferSlot = { id: string; start: string; end: string; staffId: string; menuName: string; price: number; currency: string; discountPercent: number; refundAmount: number; label?: string };
-export type PhoneAvailability = { date: string; today: string; prepayment: boolean; slots: PhoneSlot[]; transferSlots: PhoneTransferSlot[] };
-export type PhoneBookingResult = { ok: true; bookingId: string; start: string; menuName: string; staffName: string; price: number; currency: string; cash: true; transfer?: { refundAmount: number; currency: string } };
+export type PhoneAvailability = { date: string; today: string; prepayment: boolean; slots: PhoneSlot[] };
+export type PhoneBookingResult = { ok: true; bookingId: string; start: string; menuName: string; staffName: string; price: number; currency: string; cash: true };
 export type PhoneInquiryResult = { ok: true; inquiryId: string };
-export type PhoneCancelResult = { ok: boolean; message: string; choices?: { id: string; start: string; menuName: string }[] };
 export type PhoneHost = {
   availability(input: { date?: string; menuId: string; staffId?: string; optionIds?: string[] }): Promise<PhoneAvailability>;
-  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; transferId?: string; message?: string }, actionId?: string): Promise<PhoneBookingResult>;
+  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; message?: string }, actionId?: string): Promise<PhoneBookingResult>;
   inquire(input: { name: string; reason: string }): Promise<PhoneInquiryResult>;
-  cancel(input: { start?: string }): Promise<PhoneCancelResult>;
   recordCall(result: PhoneCallRecord): Promise<void>;
 };
 export type PhoneCallRecord = {
-  callSid: string; caller: string; outcome: "answered" | "booking" | "inquiry" | "cancelled" | "blocked" | "closed" | "error" | "ended";
+  callSid: string; caller: string; outcome: "answered" | "booking" | "inquiry" | "blocked" | "closed" | "error" | "ended";
   transcript: string; turns: { question: string; answer: string }[]; startedAt: string; endedAt: string;
   bookingId?: string; inquiryId?: string; error?: string;
 };
@@ -356,11 +346,11 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       if (name === "check_availability") {
         const input = z.object({ date: z.string().optional(), menuId: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional() }).parse(args || {});
         const result = await access.host.availability(input);
-        if (result.slots.length || result.transferSlots.length) slotsOffered = true;
+        if (result.slots.length) slotsOffered = true;
         return { ...result };
       }
       if (name === "create_booking") {
-        const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), transferId: z.string().optional(), message: z.string().trim().max(2000).optional() }).parse(args || {});
+        const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), message: z.string().trim().max(2000).optional() }).parse(args || {});
         const result = await access.host.book(input, actionId);
         outcome = "booking"; bookingId = result.bookingId; settled = true; failure = undefined;
         return { ...result };
@@ -369,12 +359,6 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         const input = z.object({ name: z.string().trim().min(1).max(100), reason: z.string().trim().min(1).max(2000) }).parse(args || {});
         const result = await access.host.inquire(input);
         outcome = "inquiry"; inquiryId = result.inquiryId; settled = true; failure = undefined;
-        return { ...result };
-      }
-      if (name === "cancel_booking") {
-        const input = z.object({ start: z.string().optional() }).parse(args || {});
-        const result = await access.host.cancel(input);
-        if (result.ok) { outcome = "cancelled"; settled = true; }
         return { ...result };
       }
       if (name === "finish_call") {

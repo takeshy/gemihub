@@ -4,6 +4,8 @@ import type { AddressInfo } from "node:net";
 import { once } from "node:events";
 import { createHmac } from "node:crypto";
 import { WebSocket } from "ws";
+import { google } from "googleapis";
+import { encrypt } from "../server/google.ts";
 import { Store } from "../server/store.ts";
 import { sample, type Booking, type ShopConfig } from "../server/domain.ts";
 import { applyPhoneSettings } from "./phone-test-helpers.ts";
@@ -178,7 +180,7 @@ test("the AI records an inquiry with the caller number and transcript", async t 
   assert.ok(entries.some(entry => entry.inquiryId === inquiries[0].id && entry.kind === "phone" && /駐車場/.test(entry.text)));
 });
 
-test("today's discounted transfer slot is offered with the amount the shop would bear", async t => {
+test("a discounted transfer listing is never sold by phone, so a refund cannot be triggered by a call", async t => {
   t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-06T01:00:00Z") });
   const f = await fixture(t);
   const start = new Date("2026-11-06T04:00:00Z").toISOString();
@@ -197,12 +199,13 @@ test("today's discounted transfer slot is offered with the amount the shop would
   f.callbacks().onmessage({ toolCall: { functionCalls: [{ id: "call-1", name: "check_availability", args: { menuId: "simple" } }] } });
   await f.waitFor(() => f.toolResponses.length > 0);
   const result = f.toolResponses[0].functionResponses[0].response;
-  assert.equal(result.transferSlots.length, 1);
-  assert.deepEqual(
-    [result.transferSlots[0].id, result.transferSlots[0].price, result.transferSlots[0].refundAmount, result.transferSlots[0].start],
-    ["T1", 3850, 3850, start],
-  );
-  assert.ok(!result.slots.some((slot: { start: string }) => slot.start === start), "the listed slot is not offered twice");
+  assert.equal(result.transferSlots, undefined);
+  assert.ok(!result.slots.some((slot: { start: string }) => slot.start === start), "the listed slot is not offered as a regular slot");
+  f.callbacks().onmessage({ toolCall: { functionCalls: [{ id: "call-2", name: "create_booking", args: { name: "Taro", menuId: "simple", start, transferId: "T1" } }] } });
+  await f.waitFor(() => f.toolResponses.length > 1);
+  assert.ok(f.toolResponses[1].functionResponses[0].response.error);
+  assert.equal((await f.store.get<any>("transfer", "T1")).phase, "listed");
+  assert.equal((await f.store.get<any>("checkout", "C1")).booking.status, "active");
   ws.close();
 });
 
@@ -261,7 +264,7 @@ test("signed streams reject tampering, legacy query URLs and missing secrets", a
   finally { process.env.TWILIO_AUTH_TOKEN = token; }
 });
 
-test("a call can retry a booking, cancel it and create another reservation", async t => {
+test("a call can retry a booking and create another reservation after staff cancels it", async t => {
   const f = await fixture(t), ws = await f.stream("CA-RESCHEDULE");
   const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
   const start = new Date(`${day}T10:00:00+09:00`).toISOString();
@@ -275,7 +278,7 @@ test("a call can retry a booking, cancel it and create another reservation", asy
   const first = await invoke("book-1", "create_booking", args);
   assert.equal(first.ok, true);
   assert.equal((await invoke("book-1", "create_booking", args)).bookingId, first.bookingId);
-  assert.equal((await invoke("cancel-1", "cancel_booking", { start })).ok, true);
+  assert.equal((await f.call(`/api/shops/${f.shop.id}/bookings/${first.bookingId}/status`, { status: "cancelled" })).status, 200);
   assert.ok((await invoke("book-1", "create_booking", args)).error, "a retry cannot report a cancelled booking as successful");
   const next = await invoke("book-2", "create_booking", { ...args, start: new Date(`${day}T12:00:00+09:00`).toISOString() });
   assert.equal(next.ok, true);
@@ -296,20 +299,14 @@ test("an international landline caller reuses an email CRM identity", async t =>
   ws.close();
 });
 
-test("an international caller cancels a domestic phone-only customer's booking and reuses that key", async t => {
+test("an international caller reuses a domestic phone-only customer's key", async t => {
   const f = await fixture(t), key = "tel:+819011112222";
   await f.store.put("customer", `${f.shop.id}:${key}`, { shopId: f.shop.id, email: key, name: "Taro", phone: "090-1111-2222" });
   const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo"), start = new Date(`${day}T10:00:00+09:00`).toISOString();
-  await f.store.saveBooking({ id: "manual", shopId: f.shop.id, customer: key, name: "Taro", phone: "090-1111-2222", message: "", menuId: "simple", price: 5500, staffId: "owner", start, end: new Date(Date.parse(start) + 60 * 60000).toISOString(), status: "active", createdAt: new Date().toISOString() });
   const ws = await f.stream("CA-DOMESTIC", "819011112222");
-  f.callbacks().onmessage({ toolCall: { functionCalls: [{ id: "cancel", name: "cancel_booking", args: { start } }] } });
-  await f.waitFor(() => f.toolResponses.length > 0);
-  assert.equal(f.toolResponses[0].functionResponses[0].response.ok, true);
-  assert.equal((await f.store.get<Booking>("booking", "manual"))!.status, "cancelled");
-  f.callbacks().onmessage({ toolCall: { functionCalls: [{ id: "book", name: "create_booking", args: { name: "Taro", menuId: "simple", start } }] } });
-  await f.waitFor(() => f.toolResponses.length > 1);
-  assert.equal(f.toolResponses[1].functionResponses[0].response.ok, true);
-  assert.equal((await f.store.bookings(f.shop.id)).find(booking => booking.id !== "manual")!.customer, key);
+  const booked = await f.invoke("book", "create_booking", { name: "Taro", menuId: "simple", start });
+  assert.equal(booked.ok, true);
+  assert.equal((await f.store.get<Booking>("booking", booked.bookingId))!.customer, key);
   assert.deepEqual((await f.store.records<any>("customer", f.shop)).map(record => record.email), [key]);
   ws.close();
 });
@@ -421,6 +418,20 @@ test("the caller's message reaches the booking and the owner without reading the
   ws.close();
 });
 
+test("the owner's mail leaves right after a booking instead of waiting for the scheduled run", async t => {
+  const f = await fixture(t), sent: unknown[] = [];
+  f.shop.google = { folderId: "folder" } as typeof f.shop.google;
+  await f.store.saveShop(f.shop);
+  t.mock.method(f.store, "ownerToken", async () => encrypt("token"));
+  t.mock.method(google, "gmail", (() => ({ users: { messages: { async send(input: unknown) { sent.push(input); } } } })) as any);
+  const ws = await f.stream("CA-MAIL");
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
+  assert.equal((await f.invoke("book", "create_booking", { name: "Hanako", menuId: "simple", start: `${day}T10:00:00+09:00` })).ok, true);
+  await f.waitFor(() => sent.length > 0);
+  await f.waitFor(async () => (await f.store.records<any>("job", f.shop)).length === 0);
+  ws.close();
+});
+
 test("a booking succeeds when the model rewrites the offered start", async t => {
   const f = await fixture(t), ws = await f.stream("CA-REWRITE");
   const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo"), iso = new Date(`${day}T10:00:00+09:00`).toISOString();
@@ -482,9 +493,10 @@ test("an English shop answers calls in English from the webhook through the live
   await f.waitFor(() => !!f.liveParameters());
   const config = f.liveParameters().config;
   assert.doesNotMatch(config.systemInstruction.split("\n")[0], /[ぁ-ん]/);
+  assert.match(config.systemInstruction, /Existing bookings cannot be changed or cancelled by phone/);
   assert.doesNotMatch(config.tools[0].functionDeclarations[0].description, /[ぁ-ん]/);
   const response = await f.invoke("cancel", "cancel_booking", {});
-  assert.doesNotMatch(response.message, /[ぁ-ん]/, "tool results keep the shop's language outside the upgrade request");
+  assert.equal(response.error, "This action is unavailable", "tool results keep the shop's language outside the upgrade request");
   ws.close();
 });
 
@@ -545,22 +557,21 @@ test("a repeated booking or inquiry under a new tool-call ID stays one record", 
   ws.close();
 });
 
-test("phone cancellation leaves visits alone and honors the cancellation deadline", async t => {
-  const f = await fixture(t), caller = "0312345678", key = phoneKey(caller);
-  const place = (id: string, startsIn: number) => {
-    const start = new Date(Date.now() + startsIn).toISOString();
-    return f.store.saveBooking({ id, shopId: f.shop.id, customer: key, name: "Taro", phone: caller, message: "", menuId: "simple", price: 5500, staffId: "owner", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: new Date().toISOString() });
-  };
-  await place("visited", -7 * 86400000);
-  const ws = await f.stream("CA-CANCEL", caller);
-  assert.equal((await f.invoke("past", "cancel_booking", {})).ok, false);
-  assert.equal((await f.store.get<Booking>("booking", "visited"))!.status, "active");
-  await place("soon", 3600000);
-  const late = await f.invoke("late", "cancel_booking", {});
-  assert.equal(late.ok, false);
-  assert.match(late.message, /create_inquiry/);
-  assert.equal(late.choices, undefined, "the past booking is not offered as a choice");
-  assert.equal((await f.store.get<Booking>("booking", "soon"))!.status, "active");
+test("a matching caller can leave a cancellation request without changing the booking", async t => {
+  const f = await fixture(t), caller = "0312345678", ws = await f.stream("CA-CANCEL", caller);
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
+  const booked = await f.invoke("book", "create_booking", { name: "Taro", menuId: "simple", start: `${day}T10:00:00+09:00` });
+  assert.equal(booked.ok, true);
+  const config = f.liveParameters().config;
+  assert.match(config.systemInstruction, /電話では既存の予約を変更・キャンセルできません/);
+  assert.equal(config.tools[0].functionDeclarations.some((tool: { name: string }) => tool.name === "cancel_booking"), false);
+  assert.deepEqual(await f.invoke("cancel", "cancel_booking", { start: booked.start }), { error: "この操作は利用できません" });
+
+  const reason = `${day} 10時の予約のキャンセル希望`;
+  const inquiry = await f.invoke("ask", "create_inquiry", { name: "Taro", reason });
+  assert.equal(inquiry.ok, true);
+  assert.equal((await f.store.get<Inquiry>("inquiry", inquiry.inquiryId))!.message, reason);
+  assert.equal((await f.store.get<Booking>("booking", booked.bookingId))!.status, "active");
   ws.close();
 });
 
@@ -581,14 +592,12 @@ test("a phone-only inquiry appears in the CRM and a known customer's name surviv
   again.close();
 });
 
-test("a number shared by several accounts books under the phone key and any record's booking can be cancelled", async t => {
+test("a number shared by several accounts books under the phone key", async t => {
   const f = await fixture(t), phone = "03-1234-5678", key = phoneKey(phone);
   for (const email of ["one@example.com", "two@example.com"]) await f.store.put("customer", `${f.shop.id}:${email}`, { shopId: f.shop.id, email, name: email, phone });
-  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo"), start = new Date(`${day}T10:00:00+09:00`).toISOString();
-  await f.store.saveBooking({ id: "email-booking", shopId: f.shop.id, customer: "one@example.com", name: "One", phone, message: "", menuId: "simple", price: 5500, staffId: "owner", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: new Date().toISOString() });
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
   const ws = await f.stream("CA-FAMILY");
   const booked = await f.invoke("book", "create_booking", { name: "Two", menuId: "simple", start: new Date(`${day}T12:00:00+09:00`).toISOString() });
   assert.equal((await f.store.get<Booking>("booking", booked.bookingId))!.customer, key);
-  assert.equal((await f.invoke("cancel", "cancel_booking", { start })).ok, true);
   ws.close();
 });
