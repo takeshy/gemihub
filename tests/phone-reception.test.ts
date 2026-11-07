@@ -6,6 +6,8 @@ import { createHmac } from "node:crypto";
 import { WebSocket } from "ws";
 import { google } from "googleapis";
 import { encrypt } from "../server/google.ts";
+import { digest } from "../server/auth.ts";
+import { judgePhonePin } from "../server/judge.ts";
 import { Store } from "../server/store.ts";
 import { sample, type Booking, type ShopConfig } from "../server/domain.ts";
 import { applyPhoneSettings } from "./phone-test-helpers.ts";
@@ -52,13 +54,13 @@ async function fixture(t: TestContext) {
   t.after(async () => { for (const ws of sockets) ws.terminate(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
   const call = async (path: string, data?: unknown, who = "owner") => {
     const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Cookie: `gemihub_session=${who}`, Origin: origin, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
-    return { status: response.status, body: await response.json() };
+    return { status: response.status, body: await response.json(), cookie: response.headers.get("set-cookie") };
   };
-  const webhook = async (from: string, callSid = "CA123", to = "+18312167968") => {
-    const params = { To: to, From: from, CallSid: callSid };
-    const response = await fetch(`${origin}/phone/incoming`, {
+  const webhook = async (from: string, callSid = "CA123", to = "+18312167968", extra: Record<string, string> = {}, path = "/phone/incoming") => {
+    const params = { To: to, From: from, CallSid: callSid, ...extra };
+    const response = await fetch(origin + path, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Twilio-Signature": twilioSignature(token, `${origin}/phone/incoming`, params) },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Twilio-Signature": twilioSignature(token, origin + path, params) },
       body: new URLSearchParams(params).toString(),
     });
     return { status: response.status, text: await response.text() };
@@ -100,8 +102,9 @@ test("withheld and blocked caller IDs never reach the AI", async t => {
   assert.ok(logs.some(log => log.outcome === "blocked"));
 });
 
-test("judge phone menus and signed calls use the configured numbers and registered caller", async t => {
+test("judge phone menus support registered callers and scoped keypad PIN access", async t => {
   const env = {
+    SESSION_SECRET: "judge-phone-test-private-session-secret-12345",
     JUDGE_INVITE: "judge-phone-test-invitation-1234567890",
     JUDGE_UNTIL: new Date(Date.now() + 86400000).toISOString(),
     JUDGE_PHONE_NUMBER: "+12025550120",
@@ -127,8 +130,8 @@ test("judge phone menus and signed calls use the configured numbers and register
   const us = await makeJudge("English", "en", true);
   const jp = await makeJudge("Japanese", "ja", false);
   const status = "/api/judge/status", register = "/api/judge/phone";
-  assert.deepEqual((await f.call(`${status}?lang=en`, undefined, "English")).body.phone, { number: env.JUDGE_PHONE_NUMBER, caller: "" });
-  assert.deepEqual((await f.call(`${status}?lang=ja`, undefined, "Japanese")).body.phone, { number: env.JUDGE_PHONE_NUMBER_JA, caller: "" });
+  assert.deepEqual((await f.call(`${status}?lang=en`, undefined, "English")).body.phone, { number: env.JUDGE_PHONE_NUMBER, caller: "", pin: judgePhonePin(us.id) });
+  assert.deepEqual((await f.call(`${status}?lang=ja`, undefined, "Japanese")).body.phone, { number: env.JUDGE_PHONE_NUMBER_JA, caller: "", pin: judgePhonePin(jp.id) });
   assert.equal((await f.call(register, { caller: "2025550101" })).status, 403);
   assert.equal((await f.call(register, { caller: "client:2025550101" }, "English")).status, 400);
   assert.deepEqual((await f.call(register, { caller: "(202) 555-0101" }, "English")).body, { caller: "+12025550101" });
@@ -140,13 +143,56 @@ test("judge phone menus and signed calls use the configured numbers and register
   const blocked = await f.webhook("anonymous", "CA-NO-ID", env.JUDGE_PHONE_NUMBER);
   assert.match(blocked.text, /Save the number/);
   assert.equal(webhookUrl(blocked), undefined);
-  assert.match((await f.webhook("+819033334444", "CA-UNKNOWN", env.JUDGE_PHONE_NUMBER_JA)).text, /発信元の電話番号を登録/);
+  assert.match((await f.webhook("+819033334444", "CA-UNKNOWN", env.JUDGE_PHONE_NUMBER_JA)).text, /<Gather[^>]+numDigits="8"/);
   assert.equal(webhookUrl(await f.webhook("+819011112222", "CA-UNPUBLISHED", env.JUDGE_PHONE_NUMBER_JA)), undefined);
   jp.published = { ...fixtureConfig(), name: "Japanese test shop" }; jp.publication = "provisional";
   await f.store.saveShop(jp);
   assert.equal(phoneStreamContext(new URL(webhookUrl(await f.webhook("+819011112222", "CA-JP", env.JUDGE_PHONE_NUMBER_JA))!))?.shopId, jp.id);
   assert.equal(phoneStreamContext(new URL(webhookUrl(await f.webhook("+819011112222", "CA-JP-FORWARD", env.JUDGE_PHONE_NUMBER))!))?.shopId, jp.id);
   assert.equal(phoneStreamContext(new URL(webhookUrl(await f.webhook("+12025550101"))!))?.shopId, f.shop.id, "an ordinary number still routes by destination");
+
+  const pin = judgePhonePin(us.id), jpPin = judgePhonePin(jp.id);
+  assert.match(pin, /^\d{8}$/);
+  assert.equal(judgePhonePin(us.id), pin, "refreshing the menu keeps the same PIN");
+  assert.notEqual(pin, jpPin);
+  const pinCaller = "+12025550999";
+  const pinWebhook = (digits: string, attempt = 1, from = pinCaller, sid = "CA-PIN", to = env.JUDGE_PHONE_NUMBER) =>
+    f.webhook(from, sid, to, { Digits: digits }, `/phone/incoming?pinAttempt=${attempt}`);
+  const prompt = await f.webhook(pinCaller, "CA-PIN", env.JUDGE_PHONE_NUMBER);
+  assert.match(prompt.text, /input="dtmf"/);
+  assert.match(prompt.text, /actionOnEmptyResult="true"/);
+  assert.match(prompt.text, /pinAttempt=1/);
+  assert.match(prompt.text, /language="en-US"/);
+  assert.ok(!prompt.text.includes(pin), "the audio prompt never reveals a PIN");
+  const unsigned = await fetch(`${f.origin}/phone/incoming?pinAttempt=1`, { method: "POST", body: new URLSearchParams({ To: env.JUDGE_PHONE_NUMBER, From: pinCaller, CallSid: "CA-PIN", Digits: pin }) });
+  assert.equal(unsigned.status, 403, "the Gather callback must be signed too");
+  const badPin = pin === "00000000" ? "11111111" : "00000000";
+  assert.match((await pinWebhook(badPin)).text, /pinAttempt=2/);
+  assert.match((await pinWebhook("", 2)).text, /pinAttempt=3/);
+  assert.doesNotMatch((await pinWebhook(badPin, 3)).text, /<Gather|<Connect>/);
+  assert.doesNotMatch((await pinWebhook(pin, 4)).text, /<Gather|<Connect>/);
+  const pinUrl = webhookUrl(await pinWebhook(pin, 1, pinCaller, "CA-PIN-OK"))!;
+  assert.ok(pinUrl, "a correct PIN admits an unregistered caller");
+  assert.match(pinUrl, /\/judge-pin-[a-f0-9]{32}$/);
+  assert.equal(phoneStreamContext(new URL(pinUrl))?.shopId, us.id);
+  assert.equal((await f.store.get<{caller: string}>("judgePhone", us.id))?.caller, "+12025550101", "PIN access never changes the saved registration");
+  const pinWs = await f.stream("CA-PIN-OK", pinCaller, pinUrl);
+  await f.waitFor(() => !!f.liveParameters());
+  assert.match(f.liveParameters().config.systemInstruction, /English test shop/);
+  pinWs.close();
+  await assert.rejects(f.stream("CA-PIN-OK", pinCaller, pinUrl.replace("judge-pin-", "judge-")), /403/);
+  await assert.rejects(f.stream("CA-PIN-OK", pinCaller, pinUrl.replace("CA-PIN-OK", "CA-OTHER")), /403/);
+  await assert.rejects(f.stream("CA-PIN-OK", pinCaller, pinUrl.replace(encodeURIComponent(pinCaller), encodeURIComponent("+12025550998"))), /403/);
+  const normalPinUrl = streamUrl(f.origin, f.shop.id, "CA-NORMAL-PIN", pinCaller, "pin");
+  await assert.rejects(f.stream("CA-NORMAL-PIN", pinCaller, normalPinUrl), /403/, "PIN streams must belong to a judge shop");
+  // Every new call shares the caller's guessing budget; it expires after 15 minutes.
+  const limitedCaller = "+12025550997";
+  for (let index = 0; index < 10; index++) await pinWebhook(badPin, 1, limitedCaller, `CA-LIMIT-${index}`);
+  assert.doesNotMatch((await pinWebhook(pin, 1, limitedCaller, "CA-LIMIT-BLOCKED")).text, /<Gather|<Connect>/);
+  await f.store.put("judgePhonePinAttempts", digest(limitedCaller), { count: 10, until: Date.now() - 1 });
+  assert.ok(webhookUrl(await pinWebhook(pin, 1, limitedCaller, "CA-LIMIT-EXPIRED")));
+  assert.doesNotMatch((await pinWebhook(pin, 1, "anonymous")).text, /<Gather|<Connect>/);
+  assert.ok(webhookUrl(await pinWebhook(jpPin, 1, "+819033334445", "CA-JA-PIN", env.JUDGE_PHONE_NUMBER_JA)));
 
   const url = webhookUrl(await f.webhook("+12025550101", "CA-US", env.JUDGE_PHONE_NUMBER))!;
   assert.equal(phoneStreamContext(new URL(url))?.shopId, us.id);
@@ -166,8 +212,14 @@ test("judge phone menus and signed calls use the configured numbers and register
   await assert.rejects(f.stream("CA-US", "+12025550101", url), /403/);
   assert.equal(webhookUrl(await f.webhook("+12025550101", "CA-REMOVED", env.JUDGE_PHONE_NUMBER)), undefined);
   assert.deepEqual((await f.call(register, { caller: "2025550101" }, "Japanese")).body, { caller: "+12025550101" });
-  assert.equal((await f.call("/api/judge/reset", { requestId: "00000000-0000-4000-8000-000000000000" }, "Japanese")).status, 200);
+  const reset = await f.call("/api/judge/reset", { requestId: "00000000-0000-4000-8000-000000000000" }, "Japanese");
+  assert.equal(reset.status, 200);
   assert.equal(await f.store.get("judgePhone", jp.id), undefined);
+  const resetCookie = reset.cookie!.match(/gemihub_session=([^;]+)/)![1];
+  const resetStatus = (await f.call(`${status}?lang=ja`, undefined, resetCookie)).body;
+  assert.match(resetStatus.phone.pin, /^\d{8}$/);
+  assert.notEqual(resetStatus.phone.pin, jpPin);
+  assert.equal(webhookUrl(await pinWebhook(jpPin, 1, "+819033334445", "CA-OLD-PIN", env.JUDGE_PHONE_NUMBER_JA)), undefined);
   assert.equal(webhookUrl(await f.webhook("+12025550101", "CA-RESET", env.JUDGE_PHONE_NUMBER)), undefined);
 });
 
@@ -654,6 +706,41 @@ test("a matching caller can confirm and cancel one of their cash bookings", asyn
   ws.close();
   const logs = () => f.store.queryShopLogs(f.shop.id, new Date(Date.now() - 60000).toISOString(), new Date(Date.now() + 60000).toISOString(), 100, undefined, { kind: "phone" });
   await f.waitFor(async () => (await logs()).some(log => log.callId === "CA-CANCEL" && log.outcome === "cancelled" && log.bookingId === first.bookingId));
+});
+
+test("phone cancellation notifies the booking customer and owner once, and never mails telephone IDs", async t => {
+  const f = await fixture(t), caller = "0312345678";
+  f.shop.google = { folderId: "folder" } as typeof f.shop.google;
+  await f.store.saveShop(f.shop);
+  // The booking's recipient remains authoritative even if this number now matches another CRM account.
+  await f.store.put("customer", `${f.shop.id}:different@example.com`, { shopId: f.shop.id, email: "different@example.com", name: "Different", phone: caller });
+  const place = async (id: string, customer: string) => {
+    const start = new Date(Date.now() + 5 * 86400000).toISOString();
+    await f.store.saveBooking({ id, shopId: f.shop.id, customer, name: "Taro", phone: caller, message: "", menuId: "simple", price: 5500, staffId: "owner", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: new Date().toISOString() });
+  };
+  await place("email-cancel", "booked@example.com");
+  const ws = await f.stream("CA-CUSTOMER-CANCEL", caller);
+  const confirmed = await f.invoke("cancel", "cancel_booking", { bookingId: "email-cancel" });
+  assert.equal(confirmed.ok, true);
+  const jobs = () => f.store.records<any>("job", f.shop);
+  let mail = await jobs();
+  assert.deepEqual(mail.map(job => job.to).sort(), ["booked@example.com", f.config.notificationEmail].sort());
+  const customerMail = mail.find(job => job.to === "booked@example.com");
+  assert.match(customerMail.subject, /予約をキャンセルしました/);
+  assert.match(customerMail.body, /Taro/);
+  assert.match(customerMail.body, /メニュー:/);
+  assert.match(customerMail.body, /返金はありません/);
+  assert.deepEqual(await f.invoke("retry", "cancel_booking", { bookingId: "email-cancel" }), confirmed);
+  assert.equal((await jobs()).length, 2, "retries do not queue another owner or customer notification");
+  await place("telephone-cancel", phoneKey(caller));
+  assert.equal((await f.invoke("phone-only", "cancel_booking", { bookingId: "telephone-cancel" })).ok, true);
+  mail = await jobs();
+  assert.equal(mail.length, 3, "a phone-only booking only notifies the owner");
+  assert.ok(mail.every(job => !job.to.startsWith("tel:") && job.to !== "different@example.com"));
+  await place("same-recipient", f.config.notificationEmail);
+  assert.equal((await f.invoke("dedup", "cancel_booking", { bookingId: "same-recipient" })).ok, true);
+  assert.equal((await jobs()).length, 4, "a customer using the shop notification email only receives one mail");
+  ws.close();
 });
 
 test("phone cancellation respects the caller number, booking type and shop deadline", async t => {

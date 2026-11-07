@@ -27,7 +27,7 @@ export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn
   </section>;
 }
 
-type JudgePhone = { number: string; caller: string };
+type JudgePhone = { number: string; caller: string; pin: string };
 type JudgeStatus = { until: string; aiUsed: number; aiLimit: number; storage: boolean; slug: string; published: boolean; phone?: JudgePhone };
 type JudgeMail = { id: string; to: string; cc?: string[]; subject: string; body: string; at: string };
 /** Judge-only menu: mails that would have been sent, usage, the trial path and a full reset. */
@@ -115,8 +115,10 @@ function JudgePhoneDemo({ phone, published, run }: { phone: JudgePhone; publishe
   };
   return <section className="panel" aria-labelledby="judge-phone-title">
     <h2 id="judge-phone-title">{tr("AI電話受付を試す")}</h2>
-    <p>{tr("お店を公開したら、登録した電話から下の番号にかけると、テスト予約や問い合わせができます。")}</p>
+    <p>{tr("お店を公開したら、下の番号にかけてテスト予約や問い合わせを試せます。")}</p>
     <p>{tr("かけ先の番号")} <strong>{displayJudgePhone(phone.number)}</strong></p>
+    <p>{tr("電話用の暗証番号")} <strong>{phone.pin}</strong></p>
+    <p className="small muted">{tr("発信元の番号を登録せずに試す場合は、電話の音声案内に従ってこの8桁の暗証番号をキーで入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。")}</p>
     <form onSubmit={event => { event.preventDefault(); save(caller.trim()); }}>
       <label>{tr("発信元の電話番号")}<input type="tel" autoComplete="tel" required maxLength={40} value={caller} disabled={busy} onChange={event => setCaller(event.target.value)} /></label>
       <div className="judge-actions">

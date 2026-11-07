@@ -9,6 +9,7 @@ import { digest } from '../server/auth.ts';
 import { randomBytes } from 'node:crypto';
 
 process.env.NODE_ENV = 'production';
+process.env.SESSION_SECRET = 'judge-controls-private-session-secret-12345678';
 process.env.DEMO_MODE = 'false';
 process.env.JUDGE_INVITE = 'judge-controls-browser-test-invitation';
 process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
@@ -112,6 +113,10 @@ try {
     const demoTitle = language === 'ja' ? 'AI電話受付を試す' : 'Try AI phone reception (Beta)';
     const phoneDemo = page.getByRole('region', { name: demoTitle, exact: true });
     await expect(phoneDemo).toContainText(language === 'ja' ? '050-1234-5678' : '(202) 555-0120');
+    const phoneStatus = await (await context.request.get(`${origin}/api/judge/status?lang=${language}`)).json();
+    assert.match(phoneStatus.phone.pin, /^\d{8}$/);
+    await expect(phoneDemo).toContainText(phoneStatus.phone.pin);
+    await expect(phoneDemo).toContainText(label('電話用の暗証番号'));
     await expect(phoneDemo.locator('a[href^="tel:"]')).toHaveCount(0);
     await phoneDemo.getByLabel(label('発信元の電話番号')).fill('2025550101');
     await phoneDemo.getByRole('button', { name: label('発信元の番号を登録') }).click();

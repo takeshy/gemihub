@@ -1,5 +1,5 @@
 import { tr, type Locale } from "../shared/i18n.ts";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { callerNumber, comparablePhone, type PhoneSettings } from "../shared/phone.ts";
 
 // Hackathon judge access, operator administration and invitation-only sign-up.
@@ -38,6 +38,14 @@ export function judgePhoneSettings(locale: Locale): PhoneSettings | undefined {
   if (twilioNumber && judgeActive()) return { twilioNumber, enabled: true, cashBookings: true };
 }
 export type JudgePhoneRegistration = { shopId: string; caller: string };
+/** Stable per shop, changes after a reset or invitation rotation; never derived from public IDs alone. */
+export function judgePhonePin(shopId: string) {
+  const secret = process.env.SESSION_SECRET;
+  if (!judgeActive() || !secret || secret.length < 32) return "";
+  // The invitation is shared with judges, so only the server's private key can derive other shops' PINs.
+  const bytes = createHmac("sha256", secret).update(JSON.stringify(["judge-phone-pin", judgeInvite(), shopId])).digest();
+  return (bytes.readUInt32BE(0) % 100000000).toString().padStart(8, "0");
+}
 export function judgeAiLimit() {
   const value = Number(process.env.JUDGE_AI_LIMIT || 200);
   return Number.isInteger(value) && value > 0 ? value : 200;

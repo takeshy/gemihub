@@ -40,13 +40,15 @@ export function twilioCredentials(): TwilioCredentials {
   }
   return { sid: process.env.TWILIO_ACCOUNT_SID || local.sid || "", token: process.env.TWILIO_AUTH_TOKEN || fileToken || local.password || "" };
 }
-export function phoneStreamToken(shopId: string, callSid: string, caller: string, token = twilioCredentials().token, judge = false) {
+type JudgePhoneAccess = boolean | "pin";
+export function phoneStreamToken(shopId: string, callSid: string, caller: string, token = twilioCredentials().token, judge: JudgePhoneAccess = false) {
   if (!token.trim()) throw new Error("Twilio signing secret is required");
-  const context = judge ? [shopId, callSid, caller, "judge"] : [shopId, callSid, caller];
+  const scope = judge === "pin" ? "judge-pin" : "judge";
+  const context = judge ? [shopId, callSid, caller, scope] : [shopId, callSid, caller];
   const signature = createHmac("sha256", token).update(JSON.stringify(context)).digest("hex").slice(0, 32);
-  return judge ? `judge-${signature}` : signature;
+  return judge ? `${scope}-${signature}` : signature;
 }
-export function streamUrl(base: string, shopId: string, callSid: string, caller: string, judge = false) {
+export function streamUrl(base: string, shopId: string, callSid: string, caller: string, judge: JudgePhoneAccess = false) {
   // Twilio Stream URLs do not support query parameters.
   const context = [shopId, callSid, caller, phoneStreamToken(shopId, callSid, caller, undefined, judge)].map(encodeURIComponent).join("/");
   const url = new URL(`/phone/stream/${context}`, base);
@@ -54,7 +56,7 @@ export function streamUrl(base: string, shopId: string, callSid: string, caller:
   return url.href;
 }
 export function phoneStreamContext(url: URL) {
-  const match = url.pathname.match(/^\/phone\/stream\/([^/]+)\/([^/]+)\/([^/]+)\/((?:judge-)?[a-f0-9]{32})$/);
+  const match = url.pathname.match(/^\/phone\/stream\/([^/]+)\/([^/]+)\/([^/]+)\/((?:judge-(?:pin-)?)?[a-f0-9]{32})$/);
   if (!match || url.search) return undefined;
   try {
     const [shopId, callSid, caller, token] = match.slice(1).map(decodeURIComponent);
@@ -64,7 +66,9 @@ export function phoneStreamContext(url: URL) {
 const xml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
 export const twimlSay = (message: string, language = "ja-JP") =>
   `<?xml version="1.0" encoding="UTF-8"?><Response><Say language="${language}">${xml(message)}</Say><Hangup/></Response>`;
-export const twimlConnect = (base: string, shopId: string, callSid: string, caller: string, judge = false) =>
+export const twimlGatherPin = (action: string, message: string, language: string) =>
+  `<?xml version="1.0" encoding="UTF-8"?><Response><Gather input="dtmf" numDigits="8" timeout="10" actionOnEmptyResult="true" action="${xml(action)}" method="POST"><Say language="${xml(language)}">${xml(message)}</Say></Gather><Hangup/></Response>`;
+export const twimlConnect = (base: string, shopId: string, callSid: string, caller: string, judge: JudgePhoneAccess = false) =>
   `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xml(streamUrl(base, shopId, callSid, caller, judge))}"/></Connect></Response>`;
 
 // ---- Audio conversion -------------------------------------------------------------------------

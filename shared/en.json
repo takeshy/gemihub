@@ -1,4 +1,10 @@
 {
+  "お店を公開したら、下の番号にかけてテスト予約や問い合わせを試せます。": "After publishing your shop, call the number below to try test bookings and inquiries.",
+  "電話用の暗証番号": "Phone PIN",
+  "発信元の番号を登録せずに試す場合は、電話の音声案内に従ってこの8桁の暗証番号をキーで入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。": "To try without registering your caller number, follow the voice instructions and enter this 8-digit PIN on your phone keypad. Call with caller ID enabled. Resetting your shop changes the PIN.",
+  "暗証番号を確認できませんでした。審査メニューを確認して、しばらくしてからおかけ直しください。": "We could not verify the PIN. Check your judge menu and try calling again later.",
+  "暗証番号が違うか、お店が利用できません。審査メニューに表示された8桁の暗証番号をもう一度入力してください。": "The PIN is incorrect or the shop is unavailable. Please enter the 8-digit PIN shown in your judge menu again.",
+  "発信元の電話番号が未登録です。審査メニューに表示された8桁の暗証番号を電話のキーで入力してください。": "Your caller number is not registered. Please enter the 8-digit PIN shown in your judge menu using your phone keypad.",
   "当日の電話予約を登録": "Add a same-day phone booking",
   "今日の空き枠だけを、店頭での現金払いとして登録します。オンライン予約と同じ枠を使うので二重予約になりません。キャンセル受付中の枠は選べません。お名前と電話番号はお客様一覧にも登録します。": "Adds one of today's open slots, paid in cash at the shop. It shares availability with online bookings, so it cannot double-book, and slots awaiting a replacement customer are not offered. The name and phone number are also added to your customers.",
   "{0} 様の電話予約を登録しました。": "Phone booking added for {0}.",
