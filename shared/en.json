@@ -3836,5 +3836,7 @@
   "非通知": "Withheld",
   "時間外": "Closed",
   "エラー": "Error",
+  "予約はまだ完了していません。エラーがあれば内容をお客様に伝えてください。お客様が了承済みなら create_booking を呼び、予約しない場合や折り返し希望の場合は、そのことを確認してから finish_call を呼んでください。": "The booking is not complete. If there was an error, tell the caller. If they already agreed, call create_booking; if they do not want to book or want a callback, confirm that and then call finish_call.",
+  "create_booking や create_inquiry の結果に ok: true が返るまで、完了したと言ってはいけません。エラーが返ったら内容をお客様に伝え、別の候補を案内するか create_inquiry で残してください。予約の話が済むまで finish_call を呼ばないでください。": "Never say something is complete until create_booking or create_inquiry returns ok: true. If an error returns, tell the caller and offer another slot or record it with create_inquiry. Do not call finish_call until the booking is settled.",
   "キャンセル期限を過ぎているため、電話ではキャンセルできません。名前と用件を聞いて create_inquiry で残してください。": "The cancellation deadline has passed, so this booking cannot be cancelled by phone. Ask for the caller's name and reason and record them with create_inquiry."
 }

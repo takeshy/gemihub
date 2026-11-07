@@ -156,6 +156,18 @@ variable "paypal_secret_version" {
   default     = "1"
 }
 
+variable "twilio_account_sid" {
+  description = "Twilio account SID for AI phone reception. Empty disables the Twilio settings and secret."
+  type        = string
+  default     = ""
+}
+
+variable "twilio_token_secret_version" {
+  description = "Pinned version of gemihub-web-twilio-auth-token; the payload is managed outside Terraform."
+  type        = string
+  default     = "1"
+}
+
 variable "google_client_id_secret_ref" {
   description = "Existing Google OAuth client ID secret. Set null to use google_client_id."
   type = object({

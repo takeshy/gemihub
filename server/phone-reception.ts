@@ -151,6 +151,7 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
     config.rules.payment?.enabled
       ? tr("この店は前払いを使います。電話で現金予約できるのは今日の残り枠だけです。今日より後の希望には、オンライン予約を案内してください。")
       : tr("この店は前払いを使いません。予約可能期間内なら今日より後の日も電話で予約できます。"),
+    tr("create_booking や create_inquiry の結果に ok: true が返るまで、完了したと言ってはいけません。エラーが返ったら内容をお客様に伝え、別の候補を案内するか create_inquiry で残してください。予約の話が済むまで finish_call を呼ばないでください。"),
     tr("料金はメニューに書かれた金額をそのまま伝えてください。割引や返金を自分で決めてはいけません。"),
     tr("聞き取りに失敗したら無理に続けず、名前と用件を聞いて create_inquiry で残してください。"),
     tr("今日は {0} です（{1}）。現在時刻は {2} です。", facts.today, facts.timeZone, facts.now),
@@ -274,6 +275,8 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
   let outcome: PhoneCallRecord["outcome"] = "ended", bookingId: string | undefined, inquiryId: string | undefined, failure: string | undefined;
   const pendingInput: string[] = [], pendingMedia: string[] = [];
   const pendingTools = new Set<Promise<unknown>>();
+  // A slot was offered but nothing came of it yet, so a hang-up may be losing the booking.
+  let slotsOffered = false, settled = false, finishChecked = false;
   let finishRequested = false, finalTurnReady = false, finishMark = "", markSequence = 0, playbackUntil = 0, finishTimer: NodeJS.Timeout | undefined;
   const markPlayback = () => {
     if (!finishRequested || !finalTurnReady || !streamSid || finishMark) return;
@@ -308,11 +311,12 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
   const finish = async (error?: string) => {
     if (finished) return;
     finished = true; stopped = true; clearTimeout(greetingTimer); clearTimeout(limit); clearTimeout(finishTimer);
+    const problem = () => error || failure;
     if (live) { try { live.close(); } catch { /* already closed */ } live = undefined; }
     // A disconnected caller must not leave a committed operation out of the final record.
     await Promise.allSettled([...pendingTools]);
     if (heard.trim() || spoken.trim()) transcript.push(`${tr("お客様")}: ${heard.trim()}\n${tr("AI")}: ${spoken.trim()}`);
-    await access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: error ? "error" : outcome, transcript: transcript.join("\n"), turns, startedAt, endedAt: new Date().toISOString(), ...(bookingId ? { bookingId } : {}), ...(inquiryId ? { inquiryId } : {}), ...(error ? { error } : {}) }).catch(() => undefined);
+    await access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: problem() ? "error" : outcome, transcript: transcript.join("\n"), turns, startedAt, endedAt: new Date().toISOString(), ...(bookingId ? { bookingId } : {}), ...(inquiryId ? { inquiryId } : {}), ...(problem() ? { error: problem() } : {}) }).catch(() => undefined);
     ws.close(error ? 1011 : 1000, tr("通話を終了しました"));
   };
   const limit = setTimeout(() => { void finish(); }, 15 * 60000);
@@ -350,33 +354,41 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
     try {
       if (name === "check_availability") {
         const input = z.object({ date: z.string().optional(), menuId: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional() }).parse(args || {});
-        return { ...(await access.host.availability(input)) };
+        const result = await access.host.availability(input);
+        if (result.slots.length || result.transferSlots.length) slotsOffered = true;
+        return { ...result };
       }
       if (name === "create_booking") {
         const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), transferId: z.string().optional() }).parse(args || {});
         const result = await access.host.book(input, actionId);
-        outcome = "booking"; bookingId = result.bookingId;
+        outcome = "booking"; bookingId = result.bookingId; settled = true; failure = undefined;
         return { ...result };
       }
       if (name === "create_inquiry") {
         const input = z.object({ name: z.string().trim().min(1).max(100), reason: z.string().trim().min(1).max(2000) }).parse(args || {});
         const result = await access.host.inquire(input);
-        outcome = "inquiry"; inquiryId = result.inquiryId;
+        outcome = "inquiry"; inquiryId = result.inquiryId; settled = true; failure = undefined;
         return { ...result };
       }
       if (name === "cancel_booking") {
         const input = z.object({ start: z.string().optional() }).parse(args || {});
         const result = await access.host.cancel(input);
-        if (result.ok) outcome = "cancelled";
+        if (result.ok) { outcome = "cancelled"; settled = true; }
         return { ...result };
       }
       if (name === "finish_call") {
+        // Once only: the caller may really have decided against booking.
+        if (!finishChecked && (failure || (slotsOffered && !settled))) {
+          finishChecked = true;
+          return { ok: false, error: tr("予約はまだ完了していません。エラーがあれば内容をお客様に伝えてください。お客様が了承済みなら create_booking を呼び、予約しない場合や折り返し希望の場合は、そのことを確認してから finish_call を呼んでください。") };
+        }
         if (outcome === "ended") outcome = transcript.length || heard.trim() ? "answered" : "ended";
         return { ok: true };
       }
       return { error: tr("この操作は利用できません") };
     } catch (error) {
       const message = error instanceof Error ? error.message : tr("処理できませんでした");
+      console.warn(JSON.stringify({ event: "phone_tool_failed", shopId: access.shopId, callSid: access.callSid, tool: name, error: message }));
       if (name === "create_booking" || name === "create_inquiry") failure = message;
       return { error: message };
     }
@@ -420,14 +432,18 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         }
         const calls = message.toolCall?.functionCalls || [];
         if (!calls.length) return;
-        const operation = Promise.all(calls.map(async (call): Promise<FunctionResponse> => ({
-          id: call.id, name: call.name, response: await handleTool(call.name || "", call.args as Record<string, unknown> | undefined, call.id),
-        }))).then(functionResponses => {
+        // One at a time with finish_call last, so a booking that fails can stop the hang-up beside it.
+        const ordered = [...calls].sort((a, b) => Number(a.name === "finish_call") - Number(b.name === "finish_call"));
+        const operation = (async () => {
+          const functionResponses: FunctionResponse[] = [];
+          for (const call of ordered) functionResponses.push({ id: call.id, name: call.name, response: await handleTool(call.name || "", call.args as Record<string, unknown> | undefined, call.id) });
+          return functionResponses;
+        })().then(functionResponses => {
           if (stopped) return;
           live?.sendToolResponse({ functionResponses });
           // Only a turn completed after this response can be the farewell; an earlier one is stale.
           // The mark on that turn then waits for Twilio to play all preceding audio.
-          if (calls.some(call => call.name === "finish_call")) { finishRequested = true; finalTurnReady = false; finishMark = ""; armFinishDeadline(); }
+          if (functionResponses.some(item => item.name === "finish_call" && item.response?.ok)) { finishRequested = true; finalTurnReady = false; finishMark = ""; armFinishDeadline(); }
         });
         pendingTools.add(operation);
         void operation.finally(() => pendingTools.delete(operation)).catch(() => undefined);

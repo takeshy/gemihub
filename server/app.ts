@@ -930,6 +930,12 @@ export function createApp(
     const customerEmail = customerKey.startsWith("tel:") ? undefined : customerKey;
     const timeZone = regionOf(config).timeZone;
     const today = () => dateIn(new Date(), timeZone);
+    // The model may rewrite the start it was given, with an offset or as shop-local time.
+    const instantOf = (value: string) => {
+      const local = value.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?$/);
+      const time = local ? zonedDate(local[1], local[2], timeZone).getTime() : Date.parse(value);
+      return Number.isFinite(time) ? new Date(time).toISOString() : value;
+    };
     const requestedDate = (requested?: string) => {
       const allowed = config.rules.payment?.enabled ? today() : requested || today();
       return z.iso.date().safeParse(allowed).success ? allowed : today();
@@ -965,7 +971,8 @@ export function createApp(
           transferSlots,
         };
       },
-      async book(input, actionId) {
+      async book(requested, actionId) {
+        const input = { ...requested, start: instantOf(requested.start) };
         if (!settings.cashBookings) fail(409, tr("電話での現金予約は現在受け付けていません。オンライン予約をご案内ください。"));
         return store.locked(bookingLockKey(shop.id), async () => {
           const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
@@ -1046,7 +1053,7 @@ export function createApp(
       async cancel(input) {
         const timeZone = regionOf(config).timeZone;
         // The number proves the caller, whichever customer record holds the booking. Past bookings are visits.
-        const candidates = (await store.bookings(shop.id)).filter(booking => booking.status === "active" && !booking.payment && samePhoneNumber(booking.phone, caller) && Date.parse(booking.start) > Date.now() && (!input.start || booking.start === input.start || dateIn(booking.start, timeZone) === input.start));
+        const candidates = (await store.bookings(shop.id)).filter(booking => booking.status === "active" && !booking.payment && samePhoneNumber(booking.phone, caller) && Date.parse(booking.start) > Date.now() && (!input.start || booking.start === instantOf(input.start) || dateIn(booking.start, timeZone) === input.start));
         if (!candidates.length) return { ok: false, message: tr("この番号で受け付けた現金予約が見つかりません。オンライン予約の変更・キャンセルはオンラインでお願いします。") };
         if (candidates.length > 1) return { ok: false, message: tr("同じ番号の現金予約が複数あります。日時を確認してください。"), choices: candidates.map(booking => ({ id: booking.id, start: booking.start, menuName: bookingMenuName(config, booking) })) };
         const target = candidates[0];
@@ -1094,7 +1101,7 @@ export function createApp(
         }
         if (result.outcome === "error" || (result.outcome !== "booking" && result.outcome !== "inquiry" && result.outcome !== "answered" && result.outcome !== "cancelled")) {
           await notify(shop, config, config.notificationEmail, tr("AI電話で対応できなかった着信がありました"),
-            tr("発信者: {0}\n結果: {1}\n{2}", caller, result.outcome, result.transcript.slice(0, 500)), []).catch(reportError);
+            tr("発信者: {0}\n結果: {1}\n{2}", caller, result.outcome, [result.error, result.transcript.slice(0, 500)].filter(Boolean).join("\n")), []).catch(reportError);
         }
       },
     };

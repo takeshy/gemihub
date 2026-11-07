@@ -38,7 +38,9 @@ output "shared_vm_registration" {
           OPENAI_IMAGE_MODEL                                              = var.openai_image_model
           VERTEX_LIVE_MODEL                                               = var.live_model
           VERTEX_LIVE_LOCATION                                            = var.live_location
-          }, var.google_client_id_secret_ref == null ? { GOOGLE_CLIENT_ID = var.google_client_id } : {}, var.enable_judge_access ? {
+          }, var.google_client_id_secret_ref == null ? { GOOGLE_CLIENT_ID = var.google_client_id } : {}, var.twilio_account_sid != "" ? {
+          TWILIO_ACCOUNT_SID                                              = var.twilio_account_sid
+          } : {}, var.enable_judge_access ? {
           JUDGE_UNTIL                                                     = var.judge_until
           JUDGE_AI_LIMIT                                                  = tostring(var.judge_ai_limit)
         } : {})
@@ -51,6 +53,8 @@ output "shared_vm_registration" {
           ACCESS_PASSWORD = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-access-password"].secret_id, version = var.access_password_version }
           } : {}, var.openai_model != "" ? {
           OPENAI_API_KEY = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-openai-api-key"].secret_id, version = var.openai_api_key_version }
+          } : {}, var.twilio_account_sid != "" ? {
+          TWILIO_AUTH_TOKEN = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-twilio-auth-token"].secret_id, version = var.twilio_token_secret_version }
           } : {}, var.enable_judge_access ? {
           JUDGE_INVITE = { project = var.project_id, name = google_secret_manager_secret.judge_invite[0].secret_id, version = google_secret_manager_secret_version.judge_invite[0].version }
         } : {})

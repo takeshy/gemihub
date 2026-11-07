@@ -405,6 +405,50 @@ test("long inquiry transcripts are retained in ordered interactions within the l
   assert.equal([...history.body[0].interactions].sort(newestInteractionFirst).map((entry: any) => entry.text).join(""), `お客様: ${text}\nAI: 確認します`);
 });
 
+test("a booking succeeds when the model rewrites the offered start", async t => {
+  const f = await fixture(t), ws = await f.stream("CA-REWRITE");
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo"), iso = new Date(`${day}T10:00:00+09:00`).toISOString();
+  const offset = await f.invoke("offset", "create_booking", { name: "Hanako", menuId: "simple", start: `${day}T10:00:00+09:00` });
+  assert.equal(offset.ok, true, JSON.stringify(offset));
+  assert.equal(offset.start, iso);
+  const local = await f.invoke("local", "create_booking", { name: "Taro", menuId: "simple", start: `${day}T12:00:00` });
+  assert.equal(local.ok, true, JSON.stringify(local));
+  assert.equal(local.start, new Date(`${day}T12:00:00+09:00`).toISOString());
+  ws.close();
+});
+
+test("a failed booking stops the hang-up beside it, reaches the owner and is logged as an error", async t => {
+  const f = await fixture(t);
+  f.shop.google = { folderId: "folder" } as typeof f.shop.google;
+  await f.store.saveShop(f.shop);
+  const ws = await f.stream("CA-LOST");
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
+  f.callbacks().onmessage({ toolCall: { functionCalls: [
+    { id: "finish", name: "finish_call", args: {} },
+    { id: "book", name: "create_booking", args: { name: "Hanako", menuId: "simple", start: `${day}T03:17:00+09:00` } },
+  ] } });
+  await f.waitFor(() => f.toolResponses.length > 0);
+  const responses = f.toolResponses[0].functionResponses;
+  assert.deepEqual(responses.map((item: any) => item.name), ["create_booking", "finish_call"]);
+  assert.ok(responses[0].response.error);
+  assert.equal(responses[1].response.ok, false);
+  assert.equal(ws.readyState, WebSocket.OPEN);
+  await f.invoke("finish-again", "finish_call", {});
+  ws.close(); await once(ws, "close");
+  const logs = () => f.store.queryShopLogs(f.shop.id, new Date(Date.now() - 60000).toISOString(), new Date(Date.now() + 60000).toISOString(), 100, undefined, { kind: "phone" });
+  await f.waitFor(async () => (await logs()).some(log => log.callId === "CA-LOST"));
+  assert.equal((await logs()).find(log => log.callId === "CA-LOST")?.outcome, "error");
+  await f.waitFor(async () => (await f.store.records<any>("job", f.shop)).length > 0);
+});
+
+test("hanging up after offering slots is questioned once, and a declined booking can still end", async t => {
+  const f = await fixture(t), ws = await f.stream("CA-OFFERED");
+  await f.invoke("slots", "check_availability", { menuId: "simple", date: dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo") });
+  assert.equal((await f.invoke("finish", "finish_call", {})).ok, false);
+  assert.equal((await f.invoke("finish-again", "finish_call", {})).ok, true);
+  ws.close();
+});
+
 test("transcript parts stay readable while other entries follow time order", () => {
   const entry = (id: string, at: string, part?: number) => ({ id, shopId: "s", inquiryId: "q", kind: "phone", text: id, at, ...(part === undefined ? {} : { part }) }) as InquiryInteraction;
   const entries = [entry("z", "2026-11-07T01:00:00.000Z", 0), entry("a", "2026-11-07T01:00:00.000Z", 1), entry("note", "2026-11-07T02:00:00.000Z"), entry("old", "2026-11-07T00:00:00.000Z")];

@@ -153,6 +153,7 @@ resource "google_secret_manager_secret" "app" {
     var.paypal_client_id != "" ? ["gemihub-web-paypal-client-secret"] : [],
     var.enable_access_password ? ["gemihub-web-access-password"] : [],
     var.openai_model != "" ? ["gemihub-web-openai-api-key"] : [],
+    var.twilio_account_sid != "" ? ["gemihub-web-twilio-auth-token"] : [],
   ))
   project   = var.project_id
   secret_id = each.value
