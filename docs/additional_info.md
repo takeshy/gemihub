@@ -12,11 +12,15 @@ All PayPal transactions in the demo run in the PayPal Sandbox with Sandbox busin
 AI
 
 Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for the setup interview, screenshot understanding, page and theme generation, tool-based research, image generation, drafting payment settings from plain-language instructions, and explaining and summarizing PayPal payment states. A separate review pass checks AI-generated themes. Gemini is the default provider; the judge demo currently uses Gemini 3.8 Flash.
-Gemini Live API: real-time voice conversations with the shop assistant.
+Gemini Live API: real-time voice conversations with the shop assistant, and AI phone reception. Phone calls arrive through Twilio Programmable Voice and Media Streams; gemihub relays the call audio to Gemini Live, which answers the caller and uses server tools to check availability, create cash bookings, cancel the caller's cash phone bookings and record inquiries.
 
 How they work together
 The AI turns the owner’s words into a structured refund policy for the owner to approve. The server applies the approved policy to calculate refund amounts and processes charges and refunds through PayPal.
 Consult & ask also reads live PayPal data through read-only PayPal tools. The AI explains what it found, states any difference between the booking ledger and PayPal, and cites the PayPal record. A background check flags payments that need attention, the AI summarizes them, and the server attaches a fix chosen by fixed rules (retry a refund, re-sync a state, complete a manual review, or close an unsold discounted slot). The owner approves on screen; the server re-checks the booking with PayPal and executes it with the same idempotent PayPal requests. The AI has no tool that writes to PayPal and never decides an amount.
+
+AI phone reception follows the same rule: the AI talks, the server decides. Availability, prices, payment rules and cancellation deadlines come from server code and the published shop settings, never from the model. When PayPal prepayment is on, phone bookings are limited to today's remaining slots so that later bookings stay prepaid through PayPal. Discounted replacement slots are never sold by phone, because their PayPal payment would increase another customer's refund and caller ID cannot prove who is calling. Every call is saved as a searchable transcript, and bookings and inquiries appear in the same booking list, CRM and inquiry board as online ones.
+
+Judges can try it: after publishing the demo shop, register the phone number you will call from in the judge menu and call the number shown there. The demo accepts cash test bookings and inquiries; no real payment is involved.
 
 ## Is your project new, or did it exist before Oct 1, 2026 (9:15 am PT)?
 
@@ -30,7 +34,7 @@ The earlier hubwork used conversation to create web pages, with backend behavior
 
 For the current gemihub, I redesigned the approach so beginners without programming experience could use it. Booking, payments, and access control run on fixed, deterministic backend code, removing the complexity of designing backend workflows. Owners can freely build and customize their storefront through conversation and on-screen annotations.
 
-During the submission period, I implemented PayPal prepayment at booking, automatic policy-based refunds, discounted rebooking after eligible cancellations with a larger refund when someone else books, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, AI-assisted PayPal operations (read-only PayPal lookups in the assistant, stuck-payment alerts with AI summaries, and owner-approved fixes), a CRM, and design version history with one-click rollback.
+During the submission period, I implemented PayPal prepayment at booking, automatic policy-based refunds, discounted rebooking after eligible cancellations with a larger refund when someone else books, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, AI-assisted PayPal operations (read-only PayPal lookups in the assistant, stuck-payment alerts with AI summaries, and owner-approved fixes), AI phone reception with Twilio and Gemini Live (cash bookings, phone cancellations, inquiries and call transcripts), a CRM, and design version history with one-click rollback.
 
 
 ## Which additional sponsor tool(s) did you use for this project?

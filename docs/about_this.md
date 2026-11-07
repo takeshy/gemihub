@@ -16,6 +16,7 @@ Ambiguous money matters strain human relationships, but when rules are executed 
 * **Plain-Language Policy Generation**: Say *"No cancellation fee at least 24 hours before; 30% within 24 hours, 60% within 12 hours, and 100% within one hour."* The AI structures this into a concrete refund policy (`24h → 100%`, `12h → 70%`, `1h → 40%`, `0h → 0%`) for the owner to review and approve before applying it to new bookings.
 * **AI That Watches the Money Without Touching It**: Ask *"Did that refund go through?"* and the research AI reads the live PayPal record and cites it. An hourly check compares the shop's ledger with PayPal and flags stuck payments or refunds; fixes are decided by fixed server rules and run only after the owner approves them on screen. The AI's PayPal access is read-only—it cannot create refunds or change amounts.
 * **Research AI & Gemini Live**: Ask questions like *"What is our current refund policy?"* via chat or low-latency voice (**Gemini Live**), receiving answers grounded in shop specs and live data.
+* **AI Phone Reception (Twilio + Gemini Live)**: When the owner is busy with a client, an AI receptionist answers the shop's phone. It answers questions about hours, location, menus and prices from the published shop settings, takes cash bookings from the same inventory as online bookings (same-day only when the shop requires PayPal prepayment), lets callers cancel their own phone bookings within the shop's cancellation window, and records everything else as an inquiry for a callback. The caller ID becomes the callback number and the CRM key, so callers never have to say their number. Every call keeps a searchable transcript and outcome, and the owner is emailed about new bookings, cancellations and inquiries.
 * **Centralized Customer CRM**: Keep the lifeblood of the business in one place—view past bookings, inquiries, memos, and reference photos on a single screen.
 * **Traffic & Operations Visibility**: Daily and per-page traffic reports, customer activity, and searchable operational logs—so the owner can see how the shop is doing and trace anything that happened.
 * **Opening Alerts**: Customers can request alerts for openings that match their preferred service and time, including discounted slots.
@@ -47,6 +48,7 @@ Ambiguous money matters strain human relationships, but when rules are executed 
 * **AI Layer**:
     * Configurable LLM layer supporting both **Vertex AI (Gemini)** and **OpenAI**.
     * **Gemini Live** for real-time voice conversations over WebSockets.
+    * **Twilio Media Streams** bridged to **Gemini Live** for phone reception: signed webhooks, HMAC-signed stream URLs, and server-side tools (`check_availability`, `create_booking`, `cancel_booking`, `create_inquiry`) that enforce availability, prices and cancellation deadlines—the model only converses.
     * Read-only grounded research agent with PayPal lookups scoped strictly to transaction IDs within the shop's ledger.
 * **Google Cloud & Workspace**:
     * **Cloud Firestore**: Stores business records and distributed locks for payment concurrency control.
