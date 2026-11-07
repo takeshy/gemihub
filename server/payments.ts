@@ -144,18 +144,20 @@ export function paymentService(store: Store, gateway: PaymentGateway, onChange: 
     await save(c);
     await sync(c);
   }
-  async function cancel(c: Checkout, by: string, reason: "customer" | "shop", at = new Date().toISOString()) {
+  /** `replacement` raises the refund and commits the shop's replacement booking with the cancellation. */
+  async function cancel(c: Checkout, by: string, reason: "customer" | "shop", at = new Date().toISOString(), replacement?: { amount: number; commit: () => Promise<void> }) {
     if (c.phase !== "confirmed" || !c.booking.payment) fail(409, tr("支払いを確認中です。確定後にキャンセルしてください。"));
     const payment = c.booking.payment!;
     if (!payment.cancellation) {
       if (c.booking.status !== "active") fail(409, tr("この予約は処理済みです"));
-      const quote = refundQuote(payment.amount, c.booking.start, at, payment.policy, reason);
+      const quoted = refundQuote(payment.amount, c.booking.start, at, payment.policy, reason);
+      const quote = replacement ? { percent: Math.floor(replacement.amount * 100 / payment.amount), amount: replacement.amount } : quoted;
       c.booking.status = "cancelled";
       c.booking.updatedBy = by;
       c.booking.updatedAt = at;
       payment.cancellation = { ...quote, at, by, reason, status: quote.amount ? "retrying" : "not_required", requestId: randomUUID() };
       // Freeze cancellation time, rate and amount even if Firestore/PayPal is unavailable.
-      await store.transaction(async () => { await save(c); await syncCouponUse(store, c.booking); });
+      await store.transaction(async () => { await save(c); await syncCouponUse(store, c.booking); await replacement?.commit(); });
     }
     await refund(c);
     return c.booking;

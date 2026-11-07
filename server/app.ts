@@ -46,7 +46,7 @@ import { Store, bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type S
 import { resetShop } from "./shop-reset.ts";
 import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
-import { aggregateCustomers, customerSummaries, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry } from "./customers.ts";
+import { aggregateCustomers, customerSummaries, phoneCustomerSchema, phoneKey, savePhoneCustomer, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type Inquiry, type CustomerRecord } from "./customers.ts";
 import { googleCustomerFiles, memoryCustomerFiles, type CustomerFiles } from "./customer-files.ts";
 import { uploadMenuImage, readMenuImage, menuImageResource, validateMenuImages, validateImageIds, menuImageSnapshot, type ImageUpload } from "./menu-images.ts";
 import { listImages, updateImage, archiveImage, generateLibraryImage } from "./image-library.ts";
@@ -83,7 +83,7 @@ import {
   createFolder,
   trashFile,
 } from "./google.ts";
-import { regionOf, currencyOf, dateIn, formatMinor, zonedDate } from "../shared/region.ts";
+import { fromMinor, regionOf, currencyOf, dateIn, formatMinor, zonedDate } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
@@ -345,7 +345,7 @@ export function createApp(
           id: booking.id, start: booking.start, end: booking.end, status: booking.status,
           menu: bookingMenuName(config, booking),
           staff: bookingStaffName(config, booking.staffId),
-          customer: booking.name, email: booking.customer, price: booking.price,
+          customer: booking.name, email: booking.customer, price: booking.price, ...(booking.phone ? { phoneBooking: true } : {}),
           ...(booking.payment ? { paid: booking.payment.amount, refund: booking.payment.cancellation ? { amount: booking.payment.cancellation.amount, status: booking.payment.cancellation.status } : undefined } : {}),
           ...(booking.transfers?.length ? { transfers: booking.transfers.map(entry => ({ at: entry.at, from: entry.from.name, to: entry.to.name, price: entry.price, discountPercent: entry.discountPercent, refundToPreviousHolder: { amount: entry.refund.amount, status: entry.refund.status } })) } : {}),
         }));
@@ -376,6 +376,14 @@ export function createApp(
     const filter = customerFilterSchema.parse({ period: url.searchParams.get("period") ?? undefined, since: url.searchParams.get("since") ?? undefined });
     const now = new Date();
     return aggregateCustomers(await store.bookings(shop.id), await inquiries(shop), await store.records<CustomerNote>("customerNote", shop), now, customerSince(filter, now, regionOf(shop.published).timeZone), await store.records<import("./customers.ts").CustomerRecord>("customer", shop), regionOf(shop.published).timeZone);
+  };
+  // The owner answering the phone may take today's remaining slots, whatever online cut-offs apply.
+  const phoneRules = (config: ShopConfig): ShopConfig => ({ ...config, rules: { ...config.rules, sameDay: true, leadMinutes: 0 } });
+  // With prepayment on, cash stays same-day so it cannot hold later slots unpaid. Without it, online
+  // bookings are unpaid too, so the phone may book any date they could.
+  const phoneDate = (config: ShopConfig, requested?: string) => {
+    const today = dateIn(new Date(), regionOf(config).timeZone);
+    return config.rules.payment?.enabled ? today : requested || today;
   };
   const postsFor = async (shop: Shop) => (await store.records<Post>("post", shop)).filter(post => !post.deletedAt);
   const legacyArticleIds = new Map<string, Record<string, string>>();
@@ -653,10 +661,15 @@ export function createApp(
       else if (event === "sold") {
         const entry = booking.transfers?.find(entry => entry.id === transfer.id);
         // A delayed notice may run after another transfer; address the holder from this sale.
-        const recipient = entry?.to || { customer: transfer.buyer!.customer, name: transfer.buyer!.name };
+        const recipient = entry?.to || { customer: transfer.buyer?.customer || "", name: transfer.buyer?.name || "" };
         const refund = entry ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[entry.refund.status] : "";
         await notify(shop, config, transfer.seller, tr("{0} 代わりの予約が入りました", config.name),
           tr("{0} 様\n{1}\n代わりに利用する方の予約が入り、返金額が増えました。\n返金額: {2}\n{3}", transfer.sellerName, visit, money(transfer.price), refund), []);
+        // A cash replacement has no account to notify, and the operator who took the call made the change.
+        if (transfer.replacedBy) {
+          await store.put("paymentNotice", key, { at: new Date().toISOString() });
+          return;
+        }
         await notify(shop, config, recipient.customer, tr("{0} ご予約を承りました（お得な空き枠）", config.name),
           tr("{0} 様\n{1}\n支払額: {2}\nお得な空き枠からのご予約が確定しました。\n返金条件（お支払い額に対して）: {3}", recipient.name, visit, money(transfer.price), policyText(transfer.policy)), []);
         await notify(shop, config, config.notificationEmail, tr("{0} 代わりの予約が入りました", config.name),
@@ -699,7 +712,7 @@ export function createApp(
   }
   const transferCheckoutView = (t: Transfer) => ({ id: t.id, phase: t.buyer?.phase || "expired", expires: t.buyer?.expires || 0, approvalUrl: t.buyer?.phase === "awaiting_approval" ? t.buyer.approvalUrl : undefined, review: !!t.buyer?.review, amount: t.price, currency: t.currency });
   async function operatorTransfers(shopId: string) {
-    return (await transfers.forShop(shopId)).filter(t => t.phase === "listed").map(t => ({ id: t.id, bookingId: t.bookingId, price: t.price, currency: t.currency, discountPercent: t.discountPercent, deadline: t.deadline, buying: buyerBusy(t), review: !!t.buyer?.review }));
+    return (await transfers.forShop(shopId)).filter(t => t.phase === "listed").map(t => ({ id: t.id, bookingId: t.bookingId, price: t.price, currency: t.currency, discountPercent: t.discountPercent, deadline: t.deadline, buying: buyerBusy(t), review: !!t.buyer?.review, unsold: t.unsold.amount }));
   }
   const reconcilePayments = (shopId: string) => store.locked(bookingLockKey(shopId), async () => {
     if (await store.shop(shopId)) { await payments.reconcile(shopId); await transfers.reconcile(shopId); }
@@ -1647,6 +1660,37 @@ export function createApp(
           await syncPaymentHistory(shop.id).catch(reportError);
           return json(res, result, result.ok ? 200 : 409);
         }
+        if (action === "bookings/phone-slots" && method === "GET") {
+          const config = shop.published || fail(409, tr("先にお店を公開してください"));
+          const date = phoneDate(config, url.searchParams.get("date") || undefined);
+          return json(res, { date, slots: await availableSlots(store, shop, phoneRules(config), date, url.searchParams.get("menu") || "", url.searchParams.get("staff") || undefined, calendar, undefined, url.searchParams.getAll("option")) });
+        }
+        if (action === "bookings/phone" && method === "POST") {
+          const input = phoneCustomerSchema.extend({ requestId: z.uuid(), menuId: z.string().min(1), optionIds: z.array(z.string()).max(20).default([]), staffId: z.string().optional(), start: z.string().min(1), expectedPrice: z.number().min(0).optional() }).parse(await body(req));
+          const result = await store.locked(bookingLockKey(shop.id), async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            await assertOperator(user, fresh);
+            const config = fresh.published || fail(409, tr("先にお店を公開してください"));
+            const id = digest(`${fresh.id}:phone:${input.requestId}`), existing = await store.get<Booking>("booking", id);
+            if (existing) return { ok: true, booking: existing };
+            const selection = menuSelection(config, input.menuId, input.optionIds);
+            if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
+            if (input.expectedPrice !== undefined && input.expectedPrice !== selection!.price) fail(409, tr("料金や所要時間が変わりました。メニューと空き時間を確認し直してください。"));
+            // The same availability as online bookings, so a phone booking cannot take a slot awaiting
+            // its replacement customer.
+            const date = phoneDate(config, dateIn(input.start, regionOf(config).timeZone));
+            const slot = (await availableSlots(store, fresh, phoneRules(config), date, input.menuId, input.staffId, calendar, undefined, input.optionIds)).find(item => item.start === input.start);
+            if (!slot) fail(409, tr("この時間は予約できません。空き状況を更新してください"));
+            const now = new Date().toISOString();
+            const booking: Booking = { id, requestKey: `phone:${input.requestId}`, shopId: fresh.id, customer: phoneKey(input.phone), name: input.name, phone: input.phone, message: "", menuId: input.menuId, price: selection!.price, ...(selection!.optionIds.length ? { optionIds: selection!.optionIds, items: selection!.items } : {}), ...slot!, status: "active", createdAt: now, updatedBy: user!.email, updatedAt: now };
+            await store.transaction(async () => {
+              await store.saveBooking(booking);
+              await savePhoneCustomer(store, fresh.id, input.name, input.phone, user!.email);
+            });
+            return { ok: true, booking };
+          });
+          return json(res, result);
+        }
         const cancellation = action.match(/^bookings\/([^/]+)\/status$/);
         if (cancellation && method === "POST") {
           const result = await store.locked(bookingLockKey(shop.id), async () => {
@@ -1670,12 +1714,47 @@ export function createApp(
             await store.transaction(async () => {
               await store.saveBooking(b);
               await syncCouponUse(store, b);
-              await notify(fresh, config, b.customer, tr("予約の状態が変更されました"), tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status));
+              await notify(fresh, config, b.phone ? config.notificationEmail : b.customer, tr("予約の状態が変更されました"), tr("{0} 様\n予約: {1}\n状態: {2}", b.name, b.start, b.status));
             });
             return { ok: true };
           });
           await flushMail(shop);
           return json(res, result);
+        }
+        const phoneReplacement = action.match(/^transfers\/([a-f0-9]{64})\/phone$/);
+        if (phoneReplacement && method === "POST") {
+          const input = phoneCustomerSchema.extend({ requestId: z.uuid(), expectedPrice: z.number().int().positive() }).parse(await body(req));
+          const result = await store.locked(bookingLockKey(shop.id), async () => {
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            await assertOperator(user, fresh);
+            const config = fresh.published || fail(409, tr("先にお店を公開してください"));
+            const id = digest(`${fresh.id}:phone:${input.requestId}`), existing = await store.get<Booking>("booking", id);
+            if (existing) return { ok: true, booking: existing };
+            const transfer = (await transfers.forShop(fresh.id)).find(item => item.id === phoneReplacement[1]) || fail(404, tr("この空き枠の受付は終了しています"));
+            if (transfer.price !== input.expectedPrice) fail(409, tr("キャンセル条件が変わりました。内容を確認し直してください。"));
+            const held = (await store.get<Checkout>("checkout", transfer.bookingId))?.booking || fail(404, tr("予約がありません"));
+            // Cash stays same-day: a later slot would be held unpaid while the holder is refunded.
+            const timeZone = regionOf(config).timeZone;
+            if (dateIn(held.start, timeZone) !== dateIn(new Date(), timeZone) || Date.parse(held.start) <= Date.now()) fail(409, tr("現金のお客様への差し替えは、当日の開始前の予約だけです"));
+            const now = new Date().toISOString();
+            const booking: Booking = { id, requestKey: `phone:${input.requestId}`, shopId: fresh.id, customer: phoneKey(input.phone), name: input.name, phone: input.phone, message: "", menuId: held.menuId, price: fromMinor(transfer.price, transfer.currency), ...(held.optionIds?.length ? { optionIds: held.optionIds, items: held.items } : {}), staffId: held.staffId, start: held.start, end: held.end, status: "active", createdAt: now, updatedBy: user!.email, updatedAt: now };
+            await transfers.replace(transfer, user!.email, id, async () => {
+              await store.saveBooking(booking);
+              await savePhoneCustomer(store, fresh.id, input.name, input.phone, user!.email);
+            }, now);
+            return { ok: true, booking };
+          });
+          await flushMail(shop);
+          return json(res, result);
+        }
+        if (action === "customers/phone" && method === "GET") {
+          const number = phoneCustomerSchema.shape.phone.safeParse(url.searchParams.get("number"));
+          const record = number.success ? await store.get<CustomerRecord>("customer", `${shop.id}:${phoneKey(number.data)}`) : undefined;
+          return json(res, { name: record?.name || "" });
+        }
+        if (action === "customers/phone" && method === "POST") {
+          const input = phoneCustomerSchema.parse(await body(req));
+          return json(res, { ok: true, email: await store.locked(shop.id, () => savePhoneCustomer(store, shop.id, input.name, input.phone, user!.email)) });
         }
         const customerRoute = action.match(/^customers(?:\/([^/]+)(?:\/(.*))?)?$/);
         // CRM reads must not wait for AI, publication or reconciliation writers.
@@ -3134,7 +3213,9 @@ export function createApp(
             for (const t of all.filter(t => t.seller === u.email).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 50)) {
               const view = await transferView(t);
               const entry = (await store.get<Checkout>("checkout", t.bookingId))?.booking.transfers?.find(entry => entry.id === t.id);
-              if (view) selling.push({ ...view, phase: t.phase, buying: buyerBusy(t, now), unsold: t.unsold, ...(entry ? { refund: { amount: entry.refund.amount, status: entry.refund.status } } : {}) });
+              const replaced = t.replacedBy ? (await store.get<Checkout>("checkout", t.bookingId))?.booking.payment?.cancellation : undefined;
+              const refund = entry?.refund || replaced;
+              if (view) selling.push({ ...view, phase: t.phase, buying: buyerBusy(t, now), unsold: t.unsold, ...(refund ? { refund: { amount: refund.amount, status: refund.status } } : {}) });
             }
             const buying = [];
             for (const t of all.filter(t => t.phase === "listed" && t.buyer?.customer === u.email && ["creating", "awaiting_approval", "capturing", "captured"].includes(t.buyer.phase))) {

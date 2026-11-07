@@ -164,6 +164,7 @@ export type Booking = {
   id: string;
   requestKey?: string;
   shopId: string;
+  /** The customer's email, or the `tel:` key of a phone customer, who has no account or address. */
   customer: string;
   name: string;
   menuId: string;
@@ -176,6 +177,8 @@ export type Booking = {
   end: string;
   status: "active" | "cancelled" | "no_show";
   createdAt: string;
+  /** Set on a same-day booking the shop took by phone, paid in cash at the shop. */
+  phone?: string;
   /** Customer's booking language, also used for scheduled reminders. */
   locale?: "ja" | "en";
   payment?: BookingPayment;

@@ -60,6 +60,12 @@ My page lists alerts with Stop alert. An alert is removed once the customer book
 
 Customers may choose a staff member or no preference. With no preference, gemihub assigns one available staff member who handles the menu. The shop cannot turn nomination off; customers always have both choices.
 
+# Same-day phone bookings
+
+Operators can add a booking for today from Bookings when a customer telephones. It is paid in cash at the shop and requires a name and phone number. The customer has no account, so they receive no email; the booking registers them in Customers under that number, where their visits and notes accumulate. With PayPal prepayment on, only today's slots in the shop's time zone are accepted and later dates stay online prepayment only, so cash bookings cannot hold slots ahead. With prepayment off, operators choose any date within the booking window, because online bookings are unpaid as well. Phone bookings use the same availability as online bookings, including pending payments, connected calendars and bookings awaiting a replacement customer, so those slots are not offered in this form. Entering a registered number fills in the name without replacing a typed one. Same-day and minimum-notice rules for online booking do not apply to them. Coupons, refunds and transfers do not apply. Owners can cancel or record a no-show as usual.
+
+An operator can instead give a slot awaiting a replacement to a cash customer from that booking, if it is today, has not started and no one is paying for it online. The original booking is cancelled with the refund promised for a replacement rather than the lower cancellation amount, and a phone booking for the same slot, menu and staff is created at the listing price, in one transaction. The cash collected equals the raised refund, so the shop's total stays unchanged when the customer pays. If they do not arrive, the original customer has still been refunded and the shop does not receive that amount.
+
 # Double-booking prevention
 
 The server re-checks availability and saves the booking under a per-shop lock, so two customers cannot take the same staff member's time. A retried request with the same request ID does not create a second booking. If a connected Calendar cannot be read, availability is not guessed; the customer is asked to try again.

@@ -28,6 +28,8 @@ export type Transfer = {
   createdAt: string; closedAt?: string;
   attempts: number;
   buyer?: TransferBuyer;
+  /** Set when the shop gave this slot to a cash customer: their booking, in place of a PayPal buyer. */
+  replacedBy?: string;
   /** Event side effects commit with these acknowledgements, so a crash can safely retry them. */
   notified?: Partial<Record<TransferEvent, boolean>>;
 };
@@ -272,11 +274,27 @@ export function transferService(store: Store, gateway: PaymentGateway, payments:
       catch { /* Retried next minute. */ }
     }
   }
+  /**
+   * The shop gives a listed slot to a customer paying cash: the holder's booking is cancelled with the
+   * refund promised for a replacement, and `commit` adds the new booking in the same transaction.
+   */
+  async function replace(t: Transfer, by: string, bookingId: string, commit: (seller: Booking) => Promise<void>, at = new Date().toISOString()) {
+    checkEnvironment(t.environment);
+    if (t.phase !== "listed" || Date.parse(at) >= Date.parse(t.deadline)) fail(409, tr("この空き枠の受付は終了しています"));
+    if (buyerBusy(t)) fail(409, tr("代わりに利用する方がお支払い手続き中です。完了または期限切れの後に操作してください。"));
+    const c = await store.get<Checkout>("checkout", t.bookingId), p = c?.booking.payment;
+    if (!c || c.phase !== "confirmed" || !p || p.cancellation || c.booking.status !== "active" || p.captureId !== t.sellerCaptureId) return fail(409, tr("この空き枠の受付は終了しています"));
+    const seller = structuredClone(c.booking);
+    t.phase = "sold"; t.closedAt = at; t.replacedBy = bookingId;
+    const booking = await payments.cancel(c, by, "customer", at, { amount: t.price, commit: async () => { await save(t); await commit(seller); } });
+    await notifyEvent(t, booking, "sold");
+    return booking;
+  }
   /** Owner-approved early finish: settle now with the cancellation terms shown when listing began. */
   async function close(t: Transfer) {
     if (t.phase !== "listed") fail(409, tr("この空き枠の受付は終了しています"));
     if (buyerBusy(t)) fail(409, tr("代わりに利用する方がお支払い手続き中です。完了または期限切れの後に操作してください。"));
     await settle(t);
   }
-  return { quote, list, withdraw, release, begin, createOrder, capture, reconcile, active, forShop, close };
+  return { quote, list, withdraw, release, begin, createOrder, capture, reconcile, active, forShop, close, replace };
 }

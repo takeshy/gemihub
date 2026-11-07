@@ -5,6 +5,9 @@ import { refundQuote } from "../../server/payment-domain";
 import { simulateCancellation } from "../payment-mock";
 import type { Workspace, Session } from "../App";
 import type { SellingTransfer, TransferListing } from "../Transfers";
+import { z } from "zod";
+import { phoneCustomerSchema, phoneKey } from "../../server/customers";
+import { dateIn, fromMinor, regionOf } from "../../shared/region";
 
 export const customerTransferScenarios = [
   "transfer-offers", "transfer-eligible", "transfer-listed", "transfer-seller-buying",
@@ -40,7 +43,7 @@ export function createTransferFixtures(scenario: string, shop: Workspace, sessio
   function updateOwnerListings() {
     shop.transferListings = offers.filter(offer => offer.phase === "listed").map(offer => ({
       id: offer.id, bookingId: offer.bookingId, price: offer.amount, currency: offer.currency,
-      discountPercent: offer.discountPercent, deadline: offer.deadline, buying: busy(offer), review: !!offer.buyer?.review,
+      discountPercent: offer.discountPercent, deadline: offer.deadline, buying: busy(offer), review: !!offer.buyer?.review, unsold: offer.unsold?.amount ?? 0,
     }));
   }
   function list(booking: Booking, at = new Date().toISOString()) {
@@ -122,6 +125,35 @@ export function createTransferFixtures(scenario: string, shop: Workspace, sessio
     for (const booking of shop.bookings) for (const entry of booking.transfers || [])
       if (["pending", "retrying", "awaiting_funds"].includes(entry.refund.status)) entry.refund.status = "completed";
   }
+  function replacePhone(id: string, data: unknown): Booking {
+    const input = phoneCustomerSchema.extend({ requestId: z.uuid(), expectedPrice: z.number().int().positive() }).parse(data);
+    const existing = shop.bookings.find(booking => booking.requestKey === `phone:${input.requestId}`);
+    if (existing) return existing;
+    const offer = offers.find(offer => offer.id === id), at = new Date().toISOString();
+    if (!offer || offer.phase !== "listed" || Date.parse(at) >= Date.parse(offer.deadline)) throw new Error(tr("この空き枠の受付は終了しています"));
+    if (busy(offer)) throw new Error(tr("代わりに利用する方がお支払い手続き中です。完了または期限切れの後に操作してください。"));
+    if (offer.amount !== input.expectedPrice) throw new Error(tr("キャンセル条件が変わりました。内容を確認し直してください。"));
+    const held = bookingFor(offer.bookingId), payment = held?.payment;
+    if (!held || held.status !== "active" || !payment || payment.cancellation) throw new Error(tr("この空き枠の受付は終了しています"));
+    const timeZone = regionOf(config).timeZone;
+    if (dateIn(held.start, timeZone) !== dateIn(at, timeZone) || Date.parse(held.start) <= Date.now()) throw new Error(tr("現金のお客様への差し替えは、当日の開始前の予約だけです"));
+    const booking: Booking = {
+      id: `phone-${input.requestId}`, requestKey: `phone:${input.requestId}`, shopId: shop.id,
+      customer: phoneKey(input.phone), name: input.name, phone: input.phone, message: "",
+      menuId: held.menuId, price: fromMinor(offer.amount, offer.currency),
+      ...(held.optionIds?.length ? { optionIds: structuredClone(held.optionIds), items: structuredClone(held.items) } : {}),
+      staffId: held.staffId, start: held.start, end: held.end, status: "active", createdAt: at,
+    };
+    held.status = "cancelled";
+    payment.cancellation = {
+      percent: Math.floor(offer.amount * 100 / payment.amount), amount: offer.amount,
+      at, by: session.user!.email, reason: "customer", status: "completed", requestId: `sample-refund-${offer.id}`,
+    };
+    offer.phase = "sold"; offer.refund = { amount: offer.amount, status: "completed" };
+    shop.bookings.push(booking);
+    updateOwnerListings();
+    return booking;
+  }
   function request(action: string, data?: unknown) {
     const input = (data || {}) as Record<string, unknown>;
     if (/\/bookings\/[^/]+\/cancel(?:-quote)?$/.test(action)) {
@@ -163,6 +195,6 @@ export function createTransferFixtures(scenario: string, shop: Workspace, sessio
   }
   return {
     handles: (action: string) => action.startsWith("/api/public/") && (/\/transfers(?:\/|$)/.test(action) || /\/bookings\/[^/]+\/transfer(?:-quote)?$/.test(action) || (/\/bookings\/[^/]+\/cancel(?:-quote)?$/.test(action) && !!bookingFor(action.split("/").at(-2)!)?.payment)),
-    request, release, retry,
+    request, release, retry, replacePhone,
   };
 }
