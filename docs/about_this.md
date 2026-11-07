@@ -61,13 +61,6 @@ Small, family-run salons often operate with irregular rules: staying open late b
 
 Instead of just offering a conversational setup interface, I built **infographic architecture diagrams directly into the dashboard** to visualize active rules and dependencies. This allows non-technical owners to understand their exact shop setup at a glance without feeling overwhelmed by configuration complexity.
 
-Phone reception raised a harder question: **what can an AI safely do when nobody has paid?** Online, a PayPal prepayment proves who booked and protects the shop from no-shows. A phone call has neither—caller ID cannot prove who is calling. So the server, not the AI, draws the line:
-
-* When the shop requires PayPal prepayment, phone bookings are limited to the remaining slots today; later dates stay online-only and prepaid.
-* The AI never sells discounted replacement slots by phone, because a replacement booking increases the original customer's refund—someone could otherwise trigger their own larger refund with a booking they never attend.
-* Callers can cancel only cash phone bookings made from the same number, within the shop's deadline. Changes to online bookings are directed online or recorded as inquiries for the owner.
-* The call cannot end quietly after a failed booking or after slots were offered and nothing was booked; the AI must first tell the caller, and unresolved calls are flagged to the owner.
-
 ## Accomplishments that we're proud of
 
 In Japanese merchant history, there has long been a saying: *"Even if a fire breaks out, grab the customer ledger and run."* Customer records are the lifeblood of any independent business. Yet modern CRM and booking SaaS platforms often lock data away behind high subscription fees and cluttered, hard-to-export interfaces.
