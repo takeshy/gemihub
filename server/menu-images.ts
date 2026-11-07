@@ -7,6 +7,7 @@ import type { ShopConfig } from "./domain.ts";
 import type { CustomerFiles } from "./customer-files.ts";
 import { menuImageInputSchema, menuImageLimit, type MenuImageData } from "./menu-image-domain.ts";
 import { managedImageIds } from "./image-references.ts";
+import { forEachConcurrent } from "./concurrency.ts";
 
 export type ImageUpload = { uploadedBy?: string; shopId: string; fileId: string; hash: string; mimeType: MenuImageData["mimeType"]; size: number; complete: boolean; name?: string; createdAt?: string; source?: "upload" | "ai"; prompt?: string; model?: string; archived?: boolean };
 const fail = (status: number, message: string): never => { throw Object.assign(new Error(message), { status }); };
@@ -97,6 +98,6 @@ export async function readMenuImage(store: Store, shop: Shop, imageId: string, f
 }
 export async function menuImageSnapshot(store: Store, shop: Shop, config: ShopConfig, files: CustomerFiles, token: string, extraIds: string[] = []) {
   const images: Record<string, MenuImageData> = {};
-  for (const id of new Set([...managedImageIds(config), ...extraIds])) images[id] = await readMenuImage(store, shop, id, files, token);
+  await forEachConcurrent([...new Set([...managedImageIds(config), ...extraIds])], 4, async id => { images[id] = await readMenuImage(store, shop, id, files, token); });
   return images;
 }

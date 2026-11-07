@@ -19,6 +19,7 @@ import {
 } from "./domain.ts";
 import type { ReleaseScope } from "./pages.ts";
 import type { Shop } from "./store.ts";
+import { forEachConcurrent } from "./concurrency.ts";
 export function oauth() {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -118,6 +119,7 @@ export async function syncConfig(
   menuImages?: Record<string, import("./menu-image-domain.ts").MenuImageData>,
 ) {
   if (!shop.google) throw new Error(tr("Google の保存先が未作成です"));
+  const connection = shop.google;
   const { drive } = clients(token);
   // Prepare the runnable export before writing any remote data.
   const allGenerated = artifacts(config, await readFile("dist/index.html", "utf8"), undefined, menuImages);
@@ -129,24 +131,28 @@ export async function syncConfig(
   const generated = scope?.kind === "part"
     ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || [`web/parts/${scope.part}.html`, `web/parts/${scope.part}.json`].includes(path)))
     : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || path === "web/pages/index.json" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
-  shop.google.artifactIds ||= {};
-  shop.google.artifactFolders ||= {};
+  const ids = connection.artifactIds ||= {};
+  const folders = connection.artifactFolders ||= {};
   for (const folder of (scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages"] : ["web", "admin", "web/pages", "web/parts"])) {
-    if (!shop.google.artifactFolders[folder])
-      shop.google.artifactFolders[folder] = (
+    if (!folders[folder]) {
+      folders[folder] = (
         await drive.files.create({
           requestBody: {
             name: folder,
             mimeType: "application/vnd.google-apps.folder",
-            parents: [folder.includes("/") ? shop.google.artifactFolders[folder.slice(0, folder.lastIndexOf("/"))] : shop.google.folderId],
+            parents: [folder.includes("/") ? folders[folder.slice(0, folder.lastIndexOf("/"))] : connection.folderId],
           },
           fields: "id",
         })
       ).data.id!;
-    await onProgress();
+      await onProgress();
+    }
   }
-  for (const [path, content] of Object.entries(generated)) {
-    const id = shop.google.artifactIds[path];
+  // Only newly allocated IDs need checkpoints. Serialize checkpoints while uploading independently.
+  let checkpoint = Promise.resolve();
+  const progress = () => checkpoint = checkpoint.then(async () => { await onProgress(); });
+  await forEachConcurrent(Object.entries(generated), 4, async ([path, content]) => {
+    const id = ids[path];
     const mimeType = path.endsWith(".html")
       ? "text/html"
       : path.endsWith(".svg")
@@ -161,27 +167,28 @@ export async function syncConfig(
         fileId: id,
         media: { mimeType, body: Readable.from([content]) },
       });
-    else
-      shop.google.artifactIds[path] = (
+    else {
+      ids[path] = (
         await drive.files.create({
           requestBody: {
             name: path.split("/").at(-1)!,
             parents: [
               path.includes("/")
-                ? shop.google.artifactFolders[path.slice(0, path.lastIndexOf("/"))]
-                : shop.google.folderId,
+                ? folders[path.slice(0, path.lastIndexOf("/"))]
+                : connection.folderId,
             ],
           },
           media: { mimeType, body: Readable.from([content]) },
           fields: "id",
         })
       ).data.id!;
-    await onProgress();
-  }
-  for (const [path, id] of Object.entries(shop.google.artifactIds)) {
+      await progress();
+    }
+  });
+  for (const [path, id] of Object.entries(ids)) {
     if (scope?.kind !== "part" && path.startsWith("web/pages/") && !(path in allGenerated) && (scope?.kind !== "page" || previousPage && [ `web/pages/${previousPage.slug}.html`, `web/pages/${previousPage.slug}.json` ].includes(path))) {
       await drive.files.update({ fileId: id, requestBody: { trashed: true } });
-      delete shop.google.artifactIds[path];
+      delete ids[path];
       await onProgress();
     }
   }

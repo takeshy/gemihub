@@ -48,7 +48,14 @@ try {
       await choose(part === 'header' ? 'ヘッダー' : 'フッター');
       await page.locator('summary').filter({ hasText: label(part === 'header' ? 'ヘッダーの HTML を編集' : 'フッターの HTML を編集') }).click();
     }
-    async function apply() { await page.getByRole('button', { name: label('プレビューに反映'), exact: true }).click(); }
+    async function apply({ valid = true, unchanged = false } = {}) {
+      await page.getByRole('button', { name: label('プレビューに反映'), exact: true }).click();
+      if (!valid) return;
+      await expect(page.getByRole('status').filter({ hasText: label(unchanged ? 'プレビューは編集内容と同じです。変更はありません。' : '編集内容をプレビューに反映しました。') })).toBeInViewport();
+      await expect(preview).toBeFocused();
+      await expect.poll(() => preview.evaluate(element => element.getBoundingClientRect().top)).toBeGreaterThanOrEqual(0);
+      await expect(preview).toBeInViewport();
+    }
     async function discardHeader() {
       const trigger = page.locator('.editor-toolbar').getByRole('button', { name: label('変更を取り消す'), exact: true });
       const dialog = page.getByRole('dialog', { name: label('この画面の変更を取り消す'), exact: true });
@@ -145,17 +152,23 @@ try {
     await expect(page.getByText(label('ヘッダー・フッター・全体の枠の HTML を編集'), { exact: true })).toHaveCount(0);
     await openPart('header');
     await expect(area('ヘッダーの HTML')).toHaveValue(exampleTheme.headerHtml);
-    await apply();
+    await apply({ unchanged: true });
     await expect(page.locator('.editor-toolbar .editor-change-badge')).toHaveCount(0);
     await expect(treeitem('ヘッダー').locator('.sync-badge')).toHaveCount(0);
     await expect(page.locator('.editor-toolbar .primary')).toHaveCount(0);
     await expect(area('フッターの HTML')).toHaveCount(0);
     await expect(area('全体の CSS（ヘッダー・枠・フッター共通）')).toHaveCount(0);
     await area('ヘッダーの HTML').fill('<script>alert(1)</script>');
-    await apply(); await expect(page.locator('.design-editor [role="alert"]')).toBeVisible();
+    await apply({ valid: false }); await expect(page.locator('.design-editor [role="alert"]')).toBeInViewport();
+    await expect(area('ヘッダーの HTML')).toHaveValue('<script>alert(1)</script>');
+    assert.equal((await readDraft()).config.appearance.theme.headerHtml, exampleTheme.headerHtml, 'invalid HTML retains the previous preview');
     const headerHtml = '<header class="theme-masthead"><h2>EDITED HEADER</h2><slot name="navigation"></slot></header>';
-    await area('ヘッダーの HTML').fill(headerHtml); await apply();
+    await area('ヘッダーの HTML').fill(headerHtml);
+    await expect(preview.getByRole('heading', { name: 'EDITED HEADER' })).toHaveCount(0);
+    await apply();
     await expect(preview.getByRole('heading', { name: 'EDITED HEADER' })).toBeVisible();
+    await expect(preview.getByRole('heading', { name: 'EDITED HEADER' })).toBeInViewport();
+    await page.screenshot({ path: `tmp/theme-editors/${language}-${width}-applied.png`, fullPage: false });
     assert.equal((await store.shop(shop.id)).published.appearance.theme.headerHtml, exampleTheme.headerHtml, 'preview edits remain local');
     await openPart('footer');
     const footerHtml = '<footer class="theme-footer"><h2>EDITED FOOTER</h2><slot name="content"></slot></footer>';
@@ -168,8 +181,11 @@ try {
     const bodyHtml = '<main class="edited-frame"><h2>EDITED FRAME</h2><slot name="content"></slot></main>';
     const css = exampleTheme.css + '\n.edited-frame{padding:20px;background:#f0f5ef}';
     await area('全体の枠の HTML').fill(bodyHtml);
-    await area('全体の CSS（ヘッダー・枠・フッター共通）').fill(css); await apply();
+    await area('全体の CSS（ヘッダー・枠・フッター共通）').fill(css.replace('padding:20px', 'padding:10px')); await apply();
     await expect(preview.getByRole('heading', { name: 'EDITED FRAME' })).toBeVisible();
+    await expect(preview.locator('.edited-frame')).toHaveCSS('padding-top', '10px');
+    await area('全体の CSS（ヘッダー・枠・フッター共通）').fill(css); await apply();
+    await expect(preview.locator('.edited-frame')).toHaveCSS('padding-top', '20px');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'editor fits the viewport');
     await page.screenshot({ path: `tmp/theme-editors/${language}-${width}-frame.png`, fullPage: true });
     await choose('ヘッダー'); await discardHeader();
@@ -193,6 +209,7 @@ try {
     await page.getByRole('button', { name: label('この画面を HTML で作る'), exact: true }).click();
     await area('この画面の HTML').fill('<section><h2>EDITED ABOUT HTML</h2><slot name="menus"></slot></section>');
     await apply(); await expect(preview.getByRole('heading', { name: 'EDITED ABOUT HTML' })).toBeVisible();
+    await expect(preview.getByRole('heading', { name: 'EDITED ABOUT HTML' })).toBeInViewport();
     await publish();
     assert.ok((await store.shop(shop.id)).published.screens.about.html.includes('EDITED ABOUT HTML'));
     await choose('全体の枠');

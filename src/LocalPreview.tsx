@@ -86,6 +86,13 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   // Side-by-side preview of this screen as published and as edited here, to see what "変更あり" means.
   const [comparing, setComparing] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const previewNotice = useRef<HTMLParagraphElement>(null);
+  const [previewApplied, setPreviewApplied] = useState(0);
+  useEffect(() => {
+    if (!previewApplied) return;
+    root.current?.focus({ preventScroll: true });
+    (previewNotice.current || root.current)?.scrollIntoView({ block: "start" });
+  }, [previewApplied]);
   // While the pen shows the captured screen, the live preview below would duplicate it.
   const [penOpen, setPenOpen] = useState(false);
   async function run(fn: () => Promise<void>) {
@@ -208,11 +215,21 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     setRoute({ pane: "reserve", pageSlug: page.slug });
   }
   function changeConfig(config: ShopConfig) {
-    if (!draft || draft.pending) return;
+    if (!draft || draft.pending) return false;
     const parsed = shopSchema.safeParse(config);
-    if (!parsed.success) { setInvalid(parsed.error.issues[0]?.message || tr("お店の情報を確認してください")); return; }
+    if (!parsed.success) { setInvalid(parsed.error.issues[0]?.message || tr("お店の情報を確認してください")); return false; }
     setInvalid(""); save({ ...draft, config: parsed.data });
     if (scope.kind === "page") setPageEditing(parsed.data.pages.find(p => p.id === scope.pageId));
+    return true;
+  }
+  function applyDesign(config: ShopConfig) {
+    const previous = latestDraft.current?.config;
+    if (!changeConfig(config)) return;
+    setNotice(same(previous, latestDraft.current?.config)
+      ? tr("プレビューは編集内容と同じです。変更はありません。")
+      : tr("編集内容をプレビューに反映しました。"));
+    setVersion(value => value + 1);
+    setPreviewApplied(value => value + 1);
   }
   async function choose(value: string, articleKey?: string, fromLocation = false) {
     const [category, article] = value.split(":");
@@ -423,7 +440,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       setError("");
     }} />}
     {error && !review && !pullReview && <p className="alert" role="alert">{error}</p>}
-    {notice && <p className="notice small" role="status">{notice}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
+    {notice && <p ref={previewNotice} className="notice small" role="status">{notice}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
     {invalid && <p className="alert" role="alert">{invalid}{tr("（編集欄で確認してください）")}</p>}
     {!draft && <p className="panel">{busy ? tr("画面を開いています…") : tr("画面を読み込めませんでした。ページを再読み込みしてください。")}</p>}
         {draft && draft.pending && <div className="notice"><p>{tr("反映処理を完了できていません。ローカル編集は保持しています。同じ内容で反映を再試行してください。")}</p>
@@ -458,7 +475,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     {draft && !(comparing && status === "local") && <>
       {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} local={{ base: draft.base, source: draft.source, pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
-      {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
+      {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
         if (link && !link.getAttribute("href")?.startsWith("/s/local-preview")) {
           e.preventDefault(); e.stopPropagation();
@@ -478,9 +495,9 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       </div>}
     </>}    {draft && !conflict && <div className="panel editor-secondary">
       {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダー") : tr("フッター")}{tr("の内容を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
-      {scope.kind === "shared" && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}
-      {scope.kind === "part" && <details key={`part-html:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダーの HTML を編集") : tr("フッターの HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`${scope.part}:${(draft.config.appearance?.theme || standardTheme)[themeHtmlKey(scope.part)]}`} part={scope.part} config={draft.config} shopId={shop.id} onChange={changeConfig} openFrame={() => void run(async () => choose("theme"))} /></fieldset></details>}
-      {screen === "theme" && <fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`body:${draft.config.appearance?.theme?.bodyHtml}:${draft.config.appearance?.theme?.css}`} part="body" config={draft.config} shopId={shop.id} onChange={changeConfig} /></fieldset>}
+      {scope.kind === "shared" && (screenIds as readonly string[]).includes(screen) && <details key={`screen:${screen}`}><summary>{tr("この画面の HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ScreenDesignEditor key={`${screen}:${draft.config.screens?.[screen as ScreenId]?.html || ""}`} config={draft.config} screen={screen as ScreenId} shopId={shop.id} onChange={applyDesign} /></fieldset></details>}
+      {scope.kind === "part" && <details key={`part-html:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダーの HTML を編集") : tr("フッターの HTML を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`${scope.part}:${(draft.config.appearance?.theme || standardTheme)[themeHtmlKey(scope.part)]}`} part={scope.part} config={draft.config} shopId={shop.id} onChange={applyDesign} openFrame={() => void run(async () => choose("theme"))} /></fieldset></details>}
+      {screen === "theme" && <fieldset disabled={busy || !!draft.pending}><ThemeDesignEditor key={`body:${draft.config.appearance?.theme?.bodyHtml}:${draft.config.appearance?.theme?.css}`} part="body" config={draft.config} shopId={shop.id} onChange={applyDesign} /></fieldset>}
       {scope.kind === "page" && <details key={`page:${scope.pageId}`}><summary>{tr("このページの内容を編集")}</summary>
         {scope.kind === "page" && <>
           {!draft.source && <p className="notice">{tr("追加ページを公開する前に、予約画面などを選んでお店の共通設定を反映してください。")}</p>}

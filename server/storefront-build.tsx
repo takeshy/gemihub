@@ -13,6 +13,7 @@ import { postKey, postLabel, type PublicPost } from "./post-domain.ts";
 import type { MenuImageData } from "./menu-image-domain.ts";
 import type { Shop } from "./store.ts";
 import type { StorefrontFiles } from "./storefront-files.ts";
+import { forEachConcurrent } from "./concurrency.ts";
 
 /**
  * Bump when the generated markup changes in a way existing shops should receive.
@@ -120,13 +121,19 @@ export function buildStorefront(shop: Shop, posts: PublicPost[], origin: string,
 }
 
 /** Writes assets, then pages; the caller commits the returned pointer only after every object exists. */
-export async function writeStorefront(files: StorefrontFiles, shopId: string, build: StorefrontBuild): Promise<StorefrontRelease> {
+export async function writeStorefront(files: StorefrontFiles, shopId: string, build: StorefrontBuild, previous?: StorefrontRelease): Promise<StorefrontRelease> {
   const paths = Object.keys(build.pages).sort(), assets = Object.keys(build.assets).sort(), hash = createHash("sha256");
   hash.update(JSON.stringify([storefrontRenderer, assets, build.posts || {}]));
   for (const path of paths) hash.update(JSON.stringify([path, build.pages[path]]));
   const release: StorefrontRelease = { id: hash.digest("hex"), paths, assets, renderer: storefrontRenderer, posts: build.posts || {} };
-  for (const name of assets) await files.write(storefrontAssetObject(shopId, name), build.assets[name].body, build.assets[name].contentType);
-  for (const path of paths) await files.write(storefrontObject(shopId, release, path), build.pages[path], `${path.endsWith(".xml") ? "application/xml" : "text/html"}; charset=utf-8`);
+  if (previous?.id === release.id) return release;
+  const existingAssets = new Set(previous?.assets || []);
+  await forEachConcurrent(assets.filter(name => !existingAssets.has(name)), 4, async name => {
+    await files.write(storefrontAssetObject(shopId, name), build.assets[name].body, build.assets[name].contentType);
+  });
+  await forEachConcurrent(paths, 4, async path => {
+    await files.write(storefrontObject(shopId, release, path), build.pages[path], `${path.endsWith(".xml") ? "application/xml" : "text/html"}; charset=utf-8`);
+  });
   return release;
 }
 

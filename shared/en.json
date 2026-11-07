@@ -1,4 +1,7 @@
 {
+  "プレビュー": "Preview",
+  "プレビューは編集内容と同じです。変更はありません。": "The preview already matches your edits. There are no changes.",
+  "編集内容をプレビューに反映しました。": "Your edits have been applied to the preview.",
   "お店を公開したら、下の番号にかけてテスト予約や問い合わせを試せます。": "After publishing your shop, call the number below to try test bookings and inquiries.",
   "電話用の暗証番号": "Phone PIN",
   "発信元の番号を登録せずに試す場合は、電話の音声案内に従ってこの8桁の暗証番号をキーで入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。": "To try without registering your caller number, follow the voice instructions and enter this 8-digit PIN on your phone keypad. Call with caller ID enabled. Resetting your shop changes the PIN.",

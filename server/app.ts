@@ -1,4 +1,5 @@
 import { googleCallbackPath } from "../shared/brand.ts";
+import { forEachConcurrent } from "./concurrency.ts";
 import { shopExport, exportRows, exportCsv, exportColumns, type ExportTable } from "./data-export.ts";
 import { proposeSettings, settingsChanges, type SettingsProposal } from "./settings-ai.ts";
 import { renderLanding } from "./landing.ts";
@@ -475,10 +476,10 @@ export function createApp(
   async function storefrontImages(shop: Shop, posts: Post[]) {
     const token = store.memory ? "" : await ownerToken(shop) || "";
     const images: Record<string, import("./menu-image-domain.ts").MenuImageData> = {};
-    for (const id of new Set([...managedImageIds(shop.published!), ...publishedPostImageIds(posts)])) {
+    await forEachConcurrent([...new Set([...managedImageIds(shop.published!), ...publishedPostImageIds(posts)])], 4, async id => {
       try { images[id] = await readMenuImage(store, shop, id, crmFiles, token, "display"); }
       catch (error) { console.warn(`Storefront ${shop.id}: image ${id} left out of the public page`, error); }
-    }
+    });
     return images;
   }
   async function savePublicShop(shop: Shop) {
@@ -487,7 +488,7 @@ export function createApp(
       try {
         const posts = await postsFor(shop);
         const build = buildStorefront(shop, publicPosts(posts), origin(), await storefrontShell(), await storefrontImages(shop, posts));
-        const release = await writeStorefront(pageFiles, shop.id, build);
+        const release = await writeStorefront(pageFiles, shop.id, build, shop.storefrontRelease);
         const history = [shop.storefrontRelease, ...shop.storefrontPrevious || []].filter((item): item is StorefrontRelease => !!item && item.id !== release.id);
         shop.storefrontPrevious = history.slice(0, storefrontRetainedReleases);
         dropped = history.slice(storefrontRetainedReleases);
@@ -506,7 +507,7 @@ export function createApp(
     // Only releases older than the retained ones are removed; a failed cleanup is retried on the next release.
     if (dropped.length) {
       const kept = [shop.storefrontRelease!, ...shop.storefrontPrevious || []];
-      for (const path of storefrontGarbage(shop.id, kept, dropped)) await pageFiles.remove(path).catch(error => console.warn(`Storefront ${shop.id}: could not delete ${path}`, error));
+      await forEachConcurrent(storefrontGarbage(shop.id, kept, dropped), 4, async path => { await pageFiles.remove(path).catch(error => console.warn(`Storefront ${shop.id}: could not delete ${path}`, error)); });
     }
   }
   // Shops without a release from the current generator are rebuilt by the background loop; failures back off.
@@ -828,6 +829,12 @@ export function createApp(
     await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
   });
   async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
+    const timed = async <T,>(phase: string, work: () => Promise<T>): Promise<T> => {
+      const started = Date.now();
+      if (!store.memory) console.info(JSON.stringify({ event: "publication_phase", shopId: fresh.id, planId: plan.id, phase, state: "started" }));
+      try { return await work(); }
+      finally { if (!store.memory) console.info(JSON.stringify({ event: "publication_phase", shopId: fresh.id, planId: plan.id, phase, state: "finished", durationMs: Date.now() - started })); }
+    };
     if (fresh.lastPublishedPlanId === plan.id) return { ok: true, url: `/s/${fresh.slug}` };
     if (plan.base !== fresh.revision) fail(409, tr("本番の内容が変わりました。最新の内容を読み直してください"));
     if (!plan.approved) fail(409, tr("先にプランを承認してください"));
@@ -863,15 +870,15 @@ export function createApp(
       try {
         fresh.google = await provisionShop(fresh, plan.config, token);
         await store.saveShop(fresh);
-        if (designChanged) await preserveDesignVersion(fresh, plan.id, versions, async () => store.saveShop(fresh));
-        await syncConfig(
+        if (designChanged) await timed("backup", () => preserveDesignVersion(fresh, plan.id, versions, async () => store.saveShop(fresh)));
+        await timed("drive", async () => syncConfig(
           { ...fresh, history },
           plan.config,
           token,
           async () => await store.saveShop(fresh),
           plan.scope,
           await menuImageSnapshot(store, fresh, plan.config, crmFiles, token),
-        );
+        ));
       } catch (error) {
         fresh.publishingError =
           error instanceof Error ? error.message : tr("Google 連携エラー");
@@ -896,10 +903,10 @@ export function createApp(
     fresh.revision++;
     fresh.lastPublishedPlanId = plan.id;
     retireDesignVersions(fresh);
-    await savePublicShop(fresh);
+    await timed("storefront", () => savePublicShop(fresh));
     await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError);
     if (!plan.scope || plan.scope.kind === "shared") await enqueue(fresh, "posts");
-    await flushFiles(fresh);
+    // The public release and the complete design snapshot are committed. Article exports retry in the durable worker.
     return { ok: true, url: `/s/${fresh.slug}` };
   }
   const rate = new Map<
