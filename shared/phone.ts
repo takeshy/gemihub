@@ -48,12 +48,18 @@ export function callerNumber(from: string | null | undefined): string | undefine
   return digits.length >= 6 && digits.length <= 15 ? digits : undefined;
 }
 export const normalizeNumber = (value: string | null | undefined) => (value || "").replace(/\D/g, "");
+/** Canonical forms for the supported shop countries, Japan and the US/NANP. */
+function comparablePhone(value: string) {
+  const digits = normalizeNumber(value.normalize("NFKC"));
+  if (/^81[1-9]\d{8,9}$/.test(digits)) return `+${digits}`;
+  if (/^0[1-9]\d{8,9}$/.test(digits)) return `+81${digits.slice(1)}`;
+  if (/^1[2-9]\d{9}$/.test(digits)) return `+${digits}`;
+  if (!value.trim().startsWith("+") && /^[2-9]\d{9}$/.test(digits)) return `+1${digits}`;
+  return digits ? `+${digits}` : "";
+}
 export function samePhoneNumber(a: string | null | undefined, b: string | null | undefined) {
-  const left = normalizeNumber(a), right = normalizeNumber(b);
-  if (!left || !right) return false;
-  if (left === right) return true;
-  // Twilio sends E.164 while owners may store the domestic form. Compare the national significant part.
-  return Math.min(left.length, right.length) >= 9 && left.slice(-10) === right.slice(-10);
+  const left = comparablePhone(a || ""), right = comparablePhone(b || "");
+  return !!left && left === right;
 }
 /** The caller ID read back to the caller, digit groups separated for clarity. */
 export function spokenPhoneNumber(caller: string) {

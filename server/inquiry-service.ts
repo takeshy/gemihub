@@ -66,8 +66,9 @@ export async function stageInquiryFiles(store: Store, shop: Shop, id: string | u
   await prepareInquiryFiles(store, shop, requestKey, input.files, storage);
 }
 type InquiryMail = { to: string; subject: string; body: string; inquiryInteractionId: string; attachments?: CustomerAttachment[] };
-/** Caller holds the shop lock and has staged attachments; the record and mail intent commit atomically. */
-export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>) {
+/** Caller holds the shop lock and has staged attachments; the record and mail intent commit atomically.
+ * interactionAt is a trusted server timestamp, allowing ordered chunks of one phone transcript. */
+export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>, interactionAt = new Date().toISOString()) {
   if (!id) {
     const input = manualInquirySchema.parse(data), inquiryId = digest(`${shop.id}:manual-inquiry:${input.requestId}`), hash = digest(JSON.stringify(input));
     const receipt = await store.get<{ hash: string }>("inquiryCreateRequest", inquiryId);
@@ -118,7 +119,7 @@ export async function writeInquiry(store: Store, shop: Shop, actor: string, id: 
       q.reply = input.text; q.emailHistory = true; setStatus(q, ("status" in input ? input.status : undefined) || inquiryStatus(q));
       await store.put("inquiry", q.id, q);
     }
-    const entry: InquiryInteraction = { id: requestKey, shopId: shop.id, inquiryId: q.id, kind: email ? "email" : "kind" in input ? input.kind : "note", text: input.text, at: new Date().toISOString(), by: actor, ...(attachments.length ? { attachments } : {}), ...(email ? { delivery: shop.judge || (store.memory && !shop.google) ? "simulated" : "queued", to: q.email } : {}) };
+    const entry: InquiryInteraction = { id: requestKey, shopId: shop.id, inquiryId: q.id, kind: email ? "email" : "kind" in input ? input.kind : "note", text: input.text, at: interactionAt, by: actor, ...(attachments.length ? { attachments } : {}), ...(email ? { delivery: shop.judge || (store.memory && !shop.google) ? "simulated" : "queued", to: q.email } : {}) };
     await store.put("inquiryInteraction", entry.id, entry);
     if (email) await enqueue({ to: q.email, subject: tr("{0} からの返信", shop.published?.name || shop.draft?.name || ""), body: input.text, inquiryInteractionId: entry.id, ...(attachments.length ? { attachments } : {}) }, digest(`${requestKey}:mail`));
     await store.put("inquiryEntryRequest", requestKey, { shopId: shop.id, inquiryId: q.id, hash, done: true }); return { ok: true };

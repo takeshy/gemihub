@@ -128,8 +128,8 @@ export const phoneCustomerSchema = z.object({
 });
 export const phoneKey = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
 /** A customer known by name and phone only. They hold no account, so they receive no email. */
-export async function savePhoneCustomer(store: Store, shopId: string, name: string, phone: string, by: string) {
-  const email = phoneKey(phone), id = `${shopId}:${email}`, at = new Date().toISOString();
+export async function savePhoneCustomer(store: Store, shopId: string, name: string, phone: string, by: string, customerKey = phoneKey(phone)) {
+  const email = customerKey, id = `${shopId}:${email}`, at = new Date().toISOString();
   const previous = await store.get<CustomerRecord & { createdAt?: string }>("customer", id);
   await store.put("customer", id, { ...previous, shopId, email, name, phone, createdAt: previous?.createdAt || at, updatedBy: by, updatedAt: at });
   return email;

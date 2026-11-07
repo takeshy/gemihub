@@ -38,16 +38,24 @@ export function twilioCredentials(): TwilioCredentials {
   }
   return { sid: process.env.TWILIO_ACCOUNT_SID || local.sid || "", token: process.env.TWILIO_AUTH_TOKEN || fileToken || local.password || "" };
 }
-export const phoneStreamToken = (shopId: string, callSid: string, caller: string, token = twilioCredentials().token) =>
-  createHmac("sha256", token || "phone").update(`${shopId}:${callSid}:${caller}`).digest("hex").slice(0, 32);
+export function phoneStreamToken(shopId: string, callSid: string, caller: string, token = twilioCredentials().token) {
+  if (!token.trim()) throw new Error("Twilio signing secret is required");
+  return createHmac("sha256", token).update(JSON.stringify([shopId, callSid, caller])).digest("hex").slice(0, 32);
+}
 export function streamUrl(base: string, shopId: string, callSid: string, caller: string) {
-  const url = new URL("/phone/stream", base);
+  // Twilio Stream URLs do not support query parameters.
+  const context = [shopId, callSid, caller, phoneStreamToken(shopId, callSid, caller)].map(encodeURIComponent).join("/");
+  const url = new URL(`/phone/stream/${context}`, base);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.searchParams.set("shop", shopId);
-  url.searchParams.set("call", callSid);
-  url.searchParams.set("from", caller);
-  url.searchParams.set("token", phoneStreamToken(shopId, callSid, caller));
   return url.href;
+}
+export function phoneStreamContext(url: URL) {
+  const match = url.pathname.match(/^\/phone\/stream\/([^/]+)\/([^/]+)\/([^/]+)\/([a-f0-9]{32})$/);
+  if (!match || url.search) return undefined;
+  try {
+    const [shopId, callSid, caller, token] = match.slice(1).map(decodeURIComponent);
+    return { shopId, callSid, caller, token };
+  } catch { return undefined; }
 }
 const xml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
 export const twimlSay = (message: string, language = "ja-JP") =>
@@ -207,7 +215,7 @@ export type PhoneInquiryResult = { ok: true; inquiryId: string };
 export type PhoneCancelResult = { ok: boolean; message: string; choices?: { id: string; start: string; menuName: string }[] };
 export type PhoneHost = {
   availability(input: { date?: string; menuId: string; staffId?: string; optionIds?: string[] }): Promise<PhoneAvailability>;
-  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; transferId?: string }): Promise<PhoneBookingResult>;
+  book(input: { name: string; menuId: string; start: string; staffId?: string; optionIds?: string[]; transferId?: string }, actionId?: string): Promise<PhoneBookingResult>;
   inquire(input: { name: string; reason: string }): Promise<PhoneInquiryResult>;
   cancel(input: { start?: string }): Promise<PhoneCancelResult>;
   recordCall(result: PhoneCallRecord): Promise<void>;
@@ -236,9 +244,9 @@ export function createPhoneUpgrade(authorize: PhoneAuthorizer, connector: PhoneC
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 512 * 1024 });
   return (req: IncomingMessage, socket: import("node:stream").Duplex, head: Buffer) => {
     const url = new URL(req.url || "/", "http://localhost");
-    if (url.pathname !== "/phone/stream") return false;
+    if (url.pathname !== "/phone/stream" && !url.pathname.startsWith("/phone/stream/")) return false;
     void (async () => {
-      const access = phoneLiveConfigured() ? await authorize(url).catch(() => undefined) : undefined;
+      const access = phoneLiveConfigured() && twilioCredentials().token.trim() ? await authorize(url).catch(() => undefined) : undefined;
       if (!access) { socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n"); socket.destroy(); return; }
       sockets.handleUpgrade(req, socket, head, ws => { void converse(ws, access, connector).catch(error => { console.warn(JSON.stringify({ event: "phone_stream_failed", shopId: access.shopId })); ws.close(1011, tr("通話を続けられませんでした")); void access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: "error", transcript: "", turns: [], startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), error: error instanceof Error ? error.message : String(error) }).catch(() => undefined); }); });
     })().catch(() => socket.destroy());
@@ -260,6 +268,13 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
   const turns: { question: string; answer: string }[] = [];
   let outcome: PhoneCallRecord["outcome"] = "ended", bookingId: string | undefined, inquiryId: string | undefined, failure: string | undefined;
   const pendingInput: string[] = [], pendingMedia: string[] = [];
+  const pendingTools = new Set<Promise<unknown>>();
+  let finishRequested = false, finalTurnReady = false, finishMark = "", markSequence = 0;
+  const markPlayback = () => {
+    if (!finishRequested || !finalTurnReady || !streamSid || finishMark) return;
+    finishMark = `phone-finish-${++markSequence}`;
+    send({ event: "mark", streamSid, mark: { name: finishMark } });
+  };
   const send = (value: unknown) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(value)); };
   const media = (payload: string) => {
     if (!streamSid) { pendingMedia.push(payload); return; }
@@ -277,6 +292,8 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
     if (finished) return;
     finished = true; stopped = true; clearTimeout(greetingTimer); clearTimeout(limit);
     if (live) { try { live.close(); } catch { /* already closed */ } live = undefined; }
+    // A disconnected caller must not leave a committed operation out of the final record.
+    await Promise.allSettled([...pendingTools]);
     if (heard.trim() || spoken.trim()) transcript.push(`${tr("お客様")}: ${heard.trim()}\n${tr("AI")}: ${spoken.trim()}`);
     await access.host.recordCall({ callSid: access.callSid, caller: access.caller, outcome: error ? "error" : outcome, transcript: transcript.join("\n"), turns, startedAt, endedAt: new Date().toISOString(), ...(bookingId ? { bookingId } : {}), ...(inquiryId ? { inquiryId } : {}), ...(error ? { error } : {}) }).catch(() => undefined);
     ws.close(1000, tr("通話を終了しました"));
@@ -290,10 +307,12 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
   ws.on("message", raw => {
     try {
       const input = JSON.parse(raw.toString());
+      if (stopped) return;
       if (input.event === "start") {
         streamSid = input.start?.streamSid || input.streamSid || "";
         started = true;
         for (const payload of pendingMedia.splice(0)) send({ event: "media", streamSid, media: { payload } });
+        markPlayback();
         for (const data of pendingInput.splice(0)) live?.sendRealtimeInput({ audio: { data, mimeType: "audio/pcm;rate=16000" } });
         startGreeting();
         return;
@@ -305,10 +324,11 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         return;
       }
       if (input.event === "stop") void finish();
+      if (input.event === "mark" && finishMark && input.mark?.name === finishMark) void finish();
     } catch { /* Ignore malformed Twilio frames instead of dropping the call. */ }
   });
 
-  const handleTool = async (name: string, args: Record<string, unknown> | undefined): Promise<Record<string, unknown>> => {
+  const handleTool = async (name: string, args: Record<string, unknown> | undefined, actionId?: string): Promise<Record<string, unknown>> => {
     try {
       if (name === "check_availability") {
         const input = z.object({ date: z.string().optional(), menuId: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional() }).parse(args || {});
@@ -316,7 +336,7 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       }
       if (name === "create_booking") {
         const input = z.object({ name: z.string().trim().min(1).max(100), menuId: z.string().min(1), start: z.string().min(1), staffId: z.string().optional(), optionIds: z.array(z.string()).max(20).optional(), transferId: z.string().optional() }).parse(args || {});
-        const result = await access.host.book(input);
+        const result = await access.host.book(input, actionId);
         outcome = "booking"; bookingId = result.bookingId;
         return { ...result };
       }
@@ -334,7 +354,9 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       }
       if (name === "finish_call") {
         if (outcome === "ended") outcome = transcript.length || heard.trim() ? "answered" : "ended";
-        setTimeout(() => { void finish(); }, 1200);
+        // Gemini will generate the farewell after this tool response. Mark its completed turn
+        // and wait until Twilio acknowledges that all preceding audio has played.
+        finishRequested = true; finalTurnReady = false;
         return { ok: true };
       }
       return { error: tr("この操作は利用できません") };
@@ -366,21 +388,29 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
         const content = message.serverContent;
         if (content?.inputTranscription?.text) { heard += content.inputTranscription.text; }
         if (content?.outputTranscription?.text) { spoken += content.outputTranscription.text; }
-        if (content?.interrupted) send({ event: "clear", streamSid });
+        if (content?.interrupted) {
+          // A clear also acknowledges marks for audio that was discarded, not played.
+          // Let the resumed conversation request a new farewell before hanging up.
+          finishRequested = false; finalTurnReady = false; finishMark = "";
+          send({ event: "clear", streamSid });
+        }
         for (const part of content?.modelTurn?.parts || []) if (part.inlineData?.data) media(bridge.fromGemini(part.inlineData.data));
         if (content?.turnComplete) {
           if (heard.trim() || spoken.trim()) {
             const turn = { question: heard.trim(), answer: spoken.trim() };
             turns.push(turn); transcript.push(`${tr("お客様")}: ${turn.question}\n${tr("AI")}: ${turn.answer}`); heard = ""; spoken = "";
           }
+          if (finishRequested && !message.toolCall?.functionCalls?.length) { finalTurnReady = true; markPlayback(); }
         }
         const calls = message.toolCall?.functionCalls || [];
         if (!calls.length) return;
-        void Promise.all(calls.map(async (call): Promise<FunctionResponse> => ({
-          id: call.id, name: call.name, response: await handleTool(call.name || "", call.args as Record<string, unknown> | undefined),
-        }))).then(async functionResponses => {
+        const operation = Promise.all(calls.map(async (call): Promise<FunctionResponse> => ({
+          id: call.id, name: call.name, response: await handleTool(call.name || "", call.args as Record<string, unknown> | undefined, call.id),
+        }))).then(functionResponses => {
           if (!stopped) live?.sendToolResponse({ functionResponses });
         });
+        pendingTools.add(operation);
+        void operation.finally(() => pendingTools.delete(operation)).catch(() => undefined);
       },
       onerror: () => { failure = tr("音声接続が中断しました"); void finish(failure); },
       onclose: () => { live = undefined; if (!finished) void finish(failure); },

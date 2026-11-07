@@ -85,13 +85,13 @@ import {
   createFolder,
   trashFile,
 } from "./google.ts";
-import { fromMinor, regionOf, currencyOf, dateIn, formatMinor, zonedDate } from "../shared/region.ts";
+import { fromMinor, regionOf, currencyOf, dateIn, formatMinor, formatMoney, zonedDate } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
 import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
 import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
-import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamToken, samePhoneNumber, twilioCredentials, twimlConnect, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
+import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, samePhoneNumber, twilioCredentials, twimlConnect, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
 import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, type AiProvider } from "./llm.ts";
 import {
   session,
@@ -924,8 +924,9 @@ export function createApp(
    * Deterministic side of an AI phone call. The model only chooses words and tool arguments;
    * this host enforces the same availability, menu prices and booking rules as the operator form.
    */
-  const phoneHostFor = (shop: Shop, config: ShopConfig, settings: ReturnType<typeof phoneSettingsOf>, caller: string, callSid: string, customerEmail?: string): PhoneHost => {
-    const customerKey = customerEmail || phoneKey(caller);
+  const phoneHostFor = (shop: Shop, config: ShopConfig, settings: ReturnType<typeof phoneSettingsOf>, caller: string, callSid: string, existingCustomerKey?: string): PhoneHost => {
+    const customerKey = existingCustomerKey || phoneKey(caller);
+    const customerEmail = customerKey.startsWith("tel:") ? undefined : customerKey;
     const timeZone = regionOf(config).timeZone;
     const today = () => dateIn(new Date(), timeZone);
     const requestedDate = (requested?: string) => {
@@ -963,15 +964,20 @@ export function createApp(
           transferSlots,
         };
       },
-      async book(input) {
+      async book(input, actionId) {
         if (!settings.cashBookings) fail(409, tr("電話での現金予約は現在受け付けていません。オンライン予約をご案内ください。"));
         return store.locked(bookingLockKey(shop.id), async () => {
           const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
           const freshConfig = fresh.published || fail(409, tr("先にお店を公開してください"));
           const selection = menuSelection(freshConfig, input.menuId, input.optionIds || []);
           if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
-          const id = digest(`${fresh.id}:phone-ai:${callSid}`), existing = await store.get<Booking>("booking", id);
-          if (existing) return resultOf(freshConfig, existing);
+          const details = JSON.stringify([input.name, input.menuId, input.start, input.staffId || "", [...(input.optionIds || [])].sort(), input.transferId || ""]);
+          const requestKey = `phone-ai:${callSid}:${actionId || digest(details)}`;
+          const id = digest(`${fresh.id}:${requestKey}`), existing = await store.get<Booking>("booking", id);
+          if (existing) {
+            if (existing.status !== "active" || existing.name !== input.name || existing.menuId !== input.menuId || existing.start !== input.start || (input.staffId && existing.staffId !== input.staffId) || JSON.stringify([...(existing.optionIds || [])].sort()) !== JSON.stringify([...(input.optionIds || [])].sort())) fail(409, tr("空き枠の内容が変わりました。空き状況を確認し直してください。"));
+            return resultOf(freshConfig, existing);
+          }
           const now = new Date().toISOString(), actor = `phone-ai:${callSid}`;
           if (input.transferId) {
             const transfer = (await transfers.forShop(fresh.id)).find(item => item.id === input.transferId) || fail(404, tr("この空き枠の受付は終了しています"));
@@ -980,14 +986,14 @@ export function createApp(
             if (input.staffId && held.staffId !== input.staffId) fail(409, tr("空き枠の担当が変わりました。空き状況を確認し直してください。"));
             if (dateIn(held.start, timeZone) !== today() || Date.parse(held.start) <= Date.now()) fail(409, tr("現金のお客様への差し替えは、当日の開始前の予約だけです"));
             const booking: Booking = {
-              id, requestKey: `phone-ai:${callSid}`, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: "",
+              id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: "",
               menuId: held.menuId, price: fromMinor(transfer.price, transfer.currency),
               ...(held.optionIds?.length ? { optionIds: held.optionIds, items: held.items } : {}),
               staffId: held.staffId, start: held.start, end: held.end, status: "active", createdAt: now, updatedBy: actor, updatedAt: now,
             };
             await transfers.replace(transfer, actor, id, async () => {
               await store.saveBooking(booking);
-              if (!customerEmail) await savePhoneCustomer(store, fresh.id, input.name, caller, actor);
+              if (!customerEmail) await savePhoneCustomer(store, fresh.id, input.name, caller, actor, customerKey);
             }, now);
             const refundAmount = fromMinor(transfer.price, transfer.currency);
             await notify(fresh, freshConfig, freshConfig.notificationEmail, tr("AI電話で当日の譲渡枠に現金予約が入りました"),
@@ -998,17 +1004,17 @@ export function createApp(
           const slot = (await availableSlots(store, fresh, phoneRules(freshConfig), date, input.menuId, input.staffId, calendar, undefined, input.optionIds || [])).find(item => item.start === input.start);
           if (!slot) fail(409, tr("この時間は予約できません。空き状況を更新してください"));
           const booking: Booking = {
-            id, requestKey: `phone-ai:${callSid}`, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: "",
+            id, requestKey, shopId: fresh.id, customer: customerKey, name: input.name, phone: caller, message: "",
             menuId: input.menuId, price: selection!.price, ...(selection!.optionIds.length ? { optionIds: selection!.optionIds, items: selection!.items } : {}),
             ...slot!, status: "active", createdAt: now, updatedBy: actor, updatedAt: now,
           };
           await store.transaction(async () => {
             await store.saveBooking(booking);
-            if (!customerEmail) await savePhoneCustomer(store, fresh.id, input.name, caller, actor);
+            if (!customerEmail) await savePhoneCustomer(store, fresh.id, input.name, caller, actor, customerKey);
           });
           logs.activity(fresh.id, customerKey, "booking_completed", booking.id);
           await notify(fresh, freshConfig, freshConfig.notificationEmail, tr("AI電話で現金予約を受け付けました"),
-            tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n折り返し先: {5}", input.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, booking.staffId), bookingMenuName(freshConfig, booking), formatMinor(booking.price, currencyOf(regionOf(freshConfig)), intlLocale()), caller), []).catch(reportError);
+            tr("{0} 様\n{1} {2}\nメニュー: {3}\n支払い: 来店時に現金 {4}\n折り返し先: {5}", input.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }), bookingStaffName(freshConfig, booking.staffId), bookingMenuName(freshConfig, booking), formatMoney(booking.price, currencyOf(regionOf(freshConfig)), intlLocale()), caller), []).catch(reportError);
           return resultOf(freshConfig, booking);
         });
       },
@@ -1053,9 +1059,18 @@ export function createApp(
           ...(result.error ? { issue: result.error.slice(0, 300) } : {}),
         }, digest(`${shop.id}:phone-call:${result.callSid}`)));
         if (result.inquiryId) {
-          await writeInquiry(store, shop, `phone-ai:${callSid}`, result.inquiryId, "interactions", {
-            requestId: randomUUID(), kind: "phone", text: result.transcript.trim() || tr("AIが電話を受け付けました。"),
-          }, async () => undefined).catch(() => undefined);
+          const transcript = result.transcript.trim() || tr("AIが電話を受け付けました。");
+          let part = 0;
+          for (let offset = 0; offset < transcript.length;) {
+            let end = Math.min(offset + 5000, transcript.length);
+            if (end < transcript.length && /[\uD800-\uDBFF]/.test(transcript[end - 1])) end--;
+            const text = transcript.slice(offset, end);
+            offset = end;
+            if (!text.trim()) continue;
+            await writeInquiry(store, shop, `phone-ai:${callSid}`, result.inquiryId, "interactions", {
+              requestId: randomUUID(), kind: "phone", text,
+            }, async () => undefined, new Date(Date.parse(result.endedAt) + part++).toISOString()).catch(reportError);
+          }
         }
         if (result.outcome === "error" || (result.outcome !== "booking" && result.outcome !== "inquiry" && result.outcome !== "answered" && result.outcome !== "cancelled")) {
           await notify(shop, config, config.notificationEmail, tr("AI電話で対応できなかった着信がありました"),
@@ -1149,7 +1164,7 @@ export function createApp(
           kind: "phone", ok: outcome !== "error", operation: "phone_call", outcome, callId: callSid, transcript,
         }, digest(`${shop.id}:phone-call:${callSid}`)));
         if (!settings.enabled) { recordOutcome("closed"); return reply(twimlSay(tr("この電話番号は現在ご利用いただけません。"), sayLanguage)); }
-        if (!shop.published || !phoneLiveConfigured()) { recordOutcome("error"); return reply(twimlSay(tr("ただいま電話受付をご利用いただけません。お手数ですが、しばらくしてからおかけ直しください。"), sayLanguage)); }
+        if (!shop.published || !phoneLiveConfigured() || !credentials.token.trim()) { recordOutcome("error"); return reply(twimlSay(tr("ただいま電話受付をご利用いただけません。お手数ですが、しばらくしてからおかけ直しください。"), sayLanguage)); }
         if (!withinPhoneHours(settings, new Date(), regionOf(shop.published).timeZone)) { recordOutcome("closed"); return reply(twimlSay(tr("ただいま電話受付の時間外です。営業時間内におかけ直しください。"), sayLanguage)); }
         if (!caller) {
           recordOutcome("blocked", tr("非通知または番号不明の着信"));
@@ -3870,22 +3885,24 @@ export function createApp(
     }
   })));
   const phoneUpgrade = createPhoneUpgrade(async url => {
-    const shopId = url.searchParams.get("shop") || "", callSid = url.searchParams.get("call") || "";
-    const caller = callerNumber(url.searchParams.get("from"));
+    const context = phoneStreamContext(url), secret = twilioCredentials().token;
+    if (!context || !secret.trim()) return undefined;
+    const { shopId, callSid } = context;
+    const caller = callerNumber(context.caller);
     if (!shopId || !callSid || !caller) return undefined;
-    if ((url.searchParams.get("token") || "") !== phoneStreamToken(shopId, callSid, caller)) return undefined;
+    if (context.token !== phoneStreamToken(shopId, callSid, caller, secret)) return undefined;
     const shop = await store.shop(shopId);
     if (!shop?.published) return undefined;
     const settings = phoneSettingsOf(shop);
     if (!settings.enabled) return undefined;
     if (!withinPhoneHours(settings, new Date(), regionOf(shop.published).timeZone)) return undefined;
     const records = await store.records<CustomerRecord>("customer", shop);
-    const linked = records.find(record => !!record.phone && !record.email.startsWith("tel:") && samePhoneNumber(record.phone, caller));
-    const record = linked || records.find(record => record.email === phoneKey(caller));
-    const customerEmail = linked ? normalizeEmail(linked.email) : undefined;
+    const matches = records.filter(record => samePhoneNumber(record.phone || (record.email.startsWith("tel:") ? record.email.slice(4) : ""), caller));
+    const record = matches.find(record => !record.email.startsWith("tel:")) || matches[0];
+    const customerKey = record ? (record.email.startsWith("tel:") ? record.email : normalizeEmail(record.email)) : undefined;
     return {
       shopId: shop.id, callSid, caller, config: shop.published, settings, callerName: record?.name,
-      host: phoneHostFor(shop, shop.published, settings, caller, callSid, customerEmail),
+      host: phoneHostFor(shop, shop.published, settings, caller, callSid, customerKey),
     };
   }, phoneConnector);
   attachAssistantLive(server, async (req, shopId) => {

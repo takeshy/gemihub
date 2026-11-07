@@ -11,9 +11,10 @@ AI phone reception lets a shop answer calls while the owner is working. Twilio s
 # Requirements and routing
 
 - The owner enables phone reception, stores the Twilio number in E.164 form and optionally sets the hours when the AI answers.
+- For this integration, set the shop's `twilioNumber` to `+18312167968`. This is a per-shop setting, not a shared default for every shop.
 - The Twilio number's Voice webhook is `https://<host>/phone/incoming`.
 - The webhook checks the Twilio signature with `TWILIO_AUTH_TOKEN`, looks up the shop by the dialled number, and returns TwiML that streams audio to `/phone/stream`.
-- The stream URL contains the shop, Twilio `CallSid`, caller number and a short HMAC token. The WebSocket upgrade rejects unknown shops, disabled reception, out-of-hours calls and invalid tokens.
+- The stream URL path is `/phone/stream/<shop>/<CallSid>/<caller>/<HMAC>` with each component URL-encoded; it has no query parameters, as required by [Twilio Stream](https://www.twilio.com/docs/voice/twiml/stream). The WebSocket upgrade rejects unknown shops, disabled reception, out-of-hours calls, invalid tokens and missing signing secrets. No public fallback signing key is used.
 - `PHONE_STREAM_ORIGIN` overrides the public origin used for the stream (defaults to `APP_ORIGIN`). `PHONE_LIVE_MODEL` overrides `VERTEX_LIVE_MODEL` for phone calls.
 
 # Call flow
@@ -32,16 +33,19 @@ The caller never has to say their number. The caller ID becomes the callback num
 - With PayPal prepayment enabled, phone cash bookings are limited to today's remaining slots in the shop time zone. Later dates are online prepayment only.
 - Without prepayment, phone bookings may use any date inside the booking window, because online bookings are unpaid too.
 - Today's transfer listings may be offered to cash callers. The original booking is cancelled with the same refund promised to an online replacement; the cash booking is created for that slot at the listing price. If the cash customer does not arrive, the refund amount shown to the owner is a shop loss. The owner notification states that amount.
-- A caller is matched by the caller ID in the CRM (`tel:` key). A new number creates a phone-only customer, so no email is sent.
+- A caller is matched by normalized caller ID to existing email-based or phone-only CRM records. Japanese domestic mobile and landline numbers and US national numbers match their E.164 forms. Existing customer keys are retained; a new number creates a phone-only customer, so no email is sent.
+- Booking retries use the Gemini tool-call ID within the Twilio call. A separate booking action can create a new reservation after cancellation; retrying a cancelled action cannot report success.
 - Cancelling a cash booking by phone is allowed from the same number and has no refund. Online booking changes and cancellations stay online; the AI explains that instead of changing them.
 
 # Inquiries and notifications
 
-Accepted inquiries use the existing inquiry store and kanban as `source: "phone"`, with the caller's name, callback number, reason and subject. The full call transcript is appended as a phone interaction. The owner receives an email intent for new bookings, inquiries and unresolved calls.
+Accepted inquiries use the existing inquiry store and kanban as `source: "phone"`, with the caller's name, callback number, reason and subject. The full call transcript is appended as phone interactions of at most 5,000 characters each, preserving their order. The owner receives an email intent for new bookings, inquiries and unresolved calls. Cash booking prices in notifications use the shop's major currency units (for example, $55.00 for a $55 booking).
 
 # Transcripts and operation logs
 
 Every connected call writes one `kind: "phone"` operation log with the Twilio `CallSid`, outcome (`booking`, `inquiry`, `cancelled`, `answered`, `blocked`, `closed` or `error`), duration and transcript (up to 10,000 characters). Logs are searchable with `search_shop_logs` and the owner settings screen lists the last seven days. A call ID or booking/inquiry ID can be used as a reference filter.
+
+If a caller disconnects during a tool operation, the server waits for that operation before finalizing the call log and inquiry transcript. For a normal farewell, it waits for the final Gemini turn and [Twilio's playback mark acknowledgement](https://www.twilio.com/docs/voice/media-streams/websocket-messages#mark-message) before closing the stream. The 15-minute call limit still applies.
 
 # Owner settings
 
