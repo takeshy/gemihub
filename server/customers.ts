@@ -54,6 +54,8 @@ export type Inquiry = {
   interactions?: InquiryInteraction[];
   /** Set once replies are recorded as interactions, so later replies need no legacy-history check. */
   emailHistory?: boolean;
+  completedAt?: string;
+  attachments?: CustomerAttachment[];
 };
 export type CustomerRecord = Partial<MemberProfile> & {
   shopId: string;

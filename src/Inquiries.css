@@ -27,3 +27,7 @@ button.inquiry-list-item { width: 100%; text-align: left; font: inherit; color: 
 .inquiry-detail > .button { margin-left: 8px; }
 @media (max-width: 1100px) { .inquiry-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .inquiry-board, .inquiry-create-form fieldset { grid-template-columns: minmax(0, 1fr); } }
+
+.inquiry-file-picker { min-width: 0; margin-block: .75rem; }
+.inquiry-file-picker input[type="file"] { width: 100%; max-width: 100%; }
+.inquiry-file-picker li, .customer-file { overflow-wrap: anywhere; }

@@ -88,7 +88,7 @@ export function CustomerNoteCard({ note, base, rangeQuery, saved, showAttachment
   </div>;
 }
 
-function CustomerFile({ file, path }: { file: CustomerAttachment; path: string }) {
+export function CustomerFile({ file, path }: { file: CustomerAttachment; path: string }) {
   const api = useApi();
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");

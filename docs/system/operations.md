@@ -16,7 +16,9 @@ Bookings and inquiries are grouped by email address. The shop sees visit counts,
 
 # Inquiries
 
-Customers send inquiries from the shop page. The shop replies from the management screen; the reply is emailed to the customer and the inquiry status is updated.
+Customers send inquiries from the shop page, with optional attachments. Operators can also create cases manually, record calls, incoming messages and internal notes, and send email replies. All forms allow up to five files, 5MB each and 10MB total. Bytes stay in the owner's private Google Drive. Reply emails contain only files selected for that reply; customer receipt emails include files submitted on the public form. Internal record attachments never go out by email. File downloads require a current operator of the owning shop.
+
+The list and kanban initially include recent resolved cases, while hiding cases resolved at least one shop-local calendar month ago (receipt date for legacy records). Setting either receipt-date bound shows older cases within that range. The screen explains how to show older records. Completion stores a timestamp, reopening clears it, and repeated moves preserve it. Kanban explains desktop drag and drop and the mobile/keyboard status selector. Replying and resolving remain independent.
 
 # Traffic and activity history
 

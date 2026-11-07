@@ -57,7 +57,7 @@ try {
       }
       await open('inquiries');
       const list = page.getByRole('region', { name: label('お問い合わせ一覧'), exact: true });
-      await expect(list.locator('.inquiry-list-item')).toHaveCount(2);
+      await expect(list.locator('.inquiry-list-item')).toHaveCount(4);
       await shot('10-inquiries', list.getByRole('heading', { name: label('お問い合わせ'), exact: true }));
       await open('board-pages');
       const board = page.getByLabel(label('お問い合わせカンバン'), { exact: true });
@@ -81,6 +81,17 @@ try {
       await expect(waitingColumn.locator('h3 > .count')).toHaveText('11');
       await shot('10-inquiries-board', board);
 
+      await open('archive');
+      const archivedBoard = page.getByLabel(label('お問い合わせカンバン'), { exact: true });
+      await expect(page.getByText(label('古い完了済みのレコードを表示するには期間指定してください。'), { exact: true })).toBeVisible();
+      await expect(page.getByText(label('カードはドラッグ＆ドロップで対応状況を変更できます。スマートフォンやキーボードでは、カードの対応状況を選んでください。'), { exact: true })).toBeVisible();
+      await expect(archivedBoard.locator('.inquiry-board-card', { hasText: label('駐車場の場所を教えてください。') })).toHaveCount(0);
+      await expect(archivedBoard.locator('.inquiry-board-card', { hasText: label('ご来店前のご相談') })).toHaveCount(8);
+      await page.getByLabel(label('受付日（開始）'), { exact: true }).fill('2020/01/01');
+      await page.getByLabel(label('受付日（開始）'), { exact: true }).blur();
+      await expect(archivedBoard.locator('.inquiry-board-card', { hasText: label('駐車場の場所を教えてください。') })).toHaveCount(1);
+      await expect(page.getByText(label('古い完了済みのレコードを表示するには期間指定してください。'), { exact: true })).toHaveCount(0);
+
       await open('manual');
       const form = page.getByRole('form', { name: label('お問い合わせを新規作成'), exact: true });
       await expect(form).toBeVisible();
@@ -88,15 +99,21 @@ try {
       await form.getByLabel(label('電話番号（任意）'), { exact: true }).fill('03-5555-1234');
       await form.getByLabel(label('件名（任意）'), { exact: true }).fill('Phone consultation');
       await form.getByLabel(label('お問い合わせ内容'), { exact: true }).fill('Initial call about colors');
+      await form.locator('input[type=file]').setInputFiles({ name: 'initial.txt', mimeType: 'text/plain', buffer: Buffer.from('Initial attachment') });
       await shot('10-inquiry-create', form);
       await form.getByRole('button', { name: label('お問い合わせを作成'), exact: true }).click();
       const detail = page.getByRole('region', { name: label('お問い合わせの詳細'), exact: true });
       await expect(detail).toBeVisible();
+      await expect(detail.locator('.customer-attachments')).toContainText('initial.txt');
+      const download = page.waitForEvent('download');
+      await detail.getByRole('button', { name: 'initial.txt' + label(' をダウンロード'), exact: true }).click();
+      assert.equal((await download).suggestedFilename(), 'initial.txt');
       await expect(detail.getByRole('button', { name: label('メールで返信'), exact: true })).toHaveCount(0);
       const record = detail.getByRole('form', { name: label('対応を記録する'), exact: true });
       for (const [kind, text] of [['phone', 'Phone response'], ['note', 'Private note'], ['customer', 'Customer follow-up']]) {
         await record.getByLabel(label('記録の種類'), { exact: true }).selectOption(kind);
         await record.getByRole('textbox', { name: label('対応内容'), exact: true }).fill(text);
+        await record.locator('input[type=file]').setInputFiles({ name: `${kind}.txt`, mimeType: 'text/plain', buffer: Buffer.from('Private ' + kind) });
         await record.getByRole('button', { name: label('記録を追加'), exact: true }).click();
         await expect(detail.locator('.inquiry-history')).toContainText(text);
       }
@@ -107,6 +124,7 @@ try {
       await detail.getByRole('combobox', { name: label('対応状況'), exact: true }).selectOption('waiting');
       for (const text of ['First email reply', 'Second email reply']) {
         await detail.getByRole('textbox', { name: label('返信内容'), exact: true }).fill(text);
+        await detail.getByRole('form', { name: label('メールで返信'), exact: true }).locator('input[type=file]').setInputFiles({ name: 'reply.txt', mimeType: 'text/plain', buffer: Buffer.from('Reply attachment') });
         await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
         await expect(detail.locator('.inquiry-history')).toContainText(text);
       }
@@ -143,12 +161,14 @@ try {
     await form.getByLabel(label('お客様の氏名'), { exact: true }).fill(`Actual ${language}`);
     await form.getByLabel(label('メールアドレス（任意）'), { exact: true }).fill(`workflow-${language}@example.com`);
     await form.getByLabel(label('お問い合わせ内容'), { exact: true }).fill('Actual inquiry');
+    await form.locator('input[type=file]').setInputFiles({ name: 'actual-initial.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual initial attachment') });
     await form.getByRole('button', { name: label('お問い合わせを作成'), exact: true }).click();
     const detail = page.getByRole('region', { name: label('お問い合わせの詳細'), exact: true });
     await expect(detail).toBeVisible(); assert.equal(sent.length, language === 'ja' ? 0 : 2);
     const record = detail.getByRole('form', { name: label('対応を記録する'), exact: true });
     await record.getByLabel(label('記録の種類'), { exact: true }).selectOption('phone');
     await record.getByRole('textbox', { name: label('対応内容'), exact: true }).fill('Actual phone record');
+    await record.locator('input[type=file]').setInputFiles({ name: 'actual-private.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual private attachment') });
     await record.getByRole('button', { name: label('記録を追加'), exact: true }).click();
     await expect(detail.locator('.inquiry-history')).toContainText('Actual phone record');
     const replyDraft = detail.getByRole('textbox', { name: label('返信内容'), exact: true });
@@ -169,6 +189,7 @@ try {
     await expect(replyDraft).toHaveValue('Keep this draft when the recipient is missing');
     for (const text of ['Actual first email', 'Actual second email']) {
       await detail.getByRole('textbox', { name: label('返信内容'), exact: true }).fill(text);
+      await detail.getByRole('form', { name: label('メールで返信'), exact: true }).locator('input[type=file]').setInputFiles({ name: 'actual-reply.txt', mimeType: 'text/plain', buffer: Buffer.from('Actual reply attachment') });
       const replyRequest = page.waitForRequest(request => request.url().endsWith('/reply'));
       await detail.getByRole('button', { name: label('メールで返信'), exact: true }).click();
       assert.equal((await replyRequest).postDataJSON().previousEmail, `workflow-${language}@example.com`);
@@ -178,6 +199,10 @@ try {
     const history = (await store.records('inquiryInteraction', shop)).filter(entry => entry.inquiryId === q.id);
     assert.equal(history.length, 3); assert.equal(history.filter(entry => entry.kind === 'email' && entry.delivery === 'sent').length, 2);
     assert.equal((await store.list('job')).length, 0);
+    assert.ok(sent.at(-1).includes(Buffer.from('Actual reply attachment').toString('base64')));
+    assert.ok(!sent.at(-1).includes(Buffer.from('Actual private attachment').toString('base64')));
+    assert.equal(q.attachments.length, 1);
+    assert.ok(history.every(entry => entry.attachments.length === 1));
     await page.goto(`${actualOrigin}/?shop=${shop.id}&customer=${encodeURIComponent(q.email)}&inquiry=${q.id}&lang=${language}`);
     const target = page.locator(`[data-inquiry-id="${q.id}"]`);
     await expect(target).toBeFocused(); await expect(target.locator('.inquiry-history .inquiry-entry')).toHaveCount(3);
@@ -187,7 +212,7 @@ try {
     await page.goto(`${actualOrigin}/?shop=${shop.id}&tab=inquiries&lang=${language}`);
     const inquiriesList = page.getByRole('region', { name: label('お問い合わせ一覧'), exact: true });
     const completedToggle = inquiriesList.getByRole('checkbox', { name: label('対応済みも表示する'), exact: true });
-    await expect(completedToggle).not.toBeChecked();
+    await expect(completedToggle).toBeChecked();
     await inquiriesList.getByRole('button', { name: label('カンバン表示'), exact: true }).click();
     await expect(completedToggle).toHaveCount(0);
     const actualBoard = page.getByLabel(label('お問い合わせカンバン'), { exact: true });
@@ -208,8 +233,8 @@ try {
     await expect(card('対応済み')).toHaveCount(1);
     assert.equal(workspaceReads, 0, 'board changes refresh inquiries without reloading the workspace');
     await inquiriesList.getByRole('button', { name: label('一覧表示'), exact: true }).click();
-    await expect(completedToggle).not.toBeChecked();
-    await expect(inquiriesList.locator('.inquiry-list-item', { hasText: `Actual ${language}` })).toHaveCount(0);
+    await expect(completedToggle).toBeChecked();
+    await expect(inquiriesList.locator('.inquiry-list-item', { hasText: `Actual ${language}` })).toHaveCount(1);
     const phone = language === 'ja' ? '03-5555-0001' : '03-5555-0002';
     const phoneCustomer = { email: await savePhoneCustomer(store, shop.id, `Phone ${language}`, phone, shop.owner), phone };
     await page.goto(`${actualOrigin}/?shop=${shop.id}&customer=${encodeURIComponent(phoneCustomer.email)}&lang=${language}`);
@@ -229,6 +254,32 @@ try {
     console.log(`${language}/${width}: real API creation, internal history, Gmail delivery, durable reload, CRM deep link, stale board recovery and independent list filters passed`);
   }
   assert.equal(sent.length, 4);
+  for (const [language, width] of [['ja', 1280], ['en', 390]]) {
+    const label = text => language === 'en' ? english[text] || text : text;
+    const context = await browser.newContext({ viewport: { width, height: 900 } });
+    const token = `public-inquiry-${language}`, email = `public-${language}@example.com`;
+    await store.put('session', digest(token), { user: { email, name: 'Public customer', role: 'customer', shopId: shop.id }, expires: Date.now() + 600000 });
+    await store.put('customer', `${shop.id}:${email}`, { shopId: shop.id, email, name: 'Public customer', birthDate: '1990-01-01', gender: 'not_specified' });
+    await context.addCookies([{ name: 'gemihub_session', value: token, url: actualOrigin }]);
+    const page = await context.newPage(), errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(`${actualOrigin}/s/${shop.slug}?pane=contact&lang=${language}`);
+    const form = page.locator('.contact-form'); await expect(form).toBeVisible();
+    await form.getByLabel(label('ご相談内容'), { exact: true }).fill('Public inquiry with attachments');
+    await form.locator('input[type=file]').setInputFiles({ name: 'customer.txt', mimeType: 'text/plain', buffer: Buffer.from('Public customer file') });
+    const accepted = page.waitForResponse(response => response.url().endsWith('/inquiries') && response.request().method() === 'POST');
+    await form.getByRole('button', { name: label('お問い合わせを送る →'), exact: true }).click();
+    assert.equal((await accepted).status(), 200);
+    await expect(form.getByLabel(label('ご相談内容'), { exact: true })).toHaveValue('');
+    const inquiry = (await store.records('inquiry', shop)).find(item => item.email === email);
+    assert.equal(inquiry.attachments.length, 1);
+    const file = await context.request.get(`${actualOrigin}/api/shops/${shop.id}/inquiries/${inquiry.id}/files/${inquiry.attachments[0].id}`);
+    assert.equal(file.status(), 403);
+    assert.ok(sent.at(-1).includes(Buffer.from('Public customer file').toString('base64')));
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    assert.deepEqual(errors, []); await context.close();
+    console.log(`${language}/${width}: public customer form attachment, mail delivery and operator-only download passed`);
+  }
 } finally {
   mock.restoreAll(); await browser?.close();
   if (app) await new Promise(resolve => app.close(resolve));

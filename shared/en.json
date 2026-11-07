@@ -1696,7 +1696,7 @@
   "（途中で終了した発言）": "(Interrupted message)",
   "添付は1ファイル5MB、合計10MB以内にしてください": "Attachments must be up to 5 MB each and 10 MB total",
   "投稿内容が変わっています。新しい投稿として送信してください": "Post content has changed. Send it as a new post",
-  "添付ファイルの保存先を作成できませんでした": "Unable to create attachment storage",
+  "添付ファイルの保存先を作成できませんでした": "Could not prepare attachment storage",
   "女性": "Female",
   "男性": "Male",
   "回答しない": "Prefer not to say",
@@ -3737,5 +3737,14 @@
   "電話だけの相談も、メールを送らずに手動で受け付けられます。": "Manually record a phone inquiry without sending email.",
   "ドラッグして対応状況を変更": "Drag to change status",
   "返信先が更新されています。最新の状態を確認してください。": "The recipient has changed. Check the latest status.",
-  "送信できませんでした": "Not delivered"
+  "送信できませんでした": "Not delivered",
+  "古い完了済みのレコードを表示するには期間指定してください。": "Select a date range to show older resolved inquiries.",
+  "カードはドラッグ＆ドロップで対応状況を変更できます。スマートフォンやキーボードでは、カードの対応状況を選んでください。": "Drag and drop cards to change their status. On mobile or with a keyboard, use the status selector on each card.",
+  "画面を再読み込みして、添付ファイルを選び直してください。": "Reload the page and select the attachments again.",
+  "添付ファイルを確認してください。": "Check the attachments.",
+  "お客様と社内メモの添付": "Customer and internal note attachments",
+  "古い完了案件を期間指定で表示": "Show older resolved inquiries by date range",
+  "最近の対応済みは初めから表示します。1ヶ月以上前に完了したお問い合わせは非表示です。古い案件を確認するときは受付日の開始か終了を指定してください。完了日がない古い記録は受付日を基準にします。": "Recently resolved inquiries appear by default. Inquiries resolved at least one month ago are hidden. To see older cases, set either receipt-date bound. Older records without a completion date use their receipt date.",
+  "お客様のお問い合わせフォーム、手動受付、対応の記録、メール返信で「画像・ファイルを添付」を使えます。5ファイルまで、1ファイル5MB・合計10MB以内で選びます。保存後は本文や履歴からダウンロードできます。": "Use Attach images or files on customer inquiry forms, manual reception, interaction records and email replies. Select up to five files, 5MB each and 10MB total. Download saved files from the initial message or conversation history.",
+  "メール返信では、その返信に選んだファイルだけを送ります。社内メモ・電話対応・受信した連絡の添付は送信しません。お客様フォームに付けたファイルは受付メールにも添付します。添付は店主の非公開Google Driveに保存し、運営メンバーだけが管理画面から確認できます。": "Email replies send only the files selected for that reply. Files on internal notes, phone records and incoming messages are never emailed. Files submitted through the customer form also appear on the receipt email. Files stay in the owner's private Google Drive; only operators can access them in the management screen."
 }
