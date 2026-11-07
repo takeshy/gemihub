@@ -12,6 +12,8 @@ process.env.NODE_ENV = 'production';
 process.env.DEMO_MODE = 'false';
 process.env.JUDGE_INVITE = 'judge-controls-browser-test-invitation';
 process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
+process.env.JUDGE_PHONE_NUMBER = '+12025550120';
+process.env.JUDGE_PHONE_NUMBER_JA = '+815012345678';
 const catalog = JSON.parse(await readFile('shared/en.json', 'utf8'));
 const store = new Store(':memory:'), server = createApp(store, undefined, {
   async exchange() { throw new Error('Unexpected Google sign-in'); },
@@ -83,7 +85,7 @@ try {
     await expect(page.locator('.reservation-layout')).toBeVisible();
     assert.equal(await page.getByLabel(label('スタッフ'),{exact:true}).count(),0);
     const date=shopDate(shop.published,Date.now()+4*86400000);
-    await page.locator('.date-input input[type=text]').fill(date.replaceAll('-','/'));
+    await page.getByRole('textbox', { name: label('ご希望の日付（{0}）').split('{0}')[0] }).fill(date.replaceAll('-','/'));
     await expect(page.locator('.time-grid button').first()).toBeVisible();
     // A failed availability request must be shown as a failure, with a retry action.
     let failSlots=true;
@@ -107,6 +109,15 @@ try {
     assert.equal(restored.user.email, owner.email); assert.equal(restored.user.judge, true);
     // Both actions are reachable from the judge menu; reopening the invitation resumes the same shop.
     await page.goto(`${origin}/judge-menu?lang=${language}`);
+    const demoTitle = language === 'ja' ? 'AI電話受付を試す' : 'Try AI phone reception (Beta)';
+    const phoneDemo = page.getByRole('region', { name: demoTitle, exact: true });
+    await expect(phoneDemo).toContainText(language === 'ja' ? '050-1234-5678' : '(202) 555-0120');
+    await expect(phoneDemo.locator('a[href^="tel:"]')).toHaveCount(0);
+    await phoneDemo.getByLabel(label('発信元の電話番号')).fill('2025550101');
+    await phoneDemo.getByRole('button', { name: label('発信元の番号を登録') }).click();
+    await expect(phoneDemo.getByRole('status')).toContainText('(202) 555-0101');
+    await phoneDemo.getByRole('button', { name: label('電話番号の登録を解除') }).click();
+    await expect(phoneDemo.getByRole('status')).toHaveCount(0);
     await page.getByRole('button',{name:label('お客様として試す'),exact:true}).click();
     await expect(page.locator('.customer-registration')).toBeVisible();
     const shopsBefore=(await store.list('shop')).length;

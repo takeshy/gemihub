@@ -54,8 +54,8 @@ async function fixture(t: TestContext) {
     const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Cookie: `gemihub_session=${who}`, Origin: origin, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: response.status, body: await response.json() };
   };
-  const webhook = async (from: string, callSid = "CA123") => {
-    const params = { To: "+18312167968", From: from, CallSid: callSid };
+  const webhook = async (from: string, callSid = "CA123", to = "+18312167968") => {
+    const params = { To: to, From: from, CallSid: callSid };
     const response = await fetch(`${origin}/phone/incoming`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Twilio-Signature": twilioSignature(token, `${origin}/phone/incoming`, params) },
@@ -63,8 +63,7 @@ async function fixture(t: TestContext) {
     });
     return { status: response.status, text: await response.text() };
   };
-  const stream = async (callSid = "CA-TOOL", caller = "0312345678") => {
-    const url = streamUrl(origin, shop.id, callSid, caller);
+  const stream = async (callSid = "CA-TOOL", caller = "0312345678", url = streamUrl(origin, shop.id, callSid, caller)) => {
     const ws = new WebSocket(url);
     sockets.push(ws);
     await new Promise<void>((resolve, reject) => { ws.once("open", () => resolve()); ws.once("error", reject); });
@@ -99,6 +98,77 @@ test("withheld and blocked caller IDs never reach the AI", async t => {
   await new Promise(resolve => setTimeout(resolve, 50));
   const logs = await f.store.queryShopLogs(f.shop.id, new Date(Date.now() - 60000).toISOString(), new Date(Date.now() + 60000).toISOString(), 100, undefined, { kind: "phone" });
   assert.ok(logs.some(log => log.outcome === "blocked"));
+});
+
+test("judge phone menus and signed calls use the configured numbers and registered caller", async t => {
+  const env = {
+    JUDGE_INVITE: "judge-phone-test-invitation-1234567890",
+    JUDGE_UNTIL: new Date(Date.now() + 86400000).toISOString(),
+    JUDGE_PHONE_NUMBER: "+12025550120",
+    JUDGE_PHONE_NUMBER_JA: "+815012345678",
+  };
+  for (const [key, value] of Object.entries(env)) {
+    const previous = process.env[key];
+    process.env[key] = value;
+    t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
+  }
+  const f = await fixture(t);
+  const makeJudge = async (id: string, locale: "en" | "ja", published: boolean) => {
+    const email = `judge-${id}@judge.gemihub.invalid`, shop = await f.store.createShop(email);
+    shop.judge = { createdAt: new Date().toISOString() };
+    shop.locale = locale;
+    if (published) { shop.published = { ...fixtureConfig(), name: `${id} test shop` }; shop.publication = "provisional"; }
+    await f.store.saveShop(shop);
+    const user = { email, name: id, role: "owner", shopId: shop.id, judge: true };
+    await f.store.put("user", email, user);
+    await f.store.put("session", (await import("../server/auth.ts")).digest(id), { user, expires: Date.now() + 3600000 });
+    return shop;
+  };
+  const us = await makeJudge("English", "en", true);
+  const jp = await makeJudge("Japanese", "ja", false);
+  const status = "/api/judge/status", register = "/api/judge/phone";
+  assert.deepEqual((await f.call(`${status}?lang=en`, undefined, "English")).body.phone, { number: env.JUDGE_PHONE_NUMBER, caller: "" });
+  assert.deepEqual((await f.call(`${status}?lang=ja`, undefined, "Japanese")).body.phone, { number: env.JUDGE_PHONE_NUMBER_JA, caller: "" });
+  assert.equal((await f.call(register, { caller: "2025550101" })).status, 403);
+  assert.equal((await f.call(register, { caller: "client:2025550101" }, "English")).status, 400);
+  assert.deepEqual((await f.call(register, { caller: "(202) 555-0101" }, "English")).body, { caller: "+12025550101" });
+  assert.equal((await f.call(register, { caller: "+1 202-555-0101" }, "Japanese")).status, 409);
+  assert.deepEqual((await f.call(register, { caller: "090-1111-2222" }, "Japanese")).body, { caller: "+819011112222" });
+  assert.equal((await f.call(`${status}?lang=ja`, undefined, "English")).body.phone.caller, "+12025550101");
+
+  const webhookUrl = (result: { text: string }) => result.text.match(/<Stream url="([^"]+)"/)?.[1];
+  const blocked = await f.webhook("anonymous", "CA-NO-ID", env.JUDGE_PHONE_NUMBER);
+  assert.match(blocked.text, /Save the number/);
+  assert.equal(webhookUrl(blocked), undefined);
+  assert.match((await f.webhook("+819033334444", "CA-UNKNOWN", env.JUDGE_PHONE_NUMBER_JA)).text, /発信元の電話番号を登録/);
+  assert.equal(webhookUrl(await f.webhook("+819011112222", "CA-UNPUBLISHED", env.JUDGE_PHONE_NUMBER_JA)), undefined);
+  jp.published = { ...fixtureConfig(), name: "Japanese test shop" }; jp.publication = "provisional";
+  await f.store.saveShop(jp);
+  assert.equal(phoneStreamContext(new URL(webhookUrl(await f.webhook("+819011112222", "CA-JP", env.JUDGE_PHONE_NUMBER_JA))!))?.shopId, jp.id);
+  assert.equal(phoneStreamContext(new URL(webhookUrl(await f.webhook("+819011112222", "CA-JP-FORWARD", env.JUDGE_PHONE_NUMBER))!))?.shopId, jp.id);
+  assert.equal(phoneStreamContext(new URL(webhookUrl(await f.webhook("+12025550101"))!))?.shopId, f.shop.id, "an ordinary number still routes by destination");
+
+  const url = webhookUrl(await f.webhook("+12025550101", "CA-US", env.JUDGE_PHONE_NUMBER))!;
+  assert.equal(phoneStreamContext(new URL(url))?.shopId, us.id);
+  assert.match(url, /\/judge-[a-f0-9]{32}$/);
+  const ws = await f.stream("CA-US", "+12025550101", url);
+  await f.waitFor(() => !!f.liveParameters());
+  assert.match(f.liveParameters().config.systemInstruction, /English test shop/);
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
+  assert.equal((await f.invoke("book", "create_booking", { name: "Pat", menuId: "simple", start: `${day}T10:00:00+09:00` })).ok, true);
+  assert.equal((await f.store.bookings(us.id)).length, 1);
+  assert.equal((await f.invoke("ask", "create_inquiry", { name: "Pat", reason: "Demo inquiry" })).ok, true);
+  assert.equal((await f.store.records<Inquiry>("inquiry", us)).length, 1);
+  assert.equal((await f.store.records<Inquiry>("inquiry", jp)).length, 0);
+  ws.close();
+
+  assert.deepEqual((await f.call(register, { caller: "" }, "English")).body, { caller: "" });
+  await assert.rejects(f.stream("CA-US", "+12025550101", url), /403/);
+  assert.equal(webhookUrl(await f.webhook("+12025550101", "CA-REMOVED", env.JUDGE_PHONE_NUMBER)), undefined);
+  assert.deepEqual((await f.call(register, { caller: "2025550101" }, "Japanese")).body, { caller: "+12025550101" });
+  assert.equal((await f.call("/api/judge/reset", { requestId: "00000000-0000-4000-8000-000000000000" }, "Japanese")).status, 200);
+  assert.equal(await f.store.get("judgePhone", jp.id), undefined);
+  assert.equal(webhookUrl(await f.webhook("+12025550101", "CA-RESET", env.JUDGE_PHONE_NUMBER)), undefined);
 });
 
 test("a known caller reaches a signed Twilio media stream, and settings can disable it", async t => {

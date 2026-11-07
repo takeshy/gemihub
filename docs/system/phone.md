@@ -17,6 +17,13 @@ AI phone reception lets a shop answer calls while the owner is working. Twilio s
 - The stream URL path is `/phone/stream/<shop>/<CallSid>/<caller>/<HMAC>` with each component URL-encoded; it has no query parameters, as required by [Twilio Stream](https://www.twilio.com/docs/voice/twiml/stream). The WebSocket upgrade rejects unknown shops, disabled reception, out-of-hours calls, invalid tokens and missing signing secrets. No public fallback signing key is used.
 - `PHONE_STREAM_ORIGIN` overrides the public origin used for the stream (defaults to `APP_ORIGIN`). `PHONE_LIVE_MODEL` overrides `VERTEX_LIVE_MODEL` for phone calls.
 
+# Judge phone demo
+
+- Set `JUDGE_PHONE_NUMBER` for the English (US) menu and `JUDGE_PHONE_NUMBER_JA` for the Japanese menu. In the shared VM configuration, use `judge_phone_number` and `judge_phone_number_ja`. Leave a number empty to hide the optional demo in that language.
+- The judge registers the number they will call from, publishes their demo shop and calls the number shown in their menu. Registration belongs to the current demo shop and is removed on reset. Each caller number can belong to one judge shop at a time.
+- During judge access, signed calls to the configured numbers select the demo shop by `From`. An unregistered or withheld caller hears instructions to register and call again. Other numbers route by `To` as usual. The demo accepts cash test bookings and inquiries through the usual phone tools.
+- A forwarded number can use the existing Twilio webhook if the forwarding service passes the original caller number to Twilio as `From`. Test the forwarding line before offering it to judges.
+
 # Call flow
 
 1. Withheld, anonymous and public/unknown caller IDs, including their numeric keypad spellings such as `+266696687`, are ended with a short request to call back with caller ID. They never reach Gemini and the outcome is logged.

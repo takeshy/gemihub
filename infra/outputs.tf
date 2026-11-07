@@ -41,8 +41,12 @@ output "shared_vm_registration" {
           }, var.google_client_id_secret_ref == null ? { GOOGLE_CLIENT_ID = var.google_client_id } : {}, var.twilio_account_sid != "" ? {
           TWILIO_ACCOUNT_SID                                              = var.twilio_account_sid
           } : {}, var.enable_judge_access ? {
-          JUDGE_UNTIL                                                     = var.judge_until
-          JUDGE_AI_LIMIT                                                  = tostring(var.judge_ai_limit)
+          JUDGE_UNTIL    = var.judge_until
+          JUDGE_AI_LIMIT = tostring(var.judge_ai_limit)
+          } : {}, var.enable_judge_access && var.judge_phone_number != "" ? {
+          JUDGE_PHONE_NUMBER = var.judge_phone_number
+          } : {}, var.enable_judge_access && var.judge_phone_number_ja != "" ? {
+          JUDGE_PHONE_NUMBER_JA = var.judge_phone_number_ja
         } : {})
         secrets = merge({
           SESSION_SECRET                                                  = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-session-secret"].secret_id, version = var.session_secret_version }

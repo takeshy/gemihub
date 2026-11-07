@@ -93,14 +93,18 @@ run "reuse_existing_apex" {
 run "judge_access_and_admin" {
   command = plan
   variables {
-    admin_emails       = ["admin@example.com"]
-    openai_model       = "configured-openai-model"
-    openai_image_model = "configured-openai-image-model"
+    admin_emails          = ["admin@example.com"]
+    openai_model          = "configured-openai-model"
+    openai_image_model    = "configured-openai-image-model"
+    judge_phone_number    = "+12025550120"
+    judge_phone_number_ja = "+815012345678"
   }
   assert {
     condition = (
       output.shared_vm_registration.additional_apps.gemihub-web.env.JUDGE_UNTIL == "2027-01-31T15:00:00Z" &&
       output.shared_vm_registration.additional_apps.gemihub-web.env.JUDGE_AI_LIMIT == "200" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.env.JUDGE_PHONE_NUMBER == "+12025550120" &&
+      output.shared_vm_registration.additional_apps.gemihub-web.env.JUDGE_PHONE_NUMBER_JA == "+815012345678" &&
       output.shared_vm_registration.additional_apps.gemihub-web.env.ADMIN_EMAILS == "admin@example.com" &&
       output.shared_vm_registration.additional_apps.gemihub-web.secrets.JUDGE_INVITE.name == "gemihub-web-judge-invite" &&
       output.shared_vm_registration.additional_apps.gemihub-web.secrets.ACCESS_PASSWORD.name == "gemihub-web-access-password" &&
@@ -117,6 +121,9 @@ run "judge_access_disabled" {
   variables {
     enable_judge_access    = false
     enable_access_password = false
+    openai_model           = ""
+    judge_phone_number     = "+12025550120"
+    judge_phone_number_ja  = "+815012345678"
   }
   assert {
     condition = (
@@ -124,6 +131,8 @@ run "judge_access_disabled" {
       !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.secrets), "ACCESS_PASSWORD") &&
       !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.secrets), "OPENAI_API_KEY") &&
       !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.env), "JUDGE_UNTIL") &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.env), "JUDGE_PHONE_NUMBER") &&
+      !contains(keys(output.shared_vm_registration.additional_apps.gemihub-web.env), "JUDGE_PHONE_NUMBER_JA") &&
       length(random_id.judge_invite) == 0
     )
     error_message = "Disabled judge access and sign-up gating must not inject their settings."

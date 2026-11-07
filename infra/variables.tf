@@ -212,6 +212,18 @@ variable "judge_until" {
   }
 }
 
+variable "judge_phone_number" {
+  description = "Optional E.164 number for the English (US) judge phone demo."
+  type        = string
+  default     = ""
+}
+
+variable "judge_phone_number_ja" {
+  description = "Optional E.164 number for the Japanese judge phone demo."
+  type        = string
+  default     = ""
+}
+
 variable "judge_ai_limit" {
   description = "Maximum AI requests per judge."
   type        = number

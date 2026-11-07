@@ -87,7 +87,7 @@ import {
 } from "./google.ts";
 import { fromMinor, regionOf, currencyOf, dateIn, formatMinor, formatMoney, zonedDate } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
-import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
+import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, judgeCallerNumber, judgePhoneSettings, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgePhoneRegistration, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
 import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
@@ -1125,14 +1125,25 @@ export function createApp(
         const reply = (xml: string) => { res.writeHead(200, { "Content-Type": "text/xml; charset=utf-8", "Cache-Control": "no-store" }); res.end(xml); };
         if (!verify) { res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }); res.end("invalid signature"); return; }
         const to = params.To || "", from = params.From || "", callSid = params.CallSid || randomUUID();
-        const shop = allShops.find(candidate => samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to));
+        const japaneseLine = judgePhoneSettings("ja"), englishLine = judgePhoneSettings("en");
+        const judgeLine = samePhoneNumber(japaneseLine?.twilioNumber, to) ? japaneseLine
+          : samePhoneNumber(englishLine?.twilioNumber, to) ? englishLine : undefined;
+        const caller = judgeLine ? judgeCallerNumber(from) : callerNumber(from);
+        const registration = judgeLine && caller
+          ? (await store.list<JudgePhoneRegistration>("judgePhone")).find(record => record.caller === caller) : undefined;
+        const shop = judgeLine
+          ? allShops.find(candidate => candidate.judge && candidate.id === registration?.shopId)
+          : allShops.find(candidate => samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to));
+        if (judgeLine && !shop) {
+          const locale = judgeLine === japaneseLine || caller?.startsWith("+81") ? "ja" : "en";
+          return reply(requestLocale.run(locale, () => twimlSay(tr("審査メニューで発信元の電話番号を登録し、その番号を通知しておかけ直しください。"), locale === "ja" ? "ja-JP" : "en-US")));
+        }
         // Twilio sends no language preference; the caller hears the shop's language.
         if (shop) requestLocale.enterWith(await phoneLocale(shop));
         const sayLanguage = getLocale() === "en" ? "en-US" : "ja-JP";
         if (!shop) return reply(twimlSay(tr("この電話番号は現在ご利用いただけません。"), sayLanguage));
         logs.bind(shop.id);
-        const settings = phoneSettingsOf(shop);
-        const caller = callerNumber(from);
+        const settings = judgeLine || phoneSettingsOf(shop);
         const recordOutcome = (outcome: "blocked" | "closed" | "error", transcript = "") => logs.forShop(shop.id, () => logs.record({
           kind: "phone", ok: outcome !== "error", operation: "phone_call", outcome, callId: callSid, transcript,
         }, digest(`${shop.id}:phone-call:${callSid}`)));
@@ -1144,7 +1155,7 @@ export function createApp(
           return reply(twimlSay(tr("恐れ入りますが、番号を通知しておかけ直しください。"), sayLanguage));
         }
         const base = process.env.PHONE_STREAM_ORIGIN || origin();
-        return reply(twimlConnect(base, shop.id, callSid, caller));
+        return reply(twimlConnect(base, shop.id, callSid, caller, !!judgeLine));
       }
       const s = await session(store, req);
       const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
@@ -1559,7 +1570,27 @@ export function createApp(
         const own = (user.shopId ? await (path === "/api/judge/reset" ? store.get<Shop>("shop", user.shopId) : store.shop(user.shopId)) : undefined) || fail(404, tr("お店がありません"));
         if (path === "/api/judge/status" && method === "GET") {
           const usage = await store.get<JudgeUsage>("judgeUsage", user.email);
-          return json(res, { until: judgeUntil()!.toISOString(), aiUsed: usage?.count || 0, aiLimit: judgeAiLimit(), storage: !!await store.ownerToken(own), shopId: own.id, slug: own.slug, published: !!own.published });
+          const line = own.judge && judgePhoneSettings(getLocale());
+          const phone = line && { number: line.twilioNumber, caller: (await store.get<JudgePhoneRegistration>("judgePhone", own.id))?.caller || "" };
+          return json(res, { until: judgeUntil()!.toISOString(), aiUsed: usage?.count || 0, aiLimit: judgeAiLimit(), storage: !!await store.ownerToken(own), shopId: own.id, slug: own.slug, published: !!own.published, ...(phone ? { phone } : {}) });
+        }
+        if (path === "/api/judge/phone" && method === "POST") {
+          if (user.role !== "owner" || !own.judge || own.owner !== user.email) fail(403, tr("審査員としてログインしてください"));
+          const input = z.object({ caller: z.string().trim().max(40) }).strict().parse(await body(req));
+          const caller = input.caller ? judgeCallerNumber(input.caller) : "";
+          if (caller === undefined) fail(400, tr("発信元の電話番号を確認してください。"));
+          return await store.locked("judge-phone-registration", () => store.locked(own.id, async () => {
+            const fresh = await store.shop(own.id);
+            if (!fresh?.judge || fresh.owner !== user.email || !judgePhoneSettings(getLocale())) fail(404, tr("見つかりません"));
+            if (caller) {
+              const conflict = (await store.list<JudgePhoneRegistration>("judgePhone")).some(record => record.shopId !== fresh.id && record.caller === caller);
+              if (conflict) fail(409, tr("この発信元の番号はすでに登録されています。"));
+              await store.put("judgePhone", fresh.id, { shopId: fresh.id, caller } satisfies JudgePhoneRegistration);
+            } else {
+              await store.delete("judgePhone", fresh.id);
+            }
+            return json(res, { caller });
+          }));
         }
         if (path === "/api/judge/mails" && method === "GET") {
           const mails = (await store.entries<JudgeMail>("judgeMail")).map(entry => entry.value).filter(mail => mail.shopId === own.id && mail.owner === user.email);
@@ -1595,6 +1626,7 @@ export function createApp(
                   for (const mail of await store.entries<JudgeMail>("judgeMail")) if (mail.value.shopId === fresh.id) await store.delete("judgeMail", mail.id);
                   for (const entry of await store.entries<{ user: User }>("session"))
                     if (entry.value.user?.shopId === fresh.id && isJudgeCustomerEmail(entry.value.user.email)) await store.delete("session", entry.id);
+                  await store.delete("judgePhone", fresh.id);
                   // Keep the old records for audit, but detach them from the judge so a new shop is created.
                   await store.saveShop({ ...fresh, owner: `${user.email}#archived-${fresh.id}`, judge: { ...fresh.judge!, archivedAt: new Date().toISOString() } });
                 })));
@@ -3861,13 +3893,15 @@ export function createApp(
     const context = phoneStreamContext(url), secret = twilioCredentials().token;
     if (!context || !secret.trim()) return undefined;
     const { shopId, callSid } = context;
-    const caller = callerNumber(context.caller);
+    const judgeCall = context.token.startsWith("judge-");
+    const caller = judgeCall ? judgeCallerNumber(context.caller) : callerNumber(context.caller);
     if (!shopId || !callSid || !caller) return undefined;
-    if (!secretMatches(context.token, phoneStreamToken(shopId, callSid, caller, secret))) return undefined;
+    if (!secretMatches(context.token, phoneStreamToken(shopId, callSid, caller, secret, judgeCall))) return undefined;
     const shop = await store.shop(shopId);
-    if (!shop?.published) return undefined;
-    const settings = phoneSettingsOf(shop);
-    if (!settings.enabled) return undefined;
+    if (!shop?.published || (shop.judge && !judgeActive())) return undefined;
+    if (judgeCall && (!shop.judge || (await store.get<JudgePhoneRegistration>("judgePhone", shop.id))?.caller !== caller)) return undefined;
+    const settings = judgeCall ? judgePhoneSettings("en") || judgePhoneSettings("ja") : phoneSettingsOf(shop);
+    if (!settings?.enabled) return undefined;
     if (!withinPhoneHours(settings, new Date(), regionOf(shop.published).timeZone)) return undefined;
     const records = await store.records<CustomerRecord>("customer", shop);
     const matches = records.filter(record => samePhoneNumber(record.phone, caller));

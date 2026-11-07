@@ -1,5 +1,6 @@
-import { tr } from "../shared/i18n.ts";
+import { tr, type Locale } from "../shared/i18n.ts";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { callerNumber, comparablePhone, type PhoneSettings } from "../shared/phone.ts";
 
 // Hackathon judge access, operator administration and invitation-only sign-up.
 // Secrets arrive through the environment (Secret Manager in production) and never reach the browser,
@@ -23,6 +24,20 @@ export function judgeActive(now = Date.now()) {
   const until = judgeUntil();
   return judgeInvite().length >= 32 && !!until && until.getTime() > now;
 }
+/** Accept US and Japanese national numbers, or international numbers with a country code. */
+export function judgeCallerNumber(value: string) {
+  const text = value.normalize("NFKC").trim();
+  if (!/^\+?[\d ().-]+$/.test(text) || !callerNumber(text)) return undefined;
+  const number = comparablePhone(text);
+  const national = /^\+(?:1[2-9]\d{9}|81[1-9]\d{8,9})$/.test(number);
+  const international = /^(?:\+|00)/.test(text) && /^\+[2-9]\d{7,14}$/.test(number);
+  return (national || international) && callerNumber(number) ? number : undefined;
+}
+export function judgePhoneSettings(locale: Locale): PhoneSettings | undefined {
+  const twilioNumber = judgeCallerNumber((locale === "ja" ? process.env.JUDGE_PHONE_NUMBER_JA : process.env.JUDGE_PHONE_NUMBER) || "");
+  if (twilioNumber && judgeActive()) return { twilioNumber, enabled: true, cashBookings: true };
+}
+export type JudgePhoneRegistration = { shopId: string; caller: string };
 export function judgeAiLimit() {
   const value = Number(process.env.JUDGE_AI_LIMIT || 200);
   return Number.isInteger(value) && value > 0 ? value : 200;

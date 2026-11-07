@@ -3828,5 +3828,15 @@
   "create_booking が ok: true を返したら、確定した日時とメニューを伝えて予約が完了したことを確認し、ほかにご用件がないか尋ねてください。なければお礼を言って finish_call を呼んでください。": "When create_booking returns ok: true, state the confirmed date, time and menu so the caller knows the booking is complete, then ask whether there is anything else. If not, thank them and call finish_call.",
   "お店に伝えておきたいこと（任意）": "Anything the caller wants the shop to know (optional)",
   "予約はまだ完了していません。エラーがあれば内容をお客様に伝えてください。お客様が了承済みなら create_booking を呼び、予約しない場合や折り返し希望の場合は、そのことを確認してから finish_call を呼んでください。": "The booking is not complete. If there was an error, tell the caller. If they already agreed, call create_booking; if they do not want to book or want a callback, confirm that and then call finish_call.",
-  "create_booking や create_inquiry の結果に ok: true が返るまで、完了したと言ってはいけません。エラーが返ったら内容をお客様に伝え、別の候補を案内するか create_inquiry で残してください。予約の話が済むまで finish_call を呼ばないでください。": "Never say something is complete until create_booking or create_inquiry returns ok: true. If an error returns, tell the caller and offer another slot or record it with create_inquiry. Do not call finish_call until the booking is settled."
+  "create_booking や create_inquiry の結果に ok: true が返るまで、完了したと言ってはいけません。エラーが返ったら内容をお客様に伝え、別の候補を案内するか create_inquiry で残してください。予約の話が済むまで finish_call を呼ばないでください。": "Never say something is complete until create_booking or create_inquiry returns ok: true. If an error returns, tell the caller and offer another slot or record it with create_inquiry. Do not call finish_call until the booking is settled.",
+  "審査メニューで発信元の電話番号を登録し、その番号を通知しておかけ直しください。": "Save the number you will call from in the judge menu, then call again from that number with caller ID enabled.",
+  "発信元の電話番号を確認してください。": "Check the phone number you will call from.",
+  "この発信元の番号はすでに登録されています。": "This caller number is already registered.",
+  "AI電話受付を試す": "Try AI phone reception (Beta)",
+  "お店を公開したら、登録した電話から下の番号にかけると、テスト予約や問い合わせができます。": "Once your demo shop is published, call the number below from your registered phone to make a test booking or leave a message for your shop.",
+  "かけ先の番号": "Number to call",
+  "発信元の電話番号": "Your phone number",
+  "発信元の番号を登録": "Save phone number",
+  "電話番号の登録を解除": "Remove phone number",
+  "登録済みの発信元：{0}": "Registered phone number: {0}"
 }
