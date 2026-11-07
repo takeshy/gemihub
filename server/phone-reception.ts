@@ -9,7 +9,7 @@ import { intlLocale, tr, type Locale } from "../shared/i18n.ts";
 import { regionOf } from "../shared/region.ts";
 import type { PhoneSettings } from "../shared/phone.ts";
 export * from "../shared/phone.ts";
-import type { ShopConfig } from "./domain.ts";
+import { menuSelection, type ShopConfig } from "./domain.ts";
 import { requestLocale } from "./i18n.ts";
 
 // AI phone reception through Twilio Programmable Voice. Twilio streams 8 kHz μ-law audio over a
@@ -130,6 +130,21 @@ export class TwilioAudioBridge {
 }
 
 // ---- Prompt and tools -------------------------------------------------------------------------
+const phoneMenus = (config: ShopConfig) => config.menus.filter(menu => menu.active).map(menu => ({
+  id: menu.id, name: menu.name, duration: menu.duration, price: menu.price,
+  optionFor: menu.optionFor || [], ...(menu.optionGroup ? { group: menu.optionGroup } : {}),
+}));
+class PhoneMenuSelectionError extends Error {
+  readonly code = "INVALID_MENU_SELECTION";
+  constructor(readonly config: ShopConfig, readonly menuId: string, readonly optionIds: readonly string[]) {
+    super(tr("このメニューと追加メニューは組み合わせて予約できません。登録された対応関係を確認し、お客様の希望を省かずに代案を確認するか、問い合わせとして記録してください。"));
+  }
+}
+export function requirePhoneMenuSelection(config: ShopConfig, menuId: string, optionIds: readonly string[] = []) {
+  const selection = menuSelection(config, menuId, optionIds);
+  if (!selection) throw new PhoneMenuSelectionError(config, menuId, optionIds);
+  return selection;
+}
 export type PhoneCallerFacts = {
   config: ShopConfig;
   settings: PhoneSettings;
@@ -141,10 +156,7 @@ export type PhoneCallerFacts = {
 export function phoneInstruction(facts: PhoneCallerFacts) {
   const config = facts.config;
   const payment = config.rules.payment?.enabled ? tr("前払いあり") : tr("前払いなし");
-  const menus = config.menus.filter(menu => menu.active).map(menu => ({
-    id: menu.id, name: menu.name, duration: menu.duration, price: menu.price,
-    ...(menu.optionFor ? { option: true } : {}), ...(menu.optionGroup ? { group: menu.optionGroup } : {}),
-  }));
+  const menus = phoneMenus(config);
   const staff = config.staff.map(person => ({ id: person.id, name: person.name, menuIds: person.menuIds }));
   const hours = config.hours;
   return [
@@ -154,11 +166,13 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
     tr("事実は下の店舗情報だけを根拠にしてください。書かれていないことを推測して答えないでください。営業時間・場所・メニューと料金は、この情報から答えられる範囲でその場で答えてかまいません。それ以外の問い合わせは、名前と用件を聞いて create_inquiry を呼び、あとで折り返すことを伝えてください。"),
     tr("オンライン予約の変更・キャンセルはオンラインでの手続きを案内してください。それ以外のキャンセル希望は、予約日時を聞き、予約IDなしで cancel_booking を呼んで候補を確認してください。候補の日時とメニューを復唱してお客様の了承を得てから、その候補の bookingId を指定して cancel_booking を呼んでください。ok: true が返ったときだけキャンセル完了と伝えてください。電話予約の変更や、期限を過ぎたキャンセルは、お名前と用件を聞いて create_inquiry で店に伝えてください。"),
     tr("予約は、メニューを聞き、check_availability で空き時間を確認してから候補を2〜3個伝えてください。日時が決まったら名前を必ず聞き、お店に伝えておきたいことがないか尋ねてください。そのあとメニュー・日時・お名前・来店時の現金払いであることを復唱して了承を得てから create_booking を呼び、伝えたいことがあれば message に入れてください。予約IDは自分で作らず、必ずツールの結果を使ってください。"),
+    tr("メニューのoptionForが空なら単独メニューです。単独メニューをoptionIdsに入れてはいけません。追加メニューはoptionForに選択したメニューIDが含まれるものだけを使い、同じgroupからは1つだけ選びます。追加メニューが決まったら、その組み合わせでcheck_availabilityを呼び直してください。組み合わせのエラーは空きがないという意味ではありません。希望内容を勝手に省かず、登録内容で対応できる代案をお客様に確認するか、create_inquiryで希望を記録してください。"),
     tr("create_booking が ok: true を返したら、確定した日時とメニューを伝えて予約が完了したことを確認し、ほかにご用件がないか尋ねてください。なければお礼を言って finish_call を呼んでください。"),
     config.rules.payment?.enabled
       ? tr("この店は前払いを使います。電話で現金予約できるのは今日の残り枠だけです。今日より後の希望には、オンライン予約を案内してください。")
       : tr("この店は前払いを使いません。予約可能期間内なら今日より後の日も電話で予約できます。"),
     tr("create_booking や create_inquiry の結果に ok: true が返るまで、完了したと言ってはいけません。エラーが返ったら内容をお客様に伝え、別の候補を案内するか create_inquiry で残してください。予約の話が済むまで finish_call を呼ばないでください。"),
+    tr("折り返しを約束する場合は、用件をcreate_inquiryで記録し、ok: trueが返ったことを確認してから伝えてください。"),
     tr("料金はメニューに書かれた金額をそのまま伝えてください。割引や返金を自分で決めてはいけません。"),
     tr("聞き取りに失敗したら無理に続けず、名前と用件を聞いて create_inquiry で残してください。"),
     tr("今日は {0} です（{1}）。現在時刻は {2} です。", facts.today, facts.timeZone, facts.now),
@@ -168,6 +182,7 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
       menus, staff, payment, rules: { advanceDays: config.rules.advanceDays, interval: config.rules.interval, leadMinutes: config.rules.leadMinutes, sameDay: config.rules.sameDay, cancelHours: config.rules.cancelHours },
       phone: { sameDayCash: facts.settings.cashBookings, greeting: facts.settings.greeting || "" },
     })),
+    facts.settings.rules ? tr("店舗独自の電話応対ルール（登録されたメニュー・空き状況・料金・支払条件と、ツール成功後だけ完了を伝える原則を優先してください）:\n{0}", facts.settings.rules) : "",
   ].filter(Boolean).join("\n");
 }
 // A function because the descriptions follow the shop's language, known only per call.
@@ -179,7 +194,7 @@ export const phoneTools = (): FunctionDeclaration[] => [
       date: { type: Type.STRING, description: tr("YYYY-MM-DD。省略時は今日") },
       menuId: { type: Type.STRING, description: tr("店舗情報のメニューID") },
       staffId: { type: Type.STRING, description: tr("希望スタッフのID（任意）") },
-      optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("追加メニューのID（任意）") },
+      optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("optionForにmenuIdが含まれる追加メニューのIDだけを指定。単独メニューは指定不可（任意）") },
     }, required: ["menuId"] },
   },
   {
@@ -190,7 +205,7 @@ export const phoneTools = (): FunctionDeclaration[] => [
       menuId: { type: Type.STRING, description: tr("メニューID") },
       start: { type: Type.STRING, description: tr("開始日時のISO 8601（check_availability が返した start をそのまま使う）") },
       staffId: { type: Type.STRING, description: tr("スタッフID（任意）") },
-      optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("追加メニューID（任意）") },
+      optionIds: { type: Type.ARRAY, items: { type: Type.STRING }, description: tr("optionForにmenuIdが含まれ、check_availabilityで確認した追加メニューのIDだけを指定（任意）") },
       message: { type: Type.STRING, description: tr("お店に伝えておきたいこと（任意）") },
     }, required: ["name", "menuId", "start"] },
   },
@@ -219,7 +234,10 @@ export const phoneTools = (): FunctionDeclaration[] => [
 
 // ---- Phone stream -----------------------------------------------------------------------------
 export type PhoneSlot = { start: string; end: string; staffId: string; staffName?: string; label?: string };
-export type PhoneAvailability = { date: string; today: string; prepayment: boolean; slots: PhoneSlot[] };
+export type PhoneAvailability = {
+  date: string; today: string; prepayment: boolean; slots: PhoneSlot[];
+  selection: { menuId: string; optionIds: string[]; names: string[]; price: number; duration: number };
+};
 export type PhoneBookingResult = { ok: true; bookingId: string; start: string; menuName: string; staffName: string; price: number; currency: string; cash: true };
 export type PhoneInquiryResult = { ok: true; inquiryId: string };
 type PhoneCancelChoice = { bookingId: string; start: string; menuName: string; staffName: string };
@@ -396,8 +414,10 @@ async function converse(ws: WebSocket, access: PhoneAccess, connector: PhoneConn
       return { error: tr("この操作は利用できません") };
     } catch (error) {
       const message = error instanceof Error ? error.message : tr("処理できませんでした");
-      console.warn(JSON.stringify({ event: "phone_tool_failed", shopId: access.shopId, callSid: access.callSid, tool: name, error: message }));
-      if (name === "create_booking" || name === "create_inquiry") failure = message;
+      const selection = error instanceof PhoneMenuSelectionError ? { code: error.code, menuId: error.menuId, optionIds: error.optionIds } : undefined;
+      console.warn(JSON.stringify({ event: "phone_tool_failed", shopId: access.shopId, callSid: access.callSid, tool: name, error: message, ...selection }));
+      if (name === "create_booking" || name === "create_inquiry" || error instanceof PhoneMenuSelectionError) failure = message;
+      if (error instanceof PhoneMenuSelectionError) return { ok: false, error: message, ...selection, menus: phoneMenus(error.config) };
       return { error: message };
     }
   };

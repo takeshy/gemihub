@@ -20,7 +20,15 @@ export const phoneSettingsSchema = z.object({
   cashBookings: z.boolean().default(true),
   /** Optional extra opening line. */
   greeting: z.string().trim().max(300).optional(),
+  /** Shop-specific conversation guidance; inventory and payment rules remain authoritative. */
+  rules: z.string().trim().max(6000).optional(),
 }).strict();
+export const phoneRulesProposalSchema = z.object({
+  rules: z.string().trim().max(6000),
+  explanation: z.string().trim().min(1).max(1500),
+  warnings: z.array(z.string().trim().min(1).max(500)).max(8),
+}).strict();
+export type PhoneRulesProposal = z.infer<typeof phoneRulesProposalSchema>;
 export type PhoneSettings = z.infer<typeof phoneSettingsSchema>;
 export const defaultPhoneSettings: PhoneSettings = { enabled: false, twilioNumber: "", cashBookings: true };
 export function phoneSettingsOf(shop: { phone?: unknown } | null | undefined): PhoneSettings {

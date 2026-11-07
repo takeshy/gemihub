@@ -12,6 +12,8 @@ import { Store } from "../server/store.ts";
 import { sample, type Booking, type ShopConfig } from "../server/domain.ts";
 import { applyPhoneSettings } from "./phone-test-helpers.ts";
 import { createApp } from "../server/app.ts";
+import * as intelligence from "../server/ai.ts";
+import type { proposePhoneRules } from "../server/phone-rules-ai.ts";
 import { dateIn } from "../shared/region.ts";
 import { aggregateCustomers, phoneKey, type Inquiry } from "../server/customers.ts";
 import { newestInteractionFirst, oldestInteractionFirst, type InquiryInteraction } from "../server/inquiries.ts";
@@ -29,7 +31,7 @@ function fixtureConfig(): ShopConfig {
   delete config.rules.payment;
   return config;
 }
-async function fixture(t: TestContext) {
+async function fixture(t: TestContext, phoneRules?: typeof proposePhoneRules) {
   process.env.DEMO_MODE = "true";
   process.env.TWILIO_AUTH_TOKEN = token;
   process.env.TWILIO_SKIP_SIGNATURE = "false";
@@ -47,7 +49,7 @@ async function fixture(t: TestContext) {
     sendClientContent() {}, sendRealtimeInput() {}, sendToolResponse(value: unknown) { toolResponses.push(value); }, close() {},
   };
   const connector = async (parameters: any) => { if (connectFailure) throw connectFailure; liveParameters = parameters; callbacks = parameters.callbacks; return live as any; };
-  const server = createApp(store, undefined, undefined, undefined, undefined, undefined, undefined, undefined, connector);
+  const server = createApp(store, phoneRules ? { ...intelligence, phoneRules } : undefined, undefined, undefined, undefined, undefined, undefined, undefined, connector);
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
   const sockets: WebSocket[] = [];
@@ -265,6 +267,106 @@ test("the AI creates a cash booking through the same inventory as online booking
   const call = logs.find(log => log.callId === "CA-BOOK");
   assert.equal(call?.outcome, "booking");
   assert.match(call?.transcript || "", /明日の10時/);
+});
+
+test("phone calls reject standalone services as addons before offering times and can recover with a supported selection", async t => {
+  const f = await fixture(t);
+  f.config.menus = [
+    { id: "foot", name: "Foot nails", duration: 60, price: 6000, active: true },
+    { id: "removal", name: "Other salon removal", duration: 40, price: 3300, active: true },
+    { id: "replacement", name: "Removal with replacement", duration: 35, price: 500, active: true, optionFor: ["foot"], optionGroup: "removal" },
+    { id: "own", name: "Our salon removal", duration: 35, price: 0, active: true, optionFor: ["foot"], optionGroup: "removal" },
+  ];
+  f.shop.phone!.rules = "Confirm where the existing gel was applied.";
+  await f.store.saveShop(f.shop);
+  const ws = await f.stream("CA-OPTIONS");
+  const prompt = f.liveParameters().config.systemInstruction;
+  assert.match(prompt, /Confirm where the existing gel was applied/);
+  assert.match(prompt, /"optionFor":\["foot"\]/);
+  assert.match(prompt, /"id":"removal"[^\n]*?"optionFor":\[\]/);
+  const day = dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo");
+  const input = { menuId: "foot", optionIds: ["removal"], date: day };
+  const unavailable = await f.invoke("bad-check", "check_availability", input);
+  assert.equal(unavailable.ok, false);
+  assert.equal(unavailable.code, "INVALID_MENU_SELECTION");
+  assert.equal(unavailable.slots, undefined, "a bad combination is not an empty availability result");
+  assert.deepEqual(unavailable.menus.find((menu: any) => menu.id === "removal").optionFor, []);
+  assert.equal((await f.invoke("finish", "finish_call", {})).ok, false);
+  const badBooking = await f.invoke("bad-book", "create_booking", { ...input, name: "Caller", start: `${day}T10:00:00+09:00` });
+  assert.equal(badBooking.code, "INVALID_MENU_SELECTION");
+  assert.equal((await f.store.bookings(f.shop.id)).length, 0);
+  assert.equal((await f.invoke("conflict", "check_availability", { ...input, optionIds: ["replacement", "own"] })).code, "INVALID_MENU_SELECTION");
+  const valid = await f.invoke("good-check", "check_availability", { ...input, optionIds: ["replacement"] });
+  assert.ok(valid.slots.length);
+  assert.deepEqual(valid.selection, { menuId: "foot", optionIds: ["replacement"], names: ["Foot nails", "Removal with replacement"], price: 6500, duration: 95 });
+  const booked = await f.invoke("good-book", "create_booking", { menuId: "foot", optionIds: ["replacement"], name: "Caller", start: valid.slots[0].start });
+  assert.equal(booked.ok, true);
+  const booking = (await f.store.bookings(f.shop.id))[0];
+  assert.equal(booking.price, 6500);
+  assert.deepEqual(booking.optionIds, ["replacement"]);
+  assert.equal(Date.parse(booking.end) - Date.parse(booking.start), 95 * 60000);
+  ws.close();
+});
+
+test("phone booking rechecks menu compatibility if an addon changes after availability", async t => {
+  const f = await fixture(t);
+  f.config.menus.push({ id: "addon", name: "Addon", duration: 30, price: 500, active: true, optionFor: ["simple"] });
+  await f.store.saveShop(f.shop);
+  const ws = await f.stream("CA-CHANGED-OPTIONS");
+  const input = { menuId: "simple", optionIds: ["addon"], date: dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo") };
+  const checked = await f.invoke("check", "check_availability", input);
+  assert.ok(checked.slots.length);
+  f.config.menus.find(menu => menu.id === "addon")!.optionFor = ["design"];
+  await f.store.saveShop(f.shop);
+  const result = await f.invoke("book", "create_booking", { ...input, name: "Caller", start: checked.slots[0].start });
+  assert.equal(result.code, "INVALID_MENU_SELECTION");
+  assert.deepEqual(result.menus.find((menu: any) => menu.id === "addon").optionFor, ["design"]);
+  assert.equal((await f.store.bookings(f.shop.id)).length, 0);
+  ws.close();
+});
+
+test("phone rules proposals are private, idempotent drafts and settings saves reject stale updates", async t => {
+  let generated = 0;
+  const f = await fixture(t, async (config, rules, note, call) => {
+    generated++;
+    assert.equal(config.name, f.config.name);
+    assert.equal(rules, "Keep the greeting brief.");
+    assert.equal(note, "Improve addon checks");
+    assert.equal(call?.transcript, "Caller requested foot nails with removal.");
+    return { rules: `${rules}\nCheck compatible addons.`, explanation: "Added addon checks.", warnings: [] };
+  });
+  const base = `/api/shops/${f.shop.id}/phone`;
+  const original = await f.call(`${base}/settings`);
+  const settings = { ...original.body, rules: "Keep the greeting brief." };
+  assert.equal((await f.call(`${base}/settings`, { ...settings, previous: original.body })).status, 200);
+  await f.store.appendShopLog({ id: "own-call", shopId: f.shop.id, at: new Date().toISOString(), requestId: "r", kind: "phone", operation: "phone_call", ok: false, callId: "CA-RULES", outcome: "error", transcript: "Caller requested foot nails with removal." });
+  const other = await f.store.createShop("other@example.com");
+  await f.store.appendShopLog({ id: "other-call", shopId: other.id, at: new Date().toISOString(), requestId: "r2", kind: "phone", operation: "phone_call", ok: false, callId: "CA-PRIVATE", transcript: "Other shop private call." });
+  await f.store.put("session", digest("staff"), { user: { email: "staff@example.com", name: "Staff", role: "owner", shopId: f.shop.id }, expires: Date.now() + 3600000 });
+  await f.store.put("member", `${f.shop.id}:staff@example.com`, { shopId: f.shop.id, email: "staff@example.com", accepted: true });
+  const input = { rules: settings.rules, note: "Improve addon checks", callId: "CA-RULES", requestId: "00000000-0000-4000-8000-000000000100" };
+  for (const who of ["staff", "unknown"]) {
+    assert.equal((await f.call(`${base}/rules/ai`, input, who)).status, 403);
+    assert.equal((await f.call(`${base}/settings`, settings, who)).status, 403);
+    assert.equal((await f.call(`${base}/calls`, undefined, who)).status, 403);
+  }
+  assert.equal((await f.call(`${base}/rules/ai`, { ...input, callId: "CA-PRIVATE" })).status, 404);
+  assert.equal(generated, 0);
+  const [first, repeat] = await Promise.all([f.call(`${base}/rules/ai`, input), f.call(`${base}/rules/ai`, input)]);
+  assert.equal(first.status, 200);
+  assert.deepEqual(repeat.body, first.body);
+  assert.equal(generated, 1);
+  assert.equal((await f.call(`${base}/settings`)).body.rules, settings.rules, "draft generation does not save rules");
+  assert.equal((await f.call(`${base}/rules/ai`, { ...input, note: "different" })).status, 409);
+  const updated = { ...settings, rules: first.body.rules };
+  assert.equal((await f.call(`${base}/settings`, { ...updated, previous: settings })).status, 200);
+  assert.equal((await f.call(`${base}/settings`, { ...updated, previous: settings })).status, 200, "lost-response retries succeed");
+  assert.equal((await f.call(`${base}/settings`, { ...settings, previous: settings })).status, 409, "stale tabs cannot overwrite saved rules");
+  assert.equal((await f.call(`${base}/settings`, { ...original.body, enabled: false })).status, 200);
+  assert.equal((await f.call(`${base}/settings`)).body.rules, updated.rules, "legacy callers preserve rules when omitted");
+  assert.equal((await f.call(`${base}/settings`, { ...settings, rules: "x".repeat(6001) })).status, 400);
+  assert.equal((await f.call(`${base}/settings`, { ...settings, rules: "" })).status, 200);
+  assert.equal((await f.call(`${base}/settings`)).body.rules, "");
 });
 
 test("a matching CRM phone number links the booking to the existing customer", async t => {

@@ -17,10 +17,11 @@ import { findRelevantHistory } from "../../server/chat-context";
 import type { ShopChat, ShopChatMessage } from "../../server/shop-chat";
 import { customerProfileSchema, type MemberProfile } from "../../server/customer-profile";
 import { liveValue, updateLiveValue, type LiveSection } from "../../server/live-settings";
+import { defaultPhoneSettings, phoneSettingsSchema, type PhoneRulesProposal } from "../../shared/phone";
 import { fingerprint } from "../editor-sync";
 import { imageUses } from "../../server/image-references";
 import type { LibraryImage } from "../../server/image-library-domain";
-import { scopedSource, scopedConfig, type ReleaseScope } from "../../server/pages";
+import { scopedSource, scopedConfig, same, type ReleaseScope } from "../../server/pages";
 import { shopSystem, systemSvg } from "../../server/shop-system";
 import { storyPosts } from "./posts";
 import type { SlotWish } from "../Waitlist";
@@ -514,6 +515,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const transferFixtures = createTransferFixtures(scenario, shop, session);
   const couponItems: CouponWalletItem[] = scenario.startsWith("coupon-") ? [{ id: "c".repeat(64), shopId: shop.id, campaignId: "welcome", customer: "guest@example.com", title: tr("初回クーポン"), discount: { type: "percent", value: 10 }, currency: "JPY", issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now()+30*86400000).toISOString(), state: "available" }] : [];
   const phoneCustomers: CustomerRecord[] = [];
+  shop.phoneSettings = { ...defaultPhoneSettings, ...(scenario === "settings" ? { enabled: true, twilioNumber: "+18312167968", rules: tr("希望日時とメニューを復唱してから予約する。") } : {}) };
+  const phoneCalls = scenario === "settings" ? [{ id: "phone-sample", callId: "CA-SAMPLE", at: new Date().toISOString(), outcome: "error", transcript: tr("お客様: フットネイルと他店オフをお願いします。\nAI: メニューの組み合わせを確認できませんでした。") }] : [];
+  const phoneProposals = new Map<string, { input: string; proposal: PhoneRulesProposal }>();
   const registerPhone = (name: string, phone: string) => { ({ name, phone } = phoneCustomerSchema.parse({ name, phone })); const email = phoneKey(phone); phoneCustomers.splice(0, phoneCustomers.length, ...phoneCustomers.filter(item => item.email !== email), { shopId: shop.id, email, name, phone, updatedBy: shop.owner, updatedAt: new Date().toISOString() }); return email; };
   const returnCoupon = (booking: Booking) => {
     const coupon = couponItems.find(item => item.id === booking.coupon?.grantId);
@@ -701,6 +705,28 @@ export function createMockClient(scenario: Scenario): ApiClient {
         }
         result = current().find(customer => customer.email === email);
       }
+    }
+    else if (action === `/api/shops/${shop.id}/phone/calls`) result = { calls: phoneCalls };
+    else if (action === `/api/shops/${shop.id}/phone/settings`) {
+      if (data === undefined) result = shop.phoneSettings;
+      else {
+        const { previous, ...value } = input;
+        const next = phoneSettingsSchema.parse(value);
+        const canonical = (value: unknown) => ({ ...phoneSettingsSchema.parse(value), rules: phoneSettingsSchema.parse(value).rules || "" });
+        if (previous && !same(canonical(previous), canonical(shop.phoneSettings)) && !same(canonical(next), canonical(shop.phoneSettings))) throw new Error(tr("電話受付の設定が更新されています。最新の設定を読み直してから保存してください。"));
+        shop.phoneSettings = { ...next, rules: next.rules ?? shop.phoneSettings?.rules ?? "" }; result = { ok: true, settings: shop.phoneSettings };
+      }
+    }
+    else if (action === `/api/shops/${shop.id}/phone/rules/ai`) {
+      if (input.callId && !phoneCalls.some(call => call.callId === input.callId)) throw new Error(tr("通話記録が見つかりません。最近の電話を読み直してください。"));
+      const key = JSON.stringify({ note: input.note, rules: input.rules, callId: input.callId }), cached = phoneProposals.get(String(input.requestId));
+      if (cached && cached.input !== key) throw new Error(tr("依頼の内容が変わっています。設定案を作り直してください。"));
+      const proposal: PhoneRulesProposal = cached?.proposal || {
+        rules: [String(input.rules || ""), tr("追加メニューは登録された対応関係を確認し、組み合わせが決まってから空き時間を調べる。対応できない場合は希望を省かず、問い合わせに記録してから折り返しを案内する。")].filter(Boolean).join("\n"),
+        explanation: tr("追加メニューの確認と、対応できない場合の問い合わせ受付を追加しました。"),
+        warnings: [tr("単独メニューを追加メニューとして受け付けるには、メニュー・料金で対応関係を設定してください。")],
+      };
+      phoneProposals.set(String(input.requestId), { input: key, proposal }); result = proposal;
     }
     else if (action.startsWith(`/api/shops/${shop.id}/live-settings/`) && action.endsWith("/ai")) {
       const section = action.split("/").at(-2) as LiveSection;

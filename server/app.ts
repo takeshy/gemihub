@@ -3,6 +3,8 @@ import { headerCopyKeys } from "../shared/storefront-copy.ts";
 import { forEachConcurrent } from "./concurrency.ts";
 import { shopExport, exportRows, exportCsv, exportColumns, type ExportTable } from "./data-export.ts";
 import { proposeSettings, settingsChanges, type SettingsProposal } from "./settings-ai.ts";
+import { proposePhoneRules } from "./phone-rules-ai.ts";
+import { phoneRulesProposalSchema, type PhoneRulesProposal } from "../shared/phone.ts";
 import { renderLanding } from "./landing.ts";
 import { renderLegal } from "./legal.ts";
 import { hasLegacyNotes } from "./legacy-notes.ts";
@@ -93,7 +95,7 @@ import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, j
 import { converse, draftText, type ShopData } from "./assistant.ts";
 import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
-import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, samePhoneNumber, twilioCredentials, twimlConnect, twimlGatherPin, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
+import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, requirePhoneMenuSelection, samePhoneNumber, twilioCredentials, twimlConnect, twimlGatherPin, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
 import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, type AiProvider } from "./llm.ts";
 import {
   session,
@@ -256,6 +258,7 @@ export function createApp(
     assistant?: typeof converse;
     initialTheme?: typeof createInitialTheme;
     settings?: typeof proposeSettings;
+    phoneRules?: typeof proposePhoneRules;
     visualAppearance?: typeof proposeVisualAppearance;
   } = { propose, proposeArticle, identifyVisual, explainSystem, visualAppearance: proposeVisualAppearance },
   calendar: CalendarGateway = calendarGateway,
@@ -957,10 +960,12 @@ export function createApp(
     return {
       async availability(input) {
         if (!settings.cashBookings) fail(409, tr("電話での現金予約は現在受け付けていません。オンライン予約をご案内ください。"));
+        const selection = requirePhoneMenuSelection(config, input.menuId, input.optionIds || []);
         const date = requestedDate(input.date);
         const slots = await availableSlots(store, shop, phoneRules(config), date, input.menuId, input.staffId, calendar, undefined, input.optionIds || []);
         return {
           date, today: today(), prepayment: !!config.rules.payment?.enabled,
+          selection: { menuId: input.menuId, optionIds: selection.optionIds, names: selection.items.map(item => item.name), price: selection.price, duration: selection.duration },
           slots: slots.map(slot => ({ ...slot, staffName: bookingStaffName(config, slot.staffId), label: new Date(slot.start).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" }) })),
         };
       },
@@ -970,8 +975,7 @@ export function createApp(
         const result = await store.locked(bookingLockKey(shop.id), async () => {
           const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
           const freshConfig = fresh.published || fail(409, tr("先にお店を公開してください"));
-          const selection = menuSelection(freshConfig, input.menuId, input.optionIds || []);
-          if (!selection) fail(400, tr("メニューと追加メニューの組み合わせを確認してください"));
+          const selection = requirePhoneMenuSelection(freshConfig, input.menuId, input.optionIds || []);
           const sameOptions = (booking: Booking) => JSON.stringify([...(booking.optionIds || [])].sort()) === JSON.stringify([...(input.optionIds || [])].sort());
           const details = JSON.stringify([input.name, input.menuId, input.start, input.staffId || "", [...(input.optionIds || [])].sort()]);
           const requestKey = `phone-ai:${callSid}:${actionId || digest(details)}`;
@@ -2008,15 +2012,45 @@ export function createApp(
         }
         if (action === "phone/settings" && method === "POST") {
           assertOwner(user, shop);
-          const input = phoneSettingsSchema.parse(await body(req));
+          const { previous, ...input } = phoneSettingsSchema.extend({ previous: phoneSettingsSchema.optional() }).parse(await body(req));
           if ((input.enabled || input.twilioNumber.trim()) && normalizeNumber(input.twilioNumber).length < 10) fail(400, tr("Twilioの電話番号を確認してください"));
           const saved = await store.locked(shop.id, async () => {
             const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            const current = phoneSettingsOf(fresh);
+            const next = { ...input, rules: input.rules ?? current.rules ?? "" };
+            const equal = (a: typeof current, b: typeof current) => same({ ...a, rules: a.rules || "" }, { ...b, rules: b.rules || "" });
+            if (previous && !equal(previous, current) && !equal(next, current)) fail(409, tr("電話受付の設定が更新されています。最新の設定を読み直してから保存してください。"));
             const conflict = (await store.list<Shop>("shop")).some(other => other.id !== fresh.id && !isArchivedShop(other) && samePhoneNumber(phoneSettingsOf(other).twilioNumber, input.twilioNumber));
             if (conflict) fail(409, tr("この電話番号は別のお店で使われています"));
-            fresh.phone = input; await store.saveShop(fresh); return input;
+            fresh.phone = next; await store.saveShop(fresh); return next;
           });
           return json(res, { ok: true, settings: saved });
+        }
+        if (action === "phone/rules/ai" && method === "POST") {
+          assertOwner(user, shop);
+          const input = z.object({ note: z.string().trim().min(1).max(4000), rules: z.string().trim().max(6000), callId: z.string().min(1).max(200).optional(), requestId: z.uuid() }).strict().parse(await body(req, 30000));
+          const id = digest(`${shop.id}:${user!.email}:phone-rules:${input.requestId}`);
+          return await store.locked(`phone-rules-ai:${id}`, async () => {
+            const hash = digest(JSON.stringify({ note: input.note, rules: input.rules, callId: input.callId }));
+            const cached = await store.get<{ hash: string; proposal: PhoneRulesProposal; expires: number }>("phoneRulesProposal", id);
+            if (cached) {
+              if (cached.hash !== hash) fail(409, tr("依頼の内容が変わっています。設定案を作り直してください。"));
+              if (cached.expires > Date.now()) return json(res, cached.proposal);
+            }
+            const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
+            assertOwner(user, fresh);
+            const config = fresh.published || fail(409, tr("先にお店を公開してください"));
+            let call: { transcript?: string; outcome?: string; issue?: string } | undefined;
+            if (input.callId) {
+              const now = Date.now();
+              const rows = await store.queryShopLogs(fresh.id, new Date(now - 7 * 86400000).toISOString(), new Date(now).toISOString(), 1, undefined, { kind: "phone", reference: input.callId });
+              const row = rows.find(row => row.callId === input.callId) || fail(404, tr("通話記録が見つかりません。最近の電話を読み直してください。"));
+              call = { transcript: row.transcript?.slice(0, 10000), outcome: row.outcome, issue: row.issue };
+            }
+            const proposal = phoneRulesProposalSchema.parse(await (intelligence.phoneRules || proposePhoneRules)(config, input.rules, input.note, call));
+            await store.put("phoneRulesProposal", id, { shopId: fresh.id, hash, proposal, expires: Date.now() + 3600000 });
+            return json(res, proposal);
+          });
         }
         if (action === "phone/calls" && method === "GET") {
           assertOwner(user, shop);
