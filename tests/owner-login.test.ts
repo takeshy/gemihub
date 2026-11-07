@@ -6,13 +6,13 @@ import { createApp } from "../server/app.ts";
 import { Store, type User } from "../server/store.ts";
 import { sample, dateJST } from "../server/domain.ts";
 import { decrypt } from "../server/google.ts";
-import { calendarScope, type CalendarConnection } from "../server/calendar.ts";
+import { calendarScope, calendarMirrorScope, type CalendarConnection } from "../server/calendar.ts";
 
 test("owner sign-in requires Gmail and Calendar consent, binds only the registered owner staff and keeps customer sign-in separate", async t => {
   process.env.DEMO_MODE = "true";
   process.env.GOOGLE_CLIENT_ID = "owner-login-test";
   delete process.env.ACCESS_PASSWORD;
-  const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/gmail.send", calendarScope];
+  const scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/gmail.send", calendarScope, calendarMirrorScope];
   let granted = scopes.join(" "), refresh: string | undefined = "owner-refresh-1", email = "owner@example.com";
   const prototype = google.auth.OAuth2.prototype as unknown as Record<"getToken" | "verifyIdToken", (...args: unknown[]) => Promise<unknown>>;
   t.mock.method(prototype, "getToken", async () => ({ tokens: { id_token: "identity", access_token: "access", refresh_token: refresh, scope: granted } }));
@@ -50,7 +50,8 @@ test("owner sign-in requires Gmail and Calendar consent, binds only the register
   assert.equal((await store.list("shop")).length, 0, "denied Gmail consent creates no shop or owner credential");
   assert.equal(await store.get("user", email), undefined);
   const denied = await oauth("", true); assert.equal(denied.response.status, 400);assert.doesNotMatch(await denied.response.text(), /スタッフ用/);
-  granted = scopes.join(" "); refresh = undefined;
+  // The staff calendar scope is optional: an owner who unticks it still signs in.
+  granted = scopes.filter(s => s !== calendarMirrorScope).join(" "); refresh = undefined;
   assert.equal((await oauth()).response.status, 400, "initial offline authorization requires a refresh token");
   refresh = "owner-refresh-1";
   let signedIn = await oauth(); assert.equal(signedIn.response.status, 302);

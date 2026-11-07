@@ -1691,6 +1691,7 @@
   "モックを生成し、プレビューの書き込みを破棄": "Generate mock data and discard preview writes",
   "この操作の送信元を確認できません": "Unable to verify the origin of this action",
   "Google Calendar の空き状況へのアクセスを承認してください": "Grant access to Google Calendar availability",
+  "カレンダーを作成できません": "The calendar could not be created",
   "空き状況を取得できません": "Unable to fetch availability",
   "Google Calendar の空き状況を確認できません。運営メンバーに再接続を依頼してから再試行してください。": "Unable to check Google Calendar availability. Ask the operator to reconnect, then retry.",
   "（途中で終了した発言）": "(Interrupted message)",

@@ -10,6 +10,10 @@ import { demoGoogleUnavailable } from "./judge.ts";
 import { slots, bookingDates, bookingStaff, menuSelection, ownerStaffId, type ShopConfig, type Booking } from "./domain.ts";
 
 export const calendarScope = "https://www.googleapis.com/auth/calendar.freebusy";
+/** Optional: lets gemihub keep a secondary calendar of each staff member's bookings. Busy times still come from `primary` only. */
+export const calendarMirrorScope = "https://www.googleapis.com/auth/calendar.app.created";
+/** Scopes requested wherever a calendar is connected; only `calendarScope` is required. */
+export const calendarScopes = [calendarScope, calendarMirrorScope];
 export type CalendarConnection = {
   shopId: string;
   email: string;
@@ -59,8 +63,91 @@ export const calendarGateway = {
       throw new Error(tr("空き状況を取得できません"));
     return busySchema.parse(calendar.busy);
   },
+  mirror: undefined as CalendarMirrorGateway | undefined,
 };
-export type CalendarGateway = typeof calendarGateway;
+/** One booking as an event in a staff member's gemihub calendar. */
+export type MirrorEvent = { id: string; summary: string; description: string; start: string; end: string };
+export type CalendarMirrorGateway = {
+  /** Returns the calendar to write to, creating it when `calendarId` is missing or was deleted. */
+  ensureCalendar(connection: CalendarConnection, calendarId: string | undefined, summary: string, timeZone: string): Promise<string>;
+  listEvents(connection: CalendarConnection, calendarId: string, timeMin: string): Promise<MirrorEvent[]>;
+  putEvent(connection: CalendarConnection, calendarId: string, event: MirrorEvent): Promise<void>;
+  deleteEvent(connection: CalendarConnection, calendarId: string, eventId: string): Promise<void>;
+  deleteCalendar(connection: CalendarConnection, calendarId: string): Promise<void>;
+};
+const googleStatus = (error: unknown) => Number((error as { response?: { status?: number }; code?: unknown })?.response?.status ?? (error as { code?: unknown })?.code);
+const gone = (error: unknown) => [404, 410].includes(googleStatus(error));
+function calendarApi(connection: CalendarConnection) {
+  const auth = oauth();
+  auth.setCredentials({ refresh_token: decrypt(connection.refreshToken) });
+  return google.calendar({ version: "v3", auth });
+}
+const mirrorBody = (event: MirrorEvent) => ({
+  id: event.id,
+  summary: event.summary,
+  description: event.description,
+  start: { dateTime: event.start },
+  end: { dateTime: event.end },
+  status: "confirmed",
+  // Shown as free, so nothing that reads this calendar treats a booking as a second blocker.
+  transparency: "transparent",
+  extendedProperties: { private: { gemihub: "1" } },
+});
+export const googleCalendarMirror: CalendarMirrorGateway = {
+  async ensureCalendar(connection, calendarId, summary, timeZone) {
+    const api = calendarApi(connection);
+    if (calendarId) {
+      try {
+        await api.calendars.get({ calendarId });
+        return calendarId;
+      } catch (error) {
+        if (!gone(error)) throw error;
+      }
+    }
+    const { data } = await api.calendars.insert({ requestBody: { summary, timeZone } });
+    if (!data.id) throw new Error(tr("カレンダーを作成できません"));
+    return data.id;
+  },
+  async listEvents(connection, calendarId, timeMin) {
+    const api = calendarApi(connection);
+    const events: MirrorEvent[] = [];
+    let pageToken: string | undefined;
+    do {
+      const { data } = await api.events.list({ calendarId, timeMin, privateExtendedProperty: ["gemihub=1"], singleEvents: true, maxResults: 2500, pageToken });
+      for (const item of data.items || [])
+        if (item.id && item.start?.dateTime && item.end?.dateTime)
+          events.push({ id: item.id, summary: item.summary || "", description: item.description || "", start: new Date(item.start.dateTime).toISOString(), end: new Date(item.end.dateTime).toISOString() });
+      pageToken = data.nextPageToken || undefined;
+    } while (pageToken);
+    return events;
+  },
+  async putEvent(connection, calendarId, event) {
+    const api = calendarApi(connection);
+    try {
+      await api.events.insert({ calendarId, requestBody: mirrorBody(event) });
+    } catch (error) {
+      // The ID already exists, including an event deleted earlier: update it back to confirmed.
+      if (googleStatus(error) !== 409) throw error;
+      await api.events.update({ calendarId, eventId: event.id, requestBody: mirrorBody(event) });
+    }
+  },
+  async deleteEvent(connection, calendarId, eventId) {
+    try { await calendarApi(connection).events.delete({ calendarId, eventId }); } catch (error) { if (!gone(error)) throw error; }
+  },
+  async deleteCalendar(connection, calendarId) {
+    try { await calendarApi(connection).calendars.delete({ calendarId }); } catch (error) { if (!gone(error)) throw error; }
+  },
+};
+calendarGateway.mirror = googleCalendarMirror;
+/** Errors that will not clear by retrying: the grant was revoked or the mirror scope was not granted. */
+export function mirrorAccessDenied(error: unknown) {
+  const status = googleStatus(error);
+  const message = error instanceof Error ? error.message : String(error);
+  const reasons = ((error as { response?: { data?: { error?: { errors?: { reason?: string }[] } } } })?.response?.data?.error?.errors || []).map(item => item.reason);
+  if (/invalid_grant/.test(message) || status === 401) return true;
+  return status === 403 && !reasons.some(reason => reason && /rateLimit|quota/i.test(reason));
+}
+export type CalendarGateway = Omit<typeof calendarGateway, "mirror"> & { mirror?: CalendarMirrorGateway };
 export async function connections(store: Store, shop: Shop) {
   const members = await store.records<{
     email: string; accepted: boolean; status?: string;

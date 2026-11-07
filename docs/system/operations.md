@@ -3,7 +3,7 @@ type: "Process"
 title: "Customers, inquiries, staff and notifications"
 description: "Customer records, inquiries, staff accounts and Calendar connection, and email notifications."
 tags: ["customers", "inquiries", "staff", "notifications", "email"]
-updated: "2026-11-06"
+updated: "2026-11-07"
 ---
 
 Customer records, inquiries, staff accounts and Calendar connection, and email notifications.
@@ -51,6 +51,8 @@ The overall Menu sales report uses two charts: composition pie and simultaneous 
 The Menu for sales trend dropdown affects only the trend chart: All menus compares menus, while choosing one menu compares that menu's revenue for each staff member using `staff[].menus`. The overall composition pie, totals and menu detail table do not change with this dropdown.
 
 The owner grants Calendar FreeBusy access during normal owner sign-in, alongside Drive and Gmail permissions. The owner is a booking provider without a staff registration, and their calendar is checked automatically. New shops start with no additional staff. The owner has no separate calendar status panel; ordinary sign-in handles consent. Legacy explicit staff assignments remain supported. Other staff sign in through the staff login link with their own Google account and can manage bookings, inquiries and customer notes, but not shop settings or publication. Busy times in each connected calendar block booking slots for the corresponding staff member.
+
+Sign-in also asks for the optional `calendar.app.created` permission. With it, gemihub creates a secondary calendar named "gemihub · shop name" in each connected member's Google account and keeps their active bookings in it as free events ("customer name · services", with the customer's message and a link to the dashboard; no email or phone number). It sits next to their own calendar in Google Calendar and never blocks slots, because availability reads only the primary calendar. Changes reach it within about a minute; a deleted calendar is recreated within six hours. Disconnecting, revoking a member, replacing their login or removing the staff member deletes the calendar. Judge shops do not create one. When a staff member signs in, the bookings list opens filtered to their own appointments; Clear filters shows everyone's.
 
 # Notifications
 

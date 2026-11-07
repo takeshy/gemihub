@@ -71,6 +71,8 @@ export type Plan = {
 export type Inquiry = Omit<import("../server/customers").Inquiry, "shopId" | "at"> & { at?: string };
 export type Workspace = Shop & {
   isOwner: boolean;
+  /** The signed-in staff member's booking resource; absent for the owner. */
+  myStaffId?: string;
   plans: Plan[];
   bookings: Booking[];
   paymentCheckouts?: { id: string; start: string; amount: number; currency?: Currency; phase: string; review: boolean; customer: string; name: string }[];
@@ -1068,7 +1070,7 @@ function Reservations({
   const api = useApi();
   const { money: yen, when, shopToday, displayTimeZone, timeZoneLabel } = useShopDisplay();
   const [date, setDate] = useState(() => shopToday());
-  const [staff, setStaff] = useState("");
+  const [staff, setStaff] = useState(() => !shop.isOwner && shop.myStaffId && shop.published && bookingStaff(shop.published).some(person => person.id === shop.myStaffId) ? shop.myStaffId : "");
   const visibleBookings = shop.bookings.filter(b => (!date || dateIn(b.start, displayTimeZone()) === date) && (!staff || b.staffId === staff));
   const bookingPages = usePagination(visibleBookings, JSON.stringify([shop.id, date, staff]));
   const checkoutPages = usePagination(shop.paymentCheckouts || [], shop.id);

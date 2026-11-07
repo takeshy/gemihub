@@ -21,6 +21,7 @@ import { refundTiersSchema, policyText, refundQuote } from "./payment-domain.ts"
 import { articleFiles, articleToolContext } from "./article-files.ts";
 import { postImageIds, publishedPostImageIds, wikiPaths } from "./post-images.ts";
 import { articleInputSchema, articleMetadataSchema, generateArticleMetadata } from "./post-metadata.ts";
+import { removeStaffCalendar, syncStaffCalendars } from "./calendar-mirror.ts";
 import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } from "./staff-accounts.ts";
 import type { InquiryInteraction } from "./inquiries.ts";
 import { createPublicInquiry, inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, stageInquiryFiles, stagePublicInquiry, writeInquiry } from "./inquiry-service.ts";
@@ -140,7 +141,7 @@ import { pageSchema, headerPartSchema, footerPartSchema } from "./pages.ts";
 import { buildStorefront, canonicalBase, storefrontAssetName, storefrontAssetObject, storefrontAssetType, storefrontFile, storefrontGarbage, storefrontObject, storefrontRenderer, storefrontRetainedReleases, storefrontShell, writeStorefront, type StorefrontRelease } from "./storefront-build.tsx";
 import { bucketStorefrontFiles, memoryStorefrontFiles, type StorefrontFiles } from "./storefront-files.ts";
 import { releaseScopeSchema, scopedSource, scopedConfig, same, type ReleaseScope } from "./pages.ts";
-import { calendarGateway, calendarScope, connections, connectOwnerCalendar, bookingCalendars, availableSlots, nextAvailableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
+import { calendarGateway, calendarScope, calendarScopes, connections, connectOwnerCalendar, bookingCalendars, availableSlots, nextAvailableSlots, type CalendarConnection, type CalendarGateway } from "./calendar.ts";
 /**
  * Images attached anywhere in a conversation plus the current ones, newest first within the request limits.
  * Earlier images that were since removed (or would exceed the size limit) are skipped; current ones stay strict.
@@ -1343,7 +1344,7 @@ export function createApp(
           const verifier = randomBytes(48).toString("base64url");
           await store.put("oauth", digest(state), { verifier, locale:getLocale(), staffShopId: shop.id, expires: Date.now() + 600000 });
           res.setHeader("Set-Cookie", `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
-          return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
+          return redirect(res, oauth().generateAuthUrl({ access_type: "offline", prompt: "consent select_account", scope: ["openid", "email", "profile", ...calendarScopes], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }));
         }
         const slug = url.searchParams.get("shop");
         const shop = slug
@@ -1390,7 +1391,7 @@ export function createApp(
                   "profile",
                   "https://www.googleapis.com/auth/drive.file",
                   "https://www.googleapis.com/auth/gmail.send",
-                  calendarScope,
+                  ...calendarScopes,
                 ],
             state,
             code_challenge: createHash("sha256")
@@ -1788,6 +1789,8 @@ export function createApp(
             shops.map(async (shop) => ({
               ...shop,
               isOwner: user.email === shop.owner,
+              // Staff open the bookings list on their own appointments.
+              ...(user.email !== shop.owner ? { myStaffId: (await store.get<StaffAccount>("staffAccount", staffAccountKey(shop.id, user.email)))?.staffId } : {}),
               bookings: await store.bookings(shop.id),
               paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
               transferListings: await operatorTransfers(shop.id),
@@ -2597,6 +2600,7 @@ export function createApp(
                 const member = await store.get<StaffMember>("member", key);
                 if (member) await store.put("member", key, { ...member, accepted: false, status: "revoked", revokedAt: new Date().toISOString() });
               }
+              await removeStaffCalendar(store, fresh, previous.email, calendar).catch(reportError);
               await store.delete("calendar", key);
               await store.delete("staffAccount", key);
             }
@@ -2617,6 +2621,7 @@ export function createApp(
             return json(res, { connected: !!connection, staffId: connection?.staffId || account?.staffId, email: user!.email, configured: !!process.env.GOOGLE_CLIENT_ID, loginUrl: user!.email === fresh.owner ? "/auth/google" : `/staff-login/${fresh.id}` });
           }
           if (action === "calendar/disconnect" && method === "POST") {
+            await removeStaffCalendar(store, fresh, user!.email, calendar).catch(reportError);
             await store.delete("calendar", `${fresh.id}:${user!.email}`);
             if (user!.email === fresh.owner) {
               const owner = await store.get<User>("user", fresh.owner);
@@ -2640,7 +2645,7 @@ export function createApp(
             const verifier = randomBytes(48).toString("base64url");
             await store.put("oauth", digest(state), { verifier, locale:getLocale(), calendarShopId: fresh.id, email: user!.email, staffId, expires: Date.now() + 600000 });
             res.setHeader("Set-Cookie", `gemihub_oauth=${state}; HttpOnly; SameSite=Lax; Path=/; Max-Age=600${origin().startsWith("https:") ? "; Secure" : ""}`);
-            return json(res, { authUrl: oauth().generateAuthUrl({ access_type: "offline", prompt: "consent", login_hint: user!.email, scope: ["openid", "email", calendarScope], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }) });
+            return json(res, { authUrl: oauth().generateAuthUrl({ access_type: "offline", prompt: "consent", login_hint: user!.email, scope: ["openid", "email", ...calendarScopes], state, code_challenge: createHash("sha256").update(verifier).digest("base64url"), code_challenge_method: "S256" as never }) });
           }
           if (action === "system" && method === "GET") {
             if (!fresh.published) fail(409, tr("公開後に仕組み図を表示します"));
@@ -3186,6 +3191,7 @@ export function createApp(
               status: "revoked",
               revokedAt: new Date().toISOString(),
             });
+            await removeStaffCalendar(store, fresh, email, calendar).catch(reportError);
             await store.delete("calendar", `${fresh.id}:${email}`);
             await store.delete("staffAccount", `${fresh.id}:${email}`);
             return json(res, { ok: true });
@@ -3971,6 +3977,7 @@ export function createApp(
         const job = (operation: string, work: () => Promise<unknown>) => logs.run(shop.id, () => void work().catch(error => { logs.error(error); console.error(error); }), operation);
         job("reconcile_payments", () => reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)));
         job("sync_files", () => syncFiles(shop.id));
+        job("sync_staff_calendars", () => syncStaffCalendars(store, shop, calendar, { origin: origin(), report: reportError }));
         job("deliver_mail", () => flushMail(shop, true));
         job("paypal_check", () => paypal.check(shop, { notify: true }));
         job("issue_coupons", () => hasActiveCoupons(store, shop).then(active => active ? store.locked(bookingLockKey(shop.id), async () => {
