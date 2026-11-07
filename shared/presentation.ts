@@ -7,6 +7,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { tr } from "./i18n.ts";
 
 export type Presentation = { html: string; css: string };
+export const presentationCssLimit = 12000;
 // Scoped theme CSS does not stop the application's global element rules from
 // entering a design. Restore structural defaults before applying generated CSS.
 // Keep specificity below generated rules, including plain header/footer rules.
@@ -101,7 +102,7 @@ export function compilePresentation(design: Presentation): Compiled {
   if (cache.size >= 64) cache.delete(cache.keys().next().value!);
   cache.set(id, compiled); return compiled;
 }
-export const presentationSchema = z.object({ html: z.string().min(1).max(20000), css: z.string().max(12000) }).superRefine((design, ctx) => {
+export const presentationSchema = z.object({ html: z.string().min(1).max(20000), css: z.string().max(presentationCssLimit) }).superRefine((design, ctx) => {
   try { compilePresentation(design); } catch { ctx.addIssue({ code: "custom", message: tr("表示用HTML・CSSを確認してください。スクリプト・独自のフォーム・外部CSSの読み込みは使えません。") }); }
 });
 export function presentationSlots(design: Presentation | undefined, allowed: string[], required: string[] = []) {
@@ -113,7 +114,7 @@ const html = z.string().min(1).max(20000);
 type ThemeCss = { css: string; headerCss?: string; footerCss?: string };
 // Validation and rendering must see the same stylesheet for a part.
 const themePartCss = (theme: ThemeCss, part: "header" | "body" | "footer") => [theme.css, part === "header" ? theme.headerCss : part === "footer" ? theme.footerCss : ""].filter(Boolean).join("\n");
-export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHtml: html, css: z.string().max(12000), headerCss: z.string().max(12000).optional(), footerCss: z.string().max(12000).optional() }).superRefine((theme, ctx) => {
+export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHtml: html, css: z.string().max(presentationCssLimit), headerCss: z.string().max(presentationCssLimit).optional(), footerCss: z.string().max(presentationCssLimit).optional() }).superRefine((theme, ctx) => {
   const parts = [
     ["header", theme.headerHtml, ["title", "subtitle", "details", "image", "navigation"], ["navigation"]],
     ["body", theme.bodyHtml, ["content"], ["content"]],

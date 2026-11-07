@@ -524,12 +524,11 @@ function Dashboard({
             <LanguageSwitcher embedded />
           </div>
         </nav>
-        <div className="sidebar-bottom">
-          <i className={shop?.published ? "online" : ""} />
-          {shop?.published ? tr("予約ページを公開中") : tr("公開前の準備中")}
-          <p>
-            {shop?.published ? tr("ご予約やお店の情報を、ここから管理できます。") : <>{tr("まずは、お店のことを")}<br />{tr("聞かせてください。")}</>}</p>
-        </div>
+        {!shop?.published && <div className="sidebar-bottom">
+          <i />
+          {tr("公開前の準備中")}
+          <p>{tr("まずは、お店のことを")}<br />{tr("聞かせてください。")}</p>
+        </div>}
       </aside>}
       <section className="workspace">
         {!shop ? (

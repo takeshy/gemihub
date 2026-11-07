@@ -6,8 +6,44 @@ import { Store } from "../server/store.ts";
 import { sample, planSummary } from "../server/domain.ts";
 import { digest } from "../server/auth.ts";
 import * as intelligence from "../server/ai.ts";
+import { proposeVisualAppearance } from "../server/visual.ts";
+import { standardTheme } from "../shared/theme-editing.ts";
 
 process.env.DEMO_MODE = "true";
+test("oversized CSS preserves the visual request and live configuration for a successful retry", async t => {
+  const store = new Store(":memory:");
+  const shop = await store.createShop("owner@example.com");
+  shop.published = { ...structuredClone(sample), appearance: { accent: "sage", layout: "standard", imageUrl: "", theme: structuredClone(standardTheme) } };
+  await store.saveShop(shop);
+  await store.put("session", digest("owner"), { user: { email: shop.owner, name: "Owner", role: "owner" }, expires: Date.now() + 600000 });
+  let oversized = true, generations = 0, reviews = 0;
+  const server = createApp(store, { ...intelligence,
+    async identifyVisual() { return { ids: ["theme"], explanation: "Adjust the page" }; },
+    async visualAppearance(current, instruction, images, options) {
+      return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => {
+        generations++;
+        return JSON.stringify({ appearance: { theme: { css: oversized ? ':root{--large:"' + "x".repeat(12000) + '"}' : '.public-nav{gap:24px}' } } });
+      } });
+    },
+    async visualReview() { reviews++;return { approved: true, issues: [] }; },
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.close();await store.close(); });
+  const api = (path: string, data: unknown) => fetch(`${origin}/api/shops/${shop.id}/${path}`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  const identified = await (await api("visual/identify", { media: { mimeType: "image/png", data: "aGVsbG8=" }, instruction: "Adjust the menu", displayed: shop.published, local: { base: shop.revision, source: shop.published, theme: true } })).json();
+  const request = { id: identified.id, target: "theme", instruction: "Adjust the menu" };
+  const failed = await api("visual/propose", request);
+  assert.equal(failed.status, 422);assert.equal(generations, 3);assert.equal(reviews, 0);
+  assert.match((await failed.json()).error, /依頼の内容は保持/);
+  assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
+  assert.equal((await store.list("plan")).length, 0);
+  oversized = false;
+  const retry = await api("visual/propose", request);
+  assert.equal(retry.status, 200);assert.equal((await retry.json()).visualReview.approved, true);
+  assert.equal(reviews, 1);assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
+});
+
 test("rendered review releases the shop lock, rejects stale results and never saves rejected proposals", async t => {
   const store = new Store(":memory:");
   const shop = await store.createShop("owner@example.com");

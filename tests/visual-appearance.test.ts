@@ -17,6 +17,22 @@ import { designOf, restoreDesign } from "../server/design-versions.ts";
 import { ChromePreview } from "../src/SiteChrome.tsx";
 
 const theme = { headerHtml: '<header><h1>Original headline</h1><slot name="navigation"></slot></header>', bodyHtml: '<main><slot name="content"></slot></main>', footerHtml: '<footer><slot name="content"></slot></footer>', css: 'h1{color:#193e32}' };
+test("pen changes compact long formatting and repair truly oversized CSS within the selected scope", async () => {
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: structuredClone(theme) } };
+  const before = structuredClone(current);
+  let calls = 0;
+  const { config } = await proposeVisualAppearance(current, "Adjust the header", [], { target: "part:header", generate: async () => {
+    calls++;
+    return JSON.stringify({ appearance: { theme: { headerCss: calls === 1 ? ':root{--large:"' + "x".repeat(12000) + '"}' : '/* ' + "formatting".repeat(1600) + ' */ header { padding: 24px; }' } } });
+  } });
+  assert.equal(calls, 2);
+  assert.equal(config.appearance?.theme?.headerCss, "header{padding:24px;}");
+  assert.equal(config.appearance?.theme?.css, theme.css);
+  assert.deepEqual(config.footer, current.footer);
+  assert.deepEqual(config.rules, current.rules);
+  assert.deepEqual(current, before);
+});
+
 test("visual generation receives both sides of the conversation as context, with current changes taking priority", async () => {
   const messages = [{ role: "user" as const, text: "Keep the current colors." }, { role: "assistant" as const, text: "The earlier edit was accepted." }];
   const { config } = await proposeVisualAppearance(structuredClone(sample), "Make that heading shorter", [], {

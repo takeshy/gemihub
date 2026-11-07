@@ -296,6 +296,8 @@ After the first theme sample, use Make changes and red-pen instructions. A revie
 
 ## Editing chat and initial selections
 
+Generated CSS is limited to 12,000 characters per field. Only oversized output is compacted, preserving selectors, values and cascade order. If still oversized, retry at most twice with the original request, images and previous response; the server preserves every field outside the oversized CSS. Never truncate CSS or relax validation. Usual configuration checks and screen reviews still apply. Exhaustion preserves the request and existing configuration and returns a readable retry message instead of internal paths or schema errors. Initial themes are also compacted before their existing generation/review validation.
+
 After creation, proposal reviews use the initial screen list and entire-page preview instead of a configuration/specification summary. Mark added, changed and removed screens, highlight overall design changes, and allow switching between the current and proposed page. Keep explicit approval before applying.
 
 Place Entire page in Build with AI, rather than in the Try & edit screens tree. This preview always includes header and footer, with a clearly marked Dummy area containing the same heading, text, button, input, select, textarea, card and notice elements/classes used by real screens. Samples are inert. Circle any component with the red pen and use the chat on the right to request shared CSS changes across screens. Edit, compare, publish, discard and restore the complete frame together, preserving business facts, enabled features, individual screen contents and other page drafts.

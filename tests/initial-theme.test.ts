@@ -14,6 +14,18 @@ import { initialInterviewFacts, openingQuestions, logoQuestion, logoUploadQuesti
 export const theme = { headerHtml: '<header class="brand"><slot name="title"></slot><slot name="navigation"></slot></header>', bodyHtml: '<main class="canvas"><slot name="content"></slot></main>', footerHtml: '<footer class="credits"><slot name="content"></slot></footer>', css: ':root { color:#f5eee9; background:#241432 } .brand { padding:clamp(16px,4vw,64px); } h1 { font-family:serif; font-size:clamp(36px,8vw,100px); } .canvas { max-width:72rem; margin:auto; padding:24px; } .public-nav { display:flex; flex-wrap:wrap; gap:12px; } .credits { padding:24px; } @media(max-width:600px){ .canvas { padding:12px } }' };
 const photo = (id: string) => ({ id: id.repeat(64), name: `${id}.png`, mimeType: "image/png", data: "aGVsbG8=" });
 
+test("initial themes compact generated formatting before validation and review", async () => {
+  let generations = 0;
+  const result = await createInitialTheme({ config: sample, request: "Keep the design", images: [] }, {}, async call => {
+    if (call.purpose) return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
+    generations++;
+    return JSON.stringify({ ...theme, css: '/* ' + "formatting".repeat(1600) + ' */ ' + theme.css });
+  });
+  assert.equal(generations, 1);
+  assert.ok(result.candidate!.css.length < 12000);
+  assert.equal(result.review?.approved, true);
+});
+
 test("generation and review see the actual shop text and enabled navigation slot contents", async () => {
   const config = structuredClone(sample);
   config.header.title = "A long shop name with room for all navigation";

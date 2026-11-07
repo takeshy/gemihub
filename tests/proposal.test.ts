@@ -4,6 +4,29 @@ import type OpenAI from "openai";
 import { propose } from "../server/ai.ts";
 import { sample, shopSchema } from "../server/domain.ts";
 import { setOpenAiClient, setProviderResolver } from "../server/llm.ts";
+import { standardTheme } from "../shared/theme-editing.ts";
+
+test("AI shop edits repair oversized theme CSS without losing current facts or repeating the edit", async t => {
+  process.env.OPENAI_API_KEY = "test"; process.env.OPENAI_MODEL = "test-model";
+  setProviderResolver(async () => "openai");
+  t.after(() => { setOpenAiClient(undefined); setProviderResolver(async () => "vertex"); });
+  const current = structuredClone(sample);
+  current.appearance = { accent: "sage", layout: "standard", imageUrl: "", theme: structuredClone(standardTheme) };
+  const before = structuredClone(current);
+  let calls = 0;
+  setOpenAiClient({ responses: { create: async (body: { input: unknown }) => {
+    calls++;
+    if (calls > 1) assert.match(JSON.stringify(body.input), /without applying the original edit again/);
+    return { output_text: JSON.stringify({ config: { ...(calls > 1 ? { header: { title: "Unrequested replacement" }, menus: [] } : {}), appearance: { theme: { css: calls === 1 ? ':root{--large:"' + "x".repeat(12000) + '"}' : '.public-nav{gap:24px}' } } } }), output: [] };
+  } } } as unknown as OpenAI);
+  const result = await propose("メニューの間隔を少し広げて", current, "owner@example.com");
+  assert.equal(calls, 2);
+  assert.equal(result.config.appearance?.theme?.css, ".public-nav{gap:24px}");
+  assert.deepEqual(result.config.rules, current.rules);
+  assert.deepEqual(result.config.menus, current.menus);
+  assert.equal(result.config.header.title, current.header.title);
+  assert.deepEqual(current, before);
+});
 
 test("shop proposals use a manageable generation schema and preserve existing settings", async t => {
   process.env.OPENAI_API_KEY = "test";

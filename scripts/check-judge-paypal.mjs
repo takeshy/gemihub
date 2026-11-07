@@ -52,8 +52,8 @@ try {
     await page.getByRole('button', { name: label('絞り込みを解除'), exact: true }).click();
     await expect(page.locator('.reservations-panel .section-top .count')).toHaveText('1');
     await expect(page.locator('.booking-list .booking-card')).toHaveCount(1);
-    await expect(page.locator('.sidebar-bottom')).toContainText(label('ご予約やお店の情報を、ここから管理できます。'));
-    if (language === 'en') { await expect(page.locator('.payment-details')).toContainText('$55.00 (Sandbox)'); await expect(page.locator('.sidebar-bottom')).not.toContainText('First, tell us'); }
+    await expect(page.locator('.sidebar-bottom')).toHaveCount(0);
+    if (language === 'en') await expect(page.locator('.payment-details')).toContainText('$55.00 (Sandbox)');
     const date = page.locator('.reservation-filters .date-input');
     await expect(date.locator('input[type=text]')).toHaveAttribute('placeholder', 'YYYY/MM/DD');
     await expect(date.locator('.date-input-format')).toHaveCount(0);

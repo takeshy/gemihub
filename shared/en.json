@@ -3969,5 +3969,6 @@
   "追加": "Added",
   "変更": "Changed",
   "メッセージ": "Message",
-  "詳しく見る": "Learn more"
+  "詳しく見る": "Learn more",
+  "修正案のデザインが複雑になりすぎたため、自動調整できませんでした。依頼の内容は保持しています。もう一度お試しください。": "The proposed design became too complex to adjust automatically. Your request is preserved. Please try again."
 }

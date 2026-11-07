@@ -389,11 +389,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     const token = scope.kind === "page" ? `${scope.pageId}:${index.pages.find(p => p.id === scope.pageId)?.hash || "deleted"}` : scope.kind === "part" ? `part:${scope.part}:${index.parts[scope.part]}` : scope.kind === "theme" ? `theme:${index.themeHash}` : scope.kind === "content" ? `content:${index.contentHash}` : `shared:${index.sharedHash}`;
     if (automaticFetch.current === token) return;
     automaticFetch.current = token;
-    const updated = status === "remote";
     void run(async () => {
       await fetchScope(scope);
-      // Only production changed, so it is adopted without asking; say so instead of changing silently.
-      if (updated) setNotice(tr("本番で更新された内容を取り込みました。このブラウザに未反映の変更はなかったので、そのまま最新にしました。"));
     });
   }, [status, screen, index, busy, !!draft?.pending, !!conflict]);
   const hideHeader = screen === "theme" ? visibility[screen]?.header === true : visibility[screen]?.header !== false;
@@ -526,7 +523,6 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
           const source = backup.baseline === null && backup.scope.kind === "shared" ? null : replaceScope(draft.source || draft.config, backup.scope, backup.baseline);
           const next = { ...draft, config, source }; writeDraft(localStorage, key, next); restore(next); setNotice(tr("競合解決前のローカル編集を復元しました。"));
         })}>{tr("この時点のローカルを復元")}</button></p>)}</details>}
-      <details><summary>{tr("保存と同期について")}</summary><p>{tr("編集はこのブラウザだけに保存され、サイトデータを消すと失われます。画面は開くと必要な内容を自動で読み込みます。変更がある画面だけツリーに印を付けます。両側に変更があればプレビューを比較して解決してください。料金・勤務などの本番データは各管理メニューの保存で反映します。練習用の予約や問い合わせは本番には保存せず、Google Calendar にも接続しません。")}</p></details>
     </div>}
     {draft && createPortal(<dialog ref={discardReview} className="editor-release-dialog" aria-label={tr("この画面の変更を取り消す")} onClose={() => setPullReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
       <h3 ref={discardHeading} tabIndex={-1}>{tr("この画面の変更を取り消す")}</h3>

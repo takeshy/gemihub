@@ -4,13 +4,15 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { Store } from '../server/store.ts';
 import { createApp } from '../server/app.ts';
-import { sample, planSummary } from '../server/domain.ts';
+import { sample, planSummary, shopSchema } from '../server/domain.ts';
 import { digest } from '../server/auth.ts';
 import * as intelligence from '../server/ai.ts';
 import { proposeVisualAppearance } from '../server/visual.ts';
 import { reviewRenderedVisual } from '../server/visual-review.ts';
 import { createInitialTheme } from '../server/initial-theme.ts';
 import { standardTheme } from '../shared/theme-editing.ts';
+import { compactGeneratedStyles } from '../server/generated-design.ts';
+import { captureVisualScreens } from '../server/visual-browser.ts';
 
 process.env.DEMO_MODE = 'true';
 delete process.env.GOOGLE_CLOUD_PROJECT;
@@ -85,5 +87,14 @@ try {
   const changed = await api(setup.id, `plans/${plan.id}/theme`, { media, instruction: 'Increase the hero padding to 40 pixels' }, 'initial-review');
   assert.equal(changed.plan.themeReview.rendered, true);
   assert.equal((await store.shop(setup.id)).published, null);
+  const oversized = structuredClone(shop.published);
+  oversized.appearance.theme.css = '/* ' + 'formatting '.repeat(1500) + ' */\nh1 { letter-spacing: 0.03em; }\n@media (max-width: 600px) { h1 { letter-spacing: 0.01em; } }';
+  const compacted = shopSchema.parse(compactGeneratedStyles(oversized));
+  assert.ok(compacted.appearance.theme.css.length < 12000);
+  const captureInput = { screen: 'theme', locale: 'ja', options: {}, images: {} };
+  const beforeCompact = await captureVisualScreens({ ...captureInput, config: oversized });
+  const afterCompact = await captureVisualScreens({ ...captureInput, config: compacted });
+  assert.deepEqual(afterCompact.map(shot => shot.data), beforeCompact.map(shot => shot.data), 'compacting oversized formatting preserves the actual desktop/mobile pixels');
+  console.log('Oversized CSS formatting compacts below the limit with identical Chromium screenshots at 1280/390px.');
   console.log('Real Chromium before/after captures reach the review model at 1280/390px. Rejection -> repair -> recapture -> approval, refinement, and initial-theme correction passed; publication is unchanged.');
 } finally { await new Promise(resolve => server.close(resolve));await store.close(); }

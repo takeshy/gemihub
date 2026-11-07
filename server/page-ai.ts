@@ -1,5 +1,5 @@
 import { tr } from "../shared/i18n.ts";
-import { generateJson } from "./llm.ts";
+import { generateValidatedDesign } from "./generated-design.ts";
 import { z } from "zod";
 import { pageSchema, headerPartSchema, footerPartSchema, type ShopPage } from "./pages.ts";
 import { shopSchema, type ShopConfig } from "./domain.ts";
@@ -9,8 +9,7 @@ export const profileSchema = z.object({ name: shopSchema.shape.name, industry: s
 export const themeProfileSchema = z.object({ header: shopSchema.shape.header, footer: shopSchema.shape.footer, appearance: shopSchema.shape.appearance });
 export const messageSchema = z.object({ role: z.enum(["user", "assistant"]), text: z.string().min(1).max(12000) });
 async function generate<T extends z.ZodType>(schema: T, input: unknown, instruction: string, images: RequestImage[] = []) {
-  const answer = await generateJson({ unavailableMessage: tr("AI の接続がまだ設定されていません"), contents: [{ role: "user", parts: requestImageParts(input, images) }], schema: z.toJSONSchema(schema), system: instruction + " " + ownerLanguageInstruction });
-  return schema.parse(JSON.parse(answer));
+  return generateValidatedDesign({ unavailableMessage: tr("AI の接続がまだ設定されていません"), contents: [{ role: "user", parts: requestImageParts(input, images) }], schema: z.toJSONSchema(schema), system: instruction + " " + ownerLanguageInstruction }, value => schema.parse(value));
 }
 export async function createPageWithAI(messages: z.infer<typeof messageSchema>[], context: Pick<ShopConfig, "name" | "industry" | "description" | "address">, mode: "chat" | "write", images: RequestImage[] = []) {
   const schema = z.object({ reply: z.string().min(1).max(4000), page: pageSchema.omit({ id: true }).nullable() });
