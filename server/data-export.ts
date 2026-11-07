@@ -36,6 +36,7 @@ export async function shopExport(store: Store, shop: Shop, email: string) {
     schemaVersion: 1, exportedAt: new Date().toISOString(),
     shop: { id: shop.id, slug: shop.slug, publication: shop.publication, revision: shop.revision,
       config: shop.published, draft: shop.draft, history: shop.history,
+      phone: shop.phone || null,
       driveFolderId: shop.google?.folderId },
     records: { bookings, customers, inquiries, inquiryInteractions, members, posts, customerNotes, waitlist, couponCampaigns, couponGrants, couponUses, couponManual,
       menus: shop.published?.menus || shop.draft?.menus || [], staff: shop.published?.staff || shop.draft?.staff || [] },

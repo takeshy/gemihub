@@ -27,13 +27,13 @@ const clientMessage = z.discriminatedUnion("type", [
  * Accepts WebSocket upgrades on /api/shops/:id/assistant/live. `authorize` checks the session and
  * shop (and charges a judge's quota once per conversation) and returns the shop's documents.
  */
-export function attachAssistantLive(server: Server, authorize: (req: IncomingMessage, shopId: string) => Promise<LiveAccess | undefined>, connector: LiveConnector = defaultConnector) {
+export function attachAssistantLive(server: Server, authorize: (req: IncomingMessage, shopId: string) => Promise<LiveAccess | undefined>, connector: LiveConnector = defaultConnector, fallback?: (req: IncomingMessage, socket: import("node:stream").Duplex, head: Buffer) => boolean) {
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 65536 });
   server.on("upgrade", (req, socket, head) => {
     void (async () => {
       const url = new URL(req.url || "/", origin());
       const match = url.pathname.match(/^\/api\/shops\/([^/]+)\/assistant\/live$/);
-      if (!match) return;
+      if (!match) { fallback?.(req, socket, head); return; }
       const access = req.headers.origin === origin() && req.headers.host === new URL(origin()).host && liveConfigured()
         ? await authorize(req, match[1]).catch(() => undefined) : undefined;
       if (!access) {

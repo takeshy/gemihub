@@ -59,7 +59,7 @@ test("Storybook cash replacement cancels the holder, raises the refund and regis
   await assert.rejects(api(route, { ...input, phone: "------" }));
   await assert.rejects(api(route, { ...input, expectedPrice: listing.price + 1 }));
   const { booking } = await api<{ booking: Booking }>(route, input);
-  assert.equal(booking.customer, "tel:0312345678");
+  assert.equal(booking.customer, "tel:+81312345678");
   assert.equal(booking.price, listing.price);
   assert.equal(booking.payment, undefined);
   assert.deepEqual([booking.start, booking.end, booking.staffId, booking.menuId], [held.start, held.end, held.staffId, held.menuId]);

@@ -31,6 +31,8 @@ import { SiteHeader, SiteFooter, ThemeBody } from "./SiteChrome";
 import { hasThemeFrame } from "../shared/theme-editing";
 import { CustomPage } from "./CustomPage";
 import { LiveSettings } from "./LiveSettings";
+import { PhoneReception } from "./PhoneReception";
+import type { PhoneSettings } from "../shared/phone";
 import { LocalPreview } from "./LocalPreview";
 import { Manual } from "./Manual";
 import { MenuImage, MenuImageEditor } from "./MenuImage";
@@ -75,6 +77,7 @@ export type Workspace = Shop & {
   transferListings?: { id: string; bookingId: string; price: number; currency: Currency; discountPercent: number; deadline: string; buying: boolean; review: boolean; unsold: number }[];
   paypalAlerts?: PayPalAlertState;
   paypalSettings?: { enabled: boolean; digestHour: number };
+  phoneSettings?: PhoneSettings;
   inquiries: Inquiry[];
   members: { email: string; accepted: boolean; status?: string }[];
   jobs: { type: string; error?: string }[];
@@ -1231,6 +1234,7 @@ function Settings({
         </select></label>
         <a className="button" download href={`/api/shops/${shop.id}/export?format=csv&table=${exportTable}`}>{tr("選んだデータを保存（CSV）")}</a>
       </section>}
+      {shop.isOwner && <PhoneReception shop={shop} reload={reload} />}
       <h3>{tr("お店独自のドメイン")}</h3>
       <p className="muted">
         {tr("お持ちのドメインを使う場合に設定してください。DNS と HTTPS の接続設定が必要です。")}</p>
