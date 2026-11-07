@@ -139,7 +139,7 @@ test("empty part CSS equals unset CSS, and clearing it removes the key", () => {
 
 test("the appearance target cannot change header-owned copy", async () => {
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", copy: { navReserve: "Reserve" } } };
-  await assert.rejects(proposeVisualAppearance(current, "Rename", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) }), /指定箇所以外/);
+  await assert.rejects(proposeVisualAppearance(current, "Rename", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) }), /ツリーの「ヘッダー」「フッター」から修正/);
   const { config } = await proposeVisualAppearance(current, "Colour", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { accent: "rose", copy: { recentPosts: "News" } } }) });
   assert.equal(config.appearance!.accent, "rose");
   assert.equal(config.appearance!.copy!.navReserve, "Reserve");
@@ -149,7 +149,7 @@ test("the appearance target cannot change header or footer theme parts, which th
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: { ...theme, headerCss: "h1{color:red}" } } };
   const revised = theme.headerHtml.replace("Original headline", "Revised");
   for (const patch of [{ headerHtml: revised }, { headerCss: "h1{color:blue}" }, { headerCss: "" }, { footerHtml: '<footer class="x"><slot name="content"></slot></footer>' }, { footerCss: "p{color:red}" }])
-    await assert.rejects(proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: patch } }) }), /指定箇所以外/, JSON.stringify(patch));
+    await assert.rejects(proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: patch } }) }), /別に比較・反映するため[\s\S]*ツリーの「ヘッダー」「フッター」から修正/, JSON.stringify(patch));
   const { config } = await proposeVisualAppearance(current, "Restyle", [], { target: "appearance", generate: async () => JSON.stringify({ appearance: { theme: { css: "p{color:green}" } } }) });
   assert.equal(scopedConfig(current, config, { kind: "shared" }).appearance!.theme!.css, "p{color:green}");
   assert.equal(config.appearance!.theme!.headerCss, "h1{color:red}");

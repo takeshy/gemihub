@@ -117,6 +117,9 @@ export function validateVisualChange(before: ShopConfig, input: ShopConfig, targ
     if (!item || !updated) throw new Error(tr("対象のスタッフがありません"));
     item.name = updated.name;
   } else throw Object.assign(new Error(tr("変更対象を選び直してください")), {status: 400});
+  // For the appearance target, `allowed` differs from `next` in appearance only by what the header and footer own.
+  if (target === "appearance" && !same(allowed.appearance, next.appearance))
+    throw Object.assign(new Error(tr("ナビゲーションの文言とヘッダー・フッターの内容は、この画面とは別に比較・反映するため、ここからは変更できません。ツリーの「ヘッダー」「フッター」から修正してください。")), {status: 400});
   if (!same(shopSchema.parse(allowed), next))
     throw Object.assign(new Error(tr("指定箇所以外の変更が含まれています。予約ルールや料金の変更は言葉で依頼してください。")), {status: 400});
   return next;

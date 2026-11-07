@@ -3884,5 +3884,6 @@
   "このパーツの HTML と専用 CSS を編集します。共通 CSS は「全体の枠」で編集できます。": "Edit this part’s HTML and CSS. Edit shared CSS in Overall frame.",
   "このパーツの HTML と専用 CSS を標準に戻しますか？他のパーツと共通 CSS は残ります。": "Restore this part’s default HTML and CSS? Other parts and shared CSS are retained.",
   "修正する箇所を確認し、「この箇所を修正する」を押すと変更前と修正案が左右に表示されます。「OK」でローカルに採用、「さらに変更」で案への追加依頼、「キャンセル」で案を破棄できます。赤丸の画像は修正案の生成にも使います。初回テーマは「送信」だけで更新します。この段階では本番には反映されません。": "Confirm the target and choose Change this area to compare the current version and proposal side by side. Choose OK to accept locally, Make more changes to refine the proposal, or Cancel to discard it. The annotated image is also sent when generating the proposal. Initial themes still update on Send. These edits are not published yet.",
+  "ナビゲーションの文言とヘッダー・フッターの内容は、この画面とは別に比較・反映するため、ここからは変更できません。ツリーの「ヘッダー」「フッター」から修正してください。": "Navigation labels and header or footer content are compared and published separately from this screen, so they can’t be changed here. Edit them from Header or Footer in the tree.",
   " ナビゲーションの文言やヘッダー・フッターの内容は、ツリーの「ヘッダー」「フッター」から修正できます。": " Edit navigation labels and header or footer content from Header or Footer in the tree."
 }
