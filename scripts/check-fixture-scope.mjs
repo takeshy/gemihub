@@ -72,7 +72,25 @@ try {
     await choose('お知らせ一覧'); await openSamples();
     await expect(field('記事タイトル')).toHaveCount(1);
     assert.equal(await field('記事タイトル').inputValue(), initial.posts.find(post => post.category === 'announcements').title);
-    await samples.getByRole('button', { name: label('サンプル記事を追加'), exact: true }).click(); await apply();
+    const addArticle = samples.getByRole('button', { name: label('サンプル記事を追加'), exact: true });
+    const [title, date, picker, add, applyButton] = await Promise.all([
+      field('記事タイトル').boundingBox(),
+      field('記事の日付').boundingBox(),
+      samples.getByRole('button', { name: label('カレンダーで日付を選ぶ'), exact: true }).boundingBox(),
+      addArticle.boundingBox(),
+      samples.getByRole('button', { name: label('サンプルをプレビューに反映'), exact: true }).boundingBox(),
+    ]);
+    assert.ok(title && date && picker && add && applyButton, 'sample article controls are visible');
+    if (width <= 760) {
+      assert.ok(date.y > title.y + title.height && Math.abs(date.x - title.x) < 1, 'article fields stack and share a left edge on mobile');
+      assert.ok(Math.abs(picker.x + picker.width - title.x - title.width) < 1, 'the calendar button aligns with the title field’s right edge');
+    } else {
+      assert.ok(Math.abs(title.y - date.y) < 1 && date.x > title.x + title.width, 'article fields align side by side on desktop');
+      assert.ok(title.width > date.width + picker.width, 'the title field has more room than the date controls');
+    }
+    assert.ok(applyButton.y > add.y + add.height, 'add and apply buttons have vertical space between them');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, 'the article editor fits the viewport');
+    await addArticle.click(); await apply();
     let saved = (await read()).fixtures;
     assert.equal(saved.posts.filter(post => post.category === 'announcements').length, 2);
     assert.equal(saved.posts.find(post => post.category === 'blogs').title, 'Scoped blog title');

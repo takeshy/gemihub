@@ -47,8 +47,10 @@ export function FixtureEditor({ value, onChange, config, scope }: { value: Fixtu
     {fixturePostEntries(value, scope).map(({ post: p, index }, visibleIndex) => <fieldset className="panel" key={`${index}-${p.slug}`}>
       <legend>{postLabel(p.category)} {visibleIndex + 1}</legend>
       {scope.postCategories.length > 1 && <label>{tr("記事の種類")}<select value={p.category} onChange={e => post(index, { category: e.target.value as typeof p.category })}>{scope.postCategories.map(category => <option key={category} value={category}>{postLabel(category)}</option>)}</select></label>}
-      <label>{tr("記事タイトル")}<input value={p.title} onChange={e => post(index, { title: e.target.value })} /></label>
-      <label>{tr("記事の日付")}<DateInput aria-label={tr("記事の日付")} value={p.date} onValueChange={value => post(index, { date: value })} /></label>
+      <div className="form-grid fixture-article-fields">
+        <label>{tr("記事タイトル")}<input value={p.title} onChange={e => post(index, { title: e.target.value })} /></label>
+        <label>{tr("記事の日付")}<DateInput aria-label={tr("記事の日付")} value={p.date} onValueChange={value => post(index, { date: value })} /></label>
+      </div>
       {scope.articleBody && <label>{tr("記事の本文")}<textarea rows={6} value={p.body} onChange={e => post(index, { body: e.target.value })} /></label>}
       {!scope.articleBody && <button onClick={() => onChange({ ...value, posts: value.posts.filter((_, i) => i !== index) })}>{tr("このサンプル記事を削除")}</button>}
     </fieldset>)}

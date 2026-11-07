@@ -497,14 +497,16 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
         {samples && hasFixtureFields(samples) && (!samples.articleBody || fixturePostEntries(draft.fixtures, samples).length > 0) && <details key={`fixtures:${screen}:${route.articleKey || ""}`}><summary>{tr("サンプルデータを編集")}</summary>
           <p>{tr("この画面で使うサンプルだけを編集します。サンプルデータと練習中の操作は本番に反映しません。")}</p>
           <fieldset disabled={busy || !!draft.pending || !!conflict}><FixtureEditor config={draft.config} value={fixtureEditing || draft.fixtures} onChange={setFixtureEditing} scope={samples} /></fieldset>
-          <button disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
-            const fixtures = fixturesSchema.parse(fixtureEditing || draft.fixtures);
-            if (samples.bookings && fixtures.bookings.some(b => !bookingStaff(draft.config).some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !bookingStaff(draft.config).some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
-            const articleIndex = samples.articleBody ? fixturePostEntries(draft.fixtures, samples)[0]?.index : undefined;
-            save({ ...draft, fixtures });
-            await choose(screen, articleIndex === undefined ? route.articleKey : postKey(fixtures.posts[articleIndex]));
-            setNotice(tr("サンプルデータを保存しました。"));
-          })}>{tr("サンプルをプレビューに反映")}</button>
+          <div className="actions">
+            <button className="primary" disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
+              const fixtures = fixturesSchema.parse(fixtureEditing || draft.fixtures);
+              if (samples.bookings && fixtures.bookings.some(b => !bookingStaff(draft.config).some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !bookingStaff(draft.config).some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
+              const articleIndex = samples.articleBody ? fixturePostEntries(draft.fixtures, samples)[0]?.index : undefined;
+              save({ ...draft, fixtures });
+              await choose(screen, articleIndex === undefined ? route.articleKey : postKey(fixtures.posts[articleIndex]));
+              setNotice(tr("サンプルデータを保存しました。"));
+            })}>{tr("サンプルをプレビューに反映")}</button>
+          </div>
         </details>}
         {!!draft.backups?.length && <details><summary>{tr("競合解決前の控え")}</summary>{draft.backups.map((backup, i) => <p key={`${backup.at}-${i}`}>{backup.at} <button disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
           const config = replaceScope(draft.config, backup.scope, backup.localValue);
