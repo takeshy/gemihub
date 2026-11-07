@@ -8,6 +8,7 @@ import { renderChrome } from "./chrome-renderer.tsx";
 import type { ShopConfig } from "./domain.ts";
 import { navigationItems } from "../shared/navigation.ts";
 import type { VisualReview } from "../shared/visual-review.ts";
+import { themeComponentInstruction } from "../shared/theme-editing.ts";
 
 const reviewSchema = z.object({ approved: z.boolean(), issues: z.array(z.string().min(1).max(1000)).max(12), imageUsage: z.array(z.object({ id: z.string(), purpose: z.enum(["reference", "asset"]) })).max(15) });
 export type ThemeReview = z.infer<typeof reviewSchema>;
@@ -107,7 +108,7 @@ export async function createInitialTheme(input: { config: ShopConfig; request: s
   while (state.attempts < 3 || state.candidate) {
     if (!state.candidate) {
       state = { ...state, attempts: state.attempts + 1, review: undefined, renderedReview: undefined }; await persist();
-      const raw = await model({ system: generationSystem + "\n" + layoutInstruction, schema: themeSchema.toJSONSchema(), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
+      const raw = await model({ system: generationSystem + "\n" + layoutInstruction + "\n" + themeComponentInstruction, schema: themeSchema.toJSONSchema(), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
       const parsed = themeSchema.safeParse(normalizeInitialNavigation((() => { try { return JSON.parse(raw); } catch { return null; } })(), state.config));
       if (!parsed.success) { state = { ...state, feedback: parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`), candidate: undefined }; await persist(); continue; }
       state = { ...state, candidate: parsed.data }; await persist();

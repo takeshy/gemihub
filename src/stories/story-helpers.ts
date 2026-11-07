@@ -10,7 +10,7 @@ export async function openEditingChat({ canvasElement }: { canvasElement: HTMLEl
 }
 
 /** Drives the chat to the failing request, so the story opens on the error and its recovery action. */
-export async function sendFirstMessage(canvasElement: HTMLElement, text: string) {
+export async function sendFirstMessage(canvasElement: HTMLElement, text: string, resultSelector = '[role="alert"]') {
   const find = <T extends Element>(selector: string, match?: (element: T) => boolean) => new Promise<T>((resolve, reject) => {
     let attempt = 0;
     const tick = () => {
@@ -27,5 +27,5 @@ export async function sendFirstMessage(canvasElement: HTMLElement, text: string)
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, text);
   composer.dispatchEvent(new Event("input", { bubbles: true }));
   (await find<HTMLButtonElement>(".chat-composer button[type=submit], .chat-composer button", button => button.textContent === tr("送信"))).click();
-  await find('[role="alert"]');
+  await find(resultSelector);
 }

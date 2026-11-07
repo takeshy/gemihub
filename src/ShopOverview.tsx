@@ -13,7 +13,7 @@ import { ShopRequest } from "./ShopRequest";
 import type { Plan, Workspace } from "./App";
 export type BuildContext = { config: ShopConfig | null; published: boolean; revision: number; hash: string; history: { at: string; summary: string }[] };
 const days = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
-export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPlan, onAccept, plan, open, focusRequest = false, initialIntent }: { initialIntent?: RequestIntent; focusRequest?: boolean; google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; publiclyPublished: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[], intent?: RequestIntent, chat?: ChatReference) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
+export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPlan, onAccept, plan, open, previewHost, focusRequest = false, initialIntent }: { previewHost?: (host: HTMLDivElement | null) => void; initialIntent?: RequestIntent; focusRequest?: boolean; google?: Workspace["google"]; open: (screen: string) => void; shopId: string; isOwner: boolean; publiclyPublished: boolean; onPlan: (text: string, context: Pick<BuildContext, "revision" | "hash">, imageIds?: string[], intent?: RequestIntent, chat?: ChatReference) => Promise<Plan>; onAccept: (plan: Plan) => Promise<void>; plan?: Plan }) {
   const api = useApi();
   const { money, shopTime } = useShopDisplay();
   const [data, setData] = useState<BuildContext>();
@@ -55,6 +55,7 @@ export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPla
       <ol>{[...(data?.history || [])].reverse().map((entry, i) => <li key={`${entry.at}-${i}`}><time dateTime={entry.at}>{shopTime(entry.at)}</time><p>{entry.summary}</p></li>)}</ol>
       </details>
     </section>
+    {previewHost && <section className="panel shop-theme-editor" aria-label={tr("ページ全体の編集")}><h2>{tr("ページ全体")}</h2><p className="small muted">{tr("赤マルで囲んで、ページ全体や部品の見た目をAIに依頼できます。修正チャットは右側に表示されます。")}</p><div ref={previewHost} /></section>}
     <section ref={requestSection} className="panel shop-consultation" aria-label={tr("AIへの相談")}>
       <div className="section-top"><span className="ai-mark">✳</span><div><h2>{tr("AIとお店をつくる")}</h2><p className="small muted">{tr("直したいことや追加したいページをAIに伝えます。質問はメニューの「相談・質問」へ。")}</p></div></div>
       <p className="muted">{tr("現在のお店の設定と変更履歴を見ながら、音声や文字でやりとりできます。")}</p>
@@ -76,7 +77,7 @@ export function ShopOverview({ shopId, google, isOwner, publiclyPublished, onPla
             <section className="spec-card spec-wide spec-payment"><h3>{tr("お支払いとキャンセル")}</h3><p>{infographic.payment.summary}</p>{infographic.payment.policy && <p>{tr("返金条件（お支払い額に対して）：{0}", infographic.payment.policy)}</p>}<p>{infographic.payment.cancellation}</p></section>
             <section className="spec-card spec-wide"><h3><span aria-hidden="true">♧</span> {tr(" スタッフと予約の割り当て")}</h3><p>{tr("お客様が指名・指名なしを選択。指名なしは、対応するスタッフのうち空いている1人に割り当てます。")}</p><div className="spec-staff-list">{infographic.staff.map(staff => <div key={staff.id}><b>{staff.name}</b><p>{staff.weekdays.map(d => days()[d]).join(listSeparator())} {staff.start} – {staff.end}</p><p>{staff.menuIds.map(id => config.menus.find(m => m.id === id)?.name).join(listSeparator())}</p></div>)}</div><p className="spec-note">{tr("営業時間・勤務・施術時間・予約済みの時間・連携済みのGoogle Calendarを確認して、予約可能な時間を表示します。")}</p></section>
             <section className="spec-card spec-wide"><h3>{tr("お客様管理")}</h3><p>{tr("予約・問い合わせをメールアドレスでまとめ、来店回数・最終来店日・合計金額を自動集計します。")}</p><p>{tr("期間指定、メモ・予約・問い合わせの絞り込み、非公開のメモと添付、画像一覧に対応。来店実績は終了した有効な予約だけで、キャンセル・無断キャンセルを除きます。")}</p><p>{tr("予約時のメッセージは予約情報に記録します。")}</p></section>
-            <section className="spec-card spec-wide"><h3><span aria-hidden="true">▣</span> {tr(" お店のページ")}</h3><div className="spec-page-tags">{infographic.pages.map((page, i) => <span key={i}>{page.title}</span>)}</div><p className="spec-note">{tr("ヘッダー・フッターを含む見た目は「ページ全体」でまとめて編集できます。")}</p><p>{tr("アクセス：")}{config.address}</p><p>{tr("お店への通知：")}{config.notificationEmail}</p></section>
+            <section className="spec-card spec-wide"><h3><span aria-hidden="true">▣</span> {tr(" お店のページ")}</h3><div className="spec-page-tags">{infographic.pages.map((page, i) => <span key={i}>{page.title}</span>)}</div><p className="spec-note">{tr("ヘッダー・フッターや共通部品の見た目は、この画面の「ページ全体」でまとめて編集できます。")}</p><p>{tr("アクセス：")}{config.address}</p><p>{tr("お店への通知：")}{config.notificationEmail}</p></section>
           </div>
         </>}
       </section>

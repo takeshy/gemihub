@@ -8,6 +8,7 @@ import { postKey } from "../server/post-domain";
 import { ChromePreview, ThemeBody } from "./SiteChrome";
 import { hasThemeFrame } from "../shared/theme-editing";
 import { articleKinds } from "../shared/article-features";
+import { same, scopedSource } from "../server/pages";
 
 export type PreviewScreen = { id: string; name: string; description: string; pane?: string; category?: "blogs" | "announcements"; article?: boolean; articleKey?: string; pageSlug?: string };
 export function previewScreens(config: ShopConfig): PreviewScreen[] {
@@ -20,7 +21,7 @@ export function previewScreens(config: ShopConfig): PreviewScreen[] {
     { id: "blogs:article", name: tr("ブログ記事"), description: tr("お店のお便りを読む"), category: "blogs", article: true },
     { id: "announcements", name: tr("お知らせ一覧"), description: tr("営業日などの案内を一覧で見る"), category: "announcements" },
     { id: "announcements:article", name: tr("お知らせ記事"), description: tr("お店からの案内を読む"), category: "announcements", article: true },
-    ...config.pages.map(page => ({ id: `page:${page.id}`, name: page.title, description: tr("追加するページ"), pageSlug: page.slug })),
+    ...config.pages.map(page => ({ id: `page:${page.id}`, name: page.title, description: tr("追加ページ"), pageSlug: page.slug })),
   ] as PreviewScreen[]).filter(screen => !screen.category || articleKinds(config).includes(screen.category));
 }
 
@@ -53,27 +54,64 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
 }
 
 /**
- * The first-publication review: the screens that will be prepared, by name only, and a sample of
- * the theme (header, footer, colours and layout) with placeholder content instead of screen captures.
+ * Initial and subsequent proposal reviews share the screen inventory and whole-page sample.
+ * Later proposals also compare the published design and mark screen changes.
  */
-export function ScreenGallery({ config, shopId, themeRef }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null> }) {
+export function ScreenGallery({ config, shopId, themeRef, previousConfig }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null>; previousConfig?: ShopConfig }) {
+  const [before, setBefore] = useState(false);
+  const screens = previewScreens(config);
+  const previousScreens = previousConfig ? previewScreens(previousConfig) : [];
+  const removed = previousScreens.filter(screen => !screens.some(next => next.id === screen.id));
+  const themeChanged = previousConfig && !same(scopedSource(previousConfig, { kind: "theme" }), scopedSource(config, { kind: "theme" }));
+  const screenChanged = (id: string) => id.startsWith("page:")
+    ? !same(previousConfig?.pages.find(page => `page:${page.id}` === id), config.pages.find(page => `page:${page.id}` === id))
+    : !same(previousConfig?.screens?.[id as keyof NonNullable<ShopConfig["screens"]>], config.screens?.[id as keyof NonNullable<ShopConfig["screens"]>]);
   return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}>
     <h4>{tr("用意する画面")}</h4>
-    <ul className="screen-name-list">{previewScreens(config).map(screen => <li key={screen.id}><strong>{screen.name}</strong><span>{screen.description}</span></li>)}</ul>
+    <ul className="screen-name-list">
+      {screens.map(screen => <li key={screen.id}>
+        <strong>{screen.name}</strong><span>{screen.description}</span>
+        {previousConfig && (!previousScreens.some(previous => previous.id === screen.id)
+          ? <b className="screen-change screen-added">{tr("追加")}</b>
+          : screenChanged(screen.id) ? <b className="screen-change">{tr("変更")}</b> : null)}
+      </li>)}
+      {removed.map(screen => <li key={screen.id} className="screen-removed"><strong>{screen.name}</strong><b className="screen-change">{tr("削除")}</b></li>)}
+    </ul>
     <p className="small muted">{tr("全画面に共通のヘッダー・フッターが付きます。")}</p>
     <h4>{tr("ページの雰囲気")}</h4>
+    {themeChanged && <p className="notice">{tr("ページ全体のデザインに変更があります。変更前と変更後を切り替えて確認できます。")}</p>}
+    {previousConfig && <div className="actions" aria-label={tr("ページ全体の比較")}><button type="button" aria-pressed={before} onClick={() => setBefore(true)}>{tr("変更前")}</button><button type="button" aria-pressed={!before} onClick={() => setBefore(false)}>{tr("変更後")}</button></div>}
     <p className="small muted">{tr("色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。")}</p>
-    <ThemePreview config={config} shopId={shopId} themeRef={themeRef} />
+    <ThemePreview config={before && previousConfig ? previousConfig : config} shopId={shopId} themeRef={themeRef} />
   </section>;
 }
 
-/** A complete frame, with unmistakably dummy content instead of a working booking screen. */
+function ThemeSamples() {
+  return <div className="theme-placeholder">
+    <strong>{tr("Dummy（仮の内容）")}</strong>
+    <p>{tr("各画面で使う部品の見本です。色・文字・ボタン・入力欄・カードをまとめて確認できます。")}</p>
+    <section className="panel theme-sample-card">
+      <h2>{tr("見出しの見本")}</h2><p>{tr("本文の見本です。お店の紹介やご案内がここに入ります。")}</p>
+      <div className="theme-sample-fields">
+        <label className="field">{tr("お名前")}<input readOnly value={tr("サンプルのお客様")} /></label>
+        <label className="field">{tr("メニュー")}<select defaultValue="sample"><option value="sample">{tr("サンプルメニュー")}</option></select></label>
+        <label className="field">{tr("メッセージ")}<textarea readOnly rows={2} value={tr("メッセージの見本です。")} /></label>
+      </div>
+      <div className="actions"><button type="button" className="primary">{tr("予約する")}</button><button type="button">{tr("戻る")}</button><a>{tr("詳しく見る")}</a></div>
+      <p className="notice">{tr("ご案内の見本です。実際の予約や送信は行いません。")}</p>
+    </section>
+  </div>;
+}
+
+/** A complete frame containing inert samples of the real screens' UI elements. */
 export function ThemePreview({ config, shopId, themeRef }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null> }) {
   const accent = config.appearance?.accent || "sage";
   const layout = config.appearance?.layout || "standard";
   return <div className="theme-preview" ref={themeRef} inert aria-label={tr("ページ全体の見本")}>
       <ChromePreview config={config} part="header" imageBase={`/api/shops/${shopId}/menu-images`} />
-      <div className={`public-shop accent-${accent} layout-${layout}${hasThemeFrame(config.appearance?.theme)?" custom-theme":""}`}><ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><div className="theme-placeholder"><strong>{tr("Dummy（仮の内容）")}</strong><span>{tr("ここに各ページの内容が入ります")}</span><small>{tr("予約やお問い合わせなどの内容は、それぞれの画面で編集できます。")}</small></div></ThemeBody></div>
+      <div className={`public-shop accent-${accent} layout-${layout}${hasThemeFrame(config.appearance?.theme)?" custom-theme":""}`}>
+        <ThemeBody config={config} imageBase={`/api/shops/${shopId}/menu-images`}><ThemeSamples /></ThemeBody>
+      </div>
       <ChromePreview config={config} part="footer" imageBase={`/api/shops/${shopId}/menu-images`} />
     </div>;
 }

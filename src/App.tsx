@@ -40,7 +40,8 @@ import { MenuImage, MenuImageEditor } from "./MenuImage";
 import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
-import React, { useEffect, useState, useRef, useId } from "react";
+import React, { useEffect, useLayoutEffect, useState, useRef, useId } from "react";
+import { createPortal } from "react-dom";
 import { useApi } from "./api";
 import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
@@ -363,11 +364,15 @@ function Dashboard({
   const api = useApi();
   const navigation = useDashboardNavigation(search, initialTab, browserNavigation);
   const { tab, shop: chosen, screen: initialScreen, article: initialArticleKey, customer: initialCustomer, customerImages: initialCustomerImages, inquiry: initialInquiryId, focusRequest, intent: requestIntent } = navigation.route;
-  const editorSelection = useRef({ screen: initialScreen || "reserve", article: initialArticleKey });
+  const editorSelection = useRef({ screen: initialScreen && !["theme", "part:header", "part:footer"].includes(initialScreen) ? initialScreen : "reserve", article: initialArticleKey });
   const [shops, setShops] = useState<Workspace[]>([]);
   // Until the first workspace response, an empty list means "loading", not "no shops".
   const [loaded, setLoaded] = useState(false);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
+  const [buildEditorHost, setBuildEditorHost] = useState<HTMLDivElement | null>(null);
+  const [screenEditorHost, setScreenEditorHost] = useState<HTMLDivElement | null>(null);
+  // Move the same editor between views so local edits, recovery and the sidebar stay intact.
+  const [editorMount] = useState(() => document.createElement("div"));
   const [editorTreeOpen, setEditorTreeOpen] = useState(true);
   const editorTreeId = useId();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -395,7 +400,12 @@ function Dashboard({
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
   const activeTab = !publiclyPublished && ["bookings", "customers", "analytics", "coupons"].includes(tab)
     ? (shop?.isOwner ? "try" : "staff") : tab;
-  const view = creating ? "build" : activeTab;
+  const view = creating || activeTab === "try" && ["theme", "part:header", "part:footer"].includes(initialScreen || "") ? "build" : activeTab;
+  useLayoutEffect(() => {
+    const host = view === "build" ? buildEditorHost : screenEditorHost;
+    if (host) host.appendChild(editorMount);
+    return () => editorMount.remove();
+  }, [view, buildEditorHost, screenEditorHost, editorMount]);
   function closeMobileMenu() {
     setMobileMenuOpen(false);
     if (mobileMenuOpen && window.matchMedia("(max-width: 760px)").matches) menuToggle.current?.focus();
@@ -411,7 +421,7 @@ function Dashboard({
     if (allowed !== tab) navigation.visit(allowed, shop.id, undefined, undefined, true);
   }, [shop?.id, shop?.isOwner, view, tab, publiclyPublished]);
   useEffect(() => {
-    if (tab === "try") editorSelection.current = { screen: initialScreen || "reserve", article: initialArticleKey };
+    if (tab === "try" && view === "try") editorSelection.current = { screen: initialScreen || "reserve", article: initialArticleKey };
   }, [tab, initialScreen, initialArticleKey]);
   useEffect(() => { setPlan(undefined); }, [shop?.id]);
   const activePlan =
@@ -567,7 +577,7 @@ function Dashboard({
                 )}
                 {view === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} publiclyPublished={publiclyPublished} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.judge ? undefined : shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} previewHost={shop.isOwner ? setBuildEditorHost : undefined} shopId={shop.id} publiclyPublished={publiclyPublished} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.judge ? undefined : shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
                       setPlan(p); await load(); return p;
                     }} />}
@@ -608,7 +618,8 @@ function Dashboard({
             )}
           </>
         )}
-        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} active={view === "try"} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { closeMobileMenu(); editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
+        <div hidden={view !== "try"} ref={setScreenEditorHost} />
+        {shop?.isOwner && shop.published && createPortal(<LocalPreview key={shop.id} active={view === "try" || view === "build"} initialScreen={view === "build" ? "theme" : tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { closeMobileMenu(); if (screen === "theme") { navigation.visit("build", shop.id); return; } editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} />, editorMount)}
       </section>
     </div>
     </ShopRegionContext.Provider>

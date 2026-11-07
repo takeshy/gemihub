@@ -49,18 +49,18 @@ try{
   const page=await context.newPage();active=page;page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(`${origin}/?lang=${language}`);
   if(width<760)await page.locator('.mobile-menu-toggle').click();
-  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('画面を試す・編集')+'$')}).click();
-  if(width<760)await page.locator('.mobile-menu-toggle').click();
-  await page.getByRole('treeitem',{name:new RegExp('^'+label('ページ全体'))}).click();
+  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('AIとお店をつくる')+'$')}).click();
   assert.equal(await page.getByRole('treeitem',{name:label('ヘッダー'),exact:true}).count(),0);
   assert.equal(await page.getByRole('treeitem',{name:label('フッター'),exact:true}).count(),0);
   const preview=page.locator('.local-preview-screen');await expect(preview).toContainText(label('Dummy（仮の内容）'));
-  assert.equal(await preview.locator('form,input,select').count(),0,'the center is dummy content, not a booking form');
+  assert.equal(await preview.locator('form').count(),0,'the center contains inert samples, not a booking form');
+  await expect(preview.locator('.theme-placeholder input')).toBeVisible();
+  await expect(preview.locator('.theme-preview')).toHaveAttribute('inert','');
   await expect(preview.locator('.public-nav')).toBeVisible();await expect(preview.locator('.site-footer')).toBeVisible();
   const draft=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)),key);
   const begin=async()=>{
    await page.getByRole('button',{name:label('修正する'),exact:true}).click();const canvas=page.locator('.annotation-canvas');
-   await expect.poll(()=>canvas.evaluate(element=>element.height)).toBeGreaterThan(100);const bounds=await canvas.boundingBox();
+   await expect.poll(()=>canvas.evaluate(element=>element.height)).toBeGreaterThan(100);await canvas.evaluate(element=>element.scrollIntoView({block:'start'}));const bounds=await canvas.boundingBox();
    await page.mouse.move(bounds.x+20,bounds.y+30);await page.mouse.down();await page.mouse.move(bounds.x+180,bounds.y+40);await page.mouse.up();
    const chat=page.locator('.visual-chat-panel');await chat.getByRole('textbox').fill(language==='ja'?'上のメニューの間隔を広げて、下のあいさつも変えてください。':'Make the top menu more spacious and change the footer greeting.');
    if(process.env.UPDATE_MANUAL==='1'&&await chat.locator('.chat-message').count()===0)await page.screenshot({path:`public/manual/${language==='en'?'en/':''}22-pen.jpg`,type:'jpeg',quality:86,fullPage:true});

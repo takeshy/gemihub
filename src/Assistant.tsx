@@ -2,7 +2,8 @@ import { getLocale, intlLocale, tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
-import { ConfigSummary, type Plan, type Workspace } from "./App";
+import { type Plan, type Workspace } from "./App";
+import { ScreenGallery } from "./ScreenGallery";
 import { AssistantAnswer } from "./AssistantAnswer";
 import { paid } from "./money";
 import type { PayPalAlertItem, PayPalAlertState, PayPalProposal, PayPalProposalOperation, PayPalSeverity, PayPalAlertKind } from "../server/paypal-ops";
@@ -136,7 +137,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
     {plan && <section className="request-review" aria-label={tr("変更案の確認")}>
       <h3>{tr("このように変更してよいですか？")}</h3>
       <ul className="check-list">{plan.summary.map((summary, index) => <li key={index}>{summary}</li>)}</ul>
-      <ConfigSummary config={plan.config} />
+      <ScreenGallery key={plan.id} config={plan.config} previousConfig={shop.published || undefined} shopId={shop.id} />
       <div className="actions">
         <button type="button" disabled={busy} onClick={() => setPlan(undefined)}>{tr("やめる")}</button>
         <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => { await acceptPlan(plan); if (alive.current) { setPlan(undefined); setMessages(items => [...items, { role: "assistant", text: tr("変更を反映しました。変更履歴に依頼文とあわせて記録しました。") }]); } })}>{tr("この内容で反映する")}</button>

@@ -55,7 +55,7 @@ Keep Google authorization, sign-in, country, and time zone; return to an empty s
 
 ## Local screen editor and scoped releases
 
-After private publication, the owner starts in Try and edit screens; staff start in their calendar until public publication, then booking management. Keep a persistent sidebar tree for shared components, booking/shop pages, blog/announcements, and additional pages. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Firestore, Gmail, Calendar, or production data.
+After private publication, the owner starts in Try and edit screens; staff start in their calendar until public publication, then booking management. Keep a persistent sidebar tree for booking/shop pages, blog/announcements, and additional pages; edit the shared entire-page design in Build with AI. Use the real customer components with an isolated mock API. Practice bookings, cancellations, inquiries, sample names, and sample articles must never affect Firestore, Gmail, Calendar, or production data.
 
 Show blog and announcement lists/articles in the tree and sample data only when those features are enabled. Refresh feature choices in cached drafts without losing local design edits. Switching between cached screens does not wait for a remote update check; periodic checks and conflict detection at publication remain active.
 
@@ -296,7 +296,9 @@ After the first theme sample, use Make changes and red-pen instructions. A revie
 
 ## Editing chat and initial selections
 
-Replace the separate Header, Footer and Frame tree items with Entire page. This preview always includes header and footer, with a clearly marked Dummy placeholder in the center. Edit, compare, publish, discard and restore the complete frame together, preserving business facts, enabled features, individual screen contents and other page drafts.
+After creation, proposal reviews use the initial screen list and entire-page preview instead of a configuration/specification summary. Mark added, changed and removed screens, highlight overall design changes, and allow switching between the current and proposed page. Keep explicit approval before applying.
+
+Place Entire page in Build with AI, rather than in the Try & edit screens tree. This preview always includes header and footer, with a clearly marked Dummy area containing the same heading, text, button, input, select, textarea, card and notice elements/classes used by real screens. Samples are inert. Circle any component with the red pen and use the chat on the right to request shared CSS changes across screens. Edit, compare, publish, discard and restore the complete frame together, preserving business facts, enabled features, individual screen contents and other page drafts.
 
 The first-theme and regular red-pen editors keep the picture on the left and the editing conversation on the right (below on phones). The original preview is hidden while the annotation capture is shown. Replies stay in the chat; applying a revision retains the conversation. Initial themes update on Send; regular changes automatically locate the target from the red marks and request, generate and review the proposal, then show the comparison without a target selector. Only unclear requests get a short clarification question. Edits remain unpublished until the existing publication action.
 

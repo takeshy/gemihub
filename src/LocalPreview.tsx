@@ -50,7 +50,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
     document.addEventListener("keydown", closeOnEscape);
     return () => { document.removeEventListener("pointerdown", closeOutside, true); document.removeEventListener("keydown", closeOnEscape); };
   }, []);
-  const [screen, setScreen] = useState("reserve");
+  const [screen, setScreen] = useState(initialScreen || "reserve");
   const [penHost, setPenHost] = useState<HTMLSpanElement | null>(null);
   const [historyHost, setHistoryHost] = useState<HTMLSpanElement | null>(null);
   const [visibility, setVisibility] = useState<Record<string, { header?: boolean; footer?: boolean }>>({});

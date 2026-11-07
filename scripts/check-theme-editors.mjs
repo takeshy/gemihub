@@ -21,8 +21,9 @@ try{
   const context=await browser.newContext({viewport:{width,height:950}});await context.addCookies([{name:'gemihub_session',value:cookie,url:origin}]);
   const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(`${origin}/?lang=${language}`);if(width<760)await page.locator('.mobile-menu-toggle').click();
-  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('画面を試す・編集')+'$')}).click();if(width<760)await page.locator('.mobile-menu-toggle').click();
-  await page.getByRole('treeitem',{name:label('ページ全体'),exact:true}).click();
+  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('AIとお店をつくる')+'$')}).click();
+  await expect(page.locator('.shop-theme-editor .local-preview-screen')).toBeVisible();
+  await expect(page.getByRole('treeitem',{name:label('ページ全体'),exact:true})).toHaveCount(0);
   await page.locator('summary').filter({hasText:label('ページ全体の HTML を編集')}).click();
   const area=text=>page.getByRole('textbox',{name:label(text),exact:true});
   await area('ヘッダーの HTML').fill('<header class="edited-header"><h1>EDITED HEADER</h1><slot name="navigation"></slot></header>');

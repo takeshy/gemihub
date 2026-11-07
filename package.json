@@ -26,6 +26,7 @@
     "check:initial-theme": "node --import tsx scripts/check-initial-theme.mjs",
     "check:onboarding-recovery": "node --import tsx scripts/check-onboarding-recovery.mjs",
     "check:theme-layout": "node --import tsx scripts/check-theme-layout.mjs",
+    "check:build-design": "node --import tsx scripts/check-build-design.mjs",
     "check:theme-editors": "node --import tsx scripts/check-theme-editors.mjs",
     "check:fixture-scope": "node --import tsx scripts/check-fixture-scope.mjs",
     "check:mobile-inputs": "node scripts/check-mobile-inputs.mjs",

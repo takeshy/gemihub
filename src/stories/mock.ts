@@ -100,6 +100,7 @@ export type Scenario =
   | "editor-conflict"
   | "editor-local"
   | "page-builder"
+  | "design-proposal"
   | "proposal-failure"
   | "question-failure"
   | "local-editor-pages"
@@ -888,7 +889,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
       const newPage = input.intent === "new-page";
       const creation=input.intent==="create-shop";
       const changeRequest = input.intent !== "consult" && (newPage || /変更|したい|変え|追加|使って|change|add|use|want/i.test(String(input.question)));
-      result = {answer: newPage && changeRequest ? tr("新しいページと、お客様向けのメニューに表示する名前を確認してください。") : hasImages && changeRequest ? tr("選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。") : changeRequest ? tr("「{0}」のご依頼ですね。Storybook のサンプルでは、水曜日を定休日にする変更案を作ります。内容を確認してから承認・公開してください。", String(input.question).slice(0, 80)) : /履歴|history/i.test(String(input.question)) ? tr("変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。") : tr("お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。"), changeRequest};
+      result = {answer: scenario === "design-proposal" && changeRequest ? tr("新しいページと、お客様向けのメニューに表示する名前を確認してください。") + "\n" + tr("ページ全体の見た目をまとめて修正します。") : newPage && changeRequest ? tr("新しいページと、お客様向けのメニューに表示する名前を確認してください。") : hasImages && changeRequest ? tr("選んだ画像を使う変更ですね。変更案を確認してから承認・公開してください。") : changeRequest ? tr("「{0}」のご依頼ですね。Storybook のサンプルでは、水曜日を定休日にする変更案を作ります。内容を確認してから承認・公開してください。", String(input.question).slice(0, 80)) : /履歴|history/i.test(String(input.question)) ? tr("変更履歴には「お店の予約ページを公開」が記録されています。現在のメニューや勤務時間は左の仕様で確認できます。") : tr("お客様が指名・指名なしを選べます。指名時は指定先だけ、指名なしは対応スタッフ全員の勤務時間と既存の予約を確認して空き枠を表示します。"), changeRequest};
       const currentMessages=chatReference?chats.find(chat=>chat.id===chatReference.id)?.messages || []:[];
       const related=findRelevantHistory(chats.flatMap(chat=>chat.messages),new Map(chats.map(chat=>[chat.id,chat.intent])),String(input.question),new Set(currentMessages.slice(-24).map(message=>message.id)));
       (window as unknown as {__omaiStoryLastHistory:unknown}).__omaiStoryLastHistory=related;
@@ -935,6 +936,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
         const imageId = (input.imageIds as string[])[0];
         if (/FAQ|よくある質問/.test(String(input.text)) && next.pages.length) { next.pages[0].imageId = imageId; next.pages[0].imageUrl = ""; }
         else { next.header.imageId = imageId; next.header.imageUrl = ""; }
+      } else if (!input.config && shop.published && scenario === "design-proposal") {
+        next.pages.push({ id: "new-faq", slug: "new-faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: "<h2>FAQ</h2>", layout: "standard", imageUrl: "" });
+        next.appearance = { layout: "standard", imageUrl: "", ...next.appearance, accent: "navy", theme: structuredClone(exampleTheme), articles: { blogs: false, announcements: true } };
       } else if (!input.config && shop.published) {
         next.hours.closedWeekdays = [3];
         next.menus.push({

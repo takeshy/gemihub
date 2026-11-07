@@ -22,5 +22,5 @@ export function ScreenTree({ draft, index, statuses, selected, disabled, onChoos
     const status = statuses[id === "theme" ? "theme" : id.startsWith("page:") ? id.slice(5) : "content"];
     return <button key={id} role="treeitem" aria-selected={selected === id} disabled={disabled} onClick={() => onChoose(id)}><span className="tree-name">{label}</span>{status && ["local", "remote", "conflict"].includes(status) && <span className={`sync-badge sync-${status}`} title={badges[status as "local" | "remote" | "conflict"].title}>{badges[status as "local" | "remote" | "conflict"].label}</span>}</button>;
   };
-  return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{item("theme", tr("ページ全体"))}{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => item(id, label))}</div></details>)}</div>;
+  return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => item(id, label))}</div></details>)}</div>;
 }
