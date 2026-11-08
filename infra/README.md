@@ -135,6 +135,8 @@ After initial validation, configure `repository` and review/apply the plan to tr
 
 `infra/deploy-vm.sh` prepares the SSH known-host directory and checks authentication before deployment. SSH connection failures (exit 255) retry the check at most three times; the remote deployment runs once. Each build uses its own key, which expires after ten minutes and is removed on exit. A failed remote deployment is reported without retrying it.
 
+After deployment, `deploy-gemihub.py` verifies HTTP 200 and a stable container without restarts before persisting the manifest and removing unused images from this service's repository. It keeps the current image, the image used immediately before deployment, and every image referenced by any container. Cleanup never runs before deployment or after a failed health check, and never prunes other apps, containers or volumes. The deployment lock prevents cleanup racing another deployment. The shared boot disk remains 30GB; successful deployments keep only the necessary rollback images.
+
 ```sh
 cd /path/to/omaiweb
 npm ci --ignore-scripts

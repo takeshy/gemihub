@@ -127,6 +127,8 @@ kiokuflow の既存 private 設定に、出力の `shared_vm_backends.gemihub-we
 
 `infra/deploy-vm.sh` はSSHの接続先情報を保存する場所を準備し、配信前に認証を確認します。SSH接続の失敗（終了コード255）では確認だけを最大3回試し、配信処理は1回だけ実行します。鍵はビルドごとに作成し、有効期限を10分に設定して終了時に削除します。配信処理自体が失敗した場合は再実行せず、失敗として報告します。
 
+配信後は `deploy-gemihub.py` がHTTP 200とコンテナの再起動がないことを確認してからmanifestを保存し、このサービスの古い未使用イメージを整理します。現在の版・配信直前の版・いずれかのコンテナが参照するイメージを残します。配信前や正常起動を確認できない場合は削除しません。他アプリのイメージ・コンテナ・ボリュームには触れず、共有の配信ロックで別の配信との競合を防ぎます。共有VMのディスクは30GBのままとし、配信成功後の整理で戻し先を確保しながら容量を維持します。
+
 GitHubリポジトリは `takeshy/gemihub` です。Cloud Buildの接続先は `remoteUri = https://github.com/takeshy/gemihub.git` の登録を選びます。現在の登録名は `projects/geminihub-486523/locations/asia-northeast1/connections/gemini-hub-github/repositories/gemihub` です。リポジトリ名を変更した場合は、Gitの転送だけに頼らず、`repository` とトリガーの参照先も確認してください。push後は、そのコミットSHAのビルドが起動・成功したことと、本番の画面が更新されたことを確認します。
 
 ```sh

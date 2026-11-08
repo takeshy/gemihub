@@ -42,5 +42,7 @@ for attempt in 1 2 3; do
   sleep "$((attempt * 5))"
 done
 
+deploy_script=$(base64 -w0 "$(dirname "$0")/deploy-gemihub.py")
+printf -v image_arg '%q' "$image"
 gcloud "${ssh_args[@]}" \
-  --command="sudo python3 /opt/shared-apps/deploy.py --app gemihub-web --image $image && sudo python3 /opt/shared-apps/register.py --persist"
+  --command="printf '%s' '$deploy_script' | base64 -d | sudo python3 - --image $image_arg"

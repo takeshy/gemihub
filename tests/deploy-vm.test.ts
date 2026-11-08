@@ -45,7 +45,7 @@ test("deployment waits for SSH authentication and runs the remote deployment onc
   assert.equal(result.status, 0, result.stderr);
   const commands = ssh(result.calls);
   assert.equal(commands.filter(c => c.args.includes("--command=true")).length, 3);
-  assert.equal(commands.filter(c => c.args.some(a => a.includes("deploy.py"))).length, 1);
+  assert.equal(commands.filter(c => c.args.some(a => a.includes("sudo python3 - --image"))).length, 1);
   assert.equal(result.calls.filter(c => c.tool === "sleep").length, 2);
   assert.equal(result.calls[0].tool, "mkdir");
   assert.equal(result.calls[1].tool, "chmod");
