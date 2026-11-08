@@ -1200,11 +1200,14 @@ export function createApp(
         const caller = judgeLine ? judgeCallerNumber(from) : callerNumber(from);
         const registration = judgeLine && caller
           ? (await store.list<JudgePhoneRegistration>("judgePhone")).find(record => record.caller === caller) : undefined;
+        const originalShops = judgeLine
+          ? allShops.filter(candidate => !candidate.judge && samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to)) : [];
         let pinAccess = false;
+        let originalAccess = false;
         let shop = judgeLine
           ? allShops.find(candidate => candidate.judge && candidate.id === registration?.shopId)
           : allShops.find(candidate => samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to));
-        if (judgeLine && !shop) {
+        if (judgeLine && (!shop || originalShops.length > 0 || url.searchParams.has("pinAttempt"))) {
           const locale = judgeLine === japaneseLine ? "ja" : "en";
           const language = locale === "ja" ? "ja-JP" : "en-US";
           const denied = () => reply(requestLocale.run(locale, () => twimlSay(tr("暗証番号を確認できませんでした。審査メニューを確認して、しばらくしてからおかけ直しください。"), language)));
@@ -1213,33 +1216,40 @@ export function createApp(
           const attempt = attemptText === null ? 0 : /^[1-3]$/.test(attemptText) ? Number(attemptText) : 4;
           const gather = (retry: boolean) => reply(requestLocale.run(locale, () => twimlGatherPin(
             `${origin()}/phone/incoming?pinAttempt=${attempt + 1}`,
-            retry ? tr("暗証番号が違うか、お店が利用できません。審査メニューに表示された8桁の暗証番号をもう一度入力してください。")
-              : tr("発信元の電話番号が未登録です。審査メニューに表示された8桁の暗証番号を電話のキーで入力してください。"), language)));
+            (retry ? tr("暗証番号が違うか、お店が利用できません。審査メニューに表示された8桁の暗証番号をもう一度入力してください。")
+              : tr("審査用のお店をご利用の場合は、審査メニューに表示された8桁の暗証番号を電話のキーで入力してください。"))
+              + (originalShops.length === 1 ? tr("本来のお店をご利用の場合は、0を8回入力してください。") : ""), language)));
           if (!attempt) return gather(false);
           if (attempt > 3 || !params.CallSid) return denied();
-          // Bound guesses across calls too. Keys contain only a digest of the caller, never its number or PIN.
-          const allowed = await store.locked(`judge-phone-pin:${digest(caller)}`, async () => {
-            const key = digest(caller), now = Date.now();
-            const previous = await store.get<{ count: number; until: number }>("judgePhonePinAttempts", key);
-            const counter = previous && previous.until > now ? previous : { count: 0, until: now + 15 * 60000 };
-            if (counter.count >= 10) return false;
-            await store.put("judgePhonePinAttempts", key, { ...counter, count: counter.count + 1 });
-            return true;
-          });
-          if (!allowed) return denied();
-          const matches = /^\d{8}$/.test(params.Digits || "")
-            ? allShops.filter(candidate => candidate.judge && secretMatches(params.Digits, judgePhonePin(candidate.id))) : [];
-          // In the unlikely event of a PIN collision, never select somebody else's shop.
-          if (matches.length !== 1) return attempt < 3 ? gather(true) : denied();
-          shop = matches[0];
-          pinAccess = true;
+          if (params.Digits === "00000000") {
+            if (originalShops.length !== 1) return attempt < 3 ? gather(true) : denied();
+            shop = originalShops[0];
+            originalAccess = true;
+          } else {
+            // Bound guesses across calls too. Keys contain only a digest of the caller, never its number or PIN.
+            const allowed = await store.locked(`judge-phone-pin:${digest(caller)}`, async () => {
+              const key = digest(caller), now = Date.now();
+              const previous = await store.get<{ count: number; until: number }>("judgePhonePinAttempts", key);
+              const counter = previous && previous.until > now ? previous : { count: 0, until: now + 15 * 60000 };
+              if (counter.count >= 10) return false;
+              await store.put("judgePhonePinAttempts", key, { ...counter, count: counter.count + 1 });
+              return true;
+            });
+            if (!allowed) return denied();
+            const matches = /^\d{8}$/.test(params.Digits || "")
+              ? allShops.filter(candidate => candidate.judge && secretMatches(params.Digits, judgePhonePin(candidate.id))) : [];
+            // In the unlikely event of a PIN collision, never select somebody else's shop.
+            if (matches.length !== 1) return attempt < 3 ? gather(true) : denied();
+            shop = matches[0];
+            pinAccess = true;
+          }
         }
         // Twilio sends no language preference; the caller hears the shop's language.
         if (shop) requestLocale.enterWith(await phoneLocale(shop));
         const sayLanguage = getLocale() === "en" ? "en-US" : "ja-JP";
         if (!shop) return reply(twimlSay(tr("この電話番号は現在ご利用いただけません。"), sayLanguage));
         logs.bind(shop.id);
-        const settings = judgeLine || phoneSettingsOf(shop);
+        const settings = originalAccess ? phoneSettingsOf(shop) : judgeLine || phoneSettingsOf(shop);
         const recordOutcome = (outcome: "blocked" | "closed" | "error", transcript = "") => logs.forShop(shop.id, () => logs.record({
           kind: "phone", ok: outcome !== "error", operation: "phone_call", outcome, callId: callSid, transcript,
         }, digest(`${shop.id}:phone-call:${callSid}`)));
@@ -1251,7 +1261,7 @@ export function createApp(
           return reply(twimlSay(tr("恐れ入りますが、番号を通知しておかけ直しください。"), sayLanguage));
         }
         const base = process.env.PHONE_STREAM_ORIGIN || origin();
-        return reply(twimlConnect(base, shop.id, callSid, caller, pinAccess ? "pin" : !!judgeLine));
+        return reply(twimlConnect(base, shop.id, callSid, caller, pinAccess ? "pin" : !!judgeLine && !originalAccess));
       }
       const s = await session(store, req);
       const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;

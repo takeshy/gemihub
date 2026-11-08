@@ -2084,6 +2084,9 @@ pre {
 .shop-request .request-review .config-summary li { font-size: 14px; }
 .shop-request .request-review .summary-grid { font-size: 14px; }
 .shop-request .request-review .summary-grid span { font-size: 12px; }
+.initial-design-guidance { margin: 20px 0; padding: 18px 20px; border: 1px solid #b7cebc; border-left: 5px solid var(--green); border-radius: 12px; background: #eef5ed; color: #283c35; overflow-wrap: anywhere; }
+.initial-design-guidance h4 { margin: 0 0 10px; font-size: 18px; line-height: 1.6; color: var(--green); }
+.initial-design-guidance p { margin: 8px 0 0; font-size: 15px; line-height: 1.9; }
 .functional-overview { margin: 24px 0; display: grid; gap: 22px; }
 .functional-overview h4, .functional-overview h5, .functional-overview p { margin: 0; }
 .functional-overview h4 { font-size: 16px; }

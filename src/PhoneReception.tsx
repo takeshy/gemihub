@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { tr } from "../shared/i18n";
 import { useApi } from "./api";
 import { defaultPhoneSettings, type PhoneSettings, type PhoneRulesProposal } from "../shared/phone";
@@ -10,6 +10,7 @@ const outcomeLabel = (outcome?: string) => ({ booking: tr("予約"), inquiry: tr
 
 export function PhoneReception({ shop, reload }: { shop: Workspace; reload: () => Promise<unknown> }) {
   const api = useApi();
+  const phoneNumberHelpId = useId();
   const [settings, setSettings] = useState<PhoneSettings>(shop.phoneSettings || defaultPhoneSettings);
   const [source, setSource] = useState<PhoneSettings>(shop.phoneSettings || defaultPhoneSettings);
   const [useHours, setUseHours] = useState(!!(shop.phoneSettings || defaultPhoneSettings).hours);
@@ -49,7 +50,8 @@ export function PhoneReception({ shop, reload }: { shop: Workspace; reload: () =
     {notice && <p className="notice" role="status">{notice}</p>}
     <fieldset disabled={busy || !!proposal}>
     <label className="checkbox"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings({ ...settings, enabled: event.target.checked })} />{tr("AI電話受付を有効にする")}</label>
-    <label>{tr("Twilioの電話番号（E.164）")}<input value={settings.twilioNumber} placeholder="+819012345678" onChange={event => setSettings({ ...settings, twilioNumber: event.target.value })} /></label>
+    <label>{tr("Twilioの電話番号")}<input value={settings.twilioNumber} placeholder="+819012345678" aria-describedby={phoneNumberHelpId} onChange={event => setSettings({ ...settings, twilioNumber: event.target.value })} /></label>
+    <p id={phoneNumberHelpId} className="small muted">{tr("「+国番号」に、先頭の0を除いた電話番号を続け、ハイフンなしで入力してください。日本の国番号は81です。例：090-1234-5678 → +819012345678、03-1234-5678 → +81312345678。")}</p>
     <label className="checkbox"><input type="checkbox" checked={settings.cashBookings} onChange={event => setSettings({ ...settings, cashBookings: event.target.checked })} />{tr("電話で現金の当日予約を受け付ける")}</label>
     <p className="small muted">{tr("前払いを使う店では今日の残り枠だけ、前払いを使わない店では予約可能期間内の任意の日を受け付けます。当日分の譲渡枠は電話では扱いません。")}</p>
     <fieldset>

@@ -53,7 +53,11 @@ try{
     if(process.env.UPDATE_MANUAL==='1'&&width===1280)await writeFile(`public/manual/${language==='en'?'en/':''}04-plan.jpg`,await page.locator('.screen-gallery').screenshot({type:'jpeg',quality:86}));
     await expect(page.getByRole('button',{name:language==='ja'?'修正する':'Make changes',exact:true})).toHaveCount(0);
     await expect(page.locator('.visual-chat-panel, .annotation-canvas')).toHaveCount(0);
-    await expect(page.getByText(language==='ja'?'ページの見た目は、仮公開したあと「画面を試す・編集」から変更できます。':'You can change the page appearance in “Try and edit screens” after publishing a private preview.',{exact:true})).toBeVisible();
+    const guidance=page.locator('.initial-design-guidance');
+    await expect(guidance.getByRole('heading',{name:language==='ja'?'仮公開したあとにできること':'What you can do after publishing a private preview',exact:true})).toBeVisible();
+    await expect(guidance.getByText(language==='ja'?'仮公開したあと「AIとお店をつくる」を開くと、実際の画面を見ながらAIに指示して見た目を修正できます。':'After publishing a private preview, open “Build your shop with AI” to request design changes while viewing the actual screens.',{exact:true})).toBeVisible();
+    await expect(guidance.getByText(language==='ja'?'「このボタンを大きく」「背景を明るく」などの指示で修正できます。':'You can ask for changes such as “Make this button bigger” or “Make the background lighter”.',{exact:true})).toBeVisible();
+    assert.ok(await guidance.evaluate(el=>{const style=getComputedStyle(el);return parseFloat(style.borderLeftWidth)>=4&&parseFloat(getComputedStyle(el.querySelector('p')).fontSize)>=15;}),'the editing guidance has a prominent border and readable text');
     await expect(page.getByRole('button',{name:language==='ja'?'仮公開する':'Publish private preview',exact:true})).toBeEnabled();
     assert.equal(themeRequests.length,0);
     await page.reload();await expect(preview.locator('.theme-heading h1')).toBeVisible();

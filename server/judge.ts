@@ -44,7 +44,8 @@ export function judgePhonePin(shopId: string) {
   if (!judgeActive() || !secret || secret.length < 32) return "";
   // The invitation is shared with judges, so only the server's private key can derive other shops' PINs.
   const bytes = createHmac("sha256", secret).update(JSON.stringify(["judge-phone-pin", judgeInvite(), shopId])).digest();
-  return (bytes.readUInt32BE(0) % 100000000).toString().padStart(8, "0");
+  // 00000000 routes a shared number to its original, non-judge shop.
+  return (bytes.readUInt32BE(0) % 100000000 || 1).toString().padStart(8, "0");
 }
 export function judgeAiLimit() {
   const value = Number(process.env.JUDGE_AI_LIMIT || 200);
