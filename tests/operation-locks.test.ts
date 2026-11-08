@@ -70,14 +70,65 @@ async function setup(t: TestContext) {
     finishFiles.resolve(); finishPayment.resolve();
     server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close();
   });
-  const call = async (path: string, data?: unknown, who = "customer") => {
-    const res = await fetch(origin + path, { signal: AbortSignal.timeout(3000), method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${who}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+  const call = async (path: string, data?: unknown, who = "customer", timeout = 3000) => {
+    const res = await fetch(origin + path, { signal: AbortSignal.timeout(timeout), method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${who}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
     return { status: res.status, body: await res.json() };
   };
   const menu = config.menus[0], slot = slots(config, [], dateJST(new Date(Date.now() + 4 * 86400000)), menu.id)[0];
   const input = () => ({ requestId: randomUUID(), name: "Customer", menuId: menu.id, staffId: slot.staffId, start: slot.start, paymentConsent: { amount: menu.price, policy: defaultRefundTiers } });
   return { store, shop, call, input, slot, menu, email, gateway, calls, sent, fileStarted, finishFiles, paymentStarted, finishPayment, blockPayment: () => { blockPayment = true; } };
 }
+
+test("initial page data loads during a blocked Drive export for owners, customers and visitors", { timeout: 10000 }, async t => {
+  const f = await setup(t), base = `/api/public/${f.shop.slug}`;
+  const retry = f.call(`/api/shops/${f.shop.id}/retry`, {}, "owner", 9000);
+  await f.fileStarted.promise;
+  try {
+    for (const who of ["owner", "customer", "visitor"]) {
+      const page = await f.call(base, undefined, who);
+      assert.equal(page.status, 200, `${who} can load the page before the export finishes`);
+      assert.equal(page.body.shopId, f.shop.id);
+      assert.equal(page.body.config.name, f.shop.published!.name);
+      assert.equal(page.body.canEdit, who === "owner");
+      assert.equal(page.body.isOperator, who === "owner");
+      assert.equal(page.body.customerProfile?.name, who === "customer" ? "Customer" : undefined);
+      assert.equal(page.body.registrationRequired, false);
+      if (who !== "owner") assert.equal(page.body.config.notificationEmail, undefined);
+      const wallet = await f.call(`${base}/coupons`, undefined, who);
+      assert.equal(wallet.status, who === "customer" ? 200 : 403);
+      if (who === "customer") assert.deepEqual(wallet.body, []);
+    }
+    assert.ok(await f.store.get("job", "files"), "reading never consumes the pending export");
+    assert.deepEqual(f.calls, { create: 0, capture: 0, refund: 0 });
+  } finally { f.finishFiles.resolve(); await retry; }
+});
+
+test("page reads during sync still enforce private access and in-flight publication guards", { timeout: 10000 }, async t => {
+  const f = await setup(t), base = `/api/public/${f.shop.slug}`;
+  f.shop.publication = "provisional"; await f.store.saveShop(f.shop);
+  const entered = deferred(), finish = deferred();
+  const sync = f.store.locked(f.shop.id, async () => { entered.resolve(); await finish.promise; });
+  await entered.promise;
+  try {
+    assert.equal((await f.call(base, undefined, "owner")).status, 200);
+    const customer = await f.call(base); assert.equal(customer.status, 403); assert.equal(customer.body.config, undefined);
+    const visitor = await f.call(base, undefined, "visitor"); assert.equal(visitor.status, 401); assert.equal(visitor.body.config, undefined);
+    f.shop.publishingPlanId = "publishing"; await f.store.saveShop(f.shop);
+    const publishing = await f.call(base, undefined, "owner");
+    assert.equal(publishing.status, 503); assert.equal(publishing.body.config, undefined);
+  } finally { finish.resolve(); await sync; }
+});
+
+test("initial page reads reject a shop archived or unpublished after route lookup", async t => {
+  const f = await setup(t), hidden = structuredClone(f.shop), readShop = f.store.shop.bind(f.store);
+  t.mock.method(f.store, "shop", async (id: string) => id === hidden.id ? structuredClone(hidden) : readShop(id));
+  hidden.archivedAt = new Date().toISOString();
+  const archived = await f.call(`/api/public/${f.shop.slug}`);
+  assert.equal(archived.status, 404); assert.equal(archived.body.config, undefined);
+  delete hidden.archivedAt; hidden.published = null;
+  const unpublished = await f.call(`/api/public/${f.shop.slug}`);
+  assert.equal(unpublished.status, 404); assert.equal(unpublished.body.config, undefined);
+});
 
 test("a blocked Drive export does not block bookings, captures, refunds or operation reads", { timeout: 10000 }, async t => {
   const f = await setup(t), base = `/api/public/${f.shop.slug}`;

@@ -167,7 +167,7 @@ Customer lists, details, image galleries and attachment reads require operator a
 
 Booking/payment operations, configuration/file exports, and email delivery use separate per-shop locks. Run reconciliation and file retries independently; payment handlers never run file-export jobs. Release the booking lock before delivering queued mail. Commit changed public settings briefly under the booking lock after file generation, and wait for all affected operation locks when resetting a shop. Existing payments/refunds may finish during publication while new booking acceptance remains paused.
 
-The initial public-data GET that opens the booking page reads without acquiring the shop configuration/export lock, so background synchronization cannot delay it. Fetch the latest shop and retain private-preview authorization, archived-shop rejection, and in-flight publication guards. Booking, payment, and refund mutations retain their existing locks.
+The initial public-data and coupon-list GETs that open the booking page read without acquiring the shop configuration/export lock, so background synchronization cannot delay it. Fetch the latest shop and retain private-preview authorization, archived-shop rejection, and in-flight publication guards. Booking, payment, and refund mutations retain their existing locks.
 
 Periods are all time, one week/month/three months/six months/year, or custom start. Use midnight in the shop's time zone and calendar subtraction with month-end clamping. Apply the same lower bound to metrics and history, keeping future bookings visible. Names and note availability use all dates.
 
@@ -417,12 +417,13 @@ Verify with `npm test`, `npm run check:storefront-static`, and the shared public
 
 - Show identification, generation, desktop/mobile review and refinement stages with elapsed seconds in both the side chat and refinement dialog. Read server progress by request ID, with owner-only access.
 - Generate small color, icon or spacing changes as selector/declaration patches to existing theme CSS. Preserve unrelated declarations and screens, and apply the same scope, HTML/CSS safety and rendered-review validation.
-- Limit identification to 45 seconds and the combined generation/repair/rendered-review workflow to 120 seconds. Abort model and browser work at expiry; retries share the budget. Never approve or publish an unreviewed result.
+- Limit identification to 45 seconds and the combined generation/repair/rendered-review workflow to 120 seconds (excluding the wait for another edit of the same shop and receiving the request). Abort model and browser work at expiry; retries share the budget. Never approve or publish an unreviewed result.
 - Translate non-JSON upstream errors into readable error messages while retaining the instruction and pen marks.
 
 ## Shared components and screen styles
 
 - Keep header, central frame and footer CSS in `headerCss`, `bodyCss` and `footerCss`. Store shared base colors/defaults, typography, buttons, cards, fields, icons, notices/errors and navigation as ordered, uniquely identified `theme.styles` entries. Keep responsive and interaction states with their component. Screen and custom-page layout CSS remains attached to that screen/page.
+- After splitting, a declaration patch that names shared `theme.css` or a missing module ID edits the module that owns the selector. A selector found nowhere is appended after the last module so existing rules cannot override it. If a patch exceeds a limit, ask the owner to narrow the change.
 - Array order defines the cascade; a component can have several entries. Splitting accepted shared CSS retains rules, conditions and order, with uncertain rules kept as base styles. Do not automatically delete supposedly unused rules. Splitting happens in the editing draft and follows comparison, adoption and explicit publication.
 - Component-only changes retain the standard frame, spacing and HTML. Apply their CSS without a structural reset or a custom frame. Splitting an existing custom frame preserves that frame.
 - Identify shared components as pen-edit targets. Send only the selected component and base styles, plus a metadata catalog of other modules, to the model. Accept ID-based module edits or selector/declaration patches; reject unrelated CSS, HTML and business changes. Require desktop/mobile rendered review.

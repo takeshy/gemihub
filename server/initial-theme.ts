@@ -94,8 +94,9 @@ function themeLayoutContext(config: ShopConfig, images: RequestImage[]) {
   return { headerSlotExample: renderedHeader, footerSlotExample: renderedFooter, navigation: { items: navigationItems(config), count: navigationItems(config).length, instruction: "The application supplies exactly these items inside ONE navigation slot. Do not add hard-coded copies. The owner never needs to specify a link count. Do not impose the reference image's link count on the application's menu. Review only additional navigation authored by the theme, not the required slot items." }, navigationItemTags: ["span", "button", "a"], targetWidths: [320, 390, 768, 1280], note: "These examples show the actual slot wrappers, shop text, enabled navigation labels and structural base CSS. Choose your own layout. Preview/container width can be smaller than the viewport." };
 }
 export async function createInitialTheme(input: { config: ShopConfig; request: string; images: RequestImage[]; screen?: { mimeType: "image/png"; data: string } }, context: ThemeContext = {}, model = generateJson) {
-  // New designs must choose component/part ownership from the first generation.
-  const generationSchema = z.strictObject({ ...themeSchema.shape, css: z.literal(""), styles: themeStylesSchema,
+  // New designs should choose component/part ownership from the first generation. The schema guides the model;
+  // a combined theme.css is still split deterministically below (maxLength 0, not `const`, for provider support).
+  const generationSchema = z.strictObject({ ...themeSchema.shape, css: z.string().max(0), styles: themeStylesSchema,
     headerCss: z.string().max(componentCssLimit), bodyCss: z.string().max(componentCssLimit), footerCss: z.string().max(componentCssLimit) });
   let state: ThemeRun = context.state || { config: input.config, request: input.request, imageIds: input.images.map(image => image.id), attempts: 0, feedback: [] };
   const persist = async () => context.save?.(structuredClone(state));

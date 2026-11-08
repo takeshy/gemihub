@@ -134,3 +134,32 @@ test("the real identify/propose API accepts component targets, returns progress 
   assert.equal((await api(`visual/${identified.id}/progress?requestId=${requestId}`)).stage, "complete");
   assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
 });
+
+test("a css-field patch after splitting edits the module that owns the selector and keeps the cascade", async () => {
+  const theme = splitThemeStyles({ ...standardTheme, css: ".primary{background:green;color:white}.panel{padding:4px}" });
+  const appearance = { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme };
+  const { applyCssEdits } = await import("../server/css-edits.ts");
+  const edited = applyCssEdits(appearance, [{ field: "css", selector: ".primary", declarations: [{ property: "background", value: "red" }] }]);
+  const css = sharedThemeCss(edited!.theme!);
+  assert.doesNotMatch(css, /background:\s*green/, "the original declaration is replaced, not shadowed");
+  assert.match(css, /\.primary\s*\{[^}]*background:\s*red[^}]*color:\s*white/);
+  assert.equal(edited!.theme!.css, "");
+  // A stale styleId falls back to the module that has the selector.
+  const stale = applyCssEdits(appearance, [{ field: "style", styleId: "missing", selector: ".panel", declarations: [{ property: "padding", value: "8px" }] }]);
+  assert.match(sharedThemeCss(stale!.theme!), /\.panel\s*\{\s*padding:\s*8px/);
+  // A selector no module has is appended after every module, so it wins over earlier rules.
+  const added = applyCssEdits(appearance, [{ field: "css", selector: ".icon-star", declarations: [{ property: "color", value: "gold" }] }]);
+  assert.match(sharedThemeCss(added!.theme!), /\.panel[\s\S]*\.icon-star\s*\{\s*color:\s*gold/);
+  assert.equal(added!.theme!.styles!.at(-1)!.component, "icons");
+});
+
+test("css edits that overflow a component limit fail as a 422 the owner can narrow", async () => {
+  const { applyCssEdits, applyStyleEdits } = await import("../server/css-edits.ts");
+  const big = `.panel{${Array.from({ length: 1040 }, (_, i) => `--v${i}:1px`).join(";")}}`;
+  const theme = { ...standardTheme, css: "", frame: true, styles: [{ id: "cards-1", component: "cards" as const, css: big }] };
+  const appearance = { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme };
+  assert.ok(big.length < 12000);
+  const declarations = Array.from({ length: 20 }, (_, i) => ({ property: `--extra-${i}`, value: "x".repeat(60) }));
+  assert.throws(() => applyCssEdits(appearance, [{ field: "style", styleId: "cards-1", selector: ".panel", declarations }]), (error: Error & { status?: number }) => error.status === 422);
+  assert.throws(() => applyStyleEdits(appearance, [{ id: "cards-1", component: "buttons", css: ".primary{color:red}" }]), (error: Error & { status?: number }) => error.status === 422);
+});

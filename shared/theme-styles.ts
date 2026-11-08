@@ -56,9 +56,10 @@ export function splitThemeStyles<T extends StyledTheme>(theme: T): T {
       }
       let copy = node.clone();
       for (const wrapper of [...wrappers].reverse()) {
-        const parent = wrapper.clone();
-        if (parent.type !== "atrule") return;
-        parent.removeAll(); parent.append(copy); copy = parent;
+        if (wrapper.type !== "atrule") return;
+        // Clone only the condition; copying every sibling per rule made large @media blocks quadratic.
+        const parent = wrapper.clone({ nodes: [] });
+        parent.append(copy); copy = parent;
       }
       const component = node.type === "rule" ? selectorComponent(node.selector) : "base";
       const css = copy.toString();

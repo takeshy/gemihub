@@ -2410,7 +2410,6 @@ export function createApp(
         // Browser capture and model calls must not hold the ordinary shop-operation lock.
         if (method === "POST" && (action === "visual/propose" || /^plans\/[^/]+\/theme$/.test(action))) {
           const generateVisual = () => store.locked(`visual-generation:${shop.id}:${action}`, async () => {
-            currentAiSignal()?.throwIfAborted();
             const fresh = await store.locked(shop.id, async () => {
               const latest = (await store.shop(shop.id))!;
               await assertOperator(user, latest); assertOwner(user, latest);
@@ -2491,7 +2490,7 @@ export function createApp(
                     const repair = feedback.length ? `\n\nRepair the previous candidate to satisfy the ORIGINAL request and these rendered-screen review issues. Do not repeat relative edits already present in the candidate.\n${JSON.stringify(feedback)}` : "";
                     const base = previous?.config || current;
                     const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:") || input.target.startsWith("component:")) && intelligence.visualAppearance
-                      ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages, splitStyles: true, onRepair: async () => { currentAiSignal()?.throwIfAborted(); await saveProgress("repairing", ++visualAttempt); } })
+                      ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages, splitStyles: true, onRepair: async () => { currentAiSignal()?.throwIfAborted(); await saveProgress("repairing", visualAttempt); } })
                       : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, withVisualConversation(instruction + repair, messages)), base, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, base.region, {}, input.media);
                     validateProposedImages(next.config, visual.config, images);
                     return { config: validateVisualChange(visual.config, next.config, input.target) };
@@ -2504,7 +2503,6 @@ export function createApp(
                   return candidate;
                 });
                 await saveProgress("complete");
-                currentAiSignal()?.throwIfAborted();
                 return json(res, { ...proposed, summary: planSummary(visual.config, proposed.config) });
               } catch (error) {
                 await saveProgress("failed", progress.attempt, error instanceof Error ? error.message.slice(0, 600) : tr("操作できませんでした")).catch(reportError);
@@ -2512,7 +2510,8 @@ export function createApp(
               }
             }
           });
-          return await (action === "visual/propose" ? withAiDeadline(visualGenerationTimeoutMs, generateVisual) : generateVisual());
+          // The 120s budget starts inside, after the per-shop queue and request body, so waiting never consumes it.
+          return await generateVisual();
         }
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
@@ -3512,8 +3511,10 @@ export function createApp(
         }
         const bookingAction = /^(?:bookings|checkouts|slots|transfers|waitlist)(?:\/|$)/.test(action);
         let deliverMail = false;
-        const result = await store.locked(bookingAction ? bookingLockKey(shopRef.id) : shopRef.id, async () => {
+        const initialPageRead = method === "GET" && (!action || action === "coupons");
+        const handlePublicRequest = async () => {
           const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
+          if (initialPageRead && (!shop.published || isArchivedShop(shop))) fail(404, tr("公開されたお店がありません"));
           assertStorefrontAccess(shop);
           const customer = () => {
             if (!user || user.role !== "customer" || user.shopId !== shop.id)
@@ -3913,7 +3914,11 @@ export function createApp(
             return ({ ok: true });
           }
           fail(404, tr("見つかりません"));
-        });
+        };
+        // Initial page data and coupon lists are read-only; Drive exports must not delay booking.
+        const result = initialPageRead
+          ? await handlePublicRequest()
+          : await store.locked(bookingAction ? bookingLockKey(shopRef.id) : shopRef.id, handlePublicRequest);
         if (deliverMail) {
           await flushMail(shopRef);
           void syncPaymentHistory(shopRef.id).catch(reportError);

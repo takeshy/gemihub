@@ -4078,5 +4078,6 @@
   "共通部品：{0}": "Shared component: {0}",
   "共通部品を分けたページ全体": "Whole page with shared components",
   "青系の共通部品とページ全体": "Blue shared components and whole page",
-  "部品のスタイルを編集": "Edit component styles"
+  "部品のスタイルを編集": "Edit component styles",
+  "修正後のCSSが上限を超えました。変更する範囲を絞ってもう一度お試しください。": "The edited CSS is over the size limit. Narrow the change and try again."
 }
