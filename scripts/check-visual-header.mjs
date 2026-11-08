@@ -1,3 +1,4 @@
+import { drawAnnotationCircle } from "./draw-annotation-circle.mjs";
 import assert from 'node:assert/strict';
 import { mkdir, readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
@@ -61,9 +62,9 @@ try{
   const begin=async()=>{
    await page.getByRole('button',{name:label('修正する'),exact:true}).click();const canvas=page.locator('.annotation-canvas');
    await expect.poll(()=>canvas.evaluate(element=>element.height)).toBeGreaterThan(100);await canvas.evaluate(element=>element.scrollIntoView({block:'start'}));const bounds=await canvas.boundingBox();
-   await page.mouse.move(bounds.x+20,bounds.y+30);await page.mouse.down();await page.mouse.move(bounds.x+180,bounds.y+40);await page.mouse.up();
+   await drawAnnotationCircle(page, canvas);
    const chat=page.locator('.visual-chat-panel');await chat.getByRole('textbox').fill(language==='ja'?'上のメニューの間隔を広げて、下のあいさつも変えてください。':'Make the top menu more spacious and change the footer greeting.');
-   if(process.env.UPDATE_MANUAL==='1'&&await chat.locator('.chat-message').count()===0)await page.screenshot({path:`public/manual/${language==='en'?'en/':''}22-pen.jpg`,type:'jpeg',quality:86,fullPage:true});
+   if(process.env.UPDATE_MANUAL==='1'&&await chat.locator('.chat-message').count()===0)await page.screenshot({path:`public/manual/${language==='en'?'en/':''}22-pen.jpg`,type:'jpeg',quality:86,fullPage:false});
    await chat.getByRole('button',{name:label('送信'),exact:true}).click();
    const review=page.getByRole('dialog',{name:label('修正案を比較'),exact:true});await expect(review).toBeVisible();
    assert.equal(await page.locator('.visual-chat-confirmation').count(),0);

@@ -136,6 +136,7 @@ export type Scenario =
   | "initial-theme"
   | "provisional"
   | "production-preview"
+  | "published-history"
   | "provisional-unconfigured"
   | "provisional-page"
   | "changes"
@@ -247,7 +248,7 @@ export function scenarioProps(scenario: Scenario) {
           "calendar-member": "staff",
           "calendar-missing-staff": "staff",
           data: "basic", "data-empty": "basic",
-          settings: "settings",
+          settings: "settings", "published-history": "settings",
           "sync-error": "bookings",
         } as Partial<Record<Scenario, string>>
       )[scenario] || "build",
@@ -1026,12 +1027,14 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
       } else throw new Error(tr("未対応のモック操作"));
       result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/design-versions`) {
-      // Restore flows are covered by DesignVersions.stories.tsx; screens here only show the panel.
-      result = { versions: [], current: shop.published ? { number: 1, at: new Date().toISOString(), summary: tr("公開済みのデザイン") } : null, revision: shop.revision, publishing: !!shop.publishingPlanId, pendingRestore: null };
+      // A published shop keeps a full-history example reachable from settings.
+      result = { versions: scenario === "published-history" ? [{ number: 1, at: new Date(Date.now() - 86400000).toISOString(), summary: tr("先に選んだ公開デザイン") }] : [], current: shop.published ? { number: 1, at: new Date().toISOString(), summary: tr("公開済みのデザイン") } : null, revision: shop.revision, publishing: !!shop.publishingPlanId, pendingRestore: null };
+    } else if (action === `/api/shops/${shop.id}/design-versions/1/restore` && scenario === "published-history") {
+      shop.revision++; result = { ok: true };
     } else if (action === `/api/shops/${shop.id}/publication-preview`) {
       const current = shop.published || config;
       const live = publicPosts(posts);
-      result = { config: current, posts: live, revision: shop.revision, hash: await fingerprint({ config: current, posts: live }) };
+      result = { config: current, posts: live, publication: shop.publication || "public", revision: shop.revision, hash: await fingerprint({ config: current, posts: live }) };
     } else if (action === `/api/shops/${shop.id}/publication`) {
       if (input.hash !== await fingerprint({ config: shop.published || config, posts: publicPosts(posts) })) throw new Error(tr("プレビュー後に内容が変わりました"));
       if (input.revision !== shop.revision) throw new Error(tr("お店の内容が変わりました"));

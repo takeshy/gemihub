@@ -9,7 +9,8 @@ import { sampleFixtures, type Fixtures } from "./local-preview";
 import { fixturePostEntries, type FixtureScope } from "./fixture-scope";
 import { postLabel } from "../server/post-domain";
 export function FixtureEditor({ value, onChange, config, scope }: { value: Fixtures; onChange: (value: Fixtures) => void; config: ShopConfig; scope: FixtureScope }) {
-  const sampleBooking = sampleFixtures(config).bookings[0];
+  const samples = sampleFixtures(config).bookings;
+  const sampleBooking = samples[0], refundedBooking = samples.find(booking => booking.paymentStatus === "refunded");
   const { displayTimeZone, shopToday, timeZoneLabel } = useShopDisplay();
   const localTime = (value: string) => Number.isFinite(Date.parse(value)) ? localDateTime(value, displayTimeZone()) : "";
   const utcTime = (value: string) => {
@@ -17,7 +18,7 @@ export function FixtureEditor({ value, onChange, config, scope }: { value: Fixtu
     return Number.isFinite(date.getTime()) ? date.toISOString() : "";
   };
   function booking(index: number, change: Partial<Fixtures["bookings"][number]>) {
-    onChange({ ...value, bookings: value.bookings.map((b, i) => i === index ? { ...b, ...change } : b) });
+    onChange({ ...value, bookings: value.bookings.map((b, i) => i === index ? { ...b, ...change, ...(change.paymentStatus === "refunded" ? { status: "cancelled" as const, refundPercent: b.refundPercent ?? 100 } : change.status && change.status !== "cancelled" && b.paymentStatus === "refunded" ? { paymentStatus: "paid" as const } : {}) } : b) });
   }
   function post(index: number, change: Partial<Fixtures["posts"][number]>) {
     onChange({ ...value, posts: value.posts.map((p, i) => i === index ? { ...p, ...change } : p) });
@@ -36,10 +37,20 @@ export function FixtureEditor({ value, onChange, config, scope }: { value: Fixtu
         <label>{tr("開始日時（{0}）", timeZoneLabel)}<DateInput aria-label={tr("開始日時（{0}）", timeZoneLabel)} withTime value={localTime(b.start)} onValueChange={value => booking(index, { start: utcTime(value) })} /></label>
         <label>{tr("終了日時（{0}）", timeZoneLabel)}<DateInput aria-label={tr("終了日時（{0}）", timeZoneLabel)} withTime value={localTime(b.end)} onValueChange={value => booking(index, { end: utcTime(value) })} /></label>
         <label>{tr("予約の状態")}<select value={b.status} onChange={e => booking(index, { status: e.target.value as typeof b.status })}><option value="active">{tr("予約確定")}</option><option value="cancelled">{tr("キャンセル済み")}</option><option value="no_show">{tr("無断キャンセル")}</option></select></label>
+        <label>{tr("支払い・返金の状態")}<select value={b.paymentStatus || "automatic"} onChange={e => booking(index, { paymentStatus: e.target.value as typeof b.paymentStatus })}>
+          <option value="automatic">{tr("お店の決済設定に合わせる")}</option>
+          <option value="unpaid">{tr("支払いなし")}</option>
+          <option value="paid">{tr("PayPal支払い済み")}</option>
+          <option value="refunded">{tr("PayPal支払い済み・返金済み")}</option>
+        </select></label>
+        {b.paymentStatus === "refunded" && <label>{tr("返金率（%）")}<input type="number" min={1} max={100} step={1} value={b.refundPercent ?? 100} onChange={e => booking(index, { refundPercent: Number(e.target.value) })} /></label>}
+
       </div>
       <button onClick={() => onChange({ ...value, bookings: value.bookings.filter((_, i) => i !== index) })}>{tr("このサンプル予約を削除")}</button>
     </fieldset>)}
     <button disabled={!sampleBooking || value.bookings.length >= 100} onClick={() => { if (sampleBooking) onChange({ ...value, bookings: [...value.bookings, { ...sampleBooking, id: createRequestId() }] }); }}>{tr("サンプル予約を追加")}</button>
+    <button disabled={!refundedBooking || value.bookings.length >= 100} onClick={() => { if (refundedBooking) onChange({ ...value, bookings: [...value.bookings, { ...refundedBooking, id: createRequestId() }] }); }}>{tr("支払い・返金済みのサンプル予約を追加")}</button>
+    <p className="small muted">{tr("支払額は選んだメニューと追加メニューの合計です。返金済みを選ぶとキャンセル済みになり、返金率で返金額を確認できます。実際の決済・返金は行いません。")}</p>
     </>}
     {scope.postCategories.length > 0 && <>
     <h3>{tr("サンプル記事")}</h3>

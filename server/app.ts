@@ -3337,7 +3337,7 @@ export function createApp(
             if (!fresh.published || fresh.publishingPlanId) fail(409, tr("先に仮公開を完了してください"));
             const config = await effective(fresh);
             const posts = publicPosts(await postsFor(fresh));
-            return json(res, { config, posts, revision: fresh.revision, hash: contentHash({ config, posts }) });
+            return json(res, { config, posts, publication: fresh.publication || "public", revision: fresh.revision, hash: contentHash({ config, posts }) });
           }
           if (action === "publication" && method === "POST") {
             assertOwner(user, fresh);

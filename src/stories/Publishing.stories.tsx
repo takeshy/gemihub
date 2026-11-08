@@ -25,3 +25,5 @@ export const PublicationError: Story = {
   name: "公開の再試行",
   args: { scenario: "publication-error" },
 };
+
+export const PublishedHistory: Story = { name: "公開後の画面確認・全体の版履歴", args: { scenario: "published-history" } };

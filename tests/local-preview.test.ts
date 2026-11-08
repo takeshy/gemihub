@@ -4,8 +4,8 @@ import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app.ts";
 import { Store } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
-import { sample, dateJST, type ShopConfig } from "../server/domain.ts";
-import { createPreviewClient, sampleFixtures, draftKey, writeDraft, readDraft, syncPreviewArticleFeatures, type LocalDraft } from "../src/local-preview.ts";
+import { sample, dateJST, type Booking, type ShopConfig } from "../server/domain.ts";
+import { fixturesSchema, createPreviewClient, sampleFixtures, draftKey, writeDraft, readDraft, syncPreviewArticleFeatures, type LocalDraft } from "../src/local-preview.ts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ScreenTree } from "../src/ScreenTree.tsx";
@@ -64,7 +64,7 @@ test("local fixtures use an isolated API, allow practice operations and persist 
   const available = await client<{ start: string; staffId: string }[]>(`/api/public/local-preview/slots?date=${date}&menu=simple`);
   assert.equal(available.find(s => s.start === start)?.staffId, "haru");
   await client("/api/public/local-preview/bookings", { start, menuId: "simple", name: "練習" });
-  assert.equal((await client<unknown[]>("/api/public/local-preview/bookings")).length, 2);
+  assert.equal((await client<unknown[]>("/api/public/local-preview/bookings")).length, fixtures.bookings.length + 1);
   await client("/api/public/local-preview/bookings/sample-booking/cancel", {});
   assert.equal((await client<{status: string}[]>("/api/public/local-preview/bookings"))[0].status, "cancelled");
   await client("/api/public/local-preview/inquiries", { name: "練習", message: "テスト" });
@@ -156,4 +156,67 @@ test("local pen changes stay drafts; stale releases fail and retries publish onc
   updated.published!.description = "シートからの変更";
   await store.saveShop(updated);
   assert.equal((await request("plan", { text: "反映", config, local: { base: snapshot.base, source: snapshot.source, requestId: "33333333-3333-4333-8333-333333333333" } })).status, 409);
+});
+
+test("sample payment states persist and show paid plus refunded records in yen and cents without live payments", async () => {
+  for (const [country, timeZone, currency, price, refund] of [["JP", "Asia/Tokyo", "JPY", 5501, 2750], ["US", "America/New_York", "USD", 55.01, 2750]] as const) {
+    const config: ShopConfig = { ...structuredClone(sample), region: { country, timeZone } };
+    config.rules.payment = { enabled: false, refundTiers: [{ hoursBefore: 0, percent: 100 }] };
+    config.menus[0].price = price;
+    const fixtures = sampleFixtures(config);
+    const cancelled = fixtures.bookings.find(booking => booking.paymentStatus === "refunded")!;
+    assert.ok(cancelled, "priced menus include a paid and refunded example");
+    cancelled.refundPercent = 50;
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) || null, setItem: (key: string, value: string) => { values.set(key, value); } };
+    writeDraft(storage, "payment-fixture", { config, source: null, base: 0, fixtures });
+    const saved = readDraft(storage, "payment-fixture")!;
+    assert.equal(saved.fixtures.bookings.find(booking => booking.id === cancelled.id)?.refundPercent, 50);
+    const client = createPreviewClient(config, saved.fixtures, "sample-shop");
+    const booking = (await client<Booking[]>("/api/public/local-preview/bookings")).find(booking => booking.id === cancelled.id)!;
+    assert.equal(booking.status, "cancelled");
+    assert.equal(booking.payment?.provider, "paypal");
+    assert.equal(booking.payment?.environment, "sandbox");
+    assert.equal(booking.payment?.currency, currency);
+    assert.equal(booking.payment?.amount, 5501);
+    assert.equal(booking.payment?.cancellation?.status, "completed");
+    assert.equal(booking.payment?.cancellation?.amount, refund, "refunds round down in minor units");
+    assert.equal(booking.payment?.cancellation?.percent, 50);
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal("payment" in cancelled, false, "simulated payment details do not mutate stored fixtures");
+  }
+});
+
+test("explicit sample payments override current settings while legacy samples retain automatic payment behavior", async () => {
+  const config = structuredClone(sample);
+  config.rules.payment = { enabled: true, refundTiers: [{ hoursBefore: 0, percent: 100 }] };
+  const template = sampleFixtures(config).bookings[0];
+  const fixtures = fixturesSchema.parse({ customerName: "Sample", posts: [], bookings: [
+    { ...template, id: "legacy" },
+    { ...template, id: "unpaid", paymentStatus: "unpaid" },
+    { ...template, id: "paid", paymentStatus: "paid" },
+    { ...template, id: "refunded", status: "cancelled", paymentStatus: "refunded", refundPercent: 70 },
+  ] });
+  for (const enabled of [true, false]) {
+    config.rules.payment.enabled = enabled;
+    const client = createPreviewClient(config, fixtures, "shop");
+    const [legacy, unpaid, paid, refunded] = await client<Booking[]>("/api/public/local-preview/bookings");
+    assert.equal(!!legacy.payment, enabled);
+    assert.equal(unpaid.payment, undefined);
+    assert.ok(paid.payment);
+    assert.equal(paid.payment.cancellation, undefined);
+    assert.equal(refunded.payment?.cancellation?.status, "completed");
+    assert.equal(refunded.payment?.cancellation?.percent, 70);
+  }
+  assert.equal(fixturesSchema.safeParse({ ...fixtures, bookings: [{ ...template, paymentStatus: "refunded" }] }).success, false);
+  for (const refundPercent of [0, 101, 50.5]) assert.equal(fixturesSchema.safeParse({ ...fixtures, bookings: [{ ...template, status: "cancelled", paymentStatus: "refunded", refundPercent }] }).success, false);
+});
+
+
+test("paid sample defaults skip hidden and free services", () => {
+  const config = structuredClone(sample);
+  config.menus.forEach(menu => { menu.price = 0; });
+  assert.equal(sampleFixtures(config).bookings.some(booking => booking.paymentStatus === "refunded"), false);
+  config.menus.forEach(menu => { menu.price = 5000; menu.active = false; });
+  assert.deepEqual(sampleFixtures(config).bookings, []);
 });

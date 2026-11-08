@@ -108,6 +108,27 @@ try {
     await choose('マイページ'); await openSamples();
     await expect(field('サンプルのお客様名')).toBeVisible(); await expect(field('予約のお名前').first()).toBeVisible();
     await expect(field('記事タイトル')).toHaveCount(3); await expect(field('記事の本文')).toHaveCount(0);
+    const paymentState = () => samples.getByRole('combobox', { name: label('支払い・返金の状態'), exact: true }).first();
+    await paymentState().selectOption('refunded');
+    await expect(samples.getByRole('combobox', { name: label('予約の状態'), exact: true }).first()).toHaveValue('cancelled');
+    await samples.getByRole('spinbutton', { name: label('返金率（%）'), exact: true }).first().fill('70');
+    await apply();
+    await expect(page.locator('.local-preview-screen .payment-details [role="status"]').filter({ hasText: '70%' })).toHaveCount(1);
+    saved = (await read()).fixtures;
+    assert.equal(saved.bookings[0].paymentStatus, 'refunded'); assert.equal(saved.bookings[0].refundPercent, 70);
+    await page.reload(); await expect(page.locator('.local-preview-screen')).toBeVisible(); await openSamples();
+    await expect(paymentState()).toHaveValue('refunded');
+    await expect(samples.getByRole('spinbutton', { name: label('返金率（%）'), exact: true }).first()).toHaveValue('70');
+    await paymentState().selectOption('paid'); await apply();
+    await expect(page.locator('.local-preview-screen .payment-details [role="status"]').filter({ hasText: '70%' })).toHaveCount(0);
+    await paymentState().selectOption('unpaid'); await apply();
+    const beforeAdd = (await read()).fixtures.bookings.length;
+    await samples.getByRole('button', { name: label('支払い・返金済みのサンプル予約を追加'), exact: true }).click();
+    await apply(); saved = (await read()).fixtures;
+    assert.equal(saved.bookings.length, beforeAdd + 1); assert.equal(saved.bookings.at(-1).paymentStatus, 'refunded');
+    assert.equal(saved.bookings.at(-1).status, 'cancelled'); assert.equal(saved.bookings.at(-1).refundPercent, 100);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
+    await page.screenshot({ path: `tmp/fixture-scope/${language}-${width}-payments.png`, fullPage: true });
     // A retired menu in a hidden booking must not prevent editing a contact-screen sample.
     const draft = await read(); draft.fixtures.bookings[0].menuId = 'retired-menu';
     await page.evaluate(({ key, draft }) => localStorage.setItem(key, JSON.stringify(draft)), { key, draft });

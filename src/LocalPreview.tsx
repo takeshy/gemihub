@@ -21,7 +21,7 @@ import { PreviewViewport } from "./PreviewViewport";
 import { useComparisonScroll } from "./comparison-scroll";
 import { DesignVersionHistory } from "./DesignVersionHistory";
 import { regionOf } from "../shared/region";
-import { shopSchema, planSummary, bookingStaff, type ShopConfig } from "../server/domain";
+import { shopSchema, planSummary, bookingStaff, menuSelection, type ShopConfig } from "../server/domain";
 import { postKey, type PostCategory, type PublicPost } from "../server/post-domain";
 import { createRequestId } from "./request-id";
 import { articleKinds } from "../shared/article-features";
@@ -534,6 +534,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
             <button className="primary" disabled={busy || !!draft.pending || !!conflict} onClick={() => void run(async () => {
               const fixtures = fixturesSchema.parse(fixtureEditing || draft.fixtures);
               if (samples.bookings && fixtures.bookings.some(b => !bookingStaff(draft.config).some(s => s.id === b.staffId) || !draft.config.menus.some(m => m.id === b.menuId) || !bookingStaff(draft.config).some(s => s.id === b.staffId && s.menuIds.includes(b.menuId)))) throw new Error(tr("サンプル予約のメニュー・担当者を確認してください"));
+              if (samples.bookings && fixtures.bookings.some(b => ["paid", "refunded"].includes(b.paymentStatus || "") && (menuSelection(draft.config, b.menuId, b.optionIds)?.price ?? 0) <= 0)) throw new Error(tr("支払い済みのサンプルには、0より大きい料金のメニューを選んでください"));
               const articleIndex = samples.articleBody ? fixturePostEntries(draft.fixtures, samples)[0]?.index : undefined;
               save({ ...draft, fixtures });
               await choose(screen, articleIndex === undefined ? route.articleKey : postKey(fixtures.posts[articleIndex]));

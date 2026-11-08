@@ -74,9 +74,8 @@ text=text.replace('  assert.deepEqual(errors, []);', `
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   assert.ok(box);
-  await page.mouse.move(box.x+80,box.y+100); await page.mouse.down();
-  for(let i=1;i<=30;i++){const a=i/30*Math.PI*2;await page.mouse.move(box.x+180+100*Math.cos(a),box.y+100+35*Math.sin(a));}
-  await page.mouse.up();
+  const { drawAnnotationCircle } = await import(${JSON.stringify(pathToFileURL(resolve('scripts/draw-annotation-circle.mjs')).href)});
+  await drawAnnotationCircle(page, canvas);
   await page.getByLabel("How would you like to change this?").fill("Change this to Nails for every season");
   await capture("22-pen.jpg", ".annotation-canvas");
   assert.deepEqual(errors, []);`);

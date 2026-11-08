@@ -33,7 +33,7 @@ function HeroPreview() {
 function WebsiteCreation() {
   const steps = [
     { id: "create", label: tr("AIに制作を頼む"), title: tr("イメージを伝えて、相談しながらつくる。"), text: tr("人にWeb制作を依頼するときのように、つくりたいページやお店の雰囲気を伝える。AIの質問に答え、画面を見ながら希望を相談する。時間を気にせず、自分のペースでお店のページをつくれます。"), image: "02-interview.jpg", alt: tr("AIの質問に答えて、お店のWebページをつくる会話画面"), guide: "interview" },
-    { id: "red-circle", label: tr("赤丸で囲んで直す"), title: tr("ここを変えたい。赤丸とひと言で、AIに伝わる。"), text: tr("気になる場所を画面上で赤丸で囲んで、「この見出しを変えて」「この色をもっと明るく」とAIに伝えます。修正する箇所と内容を確認し、画面で見比べてから反映できます。"), image: "22-pen.jpg", alt: tr("変更したい紹介文を赤丸で囲み、右のチャットでAIに修正を頼む画面"), guide: "pen" },
+    { id: "red-circle", label: tr("赤丸で囲んで直す"), title: tr("ここを変えたい。赤丸とひと言で、AIに伝わる。"), text: tr("気になる場所を画面上で赤丸で囲んで、「この見出しを変えて」「この色をもっと明るく」とAIに伝えます。修正する箇所と内容を確認し、画面で見比べてから反映できます。"), image: "22-pen.jpg", alt: tr("変更したい店名を赤丸で囲み、右のチャットでAIに修正を頼む画面"), guide: "pen" },
   ];
   return <section id="features" className="lp-section lp-container" aria-labelledby="lp-features-heading">
     <div className="lp-section-heading"><div><span className="lp-kicker">01 — {tr("制作も、修正も、お店の相談も")}</span><h2 id="lp-features-heading">{tr("頼んで、話して、")}<br />{tr("お店に合うかたちへ。")}</h2></div><p>{tr("イメージを伝える。気になる場所を示して、直してもらう。お店のことをわかっているAIと、いつでもおしゃべりしながら進められます。")}</p></div>

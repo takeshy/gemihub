@@ -1260,6 +1260,11 @@ function Settings({
       ) : (
         <p>{tr("お店のページを公開すると、アドレスができあがります。")}</p>
       )}
+      {shop.isOwner && shop.published && <section className="publication-review-entry">
+        <h3>{tr("画面の確認・本番公開")}</h3>
+        <p>{tr("公開中の画面の確認や、デザイン全体の版履歴からの復元はこちらで行います。")}</p>
+        <a className="button" data-publication-preview-link href={`/publication-preview/${shop.id}`}>{tr("画面の確認・本番公開")}</a>
+      </section>}
       {shop.isOwner && <section className="shop-export" aria-label={tr("お店のデータを書き出す")}>
         <h3>{tr("お店のデータを書き出す")}</h3>
         <p>{tr("設定や記録をまとめて保存できます。CSVはスプレッドシートでも開けます。写真・添付ファイルの本体はGoogle Driveに保存されています。")}</p>

@@ -14,6 +14,10 @@ Every screen must be reviewable in Storybook, including staff preference/no pref
 
 ## Landing page and manual guidance
 
+- Booking/My page fixtures expose payment/refund state and refund percentage, including an add action and an initial paid-and-refunded example for priced services. Legacy fixtures retain the shop’s automatic payment behavior. Persist only in browser sample data, round refunds down in minor currency units, and never change real payments or bookings.
+
+- After publication, owners can restore the entire design through Publication settings → Review screens and publish → Version history. Distinguish this entry and scope from per-screen history, and show the actual publication state when reopening review. Capture Japanese and English red-pen examples with a closed red circle drawn on the real screen.
+
 - Place invitation-only access and the invitation password requirement near the landing page start buttons.
 - Show cancellation → discounted replacement listing → higher refund if booked, with eligibility, deadline, the fallback refund and no guarantee of a replacement. Under the default policy, a ¥10,000 booking cancelled 18 hours ahead lists for ¥9,000 until 12 hours before the appointment: refund ¥9,000 if booked, otherwise ¥7,000.
 - Distinguish service-stored booking/customer records with JSON/CSV export, photos/exported pages saved in Drive, and published pages served by the service.
