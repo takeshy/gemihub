@@ -4031,5 +4031,10 @@
   "Storybookの表示例です。マイクや実際の音声通話には接続しません。": "This is a Storybook preview. It does not access your microphone or connect to a real voice call.",
   "通話中の表示例です。": "Preview of an active voice call.",
   "AIと通話で相談（開始前）": "Consult the AI by voice (before starting)",
-  "AIと通話で相談（通話中）": "Consult the AI by voice (active call)"
+  "AIと通話で相談（通話中）": "Consult the AI by voice (active call)",
+  "AIが画面を修正しています。移動すると修正が中断され、内容が失われます。移動しますか？": "The AI is still editing this screen. Leaving now stops the edit and its result will be lost. Leave anyway?",
+  "AIの修正案をまだ「OK」で取り込んでいません。移動すると修正案が失われます。移動しますか？": "You haven't accepted the AI's proposed edit with OK yet. Leaving now discards it. Leave anyway?",
+  "プレビューの幅": "Preview width",
+  "PC": "PC",
+  "スマートフォン": "Phone"
 }

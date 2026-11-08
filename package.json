@@ -35,6 +35,7 @@
     "check:visual-chat": "node --import tsx scripts/check-visual-chat.mjs",
     "check:visual-header": "node --import tsx scripts/check-visual-header.mjs",
     "check:visual-review": "node --import tsx scripts/check-visual-review.mjs",
+    "check:leave-guard": "node --import tsx scripts/check-leave-guard.mjs",
     "check:chat": "node scripts/check-chat.mjs",
     "check:chat-failures": "node scripts/check-chat-failures.mjs",
     "check:storybook": "node scripts/check-storybook.mjs",

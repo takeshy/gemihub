@@ -66,10 +66,29 @@ try{
   await page.getByLabel(label('ヘッダーを表示'),{exact:true}).check();await page.keyboard.press('Escape');
   if(width<=760)await page.setViewportSize({width,height:950});
   if(language==='en')assert.doesNotMatch(await preview.innerText(),/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u,'English captures use English saved shop content');
-  await page.getByRole('button',{name:label('修正する'),exact:true}).click();
   const chat=page.locator('.visual-chat-panel'),canvas=page.locator('.annotation-canvas');
+  const shape=()=>preview.evaluate(element=>({width:element.getBoundingClientRect().width,height:element.scrollHeight}));
+  if(width>760){
+    // The phone preview is captured as the phone layout, then PC is restored for the main flow.
+    const device=page.getByRole('group',{name:label('プレビューの幅'),exact:true});
+    await device.getByRole('button',{name:label('スマートフォン'),exact:true}).click();
+    const phone=await shape();assert.equal(Math.round(phone.width),390);
+    await page.getByRole('button',{name:label('修正する'),exact:true}).click();await expect(canvas).toBeVisible();
+    await expect.poll(()=>canvas.evaluate(element=>element.height)).toBeGreaterThan(100);
+    const ratio=await canvas.evaluate(element=>element.width/element.height);
+    assert.ok(Math.abs(ratio-phone.width/phone.height)<0.05*phone.width/phone.height,`phone capture keeps the 390px layout (${ratio} vs ${phone.width/phone.height})`);
+    await expect(device.getByRole('button',{name:label('PC'),exact:true})).toBeDisabled();
+    await chat.getByRole('button',{name:label('閉じる'),exact:true}).click();await expect(canvas).toHaveCount(0);
+    await device.getByRole('button',{name:label('PC'),exact:true}).click();
+  }
+  const layout=await shape();
+  await page.getByRole('button',{name:label('修正する'),exact:true}).click();
   await expect(chat).toBeVisible();await expect(canvas).toBeVisible();
   await expect.poll(()=>canvas.evaluate(element=>element.height)).toBeGreaterThan(100);
+  // The side chat must not turn a PC capture into the narrower phone layout.
+  const captured=await canvas.evaluate(element=>element.width/element.height);
+  assert.ok(Math.abs(captured-layout.width/layout.height)<0.05*layout.width/layout.height,`capture keeps the ${width}px preview layout (${captured} vs ${layout.width/layout.height})`);
+  assert.equal(await preview.evaluate(element=>element.style.width),'','the temporary capture width is restored');
   const rect=await canvas.boundingBox();await page.mouse.move(rect.x+20,rect.y+30);await page.mouse.down();await page.mouse.move(rect.x+130,rect.y+60);await page.mouse.up();
   const input=chat.getByRole('textbox',{name:label('ここをどう変えたいですか'),exact:true});
   const review=page.getByRole('dialog',{name:label('修正案を比較'),exact:true});

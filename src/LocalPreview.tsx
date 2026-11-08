@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n";
+import { confirmLeave } from "./leave-guard";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChromeEditor, ChromePreview } from "./SiteChrome";
@@ -97,6 +98,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
   }, [previewApplied]);
   // While the pen shows the captured screen, the live preview below would duplicate it.
   const [penOpen, setPenOpen] = useState(false);
+  // Owners check and red-pen either layout; the phone frame uses the storefront's own width queries.
+  const [device, setDevice] = useState<"pc" | "phone">("pc");
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError("");
     try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -239,6 +242,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
     if ((category === "blogs" || category === "announcements") && !articleKinds(latestDraft.current?.config).includes(category)) return;
     const firstArticle = latestDraft.current?.fixtures.posts.find(post => post.category === category);
     const requestedArticle = article && (category === "blogs" || category === "announcements") ? articleKey || (firstArticle ? postKey(firstArticle) : undefined) : undefined;
+    // Switching screens remounts the pen chat, so an AI edit in progress would be discarded.
+    if (!fromLocation && (value !== screen || requestedArticle !== route.articleKey) && !confirmLeave()) return;
     if (!fromLocation) {
       entrySelected.current = JSON.stringify([value, requestedArticle]);
       if (onScreenChange) onScreenChange(value, requestedArticle); else activate?.();
@@ -408,6 +413,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
     <div className="editor-toolbar">
       <div><strong>{screenLabel}</strong>{hasChanges && <span className={`editor-change-badge ${saved ? "" : "unsaved"}`}>{saved ? tr("変更あり") : tr("未保存")}</span>}</div>
       <div className="editor-tools"><span ref={setPenHost} />
+        <div className="preview-device" role="group" aria-label={tr("プレビューの幅")}>{([["pc", tr("PC")], ["phone", tr("スマートフォン")]] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={device === value} disabled={penOpen} onClick={() => setDevice(value)}>{label}</button>)}</div>
         {scope.kind !== "part" && scope.kind !== "theme" && <details ref={displayMenu} className="preview-display-menu"><summary><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M3 16h18" /></svg>{tr("表示")}</summary><div>
           <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.header !== true : visibility[screen]?.header === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], header: !event.target.checked } }))} />{tr("ヘッダーを表示")}</label>
           <label><input type="checkbox" checked={screen === "theme" ? visibility[screen]?.footer !== true : visibility[screen]?.footer === false} onChange={event => setVisibility(v => ({ ...v, [screen]: { ...v[screen], footer: !event.target.checked } }))} />{tr("フッターを表示")}</label>
@@ -468,7 +474,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
     {draft && !(comparing && status === "local") && <>
       {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
-      {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
+      {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" data-device={device} onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
         if (link && !link.getAttribute("href")?.startsWith("/s/local-preview")) {
           e.preventDefault(); e.stopPropagation();

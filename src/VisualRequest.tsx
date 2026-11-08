@@ -1,4 +1,5 @@
 import { tr } from "../shared/i18n";
+import { useLeaveGuard } from "./leave-guard";
 import { createPortal } from "react-dom";
 import React, { useEffect, useRef, useState } from "react";
 import {useApi} from "./api";
@@ -17,6 +18,16 @@ import type { VisualPreviewOptions } from "../shared/visual-review";
 // Cross-origin images without CORS are represented by their labelled image frame.
 export async function capturePage(root: HTMLElement) {
   await document.fonts.ready;
+  // The side chat narrows the preview into the phone layout; capture the width the page has without it.
+  // A phone-width preview is already the layout being edited.
+  const covered = document.body.classList.contains("visual-chat-open") && root.dataset.device !== "phone" ? parseFloat(getComputedStyle(document.body).paddingRight) || 0 : 0;
+  if (!covered) return captureRendered(root);
+  const restore = root.style.cssText;
+  root.style.width = `${root.getBoundingClientRect().width + covered}px`; root.style.maxWidth = "none";
+  await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  try { return await captureRendered(root); } finally { root.style.cssText = restore; }
+}
+async function captureRendered(root: HTMLElement) {
   const original = [root, ...root.querySelectorAll<HTMLElement>("*")];
   const clone = root.cloneNode(true) as HTMLElement;
   const copies = [clone, ...clone.querySelectorAll<HTMLElement>("*")];
@@ -110,6 +121,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   const pendingContext = useRef("");
   const failed = useRef<string | undefined>(undefined);
   const stopDictation = useRef<(() => void) | null>(null);
+  useLeaveGuard(busy ? tr("AIが画面を修正しています。移動すると修正が中断され、内容が失われます。移動しますか？") : result || proposal ? tr("AIの修正案をまだ「OK」で取り込んでいません。移動すると修正案が失われます。移動しますか？") : undefined);
   const scopeKey = JSON.stringify({ shopId, base: local.base, source: local.source, screen: screen?.id });
   const revisionKey = (revision: Revision) => JSON.stringify([revision.config, revision.plan?.id]);
   const currentKey = revisionKey({ config, plan: initialPlan });

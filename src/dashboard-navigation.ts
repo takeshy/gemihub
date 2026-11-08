@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { confirmLeave } from "./leave-guard";
 
 export const dashboardTabs = ["dashboard", "build", "assistant", "try", "basic", "menus", "staff", "images", "settings", "bookings", "customers", "analytics", "coupons", "inquiries", "blog", "manual"] as const;
 export type DashboardTab = typeof dashboardTabs[number];
@@ -46,22 +47,30 @@ export function useDashboardNavigation(search: string, initialTab: string, brows
   useEffect(() => { latestSearch.current = search; setCurrentSearch(search); }, [search]);
   useEffect(() => {
     if (!browser) return;
-    const pop = () => { latestSearch.current = location.search; setCurrentSearch(location.search); };
+    const pop = () => {
+      // Back/forward has already moved the URL; restore it when the owner keeps the unfinished AI work.
+      if (!confirmLeave()) { window.history.pushState(window.history.state, "", `/${latestSearch.current}`); return; }
+      latestSearch.current = location.search; setCurrentSearch(location.search);
+    };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
   }, [browser]);
   return {
     route: dashboardRoute(currentSearch, browser ? "dashboard" : dashboardTab(initialTab)),
     search: currentSearch,
+    /** Returns false when the owner chose to stay on the current screen. */
     visit(tab: DashboardTab, shop: string, screen?: string, article?: string, replace = false, conversation?: string) {
-      setScrollRequest(value => value + 1);
       const next = dashboardSearch(latestSearch.current, tab, shop, screen, article, conversation);
       const previousQuery = new URLSearchParams(latestSearch.current), nextQuery = new URLSearchParams(next);
       previousQuery.sort(); nextQuery.sort();
-      if (previousQuery.toString() === nextQuery.toString()) return;
+      // Choosing the current tab again still returns to the top; only real moves need confirmation.
+      if (previousQuery.toString() !== nextQuery.toString() && !replace && !confirmLeave()) return false;
+      setScrollRequest(value => value + 1);
+      if (previousQuery.toString() === nextQuery.toString()) return true;
       if (browser) window.history[replace ? "replaceState" : "pushState"](window.history.state, "", `/${next}`);
       latestSearch.current = next;
       setCurrentSearch(next);
+      return true;
     },
   };
 }

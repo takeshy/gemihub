@@ -491,8 +491,8 @@ function Dashboard({
             value={shop?.id}
             onChange={(e) => {
               closeMobileMenu();
+              if (!navigation.visit(tab, e.target.value, tab === "try" ? "reserve" : undefined)) return;
               editorSelection.current = { screen: "reserve", article: undefined };
-              navigation.visit(tab, e.target.value, tab === "try" ? "reserve" : undefined);
               setPlan(undefined);
             }}
           >
