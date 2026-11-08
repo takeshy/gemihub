@@ -53,6 +53,8 @@ test("an icon-only AI edit receives relevant components and preserves every unre
     assert.equal(context.appearance.theme.bodyCss, undefined);
     assert.equal(context.appearance.theme.footerCss, undefined);
     assert.ok(!("appearance" in (request.schema.properties as object)));
+    assert.doesNotMatch(JSON.stringify(request.schema), /"(?:minItems|maxItems)":/);
+    assert.match(JSON.stringify(request.schema), /At most 32 items\./);
     assert.ok(context.styleCatalog.some((style: { component: string }) => style.component === "buttons"));
     return JSON.stringify({ cssEdits: [{ field: "style", styleId: "icons", selector: ".icon", declarations: [{ property: "color", value: "#008000" }] }] });
   } });

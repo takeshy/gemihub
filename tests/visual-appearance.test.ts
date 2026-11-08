@@ -24,6 +24,8 @@ test("small icon color patches preserve large accepted CSS, media rules, importa
   const before = structuredClone(current);
   const { config } = await proposeVisualAppearance(current, "Make the icon green", [], { generate: async request => {
     assert.match(request.system, /prefer cssEdits/);
+    assert.doesNotMatch(JSON.stringify(request.schema), /"(?:minItems|maxItems)":/);
+    assert.match(JSON.stringify(request.schema), /At most 24 items\./);
     return JSON.stringify({ cssEdits: [{ field: "css", selector: ".icon", declarations: [{ property: "color", value: "#198754" }] }] });
   } });
   assert.equal(config.appearance!.theme!.css, css.replaceAll("blue", "#198754"));
@@ -31,6 +33,17 @@ test("small icon color patches preserve large accepted CSS, media rules, importa
   assert.deepEqual(current, before);
   const added = await proposeVisualAppearance(config, "Style another icon", [], { generate: async () => JSON.stringify({ cssEdits: [{ field: "css", selector: ".new-icon", declarations: [{ property: "fill", value: "currentColor" }] }] }) });
   assert.match(added.config.appearance!.theme!.css, /\.new-icon\s*\{\s*fill:\s*currentColor/);
+});
+
+test("relaxed visual generation schemas still enforce CSS edit counts and declaration limits", async () => {
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme } };
+  const edit = { field: "css", selector: ".icon", declarations: [{ property: "color", value: "green" }] };
+  for (const target of ["appearance", "component:icons"]) for (const response of [
+    { cssEdits: Array.from({ length: 25 }, () => edit) },
+    { cssEdits: [{ ...edit, declarations: Array.from({ length: 21 }, () => edit.declarations[0]) }] },
+    { cssEdits: [{ ...edit, declarations: [] }] },
+    { styleEdits: Array.from({ length: 33 }, (_, index) => ({ id: `icons-${index}`, component: "icons", css: ".icon{color:green}" })) },
+  ]) await assert.rejects(proposeVisualAppearance(current, "Change icon color", [], { target, generate: async () => JSON.stringify(response) }), error => error instanceof Error && error.name === "ZodError");
 });
 
 test("CSS patches retain scope and safety validation and require an existing theme", async () => {
