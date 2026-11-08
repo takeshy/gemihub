@@ -65,7 +65,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [invalid, setInvalid] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState<string | { text: string; screen: "theme" }>("");
   const [saved, setSaved] = useState(false);
   const [review, setReview] = useState(false);
   const releaseReview = useRef<HTMLDialogElement>(null);
@@ -228,6 +228,21 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
     setInvalid(""); save({ ...draft, config: parsed.data });
     if (scope.kind === "page") setPageEditing(parsed.data.pages.find(p => p.id === scope.pageId));
     return true;
+  }
+  function applyVisual(config: ShopConfig) {
+    if (!draft || !changeConfig(config)) return;
+    // Compare this accepted edit, rather than older unsent work elsewhere in the draft.
+    const currentChanged = !same(scopedSource(draft.config, scope), scopedSource(config, scope));
+    const selected = scopedConfig(draft.config, config, scope);
+    const themeElsewhere = !same(scopedSource(selected, { kind: "theme" }), scopedSource(config, { kind: "theme" }));
+    const message = themeElsewhere
+      ? currentChanged
+        ? tr("この画面と共通の色・デザインを変更しました。本番に反映するには、この画面と「ページ全体」の両方で「反映する」を押してください。")
+        : tr("共通の色・デザインを変更しました。本番に反映するには「ページ全体」を開いて「反映する」を押してください。")
+      : tr("画面を更新しました。まだ本番には反映していません。");
+    setNotice(themeElsewhere ? { text: message, screen: "theme" } : message);
+    setPreviewApplied(value => value + 1);
+    return message;
   }
   function applyDesign(config: ShopConfig) {
     const previous = latestDraft.current?.config;
@@ -441,7 +456,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
       setError("");
     }} />}
     {error && !review && !pullReview && <p className="alert" role="alert">{error}</p>}
-    {notice && <p ref={previewNotice} className="notice small" role="status">{notice}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
+    {notice && <p ref={previewNotice} className="notice small" role="status">{typeof notice === "string" ? notice : notice.text}{typeof notice !== "string" && <button type="button" className="text-button" disabled={busy} onClick={() => void run(async () => choose(notice.screen))}>{tr("ページ全体を開く")}</button>}<button className="text-button" onClick={() => setNotice("")} aria-label={tr("通知を閉じる")}>×</button></p>}
     {invalid && <p className="alert" role="alert">{invalid}{tr("（編集欄で確認してください）")}</p>}
     {!draft && <p className="panel">{busy ? tr("画面を開いています…") : tr("画面を読み込めませんでした。ページを再読み込みしてください。")}</p>}
         {draft && draft.pending && <div className="notice"><p>{tr("反映処理を完了できていません。ローカル編集は保持しています。同じ内容で反映を再試行してください。")}</p>
@@ -474,7 +489,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
-      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => viewport(<SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />)} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", content: scope.kind === "content", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => viewport(<SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />)} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", content: scope.kind === "content", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={applyVisual} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" data-device={device} onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");

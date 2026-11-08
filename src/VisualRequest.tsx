@@ -104,7 +104,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
   local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer"; theme?: boolean; content?: boolean };
   screen?: { id: string; label: string; file: string };
-  onLocalChange: (config: ShopConfig) => void;
+  onLocalChange: (config: ShopConfig) => string | void;
   onBusyChange?: (busy: boolean) => void;
   /** The capture replaces the live preview while it is being annotated. */
   onActiveChange?: (active: boolean) => void;
@@ -311,9 +311,9 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       append({ role: "assistant", text: tr("修正案をキャンセルしました。変更前の内容を保持しています。") });
     }} onAccept={() => {
       if (locked || !proposalIsCurrent) return;
-      remember({ config: proposal.config }); onLocalChange(proposal.config);
+      remember({ config: proposal.config }); const message = onLocalChange(proposal.config);
       discardProposal();
-      append({ role: "assistant", text: tr("画面を更新しました。まだ本番には反映していません。") });
+      append({ role: "assistant", text: message || tr("画面を更新しました。まだ本番には反映していません。") });
     }} onRefine={async instruction => {
       if (!result || !proposalIsCurrent) return false;
       let success = false;

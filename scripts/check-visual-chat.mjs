@@ -10,6 +10,7 @@ import { digest } from '../server/auth.ts';
 import { requestLocale } from '../server/i18n.ts';
 import { uploadMenuImage } from '../server/menu-images.ts';
 import { memoryCustomerFiles } from '../server/customer-files.ts';
+import { withSplitTheme } from '../server/visual.ts';
 
 process.env.DEMO_MODE='true';delete process.env.GOOGLE_CLOUD_PROJECT;
 const catalog=JSON.parse(await readFile('shared/en.json','utf8'));
@@ -18,6 +19,7 @@ const server=createApp(store,{...intelligence,visualReview:async()=>({approved:t
   async identifyVisual(media,targets,instruction,_screen,messages){
     annotated=media;identified.push({instruction,messages});
     assert.ok(targets.some(target=>target.id==='description'));
+    if(/お知らせカードの色をピンクに|Make news cards pink/.test(instruction))return{ids:['component:cards'],explanation:'Change the shared news card color.'};
     if(instruction.endsWith('unclear'))return{ids:[],explanation:'How would you like this area to look?'};
     return{ids:['description'],explanation:'I’ll change the introduction and keep the rest of the page.'};
   },
@@ -25,6 +27,11 @@ const server=createApp(store,{...intelligence,visualReview:async()=>({approved:t
     receivedImages.push(images.map(image=>image.id));
     if(failNext){failNext=false;throw Object.assign(new Error('Simulated temporary AI failure'),{status:503});}
     assert.deepEqual(media,annotated);
+    if(/お知らせカードの色をピンクに|Make news cards pink/.test(text)){
+      const config=withSplitTheme(structuredClone(current));
+      config.appearance.theme.styles.push({id:'pink-news-cards',component:'cards',css:'.recent-post-list > a{background:#fdf7f9}'});
+      return{config,summary:planSummary(current,config)};
+    }
     const description=text.includes('Calm, beautiful nails')?'Calm, beautiful nails':text.includes('落ち着いた美しいネイル')?'落ち着いた美しいネイル':text.includes('Your next favorite nails')?'Your next favorite nails':text.includes('次のお気に入りネイル')?'次のお気に入りネイル':text.includes('Nails for every season')?'Nails for every season':'季節を楽しむネイル';
     const config={...structuredClone(current),description};return{config,summary:planSummary(current,config)};
   }
@@ -168,7 +175,26 @@ try{
   await expect(chat.locator('.chat-message-user').filter({hasText:retryText})).toHaveCount(1);
   await review.getByRole('button',{name:label('キャンセル'),exact:true}).click();
   await chat.getByRole('button',{name:label('閉じる'),exact:true}).click();
-  assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px: red-pen chat, sent-photo composer clearing, history/refinement/retry attachments, undo/redo and navigation passed; edits stay local until explicit publication.`);
+  // A theme edit accepted on My page must explain its actual publication destination immediately.
+  await page.evaluate(()=>localStorage.clear());await page.goto(`${origin}/?lang=${language}`);
+  if(width<=760)await page.locator('.mobile-menu-toggle').click();
+  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('AIとお店をつくる')+'$')}).click();
+  if(width<=760)await page.locator('.mobile-menu-toggle').click();
+  await page.getByRole('treeitem',{name:label('マイページ'),exact:true}).click();
+  await expect(page.locator('.editor-toolbar').getByRole('button',{name:label('反映する'),exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:label('修正する'),exact:true}).click();
+  await send(language==='ja'?'お知らせカードの色をピンクにして':'Make news cards pink');await accept();
+  const destinationMessage=label('共通の色・デザインを変更しました。本番に反映するには「ページ全体」を開いて「反映する」を押してください。');
+  await expect(chat.locator('.chat-message-assistant').last()).toHaveText('AI'+destinationMessage);
+  await expect(page.locator('.editor-toolbar').getByRole('button',{name:label('反映する'),exact:true})).toHaveCount(0);
+  await chat.getByRole('button',{name:label('閉じる'),exact:true}).click();
+  await expect(page.locator('.local-preview > [role="status"]')).toContainText(destinationMessage);
+  await page.screenshot({path:`tmp/side-chat/publication-destination-${language}-${width}.png`,fullPage:false});
+  await page.getByRole('button',{name:label('ページ全体を開く'),exact:true}).click();
+  await expect(page.locator('.editor-toolbar strong')).toHaveText(label('ページ全体'));
+  await expect(page.locator('.editor-toolbar').getByRole('button',{name:label('反映する'),exact:true})).toBeEnabled();
+  assert.deepEqual((await store.shop(shop.id)).published,shop.published);
+  assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px: red-pen chat, refinement, retry, undo/redo and the actual publication destination notice passed; edits stay local until explicit publication.`);
  }
 }catch(error){if(active&&!active.isClosed())await active.screenshot({path:'tmp/side-chat/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

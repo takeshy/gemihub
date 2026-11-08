@@ -455,6 +455,7 @@ Verify with `npm test`, `npm run check:storefront-static`, and the shared public
 - Generate small custom-page CSS changes as selector/declaration patches, with an optional media condition. Preserve unrelated rules and desktop layouts when changing a phone breakpoint.
 - Translate non-JSON upstream errors into readable error messages while retaining the instruction and pen marks.
 - Hide the sticky comparison action bar while a refinement is being entered or sent. Focus and scroll to the input, showing only Update proposal and Back to comparison. Return to comparison after success; retain input after failure. Distinguish waiting for another edit from retrying a model call that timed out.
+- When OK accepts shared design changes outside the current screen's publication scope, immediately explain in the page notice and editing chat that they must be applied from Entire page, and offer Open Entire page. If the screen itself also changed, explain that both scopes need applying. Base the notice on this accepted edit, rather than unrelated older drafts. Acceptance and the navigation button never publish automatically.
 - Give card refinements the actual React selectors: `.recent-post-list > a` is each news/blog card and `.recent-post-list` is its shared grid wrapper. Add new selectors through small declaration patches owned by the selected component, preserving base styles and other components.
 
 ## Shared components and screen styles
