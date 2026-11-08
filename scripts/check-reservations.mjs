@@ -36,7 +36,7 @@ try {
     await page.clock.setFixedTime(now);
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${origin}/?shop=${shop.id}&tab=bookings&lang=${locale}`);
-    const panel = page.locator('.reservations-panel'), date = panel.locator('.date-input input[type="text"]');
+    const panel = page.locator('.reservations-panel'), date = panel.locator('.reservation-filters .date-input input[type="text"]');
     await expect(date).toHaveValue(today.replaceAll('-', '/'));
     await expect(panel.locator('.reservation-booking')).toHaveCount(2);
     await expect(panel.locator('.section-top .count')).toHaveText('2');
@@ -56,6 +56,7 @@ try {
       await page.setViewportSize({ width, height: 1000 });
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${locale}/${region.country}/${width}: no page overflow`);
       const clipped = await panel.locator('input[type=text], select, button, .reservation-booking-header, .reservation-booking-summary, .reservation-booking-message').evaluateAll(elements => elements.filter(element => {
+        if (!element.checkVisibility() || element.closest('details:not([open])') && !element.closest('summary')) return false;
         const rect = element.getBoundingClientRect(), panel = element.closest('.reservations-panel').getBoundingClientRect();
         return rect.left < panel.left - 1 || rect.right > panel.right + 1 || element.scrollWidth > element.clientWidth + 1;
       }).map(element => ({ text: element.textContent, className: element.className })));
@@ -64,9 +65,20 @@ try {
     }
     await panel.getByRole('button', { name: label('更新'), exact: true }).click();
     await expect(date).toHaveValue(today.replaceAll('-', '/')); await expect(panel.locator('.reservation-booking')).toHaveCount(2);
+    const trigger=panel.locator('.reservation-booking-open').first();await trigger.click();
+    const detail=page.getByRole('dialog',{name:label('予約の詳細'),exact:true});await expect(detail).toBeVisible();
+    await expect(detail).toContainText('LongMessage');assert.equal(await detail.locator('input,select,textarea,form').count(),0);
+    await page.keyboard.press('Escape');await expect(detail).toHaveCount(0);await expect(trigger).toBeFocused();
+    await panel.locator('.reservation-booking-summary').first().click();await expect(detail).toBeVisible();
+    await page.screenshot({path:`tmp/reservations/modal-${locale}-${region.country}.png`});
+    await detail.getByRole('link',{name:label('お客様情報を開く →'),exact:true}).click();
+    await expect(page.locator('.customer-bookings')).toBeVisible();
+    assert.equal(new URL(page.url()).searchParams.get('customer'),`${'long-email-'.repeat(8)}@example.com`);
+    await page.goBack();await expect(panel).toBeVisible();
     page.once('dialog', dialog => dialog.accept());
     await panel.getByRole('button', { name: label('予約をキャンセル'), exact: true }).click();
     await expect(panel.locator('.reservation-booking .status.cancelled')).toHaveCount(2);
+    await expect(detail).toHaveCount(0,'cancellation controls do not also open the record modal');
     assert.deepEqual(errors, []);
     await context.close();
     console.log(`${locale}/${region.country}: shop-local today, date/staff filtering, empty states, refresh, cancellation and 320–1280px layouts passed`);

@@ -7,6 +7,7 @@ import { createApp } from '../server/app.ts';
 import { sample, shopSchema, planSummary } from '../server/domain.ts';
 import { dateIn, zonedDate, regionOf } from '../shared/region.ts';
 import { digest } from '../server/auth.ts';
+import { phoneKey } from '../server/customers.ts';
 import * as intelligence from '../server/ai.ts';
 
 process.env.DEMO_MODE = 'true'; delete process.env.GOOGLE_CLOUD_PROJECT;
@@ -42,8 +43,8 @@ try {
     for (const [id, date, name, status] of [
       ...Array.from({ length: 12 }, (_, i) => [`today-${i}`, today, `Today guest ${i}`, i === 0 ? 'cancelled' : i === 1 ? 'no_show' : 'active']),
       ['yesterday', previousDate, 'Yesterday guest', 'active'], ['tomorrow', nextDate, 'Tomorrow guest', 'active'],
-    ]) await store.put('booking', `${shop.id}:${id}`, { id: `${shop.id}:${id}`, shopId: shop.id, customer: 'guest@example.com', name, menuId: shop.published.menus[0].id, staffId: shop.published.staff[0].id, price: 6500, start: zonedDate(date, '10:00', region.timeZone).toISOString(), end: zonedDate(date, '11:00', region.timeZone).toISOString(), status, createdAt: new Date().toISOString(), message: '' });
-    for (const [index, status] of ['new', 'new', 'in_progress', 'waiting', 'completed', 'replied'].entries()) await store.put('inquiry', `${shop.id}:inquiry-${index}`, { id: `${shop.id}:inquiry-${index}`, shopId: shop.id, name: `Inquiry guest ${index}`, email: 'guest@example.com', subject: `Question ${index}`, message: `Message ${index}`, reply: '', status, at: new Date(Date.now() - index * 10000).toISOString() });
+    ]) await store.put('booking', `${shop.id}:${id}`, { id: `${shop.id}:${id}`, shopId: shop.id, customer: id === 'today-8' ? phoneKey('03-1234-5678') : 'guest@example.com', ...(id === 'today-8' ? { phone: '03-1234-5678' } : {}), name, menuId: shop.published.menus[0].id, staffId: shop.published.staff[0].id, price: 6500, start: zonedDate(date, '10:00', region.timeZone).toISOString(), end: zonedDate(date, '11:00', region.timeZone).toISOString(), status, createdAt: new Date().toISOString(), message: 'Booking details message' });
+    for (const [index, status] of ['new', 'new', 'in_progress', 'waiting', 'completed', 'replied'].entries()) await store.put('inquiry', `${shop.id}:inquiry-${index}`, { id: `${shop.id}:inquiry-${index}`, shopId: shop.id, name: `Inquiry guest ${index}`, email: index === 1 ? '' : 'guest@example.com', phone: index === 1 ? '03-9876-5432' : '', subject: `Question ${index}`, message: `Message ${index}`, reply: '', status, at: new Date(Date.now() - index * 10000).toISOString() });
     await store.put('inquiry', `${foreign.id}:private`, { id: `${foreign.id}:private`, shopId: foreign.id, name: 'Foreign private guest', email: 'private@example.com', message: 'Foreign private message', reply: '', status: 'new' });
     const context = await browser.newContext({ viewport: { width, height: 1000 }, locale: language === 'ja' ? 'ja-JP' : 'en-US', timezoneId: language === 'ja' ? 'America/Los_Angeles' : 'Asia/Tokyo' });
     await session(context, { email: shop.owner, name: 'Owner', role: 'owner', shopId: shop.id });
@@ -63,9 +64,46 @@ try {
     for (const value of ['Yesterday guest', 'Tomorrow guest', 'Inquiry guest 2', 'Inquiry guest 3', 'Foreign private']) await expect(dashboard).not.toContainText(value);
     await expect(dashboard.locator('.shop-spec')).toBeVisible();
     await dashboard.locator('.dashboard-summary-grid').screenshot({ path: `tmp/management-dashboard/summary-${language}-${width}.png` });
+    const writes=[];const recordWrite=request=>{if(request.method()!=='GET'&&new URL(request.url()).pathname.startsWith('/api/'))writes.push(request.url());};page.on('request',recordWrite);
+    const bookingTrigger=dashboard.getByRole('button',{name:label('{0}の予約を開く').replace('{0}','Today guest 8'),exact:true});
+    await bookingTrigger.focus();await page.keyboard.press('Enter');
+    const bookingDialog=page.getByRole('dialog',{name:label('予約の詳細'),exact:true});await expect(bookingDialog).toBeVisible();
+    await expect(bookingDialog).toContainText('Booking details message');await expect(bookingDialog).toContainText('03-1234-5678');
+    assert.equal(await bookingDialog.locator('input,select,textarea,form').count(),0,'booking modal is read-only');
+    await page.screenshot({path:`tmp/management-dashboard/booking-modal-${language}-${width}.png`});
+    await page.keyboard.press('Escape');await expect(bookingDialog).toHaveCount(0);await expect(bookingTrigger).toBeFocused();
+    assert.deepEqual(writes,[],'previewing and dismissing records makes no writes');
+    await bookingTrigger.click();await bookingDialog.getByRole('link',{name:label('お客様情報を開く →'),exact:true}).click();
+    await expect(page.locator('.customer-bookings')).toBeVisible();await expect(page.locator('.customers')).toContainText('Today guest 8');
+    assert.equal(new URL(page.url()).searchParams.get('customer'),phoneKey('03-1234-5678'));
+    await page.reload();await expect(page.locator('.customer-bookings')).toBeVisible();
+    await page.goBack();await expect(dashboard).toBeVisible();
+    for(const index of [0,1]){
+      await dashboard.getByRole('button',{name:label('{0}のお問い合わせを開く').replace('{0}',`Inquiry guest ${index}`),exact:true}).click();
+      const inquiryDialog=page.getByRole('dialog',{name:label('お問い合わせの詳細'),exact:true});await expect(inquiryDialog).toContainText(`Message ${index}`);
+      assert.equal(await inquiryDialog.locator('input,select,textarea,form').count(),0,'inquiry modal is read-only');
+      if(index===0)await page.screenshot({path:`tmp/management-dashboard/inquiry-modal-${language}-${width}.png`});
+      await inquiryDialog.getByRole('link',{name:label('お問い合わせを開く →'),exact:true}).click();
+      const detail=page.locator('.inquiry-detail');await expect(detail).toContainText(`Message ${index}`);
+      await expect(detail.getByRole('combobox',{name:label('対応状況'),exact:true})).toBeEnabled();
+      assert.equal(new URL(page.url()).searchParams.get('inquiry'),`${shop.id}:inquiry-${index}`);
+      await page.reload();await expect(detail).toContainText(`Message ${index}`);
+      await detail.getByRole('button',{name:label('← お問い合わせ一覧へ'),exact:true}).click();await expect(page.locator('.inquiries-list')).toBeVisible();
+      await page.goBack();await expect(detail).toContainText(`Message ${index}`);
+      await page.goBack();await expect(dashboard).toBeVisible();
+    }
+    page.off('request',recordWrite);assert.deepEqual(writes,[],'previews, destinations and history navigation make no writes');
+    await page.goto(`${origin}/?tab=inquiries&shop=${shop.id}&inquiry=${encodeURIComponent(`${foreign.id}:private`)}&lang=${language}`);
+    await expect(page.locator('.inquiry-detail').getByRole('alert')).toHaveText(label('お問い合わせが見つかりません。お問い合わせ一覧を確認してください。'));
+    await expect(page.locator('.inquiry-detail')).not.toContainText('Foreign private');
+    await page.goBack();await expect(dashboard).toBeVisible();
     await dashboard.getByRole('link', { name: label('予約一覧へ →'), exact: true }).click();
     await expect(page.locator('.reservations-panel')).toBeVisible();
     assert.equal(new URL(page.url()).searchParams.get('tab'), 'bookings');
+    const listTrigger=page.locator('.reservation-booking-open').first();await listTrigger.click();
+    await expect(bookingDialog).toBeVisible();await expect(bookingDialog).toContainText('Booking details message');
+    await page.screenshot({path:`tmp/management-dashboard/reservation-modal-${language}-${width}.png`});
+    await bookingDialog.getByRole('button',{name:label('閉じる'),exact:true}).click();await expect(bookingDialog).toHaveCount(0);await expect(listTrigger).toBeFocused();
     await page.goBack(); await expect(dashboard).toBeVisible();
     await dashboard.getByRole('link', { name: label('お問い合わせ一覧へ →'), exact: true }).click();
     await expect(page.locator('.inquiries-list')).toBeVisible();

@@ -4036,5 +4036,13 @@
   "AIの修正案をまだ「OK」で取り込んでいません。移動すると修正案が失われます。移動しますか？": "You haven't accepted the AI's proposed edit with OK yet. Leaving now discards it. Leave anyway?",
   "プレビューの幅": "Preview width",
   "PC": "PC",
-  "スマートフォン": "Phone"
+  "スマートフォン": "Phone",
+  "予約の詳細": "Booking details",
+  "料金": "Price",
+  "受付日時": "Received at",
+  "返信": "Reply",
+  "お客様情報を開く →": "Open customer details →",
+  "お問い合わせを開く →": "Open this inquiry →",
+  "お問い合わせが見つかりません。お問い合わせ一覧を確認してください。": "This inquiry could not be found. Check the inquiry list.",
+  "{0}の予約を開く": "Open {0}'s booking"
 }

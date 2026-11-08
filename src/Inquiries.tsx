@@ -1,6 +1,6 @@
 import { tr } from "../shared/i18n";
 import { useShopDisplay } from "./money";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { DateInput } from "./DateInput";
 import { useApi } from "./api";
 import { Pagination, usePagination } from "./Pagination";
@@ -20,14 +20,19 @@ export function Inquiries({
   shopId,
   inquiries,
   reload,
+  initialInquiryId,
+  back,
 }: {
   shopId: string;
   inquiries: Inquiry[];
   reload: () => Promise<unknown>;
+  initialInquiryId?: string;
+  back?: () => void;
 }) {
   const api = useApi();
   const [view, setView] = useState<"list" | "board">("list");
-  const [selectedId, setSelectedId] = useState("");
+  const [selectedId, setSelectedId] = useState(initialInquiryId || "");
+  useEffect(() => { if (initialInquiryId !== undefined) setSelectedId(initialInquiryId); }, [initialInquiryId]);
   const [moving, setMoving] = useState(false), [error, setError] = useState("");
   const moveBusy = useRef(false);
   async function move(inquiry: Inquiry, status: InquiryStatus) {
@@ -57,8 +62,10 @@ export function Inquiries({
   const pagination = usePagination(visible, JSON.stringify([shopId, view, showCompleted, query, reply, from, to]));
   const selected = inquiries.find(inquiry => inquiry.id === selectedId);
   const refresh = async () => { await reload(); };
+  const close = () => { setSelectedId(""); if (initialInquiryId) back?.(); };
+  if (selectedId && !selected) return <section className="panel inquiry-detail" aria-label={tr("お問い合わせの詳細")}><button type="button" onClick={close}>{tr("← お問い合わせ一覧へ")}</button><p role="alert">{tr("お問い合わせが見つかりません。お問い合わせ一覧を確認してください。")}</p></section>;
   if (selected) return <section className="panel inquiry-detail" aria-label={tr("お問い合わせの詳細")}>
-    <button type="button" onClick={() => setSelectedId("")}>{tr("← お問い合わせ一覧へ")}</button>
+    <button type="button" onClick={close}>{tr("← お問い合わせ一覧へ")}</button>
     {selected.email && <a className="button" data-customer-inquiry-link href={`/?${new URLSearchParams({ shop: shopId, customer: selected.email, inquiry: selected.id })}`}>{tr("お客様の詳細で対応する →")}</a>}
     <CustomerInquiry key={selected.id} shopId={shopId} inquiry={selected} onChanged={refresh} onReload={refresh} />
   </section>;

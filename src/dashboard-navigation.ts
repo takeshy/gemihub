@@ -26,7 +26,7 @@ export function dashboardRoute(search: string, fallback: DashboardTab = "dashboa
   };
 }
 // Preserve unrelated parameters (for example language), and clear context from the screen being left.
-export function dashboardSearch(search: string, tab: DashboardTab, shop: string, screen?: string, article?: string, conversation?: string) {
+export function dashboardSearch(search: string, tab: DashboardTab, shop: string, screen?: string, article?: string, conversation?: string, recordId?: string) {
   const query = new URLSearchParams(search);
   for (const key of ["tab", "shop", "calendar", "screen", "article", "customer", "customerView", "inquiry", "request", "intent", "plan", "conversation"]) query.delete(key);
   query.set("tab", tab);
@@ -34,6 +34,7 @@ export function dashboardSearch(search: string, tab: DashboardTab, shop: string,
   if (tab === "try" && screen) query.set("screen", screen);
   if (tab === "try" && article) query.set("article", article);
   if (tab === "assistant" && conversation) query.set("conversation", conversation);
+  if (recordId && (tab === "customers" || tab === "inquiries")) query.set(tab === "customers" ? "customer" : "inquiry", recordId);
   return `?${query}`;
 }
 export function useDashboardNavigation(search: string, initialTab: string, browser: boolean) {
@@ -59,8 +60,8 @@ export function useDashboardNavigation(search: string, initialTab: string, brows
     route: dashboardRoute(currentSearch, browser ? "dashboard" : dashboardTab(initialTab)),
     search: currentSearch,
     /** Returns false when the owner chose to stay on the current screen. */
-    visit(tab: DashboardTab, shop: string, screen?: string, article?: string, replace = false, conversation?: string) {
-      const next = dashboardSearch(latestSearch.current, tab, shop, screen, article, conversation);
+    visit(tab: DashboardTab, shop: string, screen?: string, article?: string, replace = false, conversation?: string, recordId?: string) {
+      const next = dashboardSearch(latestSearch.current, tab, shop, screen, article, conversation, recordId);
       const previousQuery = new URLSearchParams(latestSearch.current), nextQuery = new URLSearchParams(next);
       previousQuery.sort(); nextQuery.sort();
       // Choosing the current tab again still returns to the top; only real moves need confirmation.

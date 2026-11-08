@@ -6,12 +6,14 @@ import { useShopDisplay } from "./money";
 import { Pagination, usePagination } from "./Pagination";
 import { PayPalAttention } from "./PayPalAttention";
 import { ShopSettingsOverview } from "./ShopSettingsOverview";
+import { RecordDetailsDialog, bookingStatusText } from "./RecordDetailsDialog";
 import type { Workspace } from "./App";
 
 export function ManagementDashboard({ shop, busy, refresh, open, reload, onAsk }: {
-  shop: Workspace; busy: boolean; refresh: () => void; open: (screen: string) => void; reload: () => Promise<unknown>; onAsk: (question:string) => Promise<void>;
+  shop: Workspace; busy: boolean; refresh: () => void; open: (screen: string, recordId?: string) => void; reload: () => Promise<unknown>; onAsk: (question:string) => Promise<void>;
 }) {
   const [now, setNow] = useState(Date.now);
+  const [selected, setSelected] = useState<{ kind: "booking" | "inquiry"; id: string }>();
   useEffect(() => {
     const update = () => setNow(Date.now());
     const timer = window.setInterval(update, 60000);
@@ -24,6 +26,8 @@ export function ManagementDashboard({ shop, busy, refresh, open, reload, onAsk }
   const bookings = usePagination(summary.bookings, `${shop.id}:${summary.today}`);
   const inquiries = usePagination(summary.inquiries, shop.id);
   const publiclyPublished = shop.publication !== "provisional";
+  const selectedBooking = selected?.kind === "booking" ? shop.bookings.find(booking => booking.id === selected.id) : undefined;
+  const selectedInquiry = selected?.kind === "inquiry" ? shop.inquiries.find(inquiry => inquiry.id === selected.id) : undefined;
   const href = (tab: string) => `/?${new URLSearchParams({ tab, shop: shop.id, lang: getLocale() })}`;
   const follow = (event: React.MouseEvent<HTMLAnchorElement>, tab: string) => {
     if (event.button || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
@@ -37,20 +41,24 @@ export function ManagementDashboard({ shop, busy, refresh, open, reload, onAsk }
         {!publiclyPublished ? <p className="muted">{tr("本番公開すると、当日の予約をここで確認できます。")}</p> : <>
           {!summary.bookings.length && <p className="muted">{tr("本日の予約はありません。")}</p>}
           <div {...bookings.listProps} className="dashboard-item-list">{bookings.items.map(booking => <article key={booking.id} className="dashboard-booking">
-            <div><time dateTime={booking.start}>{shopTime(booking.start, { hour: "2-digit", minute: "2-digit" })}</time><strong>{booking.name}{tr(" 様 ")}</strong></div>
-            <p>{bookingMenuName(config, booking)} · {bookingStaffName(config, booking.staffId)}</p>
-            <span className={`status ${booking.status}`}>{shop.transferListings?.some(listing => listing.bookingId === booking.id) ? tr("キャンセル受付済み") : booking.status === "active" ? tr("予約確定") : booking.status === "no_show" ? tr("無断キャンセル") : tr("キャンセル済み")}</span>
+            <button type="button" className="dashboard-item-button" aria-haspopup="dialog" aria-label={tr("{0}の予約を開く", booking.name)} onClick={() => setSelected({ kind: "booking", id: booking.id })}>
+              <span className="dashboard-item-heading"><time dateTime={booking.start}>{shopTime(booking.start, { hour: "2-digit", minute: "2-digit" })}</time><strong>{booking.name}{tr(" 様 ")}</strong></span>
+              <span className="dashboard-item-description">{bookingMenuName(config, booking)} · {bookingStaffName(config, booking.staffId)}</span>
+              <span className={`status ${booking.status}`}>{bookingStatusText(shop, booking)}</span>
+            </button>
           </article>)}</div><Pagination pagination={bookings} label={tr("本日の予約")} />
         </>}
       </section>
       <section className="panel dashboard-inquiries" aria-label={tr("未対応のお問い合わせ")}>
         <div className="section-top"><h2>{tr("未対応のお問い合わせ")} <span className="count">{summary.inquiries.length}</span></h2><a data-dashboard-link className="text-button" href={href("inquiries")} onClick={event => follow(event, "inquiries")}>{tr("お問い合わせ一覧へ →")}</a></div>
         {!summary.inquiries.length && <p className="muted">{tr("未対応のお問い合わせはありません。")}</p>}
-        <div {...inquiries.listProps} className="dashboard-item-list">{inquiries.items.map(inquiry => <article key={inquiry.id} className="dashboard-inquiry"><div><strong>{inquiry.name}{tr(" 様 ")}</strong>{inquiry.at && Number.isFinite(Date.parse(inquiry.at)) && <time dateTime={inquiry.at}>{when(inquiry.at)}</time>}</div>{inquiry.subject && <h3>{inquiry.subject}</h3>}<p>{inquiry.message}</p></article>)}</div>
+        <div {...inquiries.listProps} className="dashboard-item-list">{inquiries.items.map(inquiry => <article key={inquiry.id} className="dashboard-inquiry"><button type="button" className="dashboard-item-button" aria-haspopup="dialog" aria-label={tr("{0}のお問い合わせを開く", inquiry.name)} onClick={() => setSelected({ kind: "inquiry", id: inquiry.id })}><span className="dashboard-item-heading"><strong>{inquiry.name}{tr(" 様 ")}</strong>{inquiry.at && Number.isFinite(Date.parse(inquiry.at)) && <time dateTime={inquiry.at}>{when(inquiry.at)}</time>}</span>{inquiry.subject && <strong className="dashboard-inquiry-subject">{inquiry.subject}</strong>}<span className="dashboard-item-description">{inquiry.message}</span></button></article>)}</div>
         <Pagination pagination={inquiries} label={tr("未対応のお問い合わせ")} />
       </section>
     </div>
     {shop.isOwner && <PayPalAttention shop={shop} reload={reload} onAsk={onAsk} />}
     <ShopSettingsOverview config={config} isOwner={shop.isOwner} publiclyPublished={publiclyPublished} google={shop.judge ? undefined : shop.google} open={open} />
+    {selectedBooking && <RecordDetailsDialog shop={shop} item={{ kind: "booking", value: selectedBooking }} close={() => setSelected(undefined)} open={open} />}
+    {selectedInquiry && <RecordDetailsDialog shop={shop} item={{ kind: "inquiry", value: selectedInquiry }} close={() => setSelected(undefined)} open={open} />}
   </div>;
 }

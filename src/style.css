@@ -2747,11 +2747,25 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .dashboard-summary-grid h2 { font-size: 18px; margin: 0; }
 .dashboard-item-list { display: grid; gap: 12px; }
 .dashboard-item-list article { padding: 14px 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
-.dashboard-item-list article > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dashboard-item-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
 .dashboard-item-list time { font-size: 12px; color: var(--muted); }
 .dashboard-item-list h3 { margin: 10px 0; font-size: 14px; }
 .dashboard-item-list p { font-size: 13px; line-height: 1.8; margin: 8px 0; }
-.dashboard-inquiry p { white-space: pre-wrap; max-height: 7.2em; overflow-y: auto; }
+.dashboard-item-button { display: block; width: 100%; padding: 10px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.dashboard-item-button:hover { background: var(--cream); }
+.dashboard-item-button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.dashboard-item-description { display: block; font-size: 13px; line-height: 1.8; margin: 8px 0; }
+.dashboard-inquiry-subject { display: block; margin: 10px 0; font-size: 14px; }
+.dashboard-inquiry .dashboard-item-description { white-space: pre-wrap; max-height: 7.2em; overflow: hidden; }
+.dashboard-detail-dialog { width: min(640px, calc(100vw - 32px)); overflow-wrap: anywhere; }
+.dashboard-detail-dialog .section-top h3 { margin: 0; }
+.dashboard-detail-fields { display: grid; gap: 10px; }
+.dashboard-detail-fields > div { display: grid; grid-template-columns: minmax(70px, 100px) minmax(0, 1fr); gap: 12px; }
+.dashboard-detail-fields dt { color: var(--muted); font-size: 13px; }
+.dashboard-detail-fields dd { margin: 0; }
+.reservation-booking { cursor: pointer; }
+.reservation-booking .reservation-booking-open { display: block; max-width: 100%; padding: 0; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; overflow-wrap: anywhere; }
+.reservation-booking-open:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 .page-change-inventory { min-width: 0; }
 .page-change-inventory .editor-toolbar { margin: 0; }
 .page-change-inventory h2 { font-size: 20px; }

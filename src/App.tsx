@@ -27,6 +27,7 @@ import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
 import { ShopOverview } from "./ShopOverview";
 import { ManagementDashboard } from "./ManagementDashboard";
+import { RecordDetailsDialog } from "./RecordDetailsDialog";
 import { ConsultationWorkspace } from "./ConsultationHistory";
 import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
@@ -407,10 +408,10 @@ function Dashboard({
     setMobileMenuOpen(false);
     if (mobileMenuOpen && window.matchMedia("(max-width: 760px)").matches) menuToggle.current?.focus();
   }
-  function setTab(value: string) {
+  function setTab(value: string, recordId?: string) {
     closeMobileMenu();
     const next = dashboardTab(value);
-    navigation.visit(next, shop?.id || chosen, next === "try" ? editorSelection.current.screen : undefined, next === "try" ? editorSelection.current.article : undefined);
+    navigation.visit(next, shop?.id || chosen, next === "try" ? editorSelection.current.screen : undefined, next === "try" ? editorSelection.current.article : undefined, false, undefined, recordId);
   }
   function selectConsultation(id?: string, replace = false) {
     closeMobileMenu(); navigation.visit("assistant", shop.id, undefined, undefined, replace, id);
@@ -603,7 +604,7 @@ function Dashboard({
                 {view === "coupons" && shop.isOwner && shop.published && <Coupons key={shop.id} shopId={shop.id} config={shop.published}/>}
                 {view === "staff" && <>{shop.isOwner && <><LiveSettings key={`${shop.id}-staff`} shop={shop} section="staff" reload={load} /><StaffAccounts key={`${shop.id}-${shop.revision}`} shop={shop} onSaved={load}/></>}{!shop.isOwner && <><StaffCalendar key={shop.id} shop={shop} onSaved={load}/><StaffPhoto shop={shop} reload={load}/></>}</>}
                 {view === "bookings" && (
-                  <Reservations key={shop.id} shop={shop} run={run} reload={load} />
+                  <Reservations key={shop.id} shop={shop} run={run} reload={load} open={setTab} />
                 )}
                 {view === "customers" && <Customers key={`${shop.id}:${initialCustomer}:${initialCustomerImages}:${initialInquiryId}`} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={()=>reloadInquiries(shop.id)} />}
                 {view === "blog" && (
@@ -616,7 +617,7 @@ function Dashboard({
                     demo={session.demo}
                   />
                 )}
-                {!creating && <div hidden={view!=="inquiries"}><Inquiries key={shop.id} shopId={shop.id} inquiries={shop.inquiries} reload={()=>reloadInquiries(shop.id)}/></div>}
+                {!creating && <div hidden={view!=="inquiries"}><Inquiries key={shop.id} shopId={shop.id} inquiries={shop.inquiries} initialInquiryId={view === "inquiries" ? initialInquiryId : undefined} back={() => setTab("inquiries")} reload={()=>reloadInquiries(shop.id)}/></div>}
                 {view === "images" && shop.isOwner && <ImageLibrary key={shop.id} shopId={shop.id} />}
                 {view === "settings" && (
                   <Settings shop={shop} run={run} reload={load} hasLegacyNotes={!!session.user?.legacyNotes} />
@@ -1078,15 +1079,19 @@ function Reservations({
   shop,
   run,
   reload,
+  open,
 }: {
   shop: Workspace;
   run: Run;
   reload: () => Promise<unknown>;
+  open: (screen: string, recordId?: string) => void;
 }) {
   const api = useApi();
   const { money: yen, when, shopToday, displayTimeZone, timeZoneLabel } = useShopDisplay();
   const [date, setDate] = useState(() => shopToday());
   const [staff, setStaff] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const selectedBooking = shop.bookings.find(booking => booking.id === selectedId);
   const visibleBookings = shop.bookings.filter(b => (!date || dateIn(b.start, displayTimeZone()) === date) && (!staff || b.staffId === staff));
   const bookingPages = usePagination(visibleBookings, JSON.stringify([shop.id, date, staff]));
   const checkoutPages = usePagination(shop.paymentCheckouts || [], shop.id);
@@ -1147,11 +1152,16 @@ function Reservations({
       {!!shop.bookings.length && !visibleBookings.length && <Empty text={tr("指定した条件の予約はありません。日付・スタッフを変更するか、絞り込みを解除してください。")} />}
       <div {...bookingPages.listProps} className="booking-list">
         {bookingPages.items.map((b) => (
-            <div className="booking-card reservation-booking" key={b.id}>
+            <div className="booking-card reservation-booking" key={b.id} onClick={event => {
+              if (event.target instanceof Element && !event.target.closest("button, a, summary, details, input, textarea, select, form")) {
+                event.currentTarget.querySelector<HTMLButtonElement>(".reservation-booking-open")?.focus({ preventScroll: true });
+                setSelectedId(b.id);
+              }
+            }}>
               <div className="reservation-booking-body">
                 <div className="reservation-booking-header">
                   <div className="reservation-booking-identity">
-                    <h3>{b.name} {tr(" 様 ")}</h3>
+                    <h3><button type="button" className="reservation-booking-open" aria-haspopup="dialog" aria-label={tr("{0}の予約を開く", b.name)} onClick={() => setSelectedId(b.id)}>{b.name} {tr(" 様 ")}</button></h3>
                     <time dateTime={b.start}>{when(b.start)}</time>
                   </div>
                   <div className="reservation-booking-statuses">
@@ -1212,6 +1222,7 @@ function Reservations({
           ))}
       </div>
       <Pagination pagination={bookingPages} label={tr("予約一覧")} />
+      {selectedBooking && <RecordDetailsDialog shop={shop} item={{ kind: "booking", value: selectedBooking }} close={() => setSelectedId("")} open={open} />}
     </div>
   );
 }
