@@ -20,6 +20,21 @@ import type { VisualPreviewOptions } from "../shared/visual-review";
 // Capture the rendered page with its computed styles, without granting screen sharing.
 // Cross-origin images without CORS are represented by their labelled image frame.
 export async function capturePage(root: HTMLElement) {
+  const viewport = root.querySelector<HTMLIFrameElement>("iframe[data-preview-viewport]");
+  if (viewport) {
+    const started = Date.now();
+    while (viewport.dataset.previewReady !== "true" || !viewport.contentDocument?.querySelector("#preview-viewport-content .public-shop")) {
+      if (Date.now() - started > 15000) throw new Error(tr("画面を表示してからお試しください"));
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    const content = viewport.contentDocument!.getElementById("preview-viewport-content")!;
+    await content.ownerDocument.fonts.ready;
+    while (content.querySelector("[data-preview-image-loading]") || [...content.querySelectorAll("img")].some(image => !image.complete)) {
+      if (Date.now() - started > 15000) throw new Error(tr("画面を表示してからお試しください"));
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return captureRendered(content);
+  }
   await document.fonts.ready;
   // The side chat narrows the preview into the phone layout; capture the width the page has without it.
   // A phone-width preview is already the layout being edited.
@@ -31,32 +46,34 @@ export async function capturePage(root: HTMLElement) {
   try { return await captureRendered(root); } finally { root.style.cssText = restore; }
 }
 async function captureRendered(root: HTMLElement) {
+  const doc = root.ownerDocument;
+  const view = doc.defaultView || window;
   const original = [root, ...root.querySelectorAll<HTMLElement>("*")];
   const clone = root.cloneNode(true) as HTMLElement;
   const copies = [clone, ...clone.querySelectorAll<HTMLElement>("*")];
   for (let i = 0; i < original.length; i++) {
-    if (original[i] instanceof HTMLInputElement && copies[i] instanceof HTMLInputElement) {
+    if (original[i].tagName === "INPUT" && copies[i].tagName === "INPUT") {
       const input = original[i] as HTMLInputElement;
       copies[i].setAttribute("value", input.value);
       if (input.checked) copies[i].setAttribute("checked", ""); else copies[i].removeAttribute("checked");
     }
-    if (original[i] instanceof HTMLTextAreaElement) copies[i].textContent = (original[i] as HTMLTextAreaElement).value;
-    if (original[i] instanceof HTMLSelectElement) {
+    if (original[i].tagName === "TEXTAREA") copies[i].textContent = (original[i] as HTMLTextAreaElement).value;
+    if (original[i].tagName === "SELECT") {
       const selected = (original[i] as HTMLSelectElement).selectedIndex;
       copies[i].querySelectorAll("option").forEach((option, index) => {
         if (index === selected) option.setAttribute("selected", ""); else option.removeAttribute("selected");
       });
     }
-    const style = getComputedStyle(original[i]);
+    const style = view.getComputedStyle(original[i]);
     for (const key of Array.from(style)) copies[i].style.setProperty(key, style.getPropertyValue(key));
-    if (copies[i] instanceof HTMLImageElement) {
+    if (copies[i].tagName === "IMG") {
       const img = original[i] as HTMLImageElement;
-      const replacement = document.createElement("div");
+      const replacement = doc.createElement("div");
       replacement.style.cssText = copies[i].style.cssText;
       replacement.textContent = img.alt || tr("紹介画像");
       // Existing image pixels can be inlined only when their origin permits it.
       try {
-        const canvas = document.createElement("canvas"); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const canvas = doc.createElement("canvas"); canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
         canvas.getContext("2d")!.drawImage(img, 0, 0);
         copies[i].setAttribute("src", canvas.toDataURL("image/png"));
         copies[i].removeAttribute("srcset");

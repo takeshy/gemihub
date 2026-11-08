@@ -29,7 +29,7 @@ import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } f
 import type { InquiryInteraction } from "./inquiries.ts";
 import { createPublicInquiry, inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, stageInquiryFiles, stagePublicInquiry, writeInquiry } from "./inquiry-service.ts";
 import type { InquiryFileStorage } from "./inquiry-files.ts";
-import { visualGenerationTimeoutMs, type VisualGenerationProgress, type VisualStage } from "../shared/visual-progress.ts";
+import { visualGenerationTimeoutMs, visualModelTimeoutMs, type VisualGenerationProgress, type VisualStage } from "../shared/visual-progress.ts";
 import { answerConsultation, appendVoiceConsultation, deleteConsultation, consultationVoiceSchema } from "./consultations.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
@@ -2564,7 +2564,7 @@ export function createApp(
               }
             }
           });
-          // The 120s budget starts inside, after the per-shop queue and request body, so waiting never consumes it.
+          // The operation budget starts after the per-shop queue and request body.
           return await generateVisual();
         }
         return await store.locked(shop.id, async () => {
@@ -2987,7 +2987,7 @@ export function createApp(
               ? t.id.startsWith(`page:${input.local.pageId}:`)
               : t.id !== "theme" && !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:") && !headerCopyKeys.some(key => t.id === `copy:${key}`)));
             const availableTargets = targets.filter(t => !t.id.startsWith("screen:") || !input.screen || t.id === `screen:${input.screen.id}`);
-            const result = await withAiDeadline(45000, () => intelligence.identifyVisual(
+            const result = await withAiDeadline(visualModelTimeoutMs, () => intelligence.identifyVisual(
               input.media,
               availableTargets,
               input.instruction,

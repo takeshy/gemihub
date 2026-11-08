@@ -1,24 +1,26 @@
 import { tr } from "../shared/i18n";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
 import { menuImageLimit } from "../server/menu-image-domain";
 import { RequestImagePicker } from "./RequestImagePicker";
 import { ImageUploadStatus } from "./ImageUploadStatus";
 import { loadMenuImage } from "./menu-image-loader";
+import { PreviewViewportContext } from "./preview-viewport-context";
 
 export function MenuImage({ imageId, imageBase, suffix = "", name, className = "menu-image", style, imageStyle, view = "display" }: { imageId?: string; imageBase: string; suffix?: string; name: string; className?: string; style?: React.CSSProperties; imageStyle?: React.CSSProperties; view?: "display" | "thumbnail" }) {
   const api = useApi();
+  const previewViewport = useContext(PreviewViewportContext);
   const ref = useRef<HTMLSpanElement>(null);
   const [visible, setVisible] = useState(false);
   const [image, setImage] = useState<{ id: string; url: string }>();
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!globalThis.IntersectionObserver) { setVisible(true); return; }
+    if (previewViewport || !globalThis.IntersectionObserver) { setVisible(true); return; }
     const observer = new IntersectionObserver(entries => { if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect(); } }, { rootMargin: "300px" });
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();
-  }, [imageId]);
+  }, [imageId, previewViewport]);
   useEffect(() => {
     let disposed = false;
     let url = "";
@@ -34,7 +36,7 @@ export function MenuImage({ imageId, imageBase, suffix = "", name, className = "
     return () => { disposed = true; if (url) URL.revokeObjectURL(url); };
   }, [imageId, imageBase, suffix, visible, api, view]);
   if (!imageId) return null;
-  return <span ref={ref} className={className} style={style}>{image?.id === imageId ? <img src={image.url} alt={tr("{0}の画像", name)} style={imageStyle} /> : <span>{error ? tr("画像を読み込めませんでした") : tr("画像を読み込み中…")}</span>}</span>;
+  return <span ref={ref} className={className} style={style} data-preview-image-loading={previewViewport && image?.id !== imageId && !error ? true : undefined}>{image?.id === imageId ? <img src={image.url} alt={tr("{0}の画像", name)} style={imageStyle} /> : <span>{error ? tr("画像を読み込めませんでした") : tr("画像を読み込み中…")}</span>}</span>;
 }
 
 export function MenuImageEditor({ shopId, imageId, name, change, uploading, label = tr("メニュー画像（任意）"), imageBase, pickerBase, uploadPath }: { label?: string; imageBase?: string; pickerBase?: string; uploadPath?: string; shopId: string; imageId?: string; name: string; change: (imageId: string | undefined) => void; uploading?: (busy: boolean) => void }) {

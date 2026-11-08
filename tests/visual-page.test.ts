@@ -17,6 +17,8 @@ import { memoryCustomerFiles } from "../server/customer-files.ts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Presentation } from "../src/Presentation.tsx";
+import postcss from "postcss";
+import { applyPageCssEdits } from "../server/css-edits.ts";
 
 process.env.DEMO_MODE = "true";
 const instruction = "店主を反映して。\n紹介メッセージ\n当店では、ただカラーを塗るだけでなく、「丁寧なケア」と「持ちの良さ」にこだわっています。\n「指先を見るたびに気分が上がる」「明日からまた頑張ろうと思える」そんな特別な時間を過ごしていただけるよう、一人ひとりのお悩みに寄り添った施術を心がけています。\n• 保有資格：JNECネイリスト技能検定1級、JNAジェルネイル技能検定上級、ネイルサロン衛生管理士\n• 得意なデザイン：ニュアンスネイル、大人可愛い上品デザイン、シンプルオフィスネイル";
@@ -25,6 +27,30 @@ const config = (): ShopConfig => ({ ...structuredClone(sample), pages: [
   { id: "staff-introduction", slug: "staff", title: "スタッフ紹介", navigationLabel: "スタッフ紹介", body: '<section class="profile"><h2>スタッフ紹介</h2><p>準備中</p></section>', css: ".profile{line-height:1.8}", layout: "standard", imageUrl: "" },
   { id: "access", slug: "access", title: "アクセス", navigationLabel: "アクセス", body: "<p>既存の案内</p>", layout: "standard", imageUrl: "" },
 ] });
+
+test("responsive page patches change only selected declarations at the requested breakpoint", async () => {
+  const before = config();
+  before.pages[0].css = '.card{display:grid;grid-template-columns:260px 1fr;padding:32px}.unrelated{color:green}@media(max-width:760px){.card{grid-template-columns:1fr;padding:22px}.unrelated{font-size:14px}}';
+  const patch = { cssEdits: [{ selector: ".card", media: "(max-width:760px)", declarations: [{ property: "min-width", value: "0" }, { property: "padding", value: "12px" }] }] };
+  const result = await proposeVisualAppearance(before, "見切れてる。スマホだと。", [], { target: "page:staff-introduction:design", generate: async request => {
+    assert.match(request.system, /return only small cssEdits/);
+    assert.equal(request.timeoutMs, 120000);
+    assert.doesNotMatch(JSON.stringify(request.schema), /"(?:minItems|maxItems)":/);
+    return JSON.stringify(patch);
+  } });
+  const css = result.config.pages[0].css!;
+  const root = postcss.parse(css), base = root.nodes.find(node => node.type === "rule" && node.selector === ".card")!;
+  assert.equal(base.toString(), '.card{display:grid;grid-template-columns:260px 1fr;padding:32px}');
+  assert.match(css, /\.unrelated\{color:green\}/);assert.match(css, /\.unrelated\{font-size:14px\}/);
+  assert.match(css, /padding:12px/);assert.match(css, /min-width:0/);
+  assert.deepEqual({ ...result.config, pages: before.pages }, before);
+  assert.equal(result.config.pages[0].body, before.pages[0].body);
+  for (const invalid of [
+    [{ selector: ".card", media: "(max-width:760px){}", declarations: [{ property: "width", value: "100%" }] }],
+    [{ selector: ".card{}", declarations: [{ property: "width", value: "100%" }] }],
+  ]) assert.throws(() => applyPageCssEdits(before.pages[0].css!, invalid));
+  await assert.rejects(proposeVisualAppearance(before, "スマホを直して", [], { target: "page:staff-introduction:design", generate: async () => JSON.stringify({ cssEdits: [{ selector: ".card", declarations: [{ property: "background", value: "url(https://example.com/track)" }] }] }) }));
+});
 
 test("all built-in screen designs preserve other screens, custom pages and booking data", async () => {
   const before = { ...config(), screens: Object.fromEntries(screenIds.map(id => [id, screenStarter(id)])) };
@@ -67,14 +93,14 @@ test("owner introduction edits generate only page copy while preserving business
     assert.equal(context.instruction, instruction);
     assert.deepEqual(context.previousMessages, messages);
     assert.deepEqual(context.selectedPage, before.pages[0]);
-    assert.deepEqual(context.allowedFields, ["body", "css"]);
+    assert.deepEqual(context.allowedFields, ["body", "css", "cssEdits"]);
     assert.equal(context.current, undefined);
     assert.equal(context.shop.rules, undefined);
     assert.equal(context.shop.menus, undefined);
     assert.deepEqual(request.contents[0].parts!.at(-1), { inlineData: media });
-    assert.deepEqual(Object.keys(request.schema.properties as object), ["body", "css"]);
+    assert.deepEqual(Object.keys(request.schema.properties as object), ["body", "css", "cssEdits"]);
     assert.equal(request.schema.additionalProperties, false);
-    assert.equal(request.timeoutMs, 45000);
+    assert.equal(request.timeoutMs, 120000);
     return JSON.stringify({ body });
   } });
   assert.equal(next.config.pages[0].body, body);

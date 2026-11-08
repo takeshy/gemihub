@@ -6,8 +6,9 @@ import { proposeVisualAppearance } from "../server/visual.ts";
 import { sample } from "../server/domain.ts";
 import { standardTheme } from "../shared/theme-editing.ts";
 import { sharedThemeCss } from "../shared/theme-styles.ts";
+import { visualGenerationTimeoutMs, visualModelTimeoutMs } from "../shared/visual-progress.ts";
 
-test("a stalled icon edit retries once in time for rendered review", { timeout: 5000 }, async t => {
+test("each visual model call gets 120 seconds and a retry leaves room for rendered review", { timeout: 5000 }, async t => {
   const key = process.env.OPENAI_API_KEY, model = process.env.OPENAI_MODEL;
   process.env.OPENAI_API_KEY = "test";process.env.OPENAI_MODEL = "test-model";
   t.after(() => {
@@ -22,16 +23,19 @@ test("a stalled icon edit retries once in time for rendered review", { timeout: 
     if (signals.length === 1) return new Promise(() => {});
     return { output_text: JSON.stringify({ cssEdits: [{ field: "css", selector: ".icon", declarations: [{ property: "color", value: "#008000" }] }] }), output: [] };
   } } } as unknown as OpenAI);
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const before = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: { ...standardTheme, css: ".icon{color:red}" } } };
-  const pending = withAiDeadline(120000, async () => {
+  const pending = withAiDeadline(visualGenerationTimeoutMs, async () => {
     const result = await proposeVisualAppearance(before, "Make the icon green", [], { target: "component:icons" });
     assert.equal(currentAiSignal()!.aborted, false, "the operation still has time for review");
     return result;
   });
   await new Promise<void>(resolve => setImmediate(resolve));
   assert.equal(signals.length, 1);
-  t.mock.timers.tick(30001);
+  t.mock.timers.tick(90001);
+  assert.equal(signals.length, 1, "the former 30/45/90-second limits must not abort a call");
+  assert.equal(signals[0].aborted, false);
+  t.mock.timers.tick(visualModelTimeoutMs - 90001 + 1);
   const result = await pending;
   assert.equal(signals.length, 2);
   assert.equal(signals[0].aborted, true);

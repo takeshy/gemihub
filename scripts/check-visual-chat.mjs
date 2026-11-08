@@ -72,12 +72,13 @@ try{
   if(width<=760)await page.setViewportSize({width,height:950});
   if(language==='en')assert.doesNotMatch(await preview.innerText(),/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u,'English captures use English saved shop content');
   const chat=page.locator('.visual-chat-panel'),canvas=page.locator('.annotation-canvas');
-  const shape=()=>preview.evaluate(element=>({width:element.getBoundingClientRect().width,height:element.scrollHeight}));
+  const shape=()=>preview.evaluate(element=>{const frame=element.querySelector('iframe[data-preview-viewport]');const content=frame?.contentDocument?.getElementById('preview-viewport-content')||element;return{width:content.getBoundingClientRect().width,height:content.scrollHeight};});
   if(width>760){
     // The phone preview is captured as the phone layout, then PC is restored for the main flow.
     const device=page.getByRole('group',{name:label('プレビューの幅'),exact:true});
     await device.getByRole('button',{name:label('スマートフォン'),exact:true}).click();
-    const phone=await shape();assert.equal(Math.round(phone.width),390);
+    await expect(page.frameLocator('.local-preview-screen iframe[data-preview-viewport]').locator('.public-shop')).toBeVisible();
+    const phone=await shape();assert.ok(phone.width<=390&&phone.width>370);
     await page.getByRole('button',{name:label('修正する'),exact:true}).click();await expect(canvas).toBeVisible();
     await expect.poll(()=>canvas.evaluate(element=>element.height)).toBeGreaterThan(100);
     const ratio=await canvas.evaluate(element=>element.width/element.height);

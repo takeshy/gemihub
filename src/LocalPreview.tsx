@@ -17,6 +17,7 @@ import { pageSchema, pageValue, scopedSource, scopedConfig, rebaseDraft, same, t
 import { FixtureEditor } from "./FixtureEditor";
 import { fixtureScope, fixturePostEntries, hasFixtureFields } from "./fixture-scope";
 import { VisualRequest } from "./VisualRequest";
+import { PreviewViewport } from "./PreviewViewport";
 import { useComparisonScroll } from "./comparison-scroll";
 import { DesignVersionHistory } from "./DesignVersionHistory";
 import { regionOf } from "../shared/region";
@@ -100,6 +101,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
   const [penOpen, setPenOpen] = useState(false);
   // Owners check and red-pen either layout; the phone frame uses the storefront's own width queries.
   const [device, setDevice] = useState<"pc" | "phone">("pc");
+  const viewport = (content: React.ReactNode) => device === "phone" ? <PreviewViewport>{content}</PreviewViewport> : content;
   async function run(fn: () => Promise<void>) {
     setBusy(true); setError("");
     try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -472,7 +474,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
-      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", content: scope.kind === "content", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => viewport(<SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />)} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", content: scope.kind === "content", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" data-device={device} onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
@@ -481,7 +483,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
           setNotice(tr("リンク先は試す画面では開きません。サイドバーの画面ツリーから選択してください。"));
         }
       }}>
-        {scope.kind === "theme" ? <ThemePreview config={draft.config} shopId={shop.id} /> : scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
+        {viewport(scope.kind === "theme" ? <ThemePreview config={draft.config} shopId={shop.id} /> : scope.kind === "part" ? <ChromePreview config={draft.config} part={scope.part} imageBase={`/api/shops/${shop.id}/images`} /> : <ApiProvider value={mock}>
           <PublicShop key={`${version}-${JSON.stringify(route)}-${JSON.stringify(draft.config)}`} session={session} slug="local-preview" search="" initialPane={route.pane} onPaneChange={pane => void run(async () => choose(pane))} pageSlug={scope.kind === "page" ? selectedPage?.slug : route.pageSlug} category={route.category} articleKey={route.articleKey} hideHeader={hideHeader} hideFooter={hideFooter} busy={busy} run={run} notify={setNotice} navigate={href => {
             const url = new URL(href, location.origin);
             const match = url.pathname.match(/^\/s\/local-preview\/(blogs|announcements)(?:\/([^/]+))?$/);
@@ -490,7 +492,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
             if (match) void run(async () => choose(`${match[1]}${match[2] ? ":article" : ""}`, match[2]));
             else void run(async () => choose(url.searchParams.get("pane") || "reserve"));
           }} />
-        </ApiProvider>}
+        </ApiProvider>)}
       </div>}
     </>}    {draft && !conflict && <div className="panel editor-secondary">
       {scope.kind === "part" && <details key={`part:${scope.part}`}><summary>{scope.part === "header" ? tr("ヘッダー") : tr("フッター")}{tr("の内容を編集")}</summary><fieldset disabled={busy || !!draft.pending}><ChromeEditor config={draft.config} part={scope.part} shopId={shop.id} onChange={changeConfig} /></fieldset></details>}

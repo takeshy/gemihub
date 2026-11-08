@@ -32,6 +32,7 @@
     "check:mobile-inputs": "node scripts/check-mobile-inputs.mjs",
     "check:assistant-markdown": "node --import tsx scripts/check-assistant-markdown.mjs",
     "check:visual-copy": "node --import tsx scripts/check-visual-copy.mjs",
+    "check:phone-viewport": "node --import tsx scripts/check-phone-viewport.mjs",
     "check:visual-chat": "node --import tsx scripts/check-visual-chat.mjs",
     "check:visual-header": "node --import tsx scripts/check-visual-header.mjs",
     "check:visual-review": "node --import tsx scripts/check-visual-review.mjs",

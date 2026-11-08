@@ -1941,6 +1941,7 @@ pre {
 .preview-device button:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
 .preview-device button[aria-pressed="true"] { background: var(--green); color: white; border-color: var(--green); }
 .local-preview-screen[data-device="phone"] { width: 390px; max-width: 100%; margin-inline: auto; }
+.preview-viewport { display: block; width: 100%; height: 900px; border: 0; background: #fffdf8; }
 /* On a phone the preview is already the phone layout. */
 @media (max-width: 760px) { .preview-device { display: none; } }
 .preview-display-menu summary { display: flex; align-items: center; justify-content: center; gap: 8px; list-style: none; cursor: pointer; font-weight: 700; color: var(--green); border: 1px solid #6e896d; border-radius: 8px; background: #eef3e8; }

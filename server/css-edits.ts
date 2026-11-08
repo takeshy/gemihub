@@ -4,6 +4,7 @@ import { tr } from "../shared/i18n.ts";
 import type { ShopConfig } from "./domain.ts";
 import { compactGeneratedStyles } from "./generated-design.ts";
 import { componentCssLimit, selectorComponent, themeCssLimit, themeStyleSchema, themeStylesSchema } from "../shared/theme-styles.ts";
+import { presentationCssLimit } from "../shared/presentation.ts";
 
 // Declaration patches let small edits preserve accepted, potentially large styles.
 export const cssEditsSchema = z.array(z.strictObject({
@@ -19,6 +20,20 @@ export const cssEditsSchema = z.array(z.strictObject({
 
 type CssEdit = z.infer<typeof cssEditsSchema>[number];
 const editFailed = (message: string) => Object.assign(new Error(message), { status: 422 });
+function patchDeclarations(rule: postcss.Rule, declarations: CssEdit["declarations"]) {
+  for (const declaration of declarations) {
+    let replaced = false;
+    rule.each(decl => {
+      if (decl.type !== "decl") return;
+      const matches = declaration.property.startsWith("--") ? decl.prop === declaration.property : decl.prop.toLowerCase() === declaration.property.toLowerCase();
+      if (!matches) return;
+      decl.value = declaration.value;
+      if (declaration.important !== undefined) decl.important = declaration.important;
+      replaced = true;
+    });
+    if (!replaced) rule.append(postcss.decl({ prop: declaration.property, value: declaration.value, important: declaration.important }));
+  }
+}
 /** Patch every rule with exactly this selector; returns undefined when the stylesheet has none. */
 function patchRules(css: string, edit: CssEdit) {
   const root = postcss.parse(css);
@@ -26,22 +41,36 @@ function patchRules(css: string, edit: CssEdit) {
   root.walkRules(rule => {
     if (rule.selector !== edit.selector) return;
     found = true;
-    for (const declaration of edit.declarations) {
-      let replaced = false;
-      rule.each(decl => {
-        if (decl.type !== "decl") return;
-        const matches = declaration.property.startsWith("--") ? decl.prop === declaration.property : decl.prop.toLowerCase() === declaration.property.toLowerCase();
-        if (!matches) return;
-        decl.value = declaration.value;
-        if (declaration.important !== undefined) decl.important = declaration.important;
-        replaced = true;
-      });
-      if (!replaced) rule.append(postcss.decl({ prop: declaration.property, value: declaration.value, important: declaration.important }));
-    }
+    patchDeclarations(rule, edit.declarations);
   });
   return found ? root.toString() : undefined;
 }
 const newRule = (edit: CssEdit) => postcss.rule({ selector: edit.selector, nodes: edit.declarations.map(declaration => postcss.decl({ prop: declaration.property, value: declaration.value, important: declaration.important })) }).toString();
+
+export const pageCssEditsSchema = z.array(z.strictObject({
+  selector: cssEditsSchema.element.shape.selector,
+  declarations: cssEditsSchema.element.shape.declarations,
+  media: z.string().trim().min(1).max(300).regex(/^[^{};@]+$/).optional(),
+})).min(1).max(24);
+
+/** A responsive page patch changes only its chosen breakpoint; desktop rules stay intact. */
+export function applyPageCssEdits(css: string, input: z.infer<typeof pageCssEditsSchema>) {
+  const root = postcss.parse(css);
+  for (const edit of pageCssEditsSchema.parse(input)) {
+    let parent: postcss.Root | postcss.AtRule = root;
+    if (edit.media) {
+      const existing = root.nodes.findLast(node => node.type === "atrule" && node.name.toLowerCase() === "media" && node.params === edit.media);
+      if (existing?.type === "atrule") parent = existing;
+      else { const media = postcss.atRule({ name: "media", params: edit.media });root.append(media);parent = media; }
+    }
+    const rules = (parent.nodes || []).filter((node): node is postcss.Rule => node.type === "rule" && node.selector === edit.selector);
+    if (rules.length) rules.forEach(rule => patchDeclarations(rule, edit.declarations));
+    else { const rule = postcss.rule({ selector: edit.selector });patchDeclarations(rule, edit.declarations);parent.append(rule); }
+  }
+  const result = compactGeneratedStyles({ css: root.toString() }) as { css: string };
+  if (result.css.length > presentationCssLimit) throw editFailed(tr("修正後のCSSが上限を超えました。変更する範囲を絞ってもう一度お試しください。"));
+  return result.css;
+}
 
 export function applyCssEdits(appearance: ShopConfig["appearance"], edits: z.infer<typeof cssEditsSchema>) {
   if (!appearance?.theme) throw editFailed(tr("変更対象を選び直してください"));
