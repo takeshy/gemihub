@@ -27,7 +27,7 @@ export function JudgeStart({ invite, signedIn, run }: { invite: string; signedIn
   </section>;
 }
 
-type JudgePhone = { number: string; caller: string; pin: string };
+type JudgePhone = { number: string; pin: string };
 type JudgeStatus = { until: string; aiUsed: number; aiLimit: number; storage: boolean; slug: string; published: boolean; phone?: JudgePhone };
 type JudgeMail = { id: string; to: string; cc?: string[]; subject: string; body: string; at: string };
 /** Judge-only menu: mails that would have been sent, usage, the trial path and a full reset. */
@@ -84,7 +84,7 @@ export function JudgeMenu({ customer = false, canReturnToOwner = false, run }: {
         </li>)}
       </ul>}
     </section>
-    {status?.phone && <JudgePhoneDemo phone={status.phone} published={status.published} run={run} />}
+    {status?.phone && <JudgePhoneDemo phone={status.phone} published={status.published} />}
     <section className="panel" aria-labelledby="judge-reset-title">
       <h2 id="judge-reset-title">{tr("アカウントデータの初期化")}</h2>
       <p>{tr("お店づくりの最初から試し直せます。AIの利用回数は戻りません。")}</p>
@@ -98,36 +98,15 @@ function displayJudgePhone(number: string) {
     .replace(/^\+81(50)(\d{4})(\d{4})$/, "0$1-$2-$3");
 }
 
-function JudgePhoneDemo({ phone, published, run }: { phone: JudgePhone; published: boolean; run: Run }) {
-  const api = useApi();
-  const [saved, setSaved] = useState(displayJudgePhone(phone.caller));
-  const [caller, setCaller] = useState(saved);
-  const [busy, setBusy] = useState(false);
-  const save = (value: string) => {
-    setBusy(true);
-    void run(async () => {
-      try {
-        const result = await api<{ caller: string }>("/api/judge/phone", { caller: value });
-        const formatted = displayJudgePhone(result.caller);
-        setSaved(formatted);
-        setCaller(formatted);
-      } finally { setBusy(false); }
-    });
-  };
+function JudgePhoneDemo({ phone, published }: { phone: JudgePhone; published: boolean }) {
   return <section className="panel" aria-labelledby="judge-phone-title">
     <h2 id="judge-phone-title">{tr("AI電話受付を試す")}</h2>
     <p>{tr("お店を公開したら、下の番号にかけてテスト予約や問い合わせを試せます。")}</p>
     <p>{tr("かけ先の番号")} <strong>{displayJudgePhone(phone.number)}</strong></p>
     <p>{tr("電話用の暗証番号")} <strong>{phone.pin}</strong></p>
-    <p className="small muted">{tr("発信元の番号を登録せずに試す場合は、電話の音声案内に従ってこの8桁の暗証番号をキーで入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。")}</p>
-    <form onSubmit={event => { event.preventDefault(); save(caller.trim()); }}>
-      <label>{tr("発信元の電話番号")}<input type="tel" autoComplete="tel" required maxLength={40} value={caller} disabled={busy} onChange={event => setCaller(event.target.value)} /></label>
-      <div className="judge-actions">
-        <button type="submit" disabled={busy || !caller.trim() || caller.trim() === saved}>{tr("発信元の番号を登録")}</button>
-        {saved && <button type="button" disabled={busy} onClick={() => save("")}>{tr("電話番号の登録を解除")}</button>}
-      </div>
-    </form>
-    {saved && <p className="small muted" role="status">{tr("登録済みの発信元：{0}", saved)}</p>}
+    <p className="small muted">{tr("電話の案内に従い、毎回この8桁の暗証番号を入力してください。8桁で自動確定し、最後のシャープは不要です。番号通知でおかけください。暗証番号はお店の初期化で変わります。")}</p>
+    <p className="small muted">{tr("00000000 は本来の店舗用の暗証番号です。")}</p>
+    <p className="small muted">{tr("キー入力を確認できない場合は、8桁の番号を1桁ずつお話しください。電話のキーでも入力できます。")}</p>
     {!published && <p className="small muted">{tr("自分のお店を公開してからお試しください")}</p>}
   </section>;
 }

@@ -41,35 +41,53 @@ export function twilioCredentials(): TwilioCredentials {
   return { sid: process.env.TWILIO_ACCOUNT_SID || local.sid || "", token: process.env.TWILIO_AUTH_TOKEN || fileToken || local.password || "" };
 }
 type JudgePhoneAccess = boolean | "pin";
-export function phoneStreamToken(shopId: string, callSid: string, caller: string, token = twilioCredentials().token, judge: JudgePhoneAccess = false) {
+export function phoneStreamToken(shopId: string, callSid: string, caller: string, token = twilioCredentials().token, judge: JudgePhoneAccess = false, locale?: Locale) {
   if (!token.trim()) throw new Error("Twilio signing secret is required");
   const scope = judge === "pin" ? "judge-pin" : "judge";
   const context = judge ? [shopId, callSid, caller, scope] : [shopId, callSid, caller];
+  if (locale) context.push(`locale:${locale}`);
   const signature = createHmac("sha256", token).update(JSON.stringify(context)).digest("hex").slice(0, 32);
-  return judge ? `${scope}-${signature}` : signature;
+  return `${judge ? `${scope}-` : ""}${locale ? `${locale}-` : ""}${signature}`;
 }
-export function streamUrl(base: string, shopId: string, callSid: string, caller: string, judge: JudgePhoneAccess = false) {
+export function streamUrl(base: string, shopId: string, callSid: string, caller: string, judge: JudgePhoneAccess = false, locale?: Locale) {
   // Twilio Stream URLs do not support query parameters.
-  const context = [shopId, callSid, caller, phoneStreamToken(shopId, callSid, caller, undefined, judge)].map(encodeURIComponent).join("/");
+  const context = [shopId, callSid, caller, phoneStreamToken(shopId, callSid, caller, undefined, judge, locale)].map(encodeURIComponent).join("/");
   const url = new URL(`/phone/stream/${context}`, base);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   return url.href;
 }
 export function phoneStreamContext(url: URL) {
-  const match = url.pathname.match(/^\/phone\/stream\/([^/]+)\/([^/]+)\/([^/]+)\/((?:judge-(?:pin-)?)?[a-f0-9]{32})$/);
+  const match = url.pathname.match(/^\/phone\/stream\/([^/]+)\/([^/]+)\/([^/]+)\/((?:judge-(?:pin-)?)?(?:ja-|en-)?[a-f0-9]{32})$/);
   if (!match || url.search) return undefined;
   try {
     const [shopId, callSid, caller, token] = match.slice(1).map(decodeURIComponent);
-    return { shopId, callSid, caller, token };
+    const locale = token.match(/^(?:judge-(?:pin-)?)?(ja|en)-/)?.[1] as Locale | undefined;
+    return { shopId, callSid, caller, token, ...(locale ? { locale } : {}) };
   } catch { return undefined; }
 }
 const xml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
 export const twimlSay = (message: string, language = "ja-JP") =>
   `<?xml version="1.0" encoding="UTF-8"?><Response><Say language="${language}">${xml(message)}</Say><Hangup/></Response>`;
-export const twimlGatherPin = (action: string, message: string, language: string) =>
-  `<?xml version="1.0" encoding="UTF-8"?><Response><Gather input="dtmf" numDigits="8" timeout="10" actionOnEmptyResult="true" action="${xml(action)}" method="POST"><Say language="${xml(language)}">${xml(message)}</Say></Gather><Hangup/></Response>`;
-export const twimlConnect = (base: string, shopId: string, callSid: string, caller: string, judge: JudgePhoneAccess = false) =>
-  `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xml(streamUrl(base, shopId, callSid, caller, judge))}"/></Connect></Response>`;
+export const twimlGatherPin = (action: string, message: string, language: string, speech = false) =>
+  `<?xml version="1.0" encoding="UTF-8"?><Response><Gather input="${speech ? "dtmf speech" : "dtmf"}" numDigits="8" timeout="10"${speech ? ` language="${xml(language)}" speechTimeout="2"` : ""} actionOnEmptyResult="true" action="${xml(action)}" method="POST"><Say language="${xml(language)}">${xml(message)}</Say></Gather><Hangup/></Response>`;
+
+/** Only eight individual digits, never a guessed PIN or a free-form instruction. Preserve leading zeros. */
+export function spokenPhonePin(value: string | undefined): string | undefined {
+  if (!value || value.length > 256) return;
+  const digits: Record<string, string> = {
+    zero: "0", oh: "0", "ゼロ": "0", "れい": "0", "レイ": "0", "まる": "0", "マル": "0", "〇": "0", "○": "0", "零": "0",
+    one: "1", "一": "1", "いち": "1", "イチ": "1", two: "2", "二": "2", "に": "2", "ニ": "2",
+    three: "3", "三": "3", "さん": "3", "サン": "3", four: "4", "四": "4", "よん": "4", "ヨン": "4",
+    five: "5", "五": "5", "ご": "5", "ゴ": "5", six: "6", "六": "6", "ろく": "6", "ロク": "6",
+    seven: "7", "七": "7", "なな": "7", "ナナ": "7", eight: "8", "八": "8", "はち": "8", "ハチ": "8",
+    nine: "9", "九": "9", "きゅう": "9", "キュウ": "9",
+  };
+  const pattern = new RegExp(Object.keys(digits).sort((a, b) => b.length - a.length).join("|"), "g");
+  const normalized = value.normalize("NFKC").toLowerCase().replace(pattern, word => digits[word]).replace(/[\s,、.。・-]/g, "");
+  return /^\d{8}$/.test(normalized) ? normalized : undefined;
+}
+export const twimlConnect = (base: string, shopId: string, callSid: string, caller: string, judge: JudgePhoneAccess = false, locale?: Locale) =>
+  `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xml(streamUrl(base, shopId, callSid, caller, judge, locale))}"/></Connect></Response>`;
 
 // ---- Audio conversion -------------------------------------------------------------------------
 const MULAW_BIAS = 0x84, MULAW_CLIP = 32635;

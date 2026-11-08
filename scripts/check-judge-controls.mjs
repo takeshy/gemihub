@@ -133,11 +133,13 @@ try {
     await expect(phoneDemo).toContainText(phoneStatus.phone.pin);
     await expect(phoneDemo).toContainText(label('電話用の暗証番号'));
     await expect(phoneDemo.locator('a[href^="tel:"]')).toHaveCount(0);
-    await phoneDemo.getByLabel(label('発信元の電話番号')).fill('2025550101');
-    await phoneDemo.getByRole('button', { name: label('発信元の番号を登録') }).click();
-    await expect(phoneDemo.getByRole('status')).toContainText('(202) 555-0101');
-    await phoneDemo.getByRole('button', { name: label('電話番号の登録を解除') }).click();
-    await expect(phoneDemo.getByRole('status')).toHaveCount(0);
+    await expect(phoneDemo.locator('input[type="tel"], form')).toHaveCount(0);
+    await expect(phoneDemo).toContainText('00000000');
+    await expect(phoneDemo).toContainText(label('電話の案内に従い、毎回この8桁の暗証番号を入力してください。8桁で自動確定し、最後のシャープは不要です。番号通知でおかけください。暗証番号はお店の初期化で変わります。'));
+    assert.equal(Object.hasOwn(phoneStatus.phone,'caller'),false);
+    const removedRegistration=await context.request.post(`${origin}/api/judge/phone`,{headers:{Origin:origin},data:{caller:'2025550101'}});
+    assert.equal(removedRegistration.status(),404);
+    await page.screenshot({path:`tmp/judge-controls/phone-pin-only-${language}-${width}.png`,fullPage:true});
     await page.getByRole('button',{name:label('お客様として試す'),exact:true}).click();
     await expect(page.locator('.customer-registration')).toBeVisible();
     const shopsBefore=(await store.list('shop')).length;

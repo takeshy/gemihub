@@ -37,7 +37,6 @@ export function judgePhoneSettings(locale: Locale): PhoneSettings | undefined {
   const twilioNumber = judgeCallerNumber((locale === "ja" ? process.env.JUDGE_PHONE_NUMBER_JA : process.env.JUDGE_PHONE_NUMBER) || "");
   if (twilioNumber && judgeActive()) return { twilioNumber, enabled: true, cashBookings: true };
 }
-export type JudgePhoneRegistration = { shopId: string; caller: string };
 /** Stable per shop, changes after a reset or invitation rotation; never derived from public IDs alone. */
 export function judgePhonePin(shopId: string) {
   const secret = process.env.SESSION_SECRET;

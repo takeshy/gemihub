@@ -93,11 +93,11 @@ import {
 } from "./google.ts";
 import { fromMinor, regionOf, currencyOf, dateIn, formatMinor, formatMoney, zonedDate } from "../shared/region.ts";
 import { themeImageIds } from "../shared/presentation.ts";
-import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, judgeCallerNumber, judgePhoneSettings, judgePhonePin, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgePhoneRegistration, type JudgeUsage } from "./judge.ts";
+import { judgeActive, judgeInvite, judgeUntil, judgeAiLimit, judgeEmailDomain, judgeCallerNumber, judgePhoneSettings, judgePhonePin, isJudgeEmail, isJudgeCustomerEmail, isAdmin, accessPasswordEnabled, accessPasswordMatches, secretMatches, demoGoogleUnavailable, type DemoGoogle, type JudgeMail, type JudgeUsage } from "./judge.ts";
 import { converse, draftText, type ShopData } from "./assistant.ts";
 import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
-import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, requirePhoneMenuSelection, samePhoneNumber, twilioCredentials, twimlConnect, twimlGatherPin, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
+import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, requirePhoneMenuSelection, samePhoneNumber, spokenPhonePin, twilioCredentials, twimlConnect, twimlGatherPin, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
 import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, withAiDeadline, currentAiSignal, type AiProvider } from "./llm.ts";
 import {
   session,
@@ -1197,31 +1197,33 @@ export function createApp(
         const japaneseLine = judgePhoneSettings("ja"), englishLine = judgePhoneSettings("en");
         const judgeLine = samePhoneNumber(japaneseLine?.twilioNumber, to) ? japaneseLine
           : samePhoneNumber(englishLine?.twilioNumber, to) ? englishLine : undefined;
+        const japaneseForward = samePhoneNumber(params.ForwardedFrom, japaneseLine?.twilioNumber);
         const caller = judgeLine ? judgeCallerNumber(from) : callerNumber(from);
-        const registration = judgeLine && caller
-          ? (await store.list<JudgePhoneRegistration>("judgePhone")).find(record => record.caller === caller) : undefined;
         const originalShops = judgeLine
           ? allShops.filter(candidate => !candidate.judge && samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to)) : [];
         let pinAccess = false;
         let originalAccess = false;
-        let shop = judgeLine
-          ? allShops.find(candidate => candidate.judge && candidate.id === registration?.shopId)
-          : allShops.find(candidate => samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to));
-        if (judgeLine && (!shop || originalShops.length > 0 || url.searchParams.has("pinAttempt"))) {
-          const locale = judgeLine === japaneseLine ? "ja" : "en";
+        let shop = judgeLine ? undefined : allShops.find(candidate => samePhoneNumber(phoneSettingsOf(candidate).twilioNumber, to));
+        if (judgeLine) {
+          const locale = judgeLine === japaneseLine || japaneseForward ? "ja" : "en";
           const language = locale === "ja" ? "ja-JP" : "en-US";
           const denied = () => reply(requestLocale.run(locale, () => twimlSay(tr("暗証番号を確認できませんでした。審査メニューを確認して、しばらくしてからおかけ直しください。"), language)));
-          if (!caller) return reply(requestLocale.run(locale, () => twimlSay(tr("審査メニューで発信元の電話番号を登録し、その番号を通知しておかけ直しください。"), language)));
+          if (!caller) return reply(requestLocale.run(locale, () => twimlSay(tr("恐れ入りますが、番号を通知しておかけ直しください。"), language)));
           const attemptText = url.searchParams.get("pinAttempt");
           const attempt = attemptText === null ? 0 : /^[1-3]$/.test(attemptText) ? Number(attemptText) : 4;
+          const speech = url.searchParams.get("speech") === "1" || attempt > 0 && !params.Digits;
           const gather = (retry: boolean) => reply(requestLocale.run(locale, () => twimlGatherPin(
-            `${origin()}/phone/incoming?pinAttempt=${attempt + 1}`,
-            (retry ? tr("暗証番号が違うか、お店が利用できません。審査メニューに表示された8桁の暗証番号をもう一度入力してください。")
+            `${origin()}/phone/incoming?pinAttempt=${attempt + 1}${speech ? "&speech=1" : ""}`,
+            (retry && speech ? tr("キー入力を確認できない場合は、8桁の番号を1桁ずつお話しください。電話のキーでも入力できます。")
+              : retry ? tr("暗証番号が違うか、お店が利用できません。審査メニューに表示された8桁の暗証番号をもう一度入力してください。")
               : tr("審査用のお店をご利用の場合は、審査メニューに表示された8桁の暗証番号を電話のキーで入力してください。"))
-              + (originalShops.length === 1 ? tr("本来のお店をご利用の場合は、0を8回入力してください。") : ""), language)));
+              + (originalShops.length === 1 ? tr("本来のお店をご利用の場合は、0を8回入力してください。") : "")
+              + tr("8桁で自動的につながります。最後のシャープは不要です。"), language, speech)));
           if (!attempt) return gather(false);
           if (attempt > 3 || !params.CallSid) return denied();
-          if (params.Digits === "00000000") {
+          if (!params.Digits && !params.SpeechResult) return attempt < 3 ? gather(true) : denied();
+          const pin = params.Digits || spokenPhonePin(params.SpeechResult);
+          if (pin === "00000000") {
             if (originalShops.length !== 1) return attempt < 3 ? gather(true) : denied();
             shop = originalShops[0];
             originalAccess = true;
@@ -1236,8 +1238,8 @@ export function createApp(
               return true;
             });
             if (!allowed) return denied();
-            const matches = /^\d{8}$/.test(params.Digits || "")
-              ? allShops.filter(candidate => candidate.judge && secretMatches(params.Digits, judgePhonePin(candidate.id))) : [];
+            const matches = /^\d{8}$/.test(pin || "")
+              ? allShops.filter(candidate => candidate.judge && secretMatches(pin!, judgePhonePin(candidate.id))) : [];
             // In the unlikely event of a PIN collision, never select somebody else's shop.
             if (matches.length !== 1) return attempt < 3 ? gather(true) : denied();
             shop = matches[0];
@@ -1245,7 +1247,7 @@ export function createApp(
           }
         }
         // Twilio sends no language preference; the caller hears the shop's language.
-        if (shop) requestLocale.enterWith(await phoneLocale(shop));
+        if (shop) requestLocale.enterWith(japaneseForward ? "ja" : await phoneLocale(shop));
         const sayLanguage = getLocale() === "en" ? "en-US" : "ja-JP";
         if (!shop) return reply(twimlSay(tr("この電話番号は現在ご利用いただけません。"), sayLanguage));
         logs.bind(shop.id);
@@ -1261,7 +1263,7 @@ export function createApp(
           return reply(twimlSay(tr("恐れ入りますが、番号を通知しておかけ直しください。"), sayLanguage));
         }
         const base = process.env.PHONE_STREAM_ORIGIN || origin();
-        return reply(twimlConnect(base, shop.id, callSid, caller, pinAccess ? "pin" : !!judgeLine && !originalAccess));
+        return reply(twimlConnect(base, shop.id, callSid, caller, pinAccess ? "pin" : false, japaneseForward ? "ja" : undefined));
       }
       const s = await session(store, req);
       const user = s?.user && isJudgeEmail(s.user.email) && !judgeActive() ? undefined : s?.user;
@@ -1679,26 +1681,8 @@ export function createApp(
         if (path === "/api/judge/status" && method === "GET") {
           const usage = await store.get<JudgeUsage>("judgeUsage", user.email);
           const line = own.judge && judgePhoneSettings(getLocale());
-          const phone = line && user.role === "owner" && own.owner === user.email && { number: line.twilioNumber, pin: judgePhonePin(own.id), caller: (await store.get<JudgePhoneRegistration>("judgePhone", own.id))?.caller || "" };
+          const phone = line && user.role === "owner" && own.owner === user.email && { number: line.twilioNumber, pin: judgePhonePin(own.id) };
           return json(res, { until: judgeUntil()!.toISOString(), aiUsed: usage?.count || 0, aiLimit: judgeAiLimit(), storage: !!await store.ownerToken(own), shopId: own.id, slug: own.slug, published: !!own.published, ...(phone ? { phone } : {}) });
-        }
-        if (path === "/api/judge/phone" && method === "POST") {
-          if (user.role !== "owner" || !own.judge || own.owner !== user.email) fail(403, tr("審査員としてログインしてください"));
-          const input = z.object({ caller: z.string().trim().max(40) }).strict().parse(await body(req));
-          const caller = input.caller ? judgeCallerNumber(input.caller) : "";
-          if (caller === undefined) fail(400, tr("発信元の電話番号を確認してください。"));
-          return await store.locked("judge-phone-registration", () => store.locked(own.id, async () => {
-            const fresh = await store.shop(own.id);
-            if (!fresh?.judge || fresh.owner !== user.email || !judgePhoneSettings(getLocale())) fail(404, tr("見つかりません"));
-            if (caller) {
-              const conflict = (await store.list<JudgePhoneRegistration>("judgePhone")).some(record => record.shopId !== fresh.id && record.caller === caller);
-              if (conflict) fail(409, tr("この発信元の番号はすでに登録されています。"));
-              await store.put("judgePhone", fresh.id, { shopId: fresh.id, caller } satisfies JudgePhoneRegistration);
-            } else {
-              await store.delete("judgePhone", fresh.id);
-            }
-            return json(res, { caller });
-          }));
         }
         if (path === "/api/judge/mails" && method === "GET") {
           const mails = (await store.entries<JudgeMail>("judgeMail")).map(entry => entry.value).filter(mail => mail.shopId === own.id && mail.owner === user.email);
@@ -4130,10 +4114,10 @@ export function createApp(
     const judgeCall = context.token.startsWith("judge-");
     const caller = judgeCall ? judgeCallerNumber(context.caller) : callerNumber(context.caller);
     if (!shopId || !callSid || !caller) return undefined;
-    if (!secretMatches(context.token, phoneStreamToken(shopId, callSid, caller, secret, pinAccess ? "pin" : judgeCall))) return undefined;
+    if (!secretMatches(context.token, phoneStreamToken(shopId, callSid, caller, secret, pinAccess ? "pin" : judgeCall, context.locale))) return undefined;
     const shop = await store.shop(shopId);
     if (!shop?.published || (shop.judge && !judgeActive())) return undefined;
-    if (judgeCall && (!shop.judge || !pinAccess && (await store.get<JudgePhoneRegistration>("judgePhone", shop.id))?.caller !== caller)) return undefined;
+    if (shop.judge && !pinAccess || judgeCall && !shop.judge) return undefined;
     const settings = judgeCall ? judgePhoneSettings("en") || judgePhoneSettings("ja") : phoneSettingsOf(shop);
     if (!settings?.enabled) return undefined;
     if (!withinPhoneHours(settings, new Date(), regionOf(shop.published).timeZone)) return undefined;
@@ -4144,7 +4128,7 @@ export function createApp(
     const account = accounts.length === 1 ? accounts[0] : undefined;
     const record = account || matches.find(record => record.email.startsWith("tel:"));
     return {
-      shopId: shop.id, callSid, caller, config: shop.published, settings, locale: await phoneLocale(shop), callerName: record?.name,
+      shopId: shop.id, callSid, caller, config: shop.published, settings, locale: context.locale || await phoneLocale(shop), callerName: record?.name,
       host: phoneHostFor(shop, shop.published, settings, caller, callSid, account && normalizeEmail(account.email)),
     };
   }, phoneConnector);
