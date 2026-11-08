@@ -1318,6 +1318,7 @@ export function createApp(
       }
       if (path === "/api/session" && method === "GET") {
         const judgeOwner = !publicHost ? await savedJudgeOwner() : undefined;
+        const judgeShop = user?.judge && user.role === "owner" && user.shopId ? await store.shop(user.shopId) : undefined;
         return json(res, {
           user: user
             ? {
@@ -1336,6 +1337,7 @@ export function createApp(
           invite: accessPasswordEnabled(),
           assistantVoice: liveConfigured(),
           ...(user && isJudgeCustomerEmail(user.email) ? { judgeCustomer: true } : {}),
+          ...(user?.judge ? { judgePublished: !!(judgeShop?.judge && !judgeShop.judge.archivedAt && judgeShop.owner === user.email && judgeShop.published) } : {}),
           ...(judgeOwner && judgeOwner.owner.email !== user?.email ? { judgeOwnerAvailable: true } : {}),
         });
       }

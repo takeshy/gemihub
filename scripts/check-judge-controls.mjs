@@ -35,9 +35,6 @@ try {
     assert.equal(started.status(), 200);
     const { user: owner } = await (await context.request.get(`${origin}/api/session`)).json();
     const shop = await store.shop(owner.shopId);
-    shop.published = structuredClone(sample); shop.publication = 'public';
-    shop.published.staff = []; shop.published.ownerBooking = true; shop.published.hours.closedWeekdays = [];
-    await store.saveShop(shop);
     const page = await context.newPage(), errors = [], roleChanges = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (request.method() === 'POST' && /\/api\/judge\/(customer|owner)$/.test(new URL(request.url()).pathname)) roleChanges.push(request.url()); });
@@ -48,7 +45,23 @@ try {
     const bar = page.locator('.judge-bar');
     const toggle = () => page.keyboard.press('Control+Shift+L');
     await page.goto(`${origin}/?lang=${language}`);
-    // Judges see their controls by default; the shortcut hides them for clean recordings.
+    await expect(header).toContainText('John');
+    await expect(menu).toHaveCount(0);await expect(banner).toHaveCount(0);await expect(bar).toHaveCount(0);
+    await expect(page.getByRole('button',{name:label('お客様として試す'),exact:true})).toHaveCount(0);
+    await toggle();await toggle();await expect(menu).toHaveCount(0);await expect(bar).toHaveCount(0);
+    await page.reload();await expect(menu).toHaveCount(0);await expect(banner).toHaveCount(0);await expect(bar).toHaveCount(0);
+    await page.screenshot({path:`tmp/judge-controls/before-build-${language}-${width}.png`});
+    await page.goto(`${origin}/judge-menu?lang=${language}`);
+    const home=page.getByRole('link',{name:label('トップページへ戻る'),exact:true});await expect(home).toBeVisible();
+    await expect(home).toHaveAttribute('href','/');await expect(page.getByRole('button',{name:label('お客様として試す'),exact:true})).toBeDisabled();
+    await home.click();await expect(menu).toHaveCount(0);assert.equal(new URL(page.url()).pathname,'/');
+    // The store becomes available only after an initial private or public publication.
+    shop.published = structuredClone(sample); shop.publication = 'provisional';
+    shop.published.staff = []; shop.published.ownerBooking = true; shop.published.hours.closedWeekdays = [];
+    await store.saveShop(shop);await page.reload();
+    await expect(bar.getByRole('button',{name:label('お客様として試す'),exact:true})).toBeEnabled();
+    shop.publication = 'public';await store.saveShop(shop);await page.reload();
+    // Available judge controls remain visible by default; the shortcut hides them for clean recordings.
     await expect(menu).toBeVisible(); await expect(banner).toBeVisible();
     await expect(header).toContainText(owner.name); await expect(header).not.toContainText('John');
     await page.keyboard.press('Control+Shift+Alt+L'); await expect(menu).toBeVisible();
@@ -110,6 +123,8 @@ try {
     assert.equal(restored.user.email, owner.email); assert.equal(restored.user.judge, true);
     // Both actions are reachable from the judge menu; reopening the invitation resumes the same shop.
     await page.goto(`${origin}/judge-menu?lang=${language}`);
+    await expect(page.getByRole('link',{name:label('トップページへ戻る'),exact:true})).toBeVisible();
+    await page.screenshot({path:`tmp/judge-controls/menu-home-${language}-${width}.png`});
     const demoTitle = language === 'ja' ? 'AI電話受付を試す' : 'Try AI phone reception (Beta)';
     const phoneDemo = page.getByRole('region', { name: demoTitle, exact: true });
     await expect(phoneDemo).toContainText(language === 'ja' ? '050-1234-5678' : '(202) 555-0120');

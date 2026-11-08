@@ -51,8 +51,9 @@ test("judges start without Google, see recorded mail instead of sending it, swit
   const started = await call("/api/judge/start", { invite });
   assert.equal(started.status, 200);
   const judge = cookies(started)[0];
-  const session = await (await call("/api/session", undefined, judge)).json() as { user: { judge?: boolean; email: string } };
+  const session = await (await call("/api/session", undefined, judge)).json() as { user: { judge?: boolean; email: string }; judgePublished?: boolean };
   assert.equal(session.user.judge, true);
+  assert.equal(session.judgePublished, false, "judge controls stay hidden before the shop is published");
   assert.match(session.user.email, /@judge\.gemihub\.invalid$/);
   const resumed = await (await call("/api/judge/start", { invite }, judge)).json() as { resumed?: boolean };
   assert.equal(resumed.resumed, true, "the same browser resumes instead of creating another judge");
@@ -61,6 +62,7 @@ test("judges start without Google, see recorded mail instead of sending it, swit
   const shop = (await store.list<Shop>("shop"))[0];
   assert.ok(shop.judge);
   shop.published = structuredClone(sample); shop.publication = "provisional"; await store.saveShop(shop);
+  assert.equal((await (await call("/api/session", undefined, judge)).json() as { judgePublished?: boolean }).judgePublished, true, "a private publication enables customer trials too");
   const workspace = await (await call("/api/workspace", undefined, judge)).json() as { shops: { publicUrl: string }[] };
   assert.equal(workspace.shops[0].publicUrl, `/s/${shop.slug}`, "judges stay on the management origin");
 

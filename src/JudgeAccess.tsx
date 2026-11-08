@@ -50,6 +50,7 @@ export function JudgeMenu({ customer = false, canReturnToOwner = false, run }: {
     <section className="panel" aria-labelledby="judge-menu-title">
       <p className="eyebrow">JUDGE</p>
       <h1 id="judge-menu-title">{tr("審査メニュー")}</h1>
+      <div className="judge-actions"><a className="button" href="/">{tr("トップページへ戻る")}</a></div>
       <JudgeBar customer={false} recovery={canReturnToOwner} published={!!status?.published} run={run} menuLink={false} />
       {status && !status.storage && <p className="alert">{tr("デモ環境の準備中です。しばらくしてからお試しください。")}</p>}
       {status && <dl className="judge-facts">
@@ -132,7 +133,7 @@ function JudgePhoneDemo({ phone, published, run }: { phone: JudgePhone; publishe
 }
 
 /** Explicit role actions shared by the storefront and management menu. */
-export function JudgeBar({ customer, recovery = false, published = true, menuLink = true, run }: { customer: boolean; recovery?: boolean; published?: boolean; menuLink?: boolean; run: Run }) {
+export function JudgeBar({ customer, recovery = false, published = false, menuLink = true, run }: { customer: boolean; recovery?: boolean; published?: boolean; menuLink?: boolean; run: Run }) {
   const api = useApi();
   return <div className="judge-bar" role="region" aria-label={tr("審査員アクセス")}>
     {customer || recovery ? <>

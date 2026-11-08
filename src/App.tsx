@@ -43,7 +43,7 @@ import { MenuImage, MenuImageEditor } from "./MenuImage";
 import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
-import React, { useEffect, useState, useRef, useId } from "react";
+import React, { useCallback, useEffect, useState, useRef, useId } from "react";
 import { useApi } from "./api";
 import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
@@ -87,7 +87,7 @@ export type Workspace = Shop & {
   jobs: { type: string; error?: string }[];
   publicUrl: string;
 };
-export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; judgeOwnerAvailable?: boolean; assistantVoice?: boolean };
+export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; judgeOwnerAvailable?: boolean; judgePublished?: boolean; assistantVoice?: boolean };
 const weekdays = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
 export type AppProps = {
   path?: string;
@@ -109,7 +109,7 @@ export function App({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
-  // Ctrl+Shift+L toggles operator controls. Judges see theirs by default, and a hidden choice
+  // Ctrl+Shift+L toggles operator controls. Judges see theirs once the shop is published, and a hidden choice
   // survives reloads in the same tab so a recording can hide them once; others start hidden on every load.
   const judgeControlsKey = "gemihub:judgeControlsHidden";
   const [operatorControlsShown, setOperatorControlsShown] = useState(false);
@@ -122,6 +122,9 @@ export function App({
     try { sessionStorage.setItem(judgeControlsKey, judgeControlsHidden ? "1" : "0"); } catch { /* storage unavailable */ }
   }, [judgeSession, judgeControlsHidden]);
   const refresh = () => api<Session>("/api/session").then(setSession);
+  const judgePublishedChanged = useCallback((published: boolean) => {
+    setSession(current => current?.user?.judge && current.judgePublished !== published ? { ...current, judgePublished: published } : current);
+  }, []);
   useEffect(() => {
     refresh().catch((e) => setError(e.message));
   }, []);
@@ -156,7 +159,8 @@ export function App({
   if (!session)
     return <div className="loading">{error || tr("お店の準備をしています…")}</div>;
   const showOperatorControls = judgeSession ? !judgeControlsHidden : operatorControlsShown;
-  const displaySession = !showOperatorControls && session.user && (session.user.judge || session.judgeCustomer)
+  const showJudgeControls = showOperatorControls && !!(session.judgePublished || session.judgeCustomer || session.judgeOwnerAvailable);
+  const displaySession = !showJudgeControls && session.user && (session.user.judge || session.judgeCustomer)
     ? { ...session, user: { ...session.user, name: "John" } }
     : session;
   const match = path.match(
@@ -181,7 +185,7 @@ export function App({
             {displaySession.user?.name || tr("あなたのお店を、あなたの言葉で。")}
           </span>
           {session.user?.role === "owner" && session.user.legacyNotes && <a className="text-button" href="/settings/migration">{tr("旧環境からの引き継ぎ")}</a>}
-          {showOperatorControls && (session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable) && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
+          {showJudgeControls && (session.user?.judge || session.judgeCustomer || session.judgeOwnerAvailable) && <a className="text-button" href="/judge-menu">{tr("審査メニュー")}</a>}
           {showOperatorControls && session.user?.admin && <a className="text-button" href="/admin">{tr("運営管理")}</a>}
           {session.user?.role === "owner" && session.user.shopId && !session.user.judge && !session.user.legacyNotes && !session.user.accessPending && <ShopReset shopId={session.user.shopId} navigate={navigate} showButton={showOperatorControls} />}
           {!session.user && <a className="text-button" href="/lp">{tr("サービス紹介")}</a>}
@@ -200,11 +204,11 @@ export function App({
           <div className="demo-banner">
             {tr("デモモード · Google には接続せず、サンプルで動作を確認できます。")}</div>
         )}
-        {showOperatorControls && session.user?.judge && !isPublic && (
+        {showJudgeControls && session.user?.judge && !isPublic && (
           <div className="demo-banner judge-banner">
             {tr("審査員アクセス · メールは送信されません。内容は")}<a href="/judge-menu">{tr("審査メニュー")}</a>{tr("で確認できます。")}</div>
         )}
-        {showOperatorControls && path !== "/judge-menu" && !session.hosted && (session.judgeCustomer || session.user?.judge || session.judgeOwnerAvailable) && <JudgeBar customer={session.user?.role !== "owner"} recovery={session.judgeOwnerAvailable} run={run} />}
+        {showJudgeControls && path !== "/judge-menu" && !session.hosted && (session.judgeCustomer || session.user?.judge || session.judgeOwnerAvailable) && <JudgeBar customer={session.user?.role !== "owner"} recovery={session.judgeOwnerAvailable} published={!!session.judgePublished} run={run} />}
         {error && (
           <div className="alert" role="alert">
             {error}
@@ -267,6 +271,7 @@ export function App({
             run={run}
             busy={busy}
             notify={setNotice}
+            onPublishedChange={judgePublishedChanged}
           />
         ) : (
           <Landing demo={session.demo} invite={!!session.invite} run={run} />
@@ -354,6 +359,7 @@ function Dashboard({
   run,
   busy,
   notify,
+  onPublishedChange,
 }: {
   initialTab?: string;
   search: string;
@@ -362,6 +368,7 @@ function Dashboard({
   run: Run;
   busy: boolean;
   notify: (s: string) => void;
+  onPublishedChange?: (published: boolean) => void;
 }) {
   const api = useApi();
   const navigation = useDashboardNavigation(search, initialTab, browserNavigation);
@@ -397,6 +404,7 @@ function Dashboard({
     });
   }, []);
   const shop = shops.find((s) => s.id === chosen) || shops[0];
+  useEffect(() => { if (shop && session.user?.judge) onPublishedChange?.(!!shop.published); }, [shop?.id, !!shop?.published, session.user?.judge, onPublishedChange]);
   const creating = !!shop?.isOwner && !shop.published;
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
   // The dashboard needs a published configuration; staff of an unpublished shop start on their own page.

@@ -2366,6 +2366,7 @@
   "接続できませんでした：{0}": "Connection failed: {0}",
   "切り替えはすべてのお店に反映されます。選んだプロバイダが失敗しても、もう一方へ自動で切り替えることはありません。": "The switch applies to every shop. If the selected provider fails, gemihub does not fall back to the other one.",
   "審査メニュー": "Judge menu",
+  "トップページへ戻る": "Back to home",
   "審査員アクセス · メールは送信されません。内容は": "Judge access · Mail is not sent. See the",
   "で確認できます。": " for its contents.",
   "現在は招待制です。新しくお店をはじめるには、ログイン後に招待パスワードが必要です。": "Sign-up is currently by invitation. Starting a new shop requires the invitation password after you sign in.",
