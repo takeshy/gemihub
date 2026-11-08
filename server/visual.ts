@@ -18,6 +18,27 @@ import { ownerLanguageInstruction } from "./owner-language.ts";
 
 type VisualProposalOptions = { generate?: typeof generateJson; target?: string; media?: { mimeType: "image/png"; data: string }; messages?: VisualMessage[]; onRepair?: (attempt: number) => Promise<void>; splitStyles?: boolean };
 
+async function proposeVisualText(current: ShopConfig, instruction: string, images: RequestImage[], options: VisualProposalOptions) {
+  const target = options.target!;
+  const field = target === "description" || target === "address" ? target : "name";
+  const item = target.startsWith("menu:") ? current.menus.find(item => target === `menu:${item.id}`) : target.startsWith("staff:") ? current.staff.find(item => target === `staff:${item.id}`) : current;
+  if (!item) throw Object.assign(new Error(tr("変更対象を選び直してください")), { status: 400 });
+  const schema = z.strictObject({ value: shopSchema.shape[field] });
+  const media = options.media ? await compactRequestImage(options.media) : undefined;
+  const answer = await (options.generate || generateJson)({
+    system: "Edit only the selected visible text and return its new value. Preserve unrelated facts and follow the latest request without repeating prior edits. Never change prices, services, durations, staff schedules, booking rules or other text. Use annotated screen marks only to locate the edit, never as assets or content. This is a draft, never a publication. " + visualConversationInstruction + " " + ownerLanguageInstruction,
+    contents: [{ role: "user", parts: [...requestImageParts({ instruction, previousMessages: options.messages || [], target, currentValue: field === "name" ? item.name : current[field], shop: { name: current.name, industry: current.industry } }, images), ...(media ? [{ text: "Annotated screen for locating the requested text edit." }, { inlineData: media }] : [])] }],
+    schema: modelJsonSchema(schema), timeoutMs: 30000,
+  });
+  const { value } = schema.parse(JSON.parse(answer));
+  const next = structuredClone(current);
+  if (target.startsWith("menu:")) next.menus.find(item => target === `menu:${item.id}`)!.name = value;
+  else if (target.startsWith("staff:")) next.staff.find(item => target === `staff:${item.id}`)!.name = value;
+  else next[field] = value;
+  const config = validateVisualChange(current, next, target);
+  return { config, summary: planSummary(current, config) };
+}
+
 /** Custom page edits return only the selected fields, never a regenerated shop configuration. */
 async function proposeVisualPage(current: ShopConfig, instruction: string, images: RequestImage[], options: VisualProposalOptions) {
   const match = /^page:([^:]+):(title|body|design)$/.exec(options.target || "");
@@ -68,6 +89,7 @@ export async function proposeVisualAppearance(current: ShopConfig, instruction: 
   dependencies: VisualProposalOptions = {}) {
   const target = dependencies.target || "appearance";
   if (target.startsWith("page:")) return proposeVisualPage(current, instruction, images, dependencies);
+  if (["name", "description", "address"].includes(target) || target.startsWith("menu:") || target.startsWith("staff:")) return proposeVisualText(current, instruction, images, dependencies);
   if (target.startsWith("component:") && !current.appearance?.theme)
     current = { ...current, appearance: { ...(current.appearance || defaultAppearance), theme: structuredClone(standardTheme) } };
   if (dependencies.splitStyles || target.startsWith("component:")) current = withSplitTheme(current);

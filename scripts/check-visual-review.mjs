@@ -13,6 +13,7 @@ import { createInitialTheme } from '../server/initial-theme.ts';
 import { standardTheme } from '../shared/theme-editing.ts';
 import { compactGeneratedStyles } from '../server/generated-design.ts';
 import { captureVisualScreens } from '../server/visual-browser.ts';
+import { screenIds, screenStarter } from '../shared/screens.ts';
 
 process.env.DEMO_MODE = 'true';
 delete process.env.GOOGLE_CLOUD_PROJECT;
@@ -100,6 +101,15 @@ try {
   assert.equal(pageResult.config.pages.at(-1).body, ownerIntroduction);
   assert.deepEqual({ ...pageResult.config, pages: pageDraft.pages }, pageDraft);
   assert.deepEqual((await store.shop(shop.id)).published, shop.published);
+  for (const id of screenIds) {
+    const design = { ...screenStarter(id), css: `${screenStarter(id).css}\nsection{padding:24px}` };
+    const edited = await proposeVisualAppearance(shop.published, 'この画面の余白だけ広げて', [], { target: `screen:${id}`, generate: async () => JSON.stringify({ screens: { [id]: design } }) });
+    assert.deepEqual({ ...edited.config, screens: undefined }, { ...shop.published, screens: undefined });
+    const shots = await captureVisualScreens({ screen: id, config: edited.config, locale: 'ja', options: {}, images: {} });
+    assert.deepEqual(shots.map(shot => shot.width), [1280, 390]);
+    for (const shot of shots) await writeFile(`tmp/visual-review/screen-${id}-${shot.width}.jpg`, Buffer.from(shot.data, 'base64'));
+  }
+  console.log('About, booking, my page and inquiry screens render after scoped edits at 1280/390px; all business data is preserved.');
   const oversized = structuredClone(shop.published);
   oversized.appearance.theme.css = '/* ' + 'formatting '.repeat(1500) + ' */\nh1 { letter-spacing: 0.03em; }\n@media (max-width: 600px) { h1 { letter-spacing: 0.01em; } }';
   const compacted = shopSchema.parse(compactGeneratedStyles(oversized));

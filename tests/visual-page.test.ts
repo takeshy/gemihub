@@ -8,6 +8,7 @@ import { createApp } from "../server/app.ts";
 import { Store } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
 import * as intelligence from "../server/ai.ts";
+import { screenIds, screenStarter } from "../shared/screens.ts";
 
 process.env.DEMO_MODE = "true";
 const instruction = "店主を反映して。\n紹介メッセージ\n当店では、ただカラーを塗るだけでなく、「丁寧なケア」と「持ちの良さ」にこだわっています。\n「指先を見るたびに気分が上がる」「明日からまた頑張ろうと思える」そんな特別な時間を過ごしていただけるよう、一人ひとりのお悩みに寄り添った施術を心がけています。\n• 保有資格：JNECネイリスト技能検定1級、JNAジェルネイル技能検定上級、ネイルサロン衛生管理士\n• 得意なデザイン：ニュアンスネイル、大人可愛い上品デザイン、シンプルオフィスネイル";
@@ -16,6 +17,38 @@ const config = (): ShopConfig => ({ ...structuredClone(sample), pages: [
   { id: "staff-introduction", slug: "staff", title: "スタッフ紹介", navigationLabel: "スタッフ紹介", body: '<section class="profile"><h2>スタッフ紹介</h2><p>準備中</p></section>', css: ".profile{line-height:1.8}", layout: "standard", imageUrl: "" },
   { id: "access", slug: "access", title: "アクセス", navigationLabel: "アクセス", body: "<p>既存の案内</p>", layout: "standard", imageUrl: "" },
 ] });
+
+test("all built-in screen designs preserve other screens, custom pages and booking data", async () => {
+  const before = { ...config(), screens: Object.fromEntries(screenIds.map(id => [id, screenStarter(id)])) };
+  for (const id of screenIds) {
+    const design = { ...screenStarter(id), css: `${screenStarter(id).css}\nsection{padding:24px}` };
+    const next = await proposeVisualAppearance(before, "この画面の余白だけ広げて", [], { target: `screen:${id}`, generate: async () => JSON.stringify({ screens: { [id]: design } }) });
+    assert.deepEqual(next.config, { ...before, screens: { ...before.screens, [id]: design } });
+    const unrelated = id === "about" ? "contact" : "about";
+    await assert.rejects(proposeVisualAppearance(before, "この画面だけ", [], { target: `screen:${id}`, generate: async () => JSON.stringify({ screens: { [id]: design, [unrelated]: { ...screenStarter(unrelated), css: "p{color:red}" } } }) }));
+  }
+});
+
+test("shop, menu and staff text targets never regenerate other text or business fields", async () => {
+  const before = config();
+  const targets = ["name", "description", "address", `menu:${before.menus[0].id}`, `staff:${before.staff[0].id}`];
+  for (const target of targets) {
+    const value = "新しい表示の文章";
+    const expected = structuredClone(before);
+    if (target.startsWith("menu:")) expected.menus[0].name = value;
+    else if (target.startsWith("staff:")) expected.staff[0].name = value;
+    else expected[target as "name" | "description" | "address"] = value;
+    const result = await proposeVisualAppearance(before, "選んだ文章を直して", [], { target, generate: async request => {
+      const context = JSON.parse(request.contents[0].parts![0].text!);
+      assert.equal(context.current, undefined);
+      assert.equal(context.shop.rules, undefined);
+      assert.deepEqual(Object.keys(request.schema.properties as object), ["value"]);
+      return JSON.stringify({ value });
+    } });
+    assert.deepEqual(result.config, expected);
+    await assert.rejects(proposeVisualAppearance(before, "選んだ文章だけ", [], { target, generate: async () => JSON.stringify({ value, menus: [] }) }));
+  }
+});
 
 test("owner introduction edits generate only page copy while preserving business data and other drafts", async () => {
   const before = config(), original = structuredClone(before);
@@ -61,9 +94,10 @@ test("page body API uses scoped patches, reviews repairs and returns a draft wit
   await store.put("session", digest("owner"), { user: { email: shop.owner, name: "Owner", role: "owner" }, expires: Date.now() + 600000 });
   let generations = 0, reviews = 0;
   const server = createApp(store, { ...intelligence,
-    async identifyVisual() { return { ids: ["page:staff-introduction:body"], explanation: "紹介文を反映します。" }; },
+    async identifyVisual(_media, _targets, text) { return { ids: [text === "紹介文を短くして" ? "description" : "page:staff-introduction:body"], explanation: "紹介文を反映します。" }; },
     async propose() { assert.fail("page edits must not regenerate the whole shop"); },
     async visualAppearance(current, text, images, options) {
+      if (options?.target === "description") return proposeVisualAppearance(current, text, images, { ...options, generate: async () => JSON.stringify({ value: "短い紹介文" }) });
       return proposeVisualAppearance(current, text, images, { ...options, generate: async request => {
         const context = JSON.parse(request.contents[0].parts![0].text!);
         if (generations++) {
@@ -75,7 +109,7 @@ test("page body API uses scoped patches, reviews repairs and returns a draft wit
     },
     async visualReview(input) {
       reviews++;
-      assert.equal(input.screen, "page:staff-introduction");
+      if (input.target !== "description") assert.equal(input.screen, "page:staff-introduction");
       assert.deepEqual(input.after.staff, shop.published!.staff);
       return { approved: reviews > 1, issues: reviews === 1 ? ["資格も表示してください"] : [] };
     },
@@ -96,4 +130,8 @@ test("page body API uses scoped patches, reviews repairs and returns a draft wit
   assert.equal(result.config.pages[1].body, displayed.pages[1].body);
   assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
   assert.equal((await store.list("plan")).length, 0);
+  const textRequest = await api("visual/identify", { media, instruction: "紹介文を短くして", displayed: shop.published, local: { base: shop.revision, source: shop.published, content: true } });
+  const textResult = await api("visual/propose", { id: textRequest.id, target: "description", instruction: "紹介文を短くして" });
+  assert.equal(textResult.config.description, "短い紹介文");
+  assert.deepEqual({ ...textResult.config, description: shop.published.description }, shop.published);
 });
