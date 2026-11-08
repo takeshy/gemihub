@@ -20,7 +20,7 @@ Consult & ask also reads live PayPal data through read-only PayPal tools. The AI
 
 AI phone reception follows the same rule: the AI talks, the server decides. Availability, prices, payment rules and cancellation deadlines come from server code and the published shop settings, never from the model. When PayPal prepayment is on, phone bookings are limited to today's remaining slots so that later bookings stay prepaid through PayPal. Discounted replacement slots are never sold by phone, because their PayPal payment would increase another customer's refund and caller ID cannot prove who is calling. Every call is saved as a searchable transcript, and bookings and inquiries appear in the same booking list, CRM and inquiry board as online ones.
 
-Judges can try it: after publishing the demo shop, register the phone number you will call from in the judge menu and call the number shown there. The demo accepts cash test bookings and inquiries; no real payment is involved.
+Judges can try it: after publishing the demo shop, call the number shown in the judge menu with caller ID enabled, and enter the 8-digit phone PIN shown there when asked. The demo accepts cash test bookings and inquiries; no real payment is involved.
 
 ## Is your project new, or did it exist before Oct 1, 2026 (9:15 am PT)?
 
@@ -58,7 +58,7 @@ Two things could be improved: (1) Sandbox accounts were confusing at first, beca
 In the product:
 
 Google Vertex AI (Gemini) and OpenAI API: administrator-selectable providers for the setup interview, screenshot understanding, page and theme generation, tool-based research, image generation, drafting payment settings from plain-language instructions, and explaining and summarizing PayPal payment states. A separate review pass checks AI-generated themes. Gemini is the default provider; the judge demo currently uses Gemini 3.8 Flash.
-Gemini Live API: real-time voice conversations with the shop assistant.
+Gemini Live API: real-time voice conversations with the shop assistant, and AI phone reception through Twilio Programmable Voice and Media Streams.
 
 During development:
 
