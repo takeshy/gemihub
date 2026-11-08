@@ -465,10 +465,10 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
       {conflict.proposed !== undefined && <div><h3>{tr("AIの結合案")}</h3><p>{conflict.explanation}</p><SyncPreview config={conflict.remoteConfig || draft.config} value={conflict.proposed} scope={conflict.scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /><button className="primary" disabled={busy} onClick={() => void run(async () => resolveConflict("merged"))}>{tr("結合案をローカルに採用")}</button></div>}
     </section>}
     {comparing && status === "local" && draft && !conflict && !draft.pending && <section className="panel conflict-dialog" aria-label={tr("変更内容の比較")}>
-      <h2>{tr("変更内容の比較")}</h2><p>{tr("編集後と反映前を、同じ画面・同じサンプルデータで比較します。比較しても何も変更しません。")}</p>
+      <h2>{tr("変更内容の比較")}</h2><p>{tr("反映前と編集後を、同じ画面・同じサンプルデータで比較します。比較しても何も変更しません。")}</p>
       {summary.length > 0 && <ul className="check-list">{summary.map(item => <li key={item}>{item}</li>)}</ul>}
       {/* Apply each side to the same context: business settings and other parts are not this edit. */}
-      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("ローカル（編集後）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div><div><h3>{tr("本番（反映前）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.source, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div></div>
+      <div className="conflict-columns" onScrollCapture={syncComparisonScroll}><div><h3>{tr("本番（反映前）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.source, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div><div><h3>{tr("ローカル（編集後）")}</h3><SyncPreview config={draft.config} value={scopedSource(draft.config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} /></div></div>
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>

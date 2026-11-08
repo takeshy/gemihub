@@ -85,8 +85,8 @@ try {
     await page.screenshot({ path: `tmp/visual-copy/preview-${width}.png`, fullPage: true });
     await page.getByRole('button', { name: '変更を比較', exact: true }).click();
     const comparison = page.getByRole('region', { name: '変更内容の比較' });
-    const before = comparison.locator('.conflict-columns > div').nth(1);
-    const after = comparison.locator('.conflict-columns > div').nth(0);
+    const before = comparison.locator('.conflict-columns > div').nth(0);
+    const after = comparison.locator('.conflict-columns > div').nth(1);
     await expect(after.getByRole('heading', { name: 'アトリエからのお知らせ', exact: true })).toBeVisible();
     await expect(before.getByRole('heading', { name: 'お店からのお便り', exact: true })).toBeVisible();
     assert.equal(await before.getByRole('heading', { name: 'ようこそアトリエへ', exact: true }).count(), 0, 'the published side does not inherit the local layout');
