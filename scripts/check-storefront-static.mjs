@@ -28,6 +28,7 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{}),args:['--no-sandbox']});
  for(const language of ['ja','en'])for(const width of [390,1280]){
   const label=text=>language==='en'?catalog[text]||text:text;
+  const expectedNavigation=['お店のこと','ご予約','マイページ','お問い合わせ','ブログ','お知らせ'].map(label).concat('Story');
   for(const javaScriptEnabled of [false,true]){
    const context=await browser.newContext({viewport:{width,height:950},locale:language==='ja'?'ja-JP':'en-US',javaScriptEnabled}),blocked=[];
    await context.route('**/api/**',async route=>{blocked.push(route.request().url());await route.abort();});
@@ -42,10 +43,11 @@ try{
     assert.equal(stylesheets.length,1);assert.match(stylesheets[0],new RegExp(`^/s/${shop.slug}/_assets/[a-f0-9]{64}\\.css$`));
     assert.ok(await page.evaluate(()=>[...document.styleSheets].some(sheet=>sheet.href?.includes('/_assets/')&&sheet.cssRules.length>0)),'the release stylesheet is loaded');
     assert.equal(await page.locator('.public-nav').getByRole('link',{name:label('ご予約'),exact:true}).getAttribute('href'),`/s/${shop.slug}?pane=reserve&lang=${language}`);
+    await expect(page.locator('.public-nav > *')).toHaveText(expectedNavigation);
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     assert.ok(!(await response.text()).includes('PRIVATE_OWNER_INBOX'));
    }
-   assert.deepEqual(blocked,[],'public content makes no API requests, even with JavaScript enabled');
+   assert.deepEqual(blocked.filter(url=>!new URL(url).pathname.endsWith('/page-views')),[],'public content needs no application data requests, even while optional analytics is blocked');
    assert.deepEqual(errors,[]);
    if(javaScriptEnabled)await page.screenshot({path:`tmp/storefront-static/story-${language}-${width}.png`,fullPage:true});
    await context.close();
@@ -55,8 +57,15 @@ try{
   await page.goto(`${top}?lang=${language}`);
   await page.locator('.public-nav').getByRole('link',{name:label('ご予約'),exact:true}).click();
   await expect(page.getByRole('region',{name:label('ご予約にはログインが必要です。'),exact:true})).toBeVisible();
+  await expect(page.locator('.public-nav > *')).toHaveText(expectedNavigation);
   await context.addCookies([{name:'gemihub_session',value:'member',url:origin}]);
   await page.reload();await expect(page.locator('.time-grid button').first()).toBeVisible();
+  await expect(page.locator('.public-nav > *')).toHaveText(expectedNavigation);
+  await page.locator('.public-nav').getByRole('button',{name:label('マイページ'),exact:true}).click();
+  await expect(page.locator('.public-nav').getByRole('button',{name:label('マイページ'),exact:true})).toHaveClass('active');
+  await expect(page.locator('.public-nav > *')).toHaveText(expectedNavigation);
+  await page.locator('.public-nav').getByRole('button',{name:label('ご予約'),exact:true}).click();
+  await expect(page.locator('.public-nav > *')).toHaveText(expectedNavigation);
   await page.locator('.time-grid button').first().click();
   await page.getByRole('textbox',{name:label('お店へのメッセージ（任意）'),exact:true}).fill('Keep my booking message');
   await page.getByRole('button',{name:new RegExp(label('この内容で予約する'))}).click();
@@ -65,6 +74,7 @@ try{
   await page.screenshot({path:`tmp/storefront-static/booking-${language}-${width}.png`,fullPage:true});
   await page.locator('.public-nav').getByRole('button',{name:label('お店のこと'),exact:true}).click();
   await expect(page.locator('[data-page="static-storefront"]')).toContainText('STATIC_ABOUT_BODY');
+  await expect(page.locator('.public-nav > *')).toHaveText(expectedNavigation);
   await context.close();
   console.log(`${language} ${width}px: public pages work with JS on/off and every API blocked; booking uses the existing authenticated API and returns to static HTML.`);
  }

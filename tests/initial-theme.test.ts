@@ -68,7 +68,7 @@ test("generation and review see the actual shop text and enabled navigation slot
     const input = JSON.parse(call.contents[0].parts![0].text!);
     const example = input.layoutContext.headerSlotExample;
     assert.equal(input.layoutContext.navigation.count, 6);
-    assert.deepEqual(input.layoutContext.navigation.items.map((item: {label:string}) => item.label), ["マイページ", "ご予約", "お店のこと", "お問い合わせ", "お知らせ", "Staff and services"]);
+    assert.deepEqual(input.layoutContext.navigation.items.map((item: {label:string}) => item.label), ["お店のこと", "ご予約", "マイページ", "お問い合わせ", "お知らせ", "Staff and services"]);
     assert.match(example, /A long shop name with room for all navigation/);
     assert.match(example, /data-design-slot="navigation"/);
     assert.match(example, /class="public-nav"/);

@@ -6,7 +6,7 @@ import { CustomPage } from "./CustomPage";
 import { PostContent } from "./PostContent";
 import { ShopAbout } from "./ShopAbout";
 import { LanguageLinks } from "./LanguageSwitcher";
-import { articleKinds } from "../shared/article-features";
+import { navigationItems } from "../shared/navigation";
 import { getLocale, tr } from "../shared/i18n";
 import type { ShopConfig } from "../server/domain";
 import { postKey, postLabel, postPath, type PublicPost, type PostCategory } from "../server/post-domain";
@@ -24,12 +24,11 @@ const link = (path: string) => `${path}${path.includes("?") ? "&" : "?"}lang=${g
 
 function Navigation({ config: c, base }: { config: ShopConfig; base: string }) {
   return <nav className="public-nav">
-    <a href={link(base || "/")}>{storefrontText(c, "navAbout")}</a>
-    <a href={link(`${base || "/"}?pane=reserve`)}>{storefrontText(c, "navReserve")}</a>
-    <a href={link(`${base || "/"}?pane=mine`)}>{storefrontText(c, "navMine")}</a>
-    <a href={link(`${base || "/"}?pane=contact`)}>{storefrontText(c, "navContact")}</a>
-    {articleKinds(c).map(kind => <a key={kind} href={link(`${base}/${kind}`)}>{storefrontText(c, kind === "blogs" ? "navBlogs" : "navAnnouncements")}</a>)}
-    {c.pages.map(page => <a key={page.id} href={link(`${base}/pages/${page.slug}`)}>{page.navigationLabel}</a>)}
+    {navigationItems(c).map(item => {
+      const home = base || "/";
+      const href = item.href === "/" ? home : item.href.startsWith("/?") ? `${home}${item.href.slice(1)}` : `${base}${item.href}`;
+      return <a key={item.href} href={link(href)}>{item.label}</a>;
+    })}
   </nav>;
 }
 function PostList({ posts, base }: { posts: PublicPost[]; base: string }) {

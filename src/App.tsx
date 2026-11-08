@@ -1,4 +1,5 @@
 import { storefrontText } from "../shared/storefront-copy";
+import { primaryNavigationItems } from "../shared/navigation";
 import { InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 import { serviceName } from "../shared/brand";
 import { Brand } from "./Brand";
@@ -1927,10 +1928,7 @@ export function PublicShop({
       {data.publication === "provisional" && <div className="preview-banner">{tr("仮公開中 · このページを用意したGoogleアカウントでログインした本人だけが表示できます。")}</div>}
       {!hideHeader && <SiteHeader config={c} imageBase={`${base}/images`}>
       <nav className="public-nav">
-        {(session.user ? [["mine", storefrontText(c, "navMine")],
-          ["reserve", storefrontText(c, "navReserve")],
-          ["about", storefrontText(c, "navAbout")],
-          ["contact", storefrontText(c, "navContact")]] : [["about", storefrontText(c, "navAbout")], ["reserve", storefrontText(c, "navReserve")], ["contact", storefrontText(c, "navContact")]]).map(([id, label]) => (
+        {primaryNavigationItems(c).map(({ pane: id, label }) => (
           <button
             className={!category && !pageSlug && pane === id ? "active" : ""}
             onClick={() =>
