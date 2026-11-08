@@ -73,7 +73,7 @@ try {
    const buttons = await nav.locator('button:visible').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().toJSON()));
    assert.ok(buttons.every(button => button.height >= 44 && button.x >= 0 && button.right <= 320), 'mobile items have full-width touch targets');
    const treeBounds = await page.locator('.sidebar-editor-tree').boundingBox();
-   const editorBounds = await item('画面を試す・編集').boundingBox();
+   const editorBounds = await item('AIとお店をつくる').boundingBox();
    const bookingsBounds = await item('予約を管理').boundingBox();
    assert.ok(editorBounds.y < treeBounds.y && treeBounds.y < bookingsBounds.y, 'screen tree stays directly below its parent');
    assert.equal(await nav.getByRole('tree').evaluate(element => getComputedStyle(element).maxHeight), 'none');
@@ -90,7 +90,7 @@ try {
   await openMenu();
   await expect(nav.getByRole('tree')).toBeVisible();
   const editorToggle = nav.locator('.sidebar-editor-toggle');
-  const editorArrowBounds = await editorToggle.boundingBox(), editorLabelBounds = await item('画面を試す・編集').boundingBox();
+  const editorArrowBounds = await editorToggle.boundingBox(), editorLabelBounds = await item('AIとお店をつくる').boundingBox();
   assert.ok(editorArrowBounds.x + editorArrowBounds.width <= editorLabelBounds.x + 1, 'editor disclosure is on the left, matching settings');
   const beforeCollapse = page.url();
   await editorToggle.click();
@@ -100,7 +100,7 @@ try {
   if (width <= 760) await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await item('メニュー・料金').click();
   await expect(page.locator('.live-settings-menus')).toBeVisible();
-  await openMenu(); await item('画面を試す・編集').click();
+  await openMenu(); await item('AIとお店をつくる').click();
   await expect(page.locator('.local-preview-screen')).toBeVisible();
   await openMenu();
   await expect(editorToggle).toHaveAttribute('aria-expanded', 'false');
@@ -119,18 +119,30 @@ try {
    await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(0);
   }
   assert.equal(documents.length, loaded, 'menu navigation must not reload the document');
+
   await page.goBack(); await tab('settings'); await expect(page.locator('.shop-export')).toBeVisible();
   await page.goBack(); await tab('images'); await expect(page.locator('.image-library')).toBeVisible();
   await page.goForward(); await tab('settings'); await expect(page.locator('.shop-export')).toBeVisible();
   const sameHistoryLength = await page.evaluate(() => history.length);
   await openMenu(); await item('公開の設定').click(); assert.equal(await page.evaluate(() => history.length), sameHistoryLength, 'repeat menu clicks do not create duplicate history');
+  // Choosing a destination near the bottom of the sidebar must not carry its page scroll over.
+  await openMenu();await item('使い方').scrollIntoViewIfNeeded();
+  assert.ok(await page.evaluate(()=>window.scrollY)>100,'start a real sidebar click from a scrolled page');
+  await item('使い方').click();await tab('manual');await expect(page.locator('.manual')).toBeVisible();
+  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
+  const repeatHistory=await page.evaluate(()=>history.length);
+  await page.evaluate(()=>window.scrollTo(0,700));await openMenu();await item('使い方').scrollIntoViewIfNeeded();
+  assert.ok(await page.evaluate(()=>window.scrollY)>100);
+  await item('使い方').click();await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
+  assert.equal(await page.evaluate(()=>history.length),repeatHistory,'scroll reset on the current menu does not add history');
+
   for (const [id, selector] of [['menus', '.live-settings-menus'], ['images', '.image-library'], ['settings', '.shop-export'], ['blog', '.blog-editor-layout'], ['manual', '.manual']]) {
    await page.goto(`${origin}/?lang=${language}&shop=${shops[0].id}&tab=${id}`);
    await expect(page.locator(selector).first()).toBeVisible(); await page.reload(); await expect(page.locator(selector).first()).toBeVisible(); await tab(id);
   }
-  // Restoring the bare root must use the default editor, not the tab used at initial load.
-  await page.goto(`${origin}/?lang=${language}`); await expect(page.locator('.local-preview-screen').first()).toBeVisible();
-  await openMenu(); await item('メニュー・料金').click(); await tab('menus'); await page.goBack(); await expect(page.locator('.local-preview-screen').first()).toBeVisible(); assert.equal(query().get('tab'), null);
+  // Restoring the bare root opens the dashboard while keeping the editor mounted.
+  await page.goto(`${origin}/?lang=${language}`); await expect(page.locator('.management-dashboard')).toBeVisible();
+  await openMenu(); await item('メニュー・料金').click(); await tab('menus'); await page.goBack(); await expect(page.locator('.management-dashboard')).toBeVisible(); assert.equal(query().get('tab'), null);
   // A history transition must not recreate the editor or erase locally saved drafts.
   const localKey = draftKey(owner, shops[0].id);
   await page.waitForFunction(key => !!localStorage.getItem(key), localKey);
@@ -141,6 +153,7 @@ try {
   const screen = name => nav.getByRole('treeitem', { name: new RegExp('^' + label(name)), includeHidden: true });
   await openMenu(); await screen('お店のこと').click(); await tab('try'); await expect.poll(() => query().get('screen')).toBe('about'); await expect(screen('お店のこと')).toHaveAttribute('aria-selected', 'true');
   await openMenu(); await screen('お問い合わせ').click(); await expect.poll(() => query().get('screen')).toBe('contact'); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(()=>page.evaluate(()=>window.scrollY)).toBe(0);
   if (width <= 760) { await expect(nav).toBeHidden(); await expect(toggle).toBeFocused(); await expect(toggle).toBeInViewport(); }
   await expect(nav.locator('[role="treeitem"][aria-selected="true"]')).toHaveCount(1);
   await page.goBack(); await expect.poll(() => query().get('screen')).toBe('about'); await expect(screen('お店のこと')).toHaveAttribute('aria-selected', 'true');
@@ -150,7 +163,7 @@ try {
   await page.goBack(); await tab('try'); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
   assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).config.description, localKey), draft.config.description);
   await page.reload(); await expect(screen('お問い合わせ')).toHaveAttribute('aria-selected', 'true');
-  await openMenu(); await screen('ヘッダー').click(); await expect.poll(() => query().get('screen')).toBe('part:header'); await page.reload(); await expect(screen('ヘッダー')).toHaveAttribute('aria-selected', 'true');
+  await openMenu(); await screen('ページ全体').click(); await expect.poll(() => query().get('screen')).toBe('theme'); await page.reload(); await expect(screen('ページ全体')).toHaveAttribute('aria-selected', 'true');
   await openMenu(); await nav.getByRole('treeitem', { name: 'FAQ', exact: true }).click(); await expect.poll(() => query().get('screen')).toBe('page:faq'); await page.reload(); await expect(page.locator('.local-preview-screen')).toContainText('History navigation FAQ');
   const editorUrl = page.url();
   // Exact articles and customer deep links remain compatible with old URL shapes.
@@ -166,7 +179,7 @@ try {
   await page.goBack(); await expect.poll(() => query().get('shop')).toBe(shops[0].id); await expect(page.locator('.local-preview-screen')).toContainText('History navigation FAQ');
   await page.goForward(); await page.reload(); await expect(page.locator('aside > select')).toHaveValue(shops[1].id);
   // Hidden pre-publication pages resolve to an available destination without adding a history entry.
-  await page.goto(`${origin}/?lang=${language}&shop=${shops[2].id}&tab=bookings`); await tab('try'); await expect(page.locator('.local-preview-screen').first()).toBeVisible();
+  await page.goto(`${origin}/?lang=${language}&shop=${shops[2].id}&tab=bookings`); await tab('dashboard'); await expect(page.locator('.management-dashboard')).toBeVisible();
 
   // Removed article features must not return through an older local design cache.
   const newsShop = await store.createShop(`news-${language}-${width}@example.com`);

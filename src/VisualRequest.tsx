@@ -9,6 +9,7 @@ import type { Plan } from "./App";
 import { submitOnShortcut } from "./submit-shortcut";
 import { MenuImage } from "./MenuImage";
 import { VisualChangeReview } from "./VisualChangeReview";
+import { useChatPanelCollapse } from "./ChatPanelCollapse";
 import type { VisualMessage } from "../shared/visual-conversation";
 import type { VisualPreviewOptions } from "../shared/visual-review";
 
@@ -86,6 +87,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
 }) {
   const api = useApi();
   const [open, setOpen] = useState(false);
+  const chatPanel = useChatPanelCollapse(open, tr("画面の修正"));
   const [image, setImage] = useState("");
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState("");
@@ -150,11 +152,11 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   useEffect(() => { if (image) { void reset(); canvas.current?.scrollIntoView({ block: "nearest" }); } }, [image]);
   useEffect(() => { onActiveChange?.(!!image); }, [image]);
   useEffect(() => {
-    if (!open) return;
+    if (!chatPanel.expanded) return;
     document.body.classList.add("visual-chat-open");
     composer.current?.focus({ preventScroll: true });
     return () => document.body.classList.remove("visual-chat-open");
-  }, [open]);
+  }, [chatPanel.expanded]);
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, result, error, busy]);
   async function run(fn: () => Promise<void>) {
     if (locked) return;
@@ -205,7 +207,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       } catch (e) { failed.current = text; if (alive.current) setInstruction(current => current || text); throw e; }
     });
   }
-  const trigger = <button className={`${triggerHost ? "editor-pen-button" : ""}${image ? " selected" : ""}`} aria-pressed={!!image} title={image ? tr("ペンをやめてプレビューに戻る") : tr("この画面を修正する")} disabled={locked} onClick={() => image ? close() : void capture()}><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z" /></svg>{image ? tr("修正をやめる") : tr("修正する")}</button>;
+  const trigger = <button className={`${triggerHost ? "editor-pen-button" : ""}${image ? " selected" : ""}`} aria-pressed={!!image} title={image ? tr("ペンをやめてプレビューに戻る") : tr("この画面を修正する")} disabled={locked} onClick={() => chatPanel.collapsed ? chatPanel.expand() : image ? close() : void capture()}><svg className="editor-action-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z" /></svg>{image && !chatPanel.collapsed ? tr("修正をやめる") : tr("修正する")}</button>;
   const historyControls = <div className="visual-edit-history" role="group" aria-label={tr("修正履歴")}>
     <button type="button" disabled={locked || history.scope !== scopeKey || history.index === 0} aria-label={tr("前の状態に戻る")} onClick={() => moveHistory(-1)}><span aria-hidden="true">←</span>{tr("戻る")}</button>
     <span className="small muted" aria-live="polite">{history.index + 1} / {history.entries.length}</span>
@@ -235,8 +237,9 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         <button type="button" className="text-button" disabled={locked || !marked} onClick={() => void reset()}>{tr("印を消して描き直す")}</button>
       </>}
     </div>}
-    {open && createPortal(<aside className="visual-chat-panel" aria-label={tr("画面の修正チャット")} data-capture-ignore>
-      <div className="visual-chat-heading"><div><h3>{tr("画面の修正")}</h3><p className="small muted">{screen?.label}</p></div><button type="button" disabled={locked} aria-label={tr("閉じる")} onClick={close}>×</button></div>
+    {chatPanel.restoreButton}
+    {open && createPortal(<aside id={chatPanel.panelId} tabIndex={-1} hidden={!chatPanel.expanded} className="visual-chat-panel" aria-label={tr("画面の修正チャット")} data-capture-ignore>
+      <div className="visual-chat-heading"><div><h3>{tr("画面の修正")}</h3><p className="small muted">{screen?.label}</p></div><div className="chat-panel-heading-actions">{chatPanel.collapseButton}<button type="button" disabled={locked} aria-label={tr("閉じる")} onClick={close}>×</button></div></div>
       <p className="small">{tr("赤ペンで囲むか、変えたいことをそのまま書いてください。")}</p>
       <div className="visual-chat-view">{historyControls}<button type="button" className="text-button" disabled={locked} onClick={() => image ? clearCapture() : void capture()}>{image ? tr("画面を操作する") : tr("赤ペンで囲む")}</button></div>
       <div ref={log} className="chat-log visual-chat-log" role="log" aria-label={tr("画面の修正の会話")} aria-live="polite">

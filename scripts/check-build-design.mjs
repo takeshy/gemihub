@@ -61,14 +61,14 @@ try {
       if (width < 760) await page.locator('.mobile-menu-toggle').click();
       await page.locator('aside nav').getByRole('button', { name: new RegExp(label(title) + '$') }).click();
     };
-    await page.goto(`${origin}/?tab=build&lang=${language}`);
-    const preview = page.locator('.shop-theme-editor .local-preview-screen');
+    await page.goto(`${origin}/?tab=try&screen=theme&lang=${language}`);
+    const preview = page.locator('.local-preview-screen');
     await expect(preview.locator('.theme-placeholder input')).toBeVisible();
-    await expect(page.getByRole('treeitem', { name: label('ページ全体'), exact: true })).toHaveCount(0);
+    await expect(page.getByRole('treeitem', { name: new RegExp('^' + label('ページ全体')), includeHidden: true })).toHaveCount(1);
     await expect(preview.locator('.theme-preview')).toHaveAttribute('inert', '');
     await page.screenshot({ path: `tmp/build-design/current-${language}-${width}.png`, fullPage: true });
 
-    await page.locator('.shop-theme-editor .editor-pen-button').click();
+    await page.locator('.local-preview .editor-pen-button').click();
     const canvas = page.locator('.annotation-canvas'), chat = page.locator('.visual-chat-panel');
     await expect(canvas).toBeVisible(); await expect(chat).toBeVisible();
     if (width > 1000) {
@@ -80,6 +80,11 @@ try {
     await page.mouse.move(rect.x + 20, rect.y + 30); await page.mouse.down();
     await page.mouse.move(rect.x + 100, rect.y + 60); await page.mouse.up();
     await chat.getByRole('textbox', { name: label('ここをどう変えたいですか'), exact: true }).fill('Round the primary buttons and make them purple across all screens.');
+    const annotated = await canvas.evaluate(element => element.toDataURL());
+    await chat.getByRole('button', { name: label('チャットを折り畳む'), exact: true }).click();
+    await expect(chat).toBeHidden(); await page.locator('.chat-panel-restore').click();
+    await expect(chat).toBeVisible(); assert.equal(await canvas.evaluate(element => element.toDataURL()), annotated);
+    await expect(chat.getByRole('textbox', { name: label('ここをどう変えたいですか'), exact: true })).toHaveValue('Round the primary buttons and make them purple across all screens.');
     await chat.getByRole('textbox', { name: label('ここをどう変えたいですか'), exact: true }).press('Control+Enter');
     const review = page.getByRole('dialog', { name: label('修正案を比較'), exact: true });
     await expect(review).toBeVisible();
@@ -90,19 +95,23 @@ try {
     await expect(preview.locator('button.primary')).toHaveCSS('background-color', 'rgb(120, 59, 101)');
     assert.deepEqual((await store.shop(shop.id)).published, shop.published, 'pen edits stay local until approval');
 
-    await navigate('画面を試す・編集');
+    if (width < 760) await page.locator('.mobile-menu-toggle').click();
+    await page.getByRole('treeitem', { name: label('予約'), exact: true }).click();
     await expect(page.locator('.local-preview-screen button.primary').first()).toHaveCSS('background-color', 'rgb(120, 59, 101)');
-    await navigate('AIとお店をつくる');
+    if (width < 760) await page.locator('.mobile-menu-toggle').click();
+    await page.getByRole('treeitem', { name: new RegExp('^' + label('ページ全体')) }).click();
     await expect(preview.locator('button.primary')).toHaveCSS('background-color', 'rgb(120, 59, 101)');
     await page.reload();
     await expect(preview.locator('button.primary')).toHaveCSS('background-color', 'rgb(120, 59, 101)');
 
-    const consultation = page.locator('.shop-consultation');
-    await consultation.getByRole('button', { name: label('はじめる'), exact: true }).click();
+    if (width < 760) await page.locator('.mobile-menu-toggle').click();
+    await page.getByRole('treeitem', { name: label('ページ追加・機能変更'), exact: true }).click();
+    await page.locator('.page-change-inventory .editor-pen-button').click();
+    const consultation = page.locator('.shop-change-chat');
     const composer = consultation.getByRole('textbox', { name: label('AIに伝えたいこと'), exact: true });
     await composer.fill('Add an FAQ page and update the overall design.'); await composer.press('Control+Enter');
     await consultation.getByRole('button', { name: label('変更案を確認する'), exact: true }).click();
-    const proposal = consultation.getByRole('region', { name: label('変更案の確認'), exact: true });
+    const proposal = page.locator('.shop-change-review').getByRole('region', { name: label('変更案の確認'), exact: true });
     await expect(proposal.locator('.config-summary')).toHaveCount(0);
     await expect(proposal.locator('.screen-name-list li').filter({ hasText: 'New FAQ' })).toContainText(label('追加'));
     await expect(proposal.locator('.screen-name-list .screen-removed')).toHaveCount(2);

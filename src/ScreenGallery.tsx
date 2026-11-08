@@ -57,17 +57,14 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
  * Initial and subsequent proposal reviews share the screen inventory and whole-page sample.
  * Later proposals also compare the published design and mark screen changes.
  */
-export function ScreenGallery({ config, shopId, themeRef, previousConfig }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null>; previousConfig?: ShopConfig }) {
-  const [before, setBefore] = useState(false);
+export function ScreenList({ config, previousConfig }: { config: ShopConfig; previousConfig?: ShopConfig }) {
   const screens = previewScreens(config);
   const previousScreens = previousConfig ? previewScreens(previousConfig) : [];
   const removed = previousScreens.filter(screen => !screens.some(next => next.id === screen.id));
-  const themeChanged = previousConfig && !same(scopedSource(previousConfig, { kind: "theme" }), scopedSource(config, { kind: "theme" }));
   const screenChanged = (id: string) => id.startsWith("page:")
     ? !same(previousConfig?.pages.find(page => `page:${page.id}` === id), config.pages.find(page => `page:${page.id}` === id))
     : !same(previousConfig?.screens?.[id as keyof NonNullable<ShopConfig["screens"]>], config.screens?.[id as keyof NonNullable<ShopConfig["screens"]>]);
-  return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}>
-    <h4>{tr("用意する画面")}</h4>
+  return (
     <ul className="screen-name-list">
       {screens.map(screen => <li key={screen.id}>
         <strong>{screen.name}</strong><span>{screen.description}</span>
@@ -77,6 +74,15 @@ export function ScreenGallery({ config, shopId, themeRef, previousConfig }: { co
       </li>)}
       {removed.map(screen => <li key={screen.id} className="screen-removed"><strong>{screen.name}</strong><b className="screen-change">{tr("削除")}</b></li>)}
     </ul>
+  );
+}
+
+export function ScreenGallery({ config, shopId, themeRef, previousConfig }: { config: ShopConfig; shopId: string; themeRef?: React.RefObject<HTMLDivElement | null>; previousConfig?: ShopConfig }) {
+  const [before, setBefore] = useState(false);
+  const themeChanged = previousConfig && !same(scopedSource(previousConfig, { kind: "theme" }), scopedSource(config, { kind: "theme" }));
+  return <section className="screen-gallery" aria-label={tr("用意する画面の一覧")}>
+    <h4>{tr("用意する画面")}</h4>
+    <ScreenList config={config} previousConfig={previousConfig} />
     <p className="small muted">{tr("全画面に共通のヘッダー・フッターが付きます。")}</p>
     <h4>{tr("ページの雰囲気")}</h4>
     {themeChanged && <p className="notice">{tr("ページ全体のデザインに変更があります。変更前と変更後を切り替えて確認できます。")}</p>}

@@ -5,7 +5,7 @@ import { Screen } from "./Screen";
 import { openEditingChat } from "./story-helpers";
 
 const meta = {
-  title: "運営/画面の編集/画面を試す・編集",
+  title: "運営/画面の編集/AIとお店をつくる",
   component: Screen,
   parameters: { layout: "fullscreen" },
   render: (args) => <Screen key={args.scenario} {...args} />,

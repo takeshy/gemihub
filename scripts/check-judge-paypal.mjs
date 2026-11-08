@@ -62,7 +62,7 @@ try {
     await expect(page.locator('.reservations-panel .section-top .count')).toHaveText('0');
     await dateInput.fill('2026/02/30'); await expect(date.getByRole('status')).toBeVisible();
     await page.screenshot({ path: `tmp/judge-paypal/bookings-${language}-${width}.png`, fullPage: true });
-    await page.goto(`${origin}/?tab=assistant&shop=${shop.id}&lang=${language}`);
+    await page.goto(`${origin}/?tab=dashboard&shop=${shop.id}&lang=${language}`);
     const panel = page.locator('.paypal-alerts');
     await expect(panel).toContainText(label('対応が必要な項目はありません。'));
     if (language === 'en') await expect(panel).not.toContainText('対応が必要な項目はありません。');
@@ -70,6 +70,7 @@ try {
     await expect(panel.getByRole('status')).toContainText(label('確認が完了しました。要対応：{0}件。').replace('{0}', '0'));
     await expect(panel.locator('time')).toHaveAttribute('datetime', /\d{4}-\d\d-\d\dT/);
     await expect(panel.locator('.paypal-proposal')).toHaveCount(0);
+    await page.goto(`${origin}/?tab=assistant&shop=${shop.id}&lang=${language}`);
     await page.getByRole('textbox', { name: label('アシスタントへの質問'), exact: true }).fill('Did the latest refund go through on PayPal?');
     await page.locator('.assistant').getByRole('button', { name: label('送信'), exact: true }).click();
     await expect(page.getByRole('log', { name: label('アシスタントとの会話'), exact: true })).toContainText('TEST-REFUND: COMPLETED, USD 55.00');

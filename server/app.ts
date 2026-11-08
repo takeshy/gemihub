@@ -29,6 +29,7 @@ import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } f
 import type { InquiryInteraction } from "./inquiries.ts";
 import { createPublicInquiry, inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, stageInquiryFiles, stagePublicInquiry, writeInquiry } from "./inquiry-service.ts";
 import type { InquiryFileStorage } from "./inquiry-files.ts";
+import { answerConsultation, importConsultation, appendVoiceConsultation, deleteConsultation, consultationImportSchema, consultationVoiceSchema } from "./consultations.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
@@ -2197,10 +2198,17 @@ export function createApp(
         }
         // These reads must stay available while a model call holds the shop write lock.
         if (action === "conversations" && method === "GET") return json(res, { email: user!.email, conversations: await conversations(store, shop, user!.email) });
+        if (action === "assistant/history/import" && method === "POST") return json(res, await importConsultation(store, shop, user!.email, consultationImportSchema.parse(await body(req, 10000000))));
+        const consultAction = action.match(/^conversations\/([a-f0-9]{64})\/(delete|turns)$/);
+        if (consultAction && method === "POST") {
+          if (consultAction[2] === "turns") return json(res, await appendVoiceConsultation(store, shop, user!.email, consultAction[1], consultationVoiceSchema.parse(await body(req, 100000))));
+          z.object({confirmed:z.literal(true)}).strict().parse(await body(req));
+          return json(res, await deleteConsultation(store, shop, user!.email, consultAction[1]));
+        }
         const conversationRead = action.match(/^conversations\/([a-f0-9]{64})(\/progress)?$/);
         if (conversationRead && method === "GET") {
           const conversation = await store.get<ShopConversation>("shopChat", conversationRead[1]);
-          if (!conversation || conversation.shopId !== shop.id || conversation.email !== user!.email) fail(404, tr("チャットが見つかりません"));
+          if (!conversation || conversation.deletedAt || conversation.shopId !== shop.id || conversation.email !== user!.email) fail(404, tr("チャットが見つかりません"));
           const progress = await store.get<ChatGeneration>("shopChatGeneration", conversation.id);
           let generation = progress?.shopId === shop.id && progress.email === user!.email ? progress : null;
           // The plan/message are authoritative if the last progress write was interrupted.
@@ -2261,18 +2269,22 @@ export function createApp(
           // Questions about this shop, answered from spec.md, history.md and the system OKF bundle.
           if (!shop.published) fail(409, tr("お店を公開してから質問してください"));
           const input = z.object({
+            chat: chatReferenceSchema.optional(),
             question: z.string().trim().min(1).max(4000),
             messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(4000) })).max(12).default([]),
           }).parse(await body(req, 100000));
-          const reply = await (intelligence.assistant || converse)({ question: input.question, messages: input.messages, data: await shopData(shop), demo: demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT });
-          const paymentQuestion = reply.sources.some(source => source.path.startsWith("paypal:") || source.path === "sheet:paypal") || /paypal|refund|payment|stuck|alert|返金|支払|止ま|要対応/i.test(input.question);
-          // Ledger rules only: the research tools already read PayPal live for this answer, and the
-          // hourly check keeps live mismatches, so a question never fans out into many PayPal calls.
-          const alerts = paymentQuestion
-            ? await paypal.check({ ...shop, locale: getLocale() }, { notify: false, force: true, live: "none" })
-            : await paypal.state(shop.id);
-          const proposals = paymentQuestion ? relevantProposals(alerts?.items || [], [input.question, reply.answer, ...reply.sources.map(source => source.path)]) : [];
-          return json(res, { answer: reply.answer, sources: reply.sources, ...(reply.draft ? { draft: reply.draft, request: draftText(reply.draft) } : {}), ...(proposals.length ? { paypalProposals: proposals } : {}) });
+          const generate = async (messages: typeof input.messages) => {
+            const reply = await (intelligence.assistant || converse)({ question: input.question, messages, data: await shopData(shop), demo: demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT });
+            const paymentQuestion = reply.sources.some(source => source.path.startsWith("paypal:") || source.path === "sheet:paypal") || /paypal|refund|payment|stuck|alert|返金|支払|止ま|要対応/i.test(input.question);
+            // Ledger rules only: the research tools already read PayPal live for this answer, and the
+            // hourly check keeps live mismatches, so a question never fans out into many PayPal calls.
+            const alerts = paymentQuestion
+              ? await paypal.check({ ...shop, locale: getLocale() }, { notify: false, force: true, live: "none" })
+              : await paypal.state(shop.id);
+            const proposals = paymentQuestion ? relevantProposals(alerts?.items || [], [input.question, reply.answer, ...reply.sources.map(source => source.path)]) : [];
+            return { answer: reply.answer, sources: reply.sources, ...(reply.draft ? { draft: reply.draft, request: draftText(reply.draft) } : {}), ...(proposals.length ? { paypalProposals: proposals } : {}) };
+          };
+          return json(res, input.chat ? await answerConsultation(store, shop, user!.email, input.chat, input.question, generate) : await generate(input.messages));
         }
         if (action === "images/generate" && method === "POST") {
           assertOwner(user, shop);

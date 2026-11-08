@@ -6,7 +6,7 @@ const storyLocale = (globals: Record<string, unknown>) => parseLocale(new URLSea
 // Editor drafts and mock chats are saved in localStorage with text in the language they were made in.
 // Drop them when the language changes, so a story never mixes Japanese and English fixtures.
 const localeMarker = "gemihub:storybook-locale";
-const languageState = /^gemihub:(local-preview|storybook-chats):/;
+const languageState = /^gemihub:(local-preview|storybook-chats|assistant):/;
 function resetStateOnLanguageChange(locale: string) {
   try {
     if (localStorage.getItem(localeMarker) === locale) return;
@@ -42,8 +42,9 @@ const preview: Preview = {
         order: [
           "運営", [
             "はじめる", ["はじめる前", "サービス紹介", "旧環境からの引き継ぎ"],
+            "ダッシュボード",
             "お店づくり", ["はじめてのお店づくり", "仮公開・本番公開", "AIに変更を依頼"],
-            "画面の編集", ["画面を試す・編集", "同期と競合", "版履歴"],
+            "画面の編集", ["AIとお店をつくる", "同期と競合", "版履歴"],
             "相談・質問",
             "設定", ["お店の基本情報", "国・タイムゾーン", "曜日別の営業時間", "メニュー・料金", "メニュー画像", "スタッフ・勤務", "カレンダー連携", "画像管理", "AIで設定", "公開の設定", "データ管理", "撮影用の初期化"],
             "予約・お客様", ["予約管理", "お客様", "お問い合わせ", "お支払いと返金", "キャンセル枠の予約"],

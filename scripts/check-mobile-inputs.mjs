@@ -53,6 +53,8 @@ try {
         await page.locator('.local-preview-screen').waitFor();
         await page.locator('.mobile-menu-toggle').click();
         await page.locator('aside nav').getByRole('button', { name: new RegExp(label('AIとお店をつくる') + '$') }).click();
+        if (await page.locator('.mobile-menu-toggle').getAttribute('aria-expanded') !== 'true') await page.locator('.mobile-menu-toggle').click();
+        await page.getByRole('treeitem', { name: label('ページ全体'), exact: true }).click();
         await page.locator('summary').filter({ hasText: label('ページ全体の HTML を編集') }).click();
         await page.locator('textarea.code-input').first().waitFor();
       }

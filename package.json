@@ -61,6 +61,7 @@
     "check:booking-transfer": "node --import tsx scripts/check-booking-transfer.mjs",
     "check:menu-addons": "node --import tsx scripts/check-menu-addons.mjs",
     "check:settings-ai": "node --import tsx scripts/check-settings-ai.mjs",
+    "check:management-dashboard": "node --import tsx scripts/check-management-dashboard.mjs",
     "check:dashboard-navigation": "node --import tsx scripts/check-dashboard-navigation.mjs",
     "check:inquiries": "node scripts/check-inquiries.mjs",
     "check:images": "node scripts/check-image-library.mjs",
@@ -93,7 +94,9 @@
     "check:lp": "node --import tsx scripts/check-landing.mjs",
     "check:storefront-static": "node --import tsx scripts/check-storefront-static.mjs",
     "check:inquiry-workflow": "node --import tsx scripts/check-inquiry-workflow.mjs",
-    "capture:manual:inquiries": "node --import tsx scripts/check-inquiry-workflow.mjs --capture"
+    "capture:manual:inquiries": "node --import tsx scripts/check-inquiry-workflow.mjs --capture",
+    "check:consultation-history": "node --import tsx scripts/check-consultation-history.mjs",
+    "check:consultation-stories": "node scripts/check-consultation-stories.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",

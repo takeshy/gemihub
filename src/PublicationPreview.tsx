@@ -36,7 +36,7 @@ export function PublicationPreview({ shopId }: { shopId: string }) {
     <div className="panel"><span className="pill">{published ? tr("本番公開済み") : tr("仮公開中・本人のみ閲覧")}</span><h1>{tr("画面の確認・本番公開")}</h1>
       <p>{tr("下のお店のメニューやリンクをクリックして、各画面の表示と動きを確認してください。ここで試した予約・キャンセル・問い合わせは練習用で、実際のデータやメールには反映しません。")}</p>
       <p className="small muted">{tr("保存・反映済みの内容を表示しています。編集中の変更や、まだ反映していない提案は表示されません。")}</p>
-      <p>{tr("デザインは各画面の編集画面で、スタッフ・料金・営業時間などはそれぞれの設定メニューで変更できます。全体的な表示や機能の修正は「AIとお店をつくる」で相談できます。")}</p>
+      <p>{tr("見た目は「AIとお店をつくる」の各画面、ページ追加や機能の変更は「ページ追加・機能変更」、スタッフ・料金・営業時間などはそれぞれの設定メニューで変更できます。")}</p>
       <a className="text-button" href="/">{tr("運営画面に戻る")}</a>
     </div>
     <DesignVersionHistory shopId={shopId} revision={snapshot?.revision} timeZone={regionOf(snapshot?.config).timeZone} disabled={busy} onRestored={load} />

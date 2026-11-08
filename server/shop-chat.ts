@@ -5,9 +5,11 @@ import type { Shop, Store } from "./store.ts";
 import { chatLabels, openingQuestions, requestIntentSchema, type RequestIntent } from "./request-intent.ts";
 import { findRelevantHistory } from "./chat-context.ts";
 import type { ShopConfig } from "./domain.ts";
+import type { PayPalProposal } from "./paypal-ops.ts";
 
-export type ShopConversation = { id: string; shopId: string; email: string; intent: RequestIntent; title: string; createdAt: string; updatedAt: string };
-export type ShopChatMessage = { id: string; shopId: string; conversationId: string; email: string; role: "user" | "assistant"; text: string; requestId: string; sequence: number; createdAt: string; updatedAt: string; detail: { article?:{title:string;excerpt:string;body:string}; imageIds?: string[]; changeRequest?: boolean; ready?: boolean; planId?: string; partial?: boolean } };
+export type ShopConversation = { id: string; shopId: string; email: string; intent: RequestIntent; title: string; createdAt: string; updatedAt: string; deletedAt?: string };
+export type ConsultationReply = { answer: string; sources: {path:string;title:string}[]; request?: string; draft?: unknown; paypalProposals?: PayPalProposal[] };
+export type ShopChatMessage = { id: string; shopId: string; conversationId: string; email: string; role: "user" | "assistant"; text: string; requestId: string; sequence: number; createdAt: string; updatedAt: string; detail: { consultation?: Omit<ConsultationReply,"answer">; voice?: boolean; article?:{title:string;excerpt:string;body:string}; imageIds?: string[]; changeRequest?: boolean; ready?: boolean; planId?: string; partial?: boolean } };
 export type ShopChat = ShopConversation & { messages: ShopChatMessage[] };
 export type ChatGeneration = {
   shopId: string; email: string; chat: ChatReference; base: number;
@@ -24,7 +26,7 @@ export function conversationContext(chat: ShopChat, limit=24) {
 const digest = (text: string) => createHash("sha256").update(text).digest("hex");
 export const chatMessageId = (conversationId: string, requestId: string, role: "user" | "assistant") => digest(`${conversationId}:${requestId}:${role}`);
 export async function conversations(store: Store, shop: Shop, email: string) {
-  return (await store.records<ShopConversation>("shopChat", shop)).filter(chat => chat.email === email).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
+  return (await store.records<ShopConversation>("shopChat", shop)).filter(chat => chat.email === email && !chat.deletedAt).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 export async function searchConversationHistory(store:Store,shop:Shop,email:string,query:string,excludedIds:ReadonlySet<string>=new Set()) {
   const own = await conversations(store,shop,email);
@@ -40,6 +42,7 @@ export async function readConversation(store: Store, shop: Shop, email: string, 
 }
 export async function createConversation(store: Store, shop: Shop, email: string, intent: RequestIntent, requestId: string, begin=false): Promise<ShopChat> {
   const id = digest(`${shop.id}:${email}:${requestId}`);
+  if ((await store.get<ShopConversation>("shopChat", id))?.deletedAt) throw Object.assign(new Error(tr("チャットが見つかりません")), {status:404});
   const previous = (await conversations(store, shop, email)).find(chat => chat.id === id);
   if (previous && previous.intent !== intent) throw Object.assign(new Error(tr("作成するチャットの種類が変わっています")),{status:409});
   if (!previous) {
@@ -51,7 +54,10 @@ export async function createConversation(store: Store, shop: Shop, email: string
   return readConversation(store,shop,email,id);
 }
 export async function appendChatMessage(store: Store, shop: Shop, chat: ShopConversation, input: Pick<ShopChatMessage,"role"|"text"|"requestId"> & { detail?: ShopChatMessage["detail"] }): Promise<ShopChatMessage> {
-  if (!input.text.trim() || input.text.length > 12000) throw Object.assign(new Error(tr("チャットの文章は12000文字以内にしてください")),{status:400});
+  const limit = chat.intent === "consult" ? 20000 : 12000;
+  if (!input.text.trim() || input.text.length > limit) throw Object.assign(new Error(tr("チャットの文章は{0}文字以内にしてください", limit)),{status:400});
+  const latest = (await conversations(store,shop,chat.email)).find(item => item.id === chat.id);
+  if (!latest) throw Object.assign(new Error(tr("チャットが見つかりません")), {status:404});
   const id = chatMessageId(chat.id, input.requestId, input.role);
   const records = await store.records<ShopChatMessage>("shopChatMessage",shop);
   const previous = records.find(message => message.id === id);
@@ -62,8 +68,7 @@ export async function appendChatMessage(store: Store, shop: Shop, chat: ShopConv
   const now = new Date().toISOString();
   const message: ShopChatMessage = {id,shopId:shop.id,conversationId:chat.id,email:chat.email,role:input.role,text:input.text,requestId:input.requestId,sequence:records.reduce((maximum,item)=>item.conversationId===chat.id?Math.max(maximum,item.sequence):maximum,0)+1,createdAt:now,updatedAt:now,detail:input.detail || {}};
   await store.put("shopChatMessage",id,message);
-  const latest = (await conversations(store,shop,chat.email)).find(item => item.id === chat.id) || chat;
-  const title = latest.title === chatLabels[chat.intent] && input.role === "user" ? input.text.replace(/\s+/g," ").slice(0,60) : latest.title;
+  const title = input.role === "user" && !records.some(message => message.conversationId === chat.id && message.role === "user") ? input.text.replace(/\s+/g," ").slice(0,60) : latest.title;
   await store.put("shopChat",chat.id,{...latest,title,updatedAt:now});
   return message;
 }

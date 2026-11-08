@@ -26,6 +26,8 @@ import type { MemberProfile } from "../server/customer-profile";
 import { BlogEditor, PublicBlog, RecentPosts, type Navigate } from "./Blog";
 import type { PostCategory, PostSummary } from "../server/post-domain";
 import { ShopOverview } from "./ShopOverview";
+import { ManagementDashboard } from "./ManagementDashboard";
+import { ConsultationWorkspace } from "./ConsultationHistory";
 import { PublicationPreview } from "./PublicationPreview";
 import { ShopRequest } from "./ShopRequest";
 import { SiteHeader, SiteFooter, ThemeBody } from "./SiteChrome";
@@ -40,8 +42,7 @@ import { MenuImage, MenuImageEditor } from "./MenuImage";
 import { Customers } from "./Customers";
 import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
-import React, { useEffect, useLayoutEffect, useState, useRef, useId } from "react";
-import { createPortal } from "react-dom";
+import React, { useEffect, useState, useRef, useId } from "react";
 import { useApi } from "./api";
 import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
@@ -97,7 +98,7 @@ export type AppProps = {
 export function App({
   path = location.pathname,
   search = location.search,
-  initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "staff" : "try",
+  initialTab = new URLSearchParams(search).has("customer") ? "customers" : new URLSearchParams(search).get("calendar") === "connected" ? "staff" : "dashboard",
   initialPane,
   navigate: customNavigate,
 }: AppProps = {}) {
@@ -345,7 +346,7 @@ function Landing({ demo, invite, run }: { demo: boolean; invite: boolean; run: R
   );
 }
 function Dashboard({
-  initialTab = "try",
+  initialTab = "dashboard",
   search,
   browserNavigation,
   session,
@@ -363,16 +364,15 @@ function Dashboard({
 }) {
   const api = useApi();
   const navigation = useDashboardNavigation(search, initialTab, browserNavigation);
-  const { tab, shop: chosen, screen: initialScreen, article: initialArticleKey, customer: initialCustomer, customerImages: initialCustomerImages, inquiry: initialInquiryId, focusRequest, intent: requestIntent } = navigation.route;
-  const editorSelection = useRef({ screen: initialScreen && !["theme", "part:header", "part:footer"].includes(initialScreen) ? initialScreen : "reserve", article: initialArticleKey });
+  const { tab, shop: chosen, screen: initialScreen, article: initialArticleKey, customer: initialCustomer, customerImages: initialCustomerImages, inquiry: initialInquiryId, focusRequest, intent: requestIntent, conversation: selectedConversation } = navigation.route;
+  const editorSelection = useRef({ screen: initialScreen || "theme", article: initialArticleKey });
   const [shops, setShops] = useState<Workspace[]>([]);
+  const [consultationRevision, setConsultationRevision] = useState(0);
+  const [assistantQuestion, setAssistantQuestion] = useState<{shopId:string;conversationId:string;question:string}>();
+  const attentionRequest = useRef<{question:string;requestId:string} | undefined>(undefined);
   // Until the first workspace response, an empty list means "loading", not "no shops".
   const [loaded, setLoaded] = useState(false);
   const [treeHost, setTreeHost] = useState<HTMLDivElement | null>(null);
-  const [buildEditorHost, setBuildEditorHost] = useState<HTMLDivElement | null>(null);
-  const [screenEditorHost, setScreenEditorHost] = useState<HTMLDivElement | null>(null);
-  // Move the same editor between views so local edits, recovery and the sidebar stay intact.
-  const [editorMount] = useState(() => document.createElement("div"));
   const [editorTreeOpen, setEditorTreeOpen] = useState(true);
   const editorTreeId = useId();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -399,13 +399,8 @@ function Dashboard({
   const creating = !!shop?.isOwner && !shop.published;
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
   const activeTab = !publiclyPublished && ["bookings", "customers", "analytics", "coupons"].includes(tab)
-    ? (shop?.isOwner ? "try" : "staff") : tab;
-  const view = creating || activeTab === "try" && ["theme", "part:header", "part:footer"].includes(initialScreen || "") ? "build" : activeTab;
-  useLayoutEffect(() => {
-    const host = view === "build" ? buildEditorHost : screenEditorHost;
-    if (host) host.appendChild(editorMount);
-    return () => editorMount.remove();
-  }, [view, buildEditorHost, screenEditorHost, editorMount]);
+    ? "dashboard" : tab;
+  const view = creating ? "build" : activeTab;
   function closeMobileMenu() {
     setMobileMenuOpen(false);
     if (mobileMenuOpen && window.matchMedia("(max-width: 760px)").matches) menuToggle.current?.focus();
@@ -415,9 +410,19 @@ function Dashboard({
     const next = dashboardTab(value);
     navigation.visit(next, shop?.id || chosen, next === "try" ? editorSelection.current.screen : undefined, next === "try" ? editorSelection.current.article : undefined);
   }
+  function selectConsultation(id?: string, replace = false) {
+    closeMobileMenu(); navigation.visit("assistant", shop.id, undefined, undefined, replace, id);
+  }
+  async function askFromDashboard(question: string) {
+    if (attentionRequest.current?.question !== question) attentionRequest.current = {question,requestId:createRequestId()};
+    const chat = await api<{id:string}>(`/api/shops/${shop.id}/conversations`, {intent:"consult",requestId:attentionRequest.current.requestId});
+    attentionRequest.current = undefined;
+    setAssistantQuestion({shopId:shop.id,conversationId:chat.id,question});
+    setConsultationRevision(value => value + 1); selectConsultation(chat.id);
+  }
   useEffect(() => {
     if (!shop) return;
-    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons"].includes(tab) ? (publiclyPublished ? "bookings" : "staff") : view;
+    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons"].includes(tab) ? "dashboard" : view;
     if (allowed !== tab) navigation.visit(allowed, shop.id, undefined, undefined, true);
   }, [shop?.id, shop?.isOwner, view, tab, publiclyPublished]);
   useEffect(() => {
@@ -436,14 +441,14 @@ function Dashboard({
     await request(`plans/${p.id}/publish`, { publication });
     setPlan(undefined);
     await load();
-    if (!shop.published) setTab("try");
+    if (!shop.published) setTab("dashboard");
     notify(publication === "provisional" ? tr("仮公開しました。あなたのログインでだけページを表示できます。") : tr("変更を反映しました。"));
   };
   const menuItems = [
-    ["build", "✧", tr("AIとお店をつくる")],
+    ["dashboard", "⌂", tr("ダッシュボード")],
     ["assistant", "✳", tr("相談・質問")],
     ["configuration", "⚙", tr("設定")],
-    ...(shop?.isOwner ? [["try", "▣", tr("画面を試す・編集")]] : []),
+    ...(shop?.isOwner ? [["try", "✧", tr("AIとお店をつくる")]] : []),
     ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")], ["analytics", "▥", tr("分析")]] : []),
     ...(publiclyPublished && shop?.isOwner ? [["coupons", "◇", tr("クーポン")]] : []),
     ["inquiries", "✉", tr("お問い合わせ")],
@@ -455,7 +460,7 @@ function Dashboard({
     ...(shop?.isOwner ? [["basic", "⌂", tr("お店の基本情報")], ["menus", "≡", tr("メニュー・料金")], ["staff", "♧", tr("スタッフ・勤務")], ["images", "▧", tr("画像管理")]] : []),
     ["settings", "⚙", tr("公開の設定")],
   ];
-  const currentMenuLabel = [...menuItems, ...settingItems].find(([id]) => id === view)?.[2];
+  const currentMenuLabel = view === "build" && shop?.published ? tr("ページ追加・機能変更") : [...menuItems, ...settingItems].find(([id]) => id === view)?.[2];
   const shopUrl = shop?.published ? new URL(shop.publicUrl, location.origin).href : undefined;
   return (
     <ShopRegionContext.Provider value={shop?.published ? regionOf(shop.published) : shop?.regionDefault || regionOf(null)}>
@@ -504,7 +509,7 @@ function Dashboard({
                 {settingItems.map(([setting, settingIcon, settingLabel]) => <button key={setting} className={view === setting ? "active" : ""} aria-current={view === setting ? "page" : undefined} onClick={() => setTab(setting)}><span aria-hidden="true">{settingIcon}</span>{settingLabel}</button>)}
               </div>
             </details> : id === "try" ? <div className="sidebar-editor" key={id}>
-              <div className={`sidebar-editor-row${view === id ? " active" : ""}`}>
+              <div className={`sidebar-editor-row${view === id || view === "build" ? " active" : ""}`}>
                 <button type="button" className="sidebar-editor-toggle" aria-label={editorTreeOpen ? tr("画面一覧を折り畳む") : tr("画面一覧を開く")} aria-expanded={editorTreeOpen} aria-controls={editorTreeId} onClick={() => setEditorTreeOpen(open => !open)}><span aria-hidden="true">{editorTreeOpen ? "▾" : "▸"}</span></button>
                 <button className="sidebar-editor-open" aria-current={view === id ? "page" : undefined} onClick={() => setTab(id)}><span aria-hidden="true">{icon}</span>{label}</button>
               </div>
@@ -516,7 +521,7 @@ function Dashboard({
             >
               <span aria-hidden="true">{icon}</span>
               {label}
-              {id === "assistant" && !!shop?.paypalAlerts?.items.length && <span className="alert-badge" aria-label={tr("要対応 {0}件", shop.paypalAlerts.items.length)}>{shop.paypalAlerts.items.length}</span>}
+              {id === "dashboard" && shop?.isOwner && !!shop?.paypalAlerts?.items.length && <span className="alert-badge" aria-label={tr("要対応 {0}件", shop.paypalAlerts.items.length)}>{shop.paypalAlerts.items.length}</span>}
             </button>
           ))}
           <div className="sidebar-language">
@@ -549,7 +554,7 @@ function Dashboard({
                     <p>{tr("次の画面で表示を確かめてから、本番公開できます。")}</p>
                   </div>}</div>
                   <p>{tr("スタッフ・メニュー・料金・営業時間などは、それぞれの設定メニューで更新できます。")}</p>
-                  <p className="editing-guidance">{tr("デザインは各画面の編集画面で更新してください。")}<button className="text-button" onClick={() => setTab("try")}>{tr("画面を試す・編集を開く →")}</button><br />{tr("全体的な表示や機能の修正は")}<button className="text-button" onClick={() => setTab("build")}>{tr("AIとお店をつくる")}</button>{tr("で相談できます。")}</p>
+                  <p className="editing-guidance">{tr("デザインは各画面の編集画面で更新してください。")}<button className="text-button" onClick={() => setTab("try")}>{tr("AIとお店をつくる →")}</button><br />{tr("全体的な表示や機能の修正は")}<button className="text-button" onClick={() => setTab("build")}>{tr("ページ追加・機能変更")}</button>{tr("で相談できます。")}</p>
                 </section>}
                 {shop.publishingPlanId && (
                   <div className="alert">
@@ -574,9 +579,10 @@ function Dashboard({
                     )}
                   </div>
                 )}
+                {view === "dashboard" && shop.published && <ManagementDashboard key={shop.id} shop={shop} busy={busy} refresh={() => void run(async () => { await load(); })} reload={load} onAsk={askFromDashboard} open={setTab} />}
                 {view === "build" && (
                   <>
-                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} previewHost={shop.isOwner ? setBuildEditorHost : undefined} shopId={shop.id} publiclyPublished={publiclyPublished} focusRequest={focusRequest} initialIntent={requestIntent} google={shop.judge ? undefined : shop.google} isOwner={shop.isOwner} open={setTab} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
+                    {shop.published && <ShopOverview key={`${shop.id}-${shop.revision}`} shopId={shop.id} focusRequest={focusRequest} initialIntent={requestIntent} isOwner={shop.isOwner} plan={activePlan} onAccept={acceptPlan} onPlan={async (text, context, imageIds, intent, chat) => {
                       const p = await api<Plan>(`/api/shops/${shop.id}/plan`, { text, context, imageIds, intent, chat });
                       setPlan(p); await load(); return p;
                     }} />}
@@ -588,7 +594,7 @@ function Dashboard({
                     </div>
                   </>
                 )}
-                {view === "assistant" && shop.published && <Assistant key={`${shop.id}:${session.user?.email}`} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} reload={load} />}
+                {view === "assistant" && shop.published && <ConsultationWorkspace key={`${shop.id}:${session.user?.email}`} shopId={shop.id} email={session.user!.email} active selected={selectedConversation} revision={consultationRevision} onSelect={selectConsultation}>{selectedConversation ? <Assistant key={`${shop.id}:${session.user?.email}:${selectedConversation}`} conversationId={selectedConversation} initialQuestion={assistantQuestion?.shopId === shop.id && assistantQuestion.conversationId === selectedConversation ? assistantQuestion.question : undefined} onInitialQuestionConsumed={() => setAssistantQuestion(undefined)} onConversationChange={() => setConsultationRevision(value => value + 1)} shop={shop} userEmail={session.user?.email || ""} voice={!!session.assistantVoice} acceptPlan={acceptPlan} reload={load} /> : <section className="panel"><h2>{tr("相談・質問")}</h2><p>{tr("左の「＋新規の相談」から相談を始められます。")}</p></section>}</ConsultationWorkspace>}
                 {view === "analytics" && <ShopAnalytics shopId={shop.id} />}
                 {view === "basic" && shop.isOwner && <section className="basic-settings" aria-label={tr("お店の基本情報と予約の設定")}>{(["basic","hours","rules"] as const).map(section=><LiveSettings key={`${shop.id}-${section}`} shop={shop} section={section} reload={load}/>)}</section>}
                 {view === "menus" && shop.isOwner && <LiveSettings key={`${shop.id}-menus`} shop={shop} section="menus" reload={load} />}
@@ -617,8 +623,7 @@ function Dashboard({
             )}
           </>
         )}
-        <div hidden={view !== "try"} ref={setScreenEditorHost} />
-        {shop?.isOwner && shop.published && createPortal(<LocalPreview key={shop.id} active={view === "try" || view === "build"} initialScreen={view === "build" ? "theme" : tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { closeMobileMenu(); if (screen === "theme") { navigation.visit("build", shop.id); return; } editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} />, editorMount)}
+        {shop?.isOwner && shop.published && <div hidden={view !== "try"}><LocalPreview key={shop.id} active={view === "try"} changesSelected={view === "build"} onChooseChanges={() => setTab("build")} initialScreen={tab === "try" ? initialScreen || "reserve" : undefined} initialArticleKey={tab === "try" ? initialArticleKey : undefined} onScreenChange={(screen, article) => { closeMobileMenu(); editorSelection.current = { screen, article }; navigation.visit("try", shop.id, screen, article); }} shop={shop} email={session.user!.email} reload={load} sidebar={treeHost} /></div>}
       </section>
     </div>
     </ShopRegionContext.Provider>

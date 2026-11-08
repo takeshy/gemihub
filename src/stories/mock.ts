@@ -58,6 +58,11 @@ import {
 export type Scenario =
   | TransferScenario
   | "analytics"
+  | "consultations"
+  | "management-dashboard-empty"
+  | "management-dashboard-provisional"
+  | "management-dashboard-staff"
+  | "whole-page-editor"
   | "system-payment"
   | "system-owner-only"
   | "us-settings"
@@ -209,15 +214,16 @@ export function scenarioProps(scenario: Scenario) {
                 ? "/s/salon-nagi"
                 : "/",
     // Remote/conflict fixtures change the FAQ page, so open that page rather than the default booking screen.
-    search: ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry-long" ? "?customer=guest%40example.com&inquiry=pagination-inquiry-22" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : ["crm-detail", "crm-activity-long", "crm-pagination"].includes(scenario) ? "?customer=guest%40example.com" : "",
+    search: scenario === "whole-page-editor" ? "?screen=theme" : ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry-long" ? "?customer=guest%40example.com&inquiry=pagination-inquiry-22" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : ["crm-detail", "crm-activity-long", "crm-pagination"].includes(scenario) ? "?customer=guest%40example.com" : "",
     initialTab: scenario.startsWith("owner-transfer-") ? "bookings" : ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
           "image-library": "build", "image-library-empty": "build", "image-library-generation": "build",
           "image-library-uploading": "images",
           manual: "manual",
-          analytics: "analytics",
-          system: "build",
+          analytics: "analytics", consultations: "assistant",
+          system: "dashboard", "system-payment": "dashboard", "system-owner-only": "dashboard",
+          "management-dashboard-empty": "dashboard", "management-dashboard-provisional": "dashboard", "management-dashboard-staff": "dashboard", "whole-page-editor": "try",
           "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
           "local-editor-pages": "try",
@@ -249,7 +255,7 @@ export function scenarioProps(scenario: Scenario) {
           : "reserve",
   };
 }
-export function createMockClient(scenario: Scenario): ApiClient {
+export function createMockClient(scenario: Scenario, chatScope?: string): ApiClient {
   let pendingChatFailure = scenario === "proposal-failure" || scenario === "question-failure";
   let customerProfile: MemberProfile | null = scenario === "registration" ? null : { name: tr("山田 花子"), birthDate: "1990-01-01", gender: "female" };
   const posts = scenario === "empty-blog" ? [] : storyPosts();
@@ -311,7 +317,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     }
   }
   const tomorrow = dateJST(new Date(Date.now() + 86400000));
-  const reservationDate = ["bookings", "bookings-long", "owner-paid", "insufficient-refund"].includes(scenario) ? dateIn(Date.now(), regionOf(config).timeZone) : tomorrow;
+  const reservationDate = ["bookings", "bookings-long", "owner-paid", "insufficient-refund", "system", "system-payment", "system-owner-only", "management-dashboard-staff"].includes(scenario) ? dateIn(Date.now(), regionOf(config).timeZone) : tomorrow;
   const bookings: Booking[] = [
     {
       id: "story-reservation",
@@ -369,7 +375,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   const shop: Workspace = {
     id: scenario === "local-editor-new" ? "story-new-shop" : "story-shop",
     owner: "owner@example.com",
-    publication: scenario.startsWith("provisional") || scenario === "production-preview" || scenario === "local-editor-new" ? "provisional" : undefined,
+    publication: scenario.startsWith("provisional") || scenario === "management-dashboard-provisional" || scenario === "production-preview" || scenario === "local-editor-new" ? "provisional" : undefined,
     slug: "salon-nagi",
     published: unpublished ? null : config,
     draft: plan.approved ? config : null,
@@ -419,6 +425,9 @@ export function createMockClient(scenario: Scenario): ApiClient {
         ? "gemihub-storybook-verification-token"
         : undefined,
   };
+  if (["system", "system-payment", "system-owner-only", "management-dashboard-staff", "management-dashboard-provisional"].includes(scenario)) shop.inquiries[0].status = "new";
+  if (scenario === "management-dashboard-empty") { shop.bookings = []; shop.inquiries = []; }
+  if (scenario === "management-dashboard-staff") shop.isOwner = false;
   if (scenario === "inquiries") {
     shop.inquiries.push(
       { id: "guest-inquiry", email: "guest@example.com", name: tr("山田 花子"), message: tr("予約をしました。アートの相談をしたいです。"), reply: tr("ご希望の写真があればお持ちください。"), status: "in_progress", at: new Date(Date.now() - 86400000).toISOString() },
@@ -525,7 +534,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
     if (coupon) coupon.state = Date.parse(coupon.expiresAt) > Date.now() ? "available" : "expired";
   };
   let wishes: SlotWish[] = scenario === "waitlist-mypage" ? [{ id: "story-wish", date: tomorrow, from: "10:00", to: "20:00", menuId: "simple", optionIds: [], discountOnly: false }, { id: "story-wish-discount", date: dateJST(new Date(Date.now() + 7 * 86400000)), from: "13:00", to: "18:00", menuId: "simple", optionIds: [], discountOnly: true }] : [];
-  if (scenario.startsWith("calendar-")) {
+  if (scenario.startsWith("calendar-") || scenario === "management-dashboard-staff") {
     shop.isOwner = false;
     session.user = { email: "haru@example.com", name: tr("はる"), role: "customer", shopId: shop.id };
   }
@@ -546,7 +555,7 @@ export function createMockClient(scenario: Scenario): ApiClient {
   let visualConfig = structuredClone(config);
   const extraData = { id: "100", title: tr("店販の記録"), headers: [tr("商品"), tr("個数"), tr("金額"), tr("確認済み")], rows: [{ row: 2, values: [tr("ヘアオイル"), 1, 2800, true] as (string | number | boolean)[] }], nextRow: 3 };
   let chats: ShopChat[] = [];
-  const chatCache = `gemihub:storybook-chats:${scenario}:${session.user?.email || "anonymous"}`;
+  const chatCache = `gemihub:storybook-chats:${scenario}${chatScope ? `:${chatScope}` : ""}:${session.user?.email || "anonymous"}`;
   try {
     const saved = JSON.parse(localStorage.getItem(chatCache) || "null");
     if(saved){ chats=saved.chats || []; if(saved.plans&&scenario!=="onboarding")shop.plans=saved.plans; if(saved.published&&scenario!=="onboarding"){shop.published=saved.published;shop.revision=saved.revision;shop.history=saved.history;} }
@@ -595,6 +604,24 @@ export function createMockClient(scenario: Scenario): ApiClient {
         if(input.begin&&!chat.messages.length)addChatTurn(id,"opening","",openingQuestions[chat.intent]);
         result=chatData(id);
       }
+    }
+    else if(action===`/api/shops/${shop.id}/assistant/history/import`){
+      const id=await fingerprint({shopId:shop.id,email:session.user!.email,requestId:input.requestId});
+      if(!chats.some(chat=>chat.id===id)){const now=new Date().toISOString();chats.push({id,shopId:shop.id,email:session.user!.email,intent:"consult",title:tr("新しいチャット"),createdAt:now,updatedAt:now,messages:[]});}
+      for(const [index,message] of (input.messages as {role:string;text:string;sources?:{path:string;title:string}[];voice?:boolean}[]).entries())addChatTurn(id,`legacy-${index}`,message.role==="user"?message.text:"",message.role==="assistant"?message.text:"",{voice:message.voice,consultation:{sources:message.sources||[]}});
+      result=chatData(id);
+    }
+    else if(action.startsWith(`/api/shops/${shop.id}/conversations/`)&&action.endsWith("/delete")){
+      chats=chats.filter(chat=>chat.id!==action.split("/").at(-2));saveChats();result={ok:true};
+    }
+    else if(action.startsWith(`/api/shops/${shop.id}/conversations/`)&&action.endsWith("/turns")){
+      addChatTurn(action.split("/").at(-2)!,String(input.requestId),String(input.question||""),String(input.answer||""),{voice:!!input.voice,consultation:{sources:(input.sources||[]) as {path:string;title:string}[]}});result={ok:true};
+    }
+    else if(action===`/api/shops/${shop.id}/assistant`){
+      const reference=input.chat as {id:string;requestId:string}|undefined;
+      const previous=reference?chatData(reference.id).messages.find(message=>message.role==="assistant"&&message.requestId===reference.requestId):undefined;
+      result=previous?{answer:previous.text,...previous.detail.consultation}:{answer:String(input.question),sources:[]};
+      if(reference&&!previous)addChatTurn(reference.id,reference.requestId,String(input.question),(result as {answer:string}).answer,{consultation:{sources:[]}});
     }
     else if(action.startsWith(`/api/shops/${shop.id}/conversations/`)&&action.endsWith("/progress"))result=null;
     else if(action.startsWith(`/api/shops/${shop.id}/conversations/`))result=chatData(action.split("/").at(-1)!);

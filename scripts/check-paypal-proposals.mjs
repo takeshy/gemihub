@@ -27,8 +27,9 @@ try {
     const page = await context.newPage(), errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route(`**/api/shops/${shop.id}/assistant`, route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ answer: 'Review this refund proposal.', sources: [], paypalProposals: [proposal] }) }));
-    await page.goto(`${origin}/?tab=assistant&shop=${shop.id}&lang=${language}`);
+    await page.goto(`${origin}/?tab=dashboard&shop=${shop.id}&lang=${language}`);
     await expect(page.locator('.paypal-alert-list li')).toHaveCount(1);
+    await page.goto(`${origin}/?tab=assistant&shop=${shop.id}&lang=${language}`);
     await page.getByRole('textbox', { name: label('アシスタントへの質問'), exact: true }).fill('Check this refund');
     await page.locator('.assistant').getByRole('button', { name: label('送信'), exact: true }).click();
     await expect(page.locator('.paypal-proposals .paypal-proposal')).toHaveCount(1);
@@ -36,9 +37,10 @@ try {
     await page.locator('.paypal-proposals').getByRole('button', { name: label('承認して実行'), exact: true }).click();
     assert.equal((await response).status(), 409, 'exercise the actual non-2xx useApi exception path');
     await expect(page.locator('.paypal-proposals')).toHaveCount(0);
-    await expect(page.locator('.paypal-alert-list li')).toHaveCount(0);
     await expect(page.locator('.assistant').getByRole('alert')).toContainText(label('状態が変わっています。最新の状態を確認してください。'));
     await expect(page.getByRole('log', { name: label('アシスタントとの会話'), exact: true })).toContainText('Review this refund proposal.');
+    await page.goto(`${origin}/?tab=dashboard&shop=${shop.id}&lang=${language}`);
+    await expect(page.locator('.paypal-alert-list li')).toHaveCount(0);
     assert.deepEqual(errors, []); await context.close();
     console.log(`${language} ${width}px: actual 409 reloads current alerts, removes expired consult proposals and preserves the conversation.`);
   }

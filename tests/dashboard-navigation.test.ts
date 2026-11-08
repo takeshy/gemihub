@@ -4,7 +4,9 @@ import { dashboardRoute, dashboardSearch, dashboardTabs } from "../src/dashboard
 
 test("all dashboard destinations and legacy links restore their intended view", () => {
   for (const tab of dashboardTabs) assert.equal(dashboardRoute(`?tab=${tab}`).tab, tab);
-  for (const [tab, expected] of [["team", "staff"], ["hours", "basic"], ["rules", "basic"], ["create-page", "build"], ["data", "try"], ["unknown", "try"]]) assert.equal(dashboardRoute(`?tab=${tab}`).tab, expected);
+  for (const [tab, expected] of [["team", "staff"], ["hours", "basic"], ["rules", "basic"], ["create-page", "build"], ["data", "dashboard"], ["unknown", "dashboard"]]) assert.equal(dashboardRoute(`?tab=${tab}`).tab, expected);
+  assert.equal(dashboardRoute("").tab, "dashboard");
+  assert.equal(dashboardRoute("?screen=theme").tab, "try");
   assert.equal(dashboardRoute("?calendar=connected").tab, "staff");
   assert.equal(dashboardRoute("?customer=guest%40example.com&tab=basic").tab, "customers");
   assert.equal(dashboardRoute("?lang=en", "menus").tab, "menus");
@@ -22,4 +24,10 @@ test("menu navigation retains language and shop while clearing context belonging
   const article = dashboardRoute(dashboardSearch(screen, "try", "second", "blogs:article", "2026-11-01-autumn"));
   assert.equal(article.article, "2026-11-01-autumn");
   assert.equal(dashboardRoute(dashboardSearch(screen, "basic", "second", "contact", "stale")).screen, undefined);
+});
+
+test("consultation links select a saved conversation and clear it on leaving",()=>{
+  const search=dashboardSearch("?lang=en", "assistant", "one", undefined,undefined,"chat-one");
+  assert.equal(dashboardRoute(search).conversation,"chat-one");
+  assert.equal(dashboardRoute(dashboardSearch(search,"dashboard","one")).conversation,undefined);
 });

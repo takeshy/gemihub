@@ -169,7 +169,7 @@ try {
     await button(dialog, "選択した画像を使う").click();
     await expect(page.locator(".request-image-selection")).toContainText("iteration.png");
 
-    await page.locator("aside nav").getByRole("button", { name: new RegExp(t("画面を試す・編集") + "$") }).click();
+    await page.locator("aside nav").getByRole("button", { name: new RegExp(t("AIとお店をつくる") + "$") }).click();
     await page.getByRole("treeitem", { name: t("ヘッダー"), exact: true }).click();
     await page.getByText(t("ヘッダー") + t("の内容を編集"), { exact: true }).click();
     await button(page, "画像管理から選ぶ・AIで生成").click();

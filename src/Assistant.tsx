@@ -1,51 +1,77 @@
-import { getLocale, intlLocale, tr } from "../shared/i18n";
+import { tr } from "../shared/i18n";
 import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
 import { type Plan, type Workspace } from "./App";
 import { ScreenGallery } from "./ScreenGallery";
 import { AssistantAnswer } from "./AssistantAnswer";
-import { paid } from "./money";
-import type { PayPalAlertItem, PayPalAlertState, PayPalProposal, PayPalProposalOperation, PayPalSeverity, PayPalAlertKind } from "../server/paypal-ops";
+import { ProposalCard, proposalOpText } from "./PayPalAttention";
+import type { PayPalProposal } from "../server/paypal-ops";
 import "./Assistant.css";
-import { z } from "zod";
+import { savedAssistantSchema, assistantStorageKey } from "./assistant-storage";
+import { createRequestId } from "./request-id";
+import type { ShopChat } from "../server/shop-chat";
 
 type Source = { path: string; title: string };
 type Reply = { answer: string; sources: Source[]; request?: string; paypalProposals?: PayPalProposal[] };
 type Message = { role: "user" | "assistant"; text: string; sources?: Source[]; voice?: boolean };
-const savedAssistantSchema = z.object({
-  messages: z.array(z.object({role:z.enum(["user","assistant"]),text:z.string().max(20000),sources:z.array(z.object({path:z.string(),title:z.string()})).optional(),voice:z.boolean().optional()})).max(100),
-  text:z.string().max(4000),draft:z.string().max(10000).optional(),planId:z.string().optional(),
-});
+
 
 /**
  * The shop assistant: questions answered from spec.md, history.md and the system OKF bundle.
  * A change request becomes an editable draft; approving it creates an ordinary change plan,
  * which is reviewed and applied exactly like other plans.
  */
-export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop: Workspace; voice: boolean; userEmail: string; acceptPlan: (plan: Plan) => Promise<void>; reload: () => Promise<unknown> }) {
+export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversationId, initialQuestion, onInitialQuestionConsumed, onConversationChange }: { conversationId?: string; initialQuestion?: string; onInitialQuestionConsumed?: () => void; onConversationChange?: () => void; shop: Workspace; voice: boolean; userEmail: string; acceptPlan: (plan: Plan) => Promise<void>; reload: () => Promise<unknown> }) {
   const api = useApi();
-  const storageKey = `gemihub:assistant:${shop.id}:${userEmail}`;
+  const storageKey = assistantStorageKey(shop.id, userEmail, conversationId);
   const [saved] = useState(() => { try { return savedAssistantSchema.parse(JSON.parse(localStorage.getItem(storageKey) || "null")); } catch { return undefined; } });
   const [messages, setMessages] = useState<Message[]>(saved?.messages || []);
   const [text, setText] = useState(saved?.text || "");
   const [mode, setMode] = useState<"chat" | "voice">("chat");
   const voiceMode = voice && mode === "voice";
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(!!conversationId);
+  const [loaded, setLoaded] = useState(!conversationId);
+  const [loadRetry, setLoadRetry] = useState(0);
+  const [conversationTitle, setConversationTitle] = useState("");
+  const pending = useRef<{id:string;text:string} | undefined>(saved?.pending);
+  const consumedInitial = useRef(false);
+  const lastReplyId = useRef("");
+  const [dismissedRequestId, setDismissedRequestId] = useState(saved?.dismissedRequestId);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState<string|undefined>(saved?.draft);
   const [plan, setPlan] = useState<Plan|undefined>(()=>shop.plans.find(plan=>plan.id===saved?.planId&&plan.base===shop.revision&&!plan.approved));
   const [proposals, setProposals] = useState<PayPalProposal[]>([]);
-  const [checking, setChecking] = useState(false);
-  const [checkResult, setCheckResult] = useState<PayPalAlertState>();
-  const [notifySetting, setNotifySetting] = useState(shop.paypalSettings?.enabled !== false);
-  const [digestHour, setDigestHour] = useState(shop.paypalSettings?.digestHour ?? 9);
-  const alerts = shop.paypalAlerts;
   const log = useRef<HTMLDivElement>(null);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  useEffect(() => { try { localStorage.setItem(storageKey,JSON.stringify({messages:messages.slice(-100),text,draft,planId:plan?.id})); } catch { /* Storage may be unavailable in private browsing. */ } },[storageKey,messages,text,draft,plan?.id]);
+  useEffect(() => { try { localStorage.setItem(storageKey,JSON.stringify({messages:messages.slice(-100),text,draft,planId:plan?.id,dismissedRequestId,pending:pending.current})); } catch { /* Storage may be unavailable in private browsing. */ } },[storageKey,messages,text,draft,plan?.id,dismissedRequestId]);
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages.length, draft, plan?.id]);
+  useEffect(() => {
+    if (!conversationId) return;
+    let active = true; setBusy(true); setLoaded(false); setError("");
+    void api<ShopChat>(`/api/shops/${shop.id}/conversations/${conversationId}`).then(chat => {
+      if (!active) return;
+      if (chat.intent !== "consult") throw new Error(tr("チャットが見つかりません"));
+      setConversationTitle(chat.title);
+      setMessages(chat.messages.map(message => ({role:message.role,text:message.text,sources:message.detail.consultation?.sources,voice:message.detail.voice})));
+      const last = chat.messages.at(-1);
+      const reply = chat.messages.filter(message => message.role === "assistant").at(-1);
+      if (reply) { lastReplyId.current = reply.requestId; setProposals(reply.detail.consultation?.paypalProposals || []); if (!saved?.draft && !saved?.planId && saved?.dismissedRequestId !== reply.requestId) setDraft(reply.detail.consultation?.request); }
+      if (saved?.pending && chat.messages.some(message => message.role === "assistant" && message.requestId === saved.pending!.id) && saved.text === saved.pending.text) { setText(""); pending.current = undefined; }
+      if (last?.role === "user") { pending.current = {id:last.requestId,text:last.text}; if (!saved?.text.trim()) setText(last.text.slice(0,4000)); }
+      setLoaded(true);
+    }).catch(error => { if (active) { setMessages([]); setError(error instanceof Error ? error.message : String(error)); } }).finally(() => { if (active) setBusy(false); });
+    return () => { active = false; };
+  }, [shop.id, conversationId, loadRetry]);
+  useEffect(() => {
+    if (!initialQuestion || !loaded || busy || consumedInitial.current) return;
+    consumedInitial.current = true; ask(initialQuestion); onInitialQuestionConsumed?.();
+  }, [initialQuestion, loaded, busy]);
+  async function saveTurn(question: string, answer: string, sources: Source[] = [], voice = false) {
+    if (conversationId) await api(`/api/shops/${shop.id}/conversations/${conversationId}/turns`, {requestId:createRequestId(),question,answer,sources,voice});
+    onConversationChange?.();
+  }
   async function run(action: () => Promise<void>) {
     setBusy(true); setError("");
     try { await action(); } catch (e) { if (alive.current) setError(e instanceof Error ? e.message : String(e)); } finally { if (alive.current) setBusy(false); }
@@ -53,23 +79,27 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
   const history = () => messages.slice(-12).map(({ role, text }) => ({ role, text: text.slice(0, 4000) }));
   function ask(question = text) {
     const value = question.trim();
-    if (!value) return;
+    if (!value || busy || !loaded) return;
     void run(async () => {
       const earlier = history();
-      setMessages(items => [...items, { role: "user", text: value }]);
+      const requestId = pending.current?.text === value ? pending.current.id : createRequestId();
+      const retrying = pending.current?.text === value; pending.current = {id:requestId,text:value};
+      setMessages(items => retrying && items.at(-1)?.role === "user" && items.at(-1)?.text === value ? items : [...items, { role: "user", text: value }]);
       setText("");
+      if (!messages.some(message => message.role === "user")) setConversationTitle(value.replace(/\s+/g," ").slice(0,60));
       try {
-        const reply = await api<Reply>(`/api/shops/${shop.id}/assistant`, { question: value, messages: earlier });
+        const reply = await api<Reply>(`/api/shops/${shop.id}/assistant`, { question: value, messages: earlier, ...(conversationId ? {chat:{id:conversationId,requestId}} : {}) });
         if (!alive.current) return;
         setMessages(items => [...items, { role: "assistant", text: reply.answer, sources: reply.sources }]);
+        pending.current = undefined; lastReplyId.current = requestId;
         setProposals(reply.paypalProposals || []);
         if (reply.request) { setDraft(reply.request); setPlan(undefined); }
-      } catch (e) { setText(value); throw e; }
+      } catch (e) { setText(value); throw e; } finally { onConversationChange?.(); }
     });
   }
   const executeProposal = (proposal: PayPalProposal) => run(async () => {
     try {
-      const result = await api<{ ok: boolean; error?: string; state?: PayPalAlertState }>(`/api/shops/${shop.id}/paypal/proposals/execute`, {
+      const result = await api<{ ok: boolean; error?: string }>(`/api/shops/${shop.id}/paypal/proposals/execute`, {
         proposalId: proposal.id, alertId: proposal.alertId, fingerprint: proposal.fingerprint,
       });
       if (!result.ok) throw new Error(result.error || tr("状態が変わっています。最新の状態を確認してください。"));
@@ -79,33 +109,23 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
       throw error;
     }
     setProposals(items => items.filter(item => item.id !== proposal.id));
-    setMessages(items => [...items, { role: "assistant", text: tr("実行しました：{0}。最新の状態を表示しています。", proposalOpText(proposal.operation)) }]);
+    const resultText = tr("実行しました：{0}。最新の状態を表示しています。", proposalOpText(proposal.operation));
+    setMessages(items => [...items, { role: "assistant", text: resultText }]);
     await reload();
-  });
-  const checkNow = () => run(async () => {
-    setChecking(true);
-    try {
-      const result = await api<PayPalAlertState>(`/api/shops/${shop.id}/paypal/alerts/check`, {});
-      setCheckResult(result);
-      await reload();
-    }
-    finally { setChecking(false); }
-  });
-  const saveAlertSettings = () => run(async () => {
-    await api(`/api/shops/${shop.id}/paypal/alerts/settings`, { notify: notifySetting, digestHour });
-    await reload();
+    await saveTurn("", resultText);
   });
   const approveDraft = () => run(async () => {
     const next = await api<Plan>(`/api/shops/${shop.id}/plan`, { text: draft, intent: "modify" });
     if (!alive.current) return;
-    setPlan(next); setDraft(undefined);
+    setPlan(next); setDraft(undefined); setDismissedRequestId(lastReplyId.current);
   });
   return <section className="panel assistant" aria-labelledby="assistant-title">
     <div className="section-top"><span className="ai-mark">✳</span><div>
       <h2 id="assistant-title">{tr("相談・質問")}</h2>
-      <p className="small muted">{tr("お店の仕様（spec.md）と変更履歴（history.md）、gemihub の仕組みの説明をもとに答えます。変更を頼むと依頼文の下書きを作り、承認するまで何も反映しません。")}</p>
+      <p className="small muted">{tr("使い方や現在のお店の設定について質問できます。見た目の修正は「AIとお店をつくる」の各画面、ページ追加や機能の変更は「ページ追加・機能変更」で依頼できます。")}</p>
     </div></div>
-    {shop.isOwner && <AlertPanel alerts={alerts} checkResult={checkResult} checking={checking} busy={busy} notify={notifySetting} digestHour={digestHour} onNotify={setNotifySetting} onDigestHour={setDigestHour} onSaveSettings={() => void saveAlertSettings()} onCheck={() => void checkNow()} onAsk={question => ask(question)} onExecute={proposal => void executeProposal(proposal)} />}
+    {conversationTitle && <h3 className="assistant-conversation-title">{conversationTitle}</h3>}
+    {conversationId && !loaded && error && <button type="button" disabled={busy} onClick={() => setLoadRetry(value => value + 1)}>{tr("もう一度読み込む")}</button>}
     {voice && <div className="assistant-modes" role="group" aria-label={tr("相談の方法")}>
       <button type="button" aria-pressed={!voiceMode} onClick={() => setMode("chat")}>{tr("チャットで質問")}</button>
       <button type="button" aria-pressed={voiceMode} onClick={() => setMode("voice")}>{tr("AIと話す")}</button>
@@ -130,7 +150,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
       <p className="small muted">{shop.isOwner ? tr("内容を確認し、必要なら直してから承認してください。承認すると変更プランを作ります。プランをもう一度確認するまで反映されません。音声での了承は承認になりません。") : tr("変更の承認は店主だけができます。この下書きを店主に伝えてください。")}</p>
       <textarea aria-label={tr("依頼文")} rows={10} maxLength={10000} value={draft} disabled={busy || !shop.isOwner} onChange={event => setDraft(event.target.value)} />
       <div className="actions">
-        <button type="button" disabled={busy} onClick={() => setDraft(undefined)}>{tr("破棄する")}</button>
+        <button type="button" disabled={busy} onClick={() => { setDraft(undefined); setDismissedRequestId(lastReplyId.current); }}>{tr("破棄する")}</button>
         {shop.isOwner && <button type="button" className="primary" disabled={busy || !draft?.trim()} onClick={() => void approveDraft()}>{tr("承認して変更プランを作る")}</button>}
       </div>
     </section>}
@@ -143,59 +163,12 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload }: { shop
         <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => { await acceptPlan(plan); if (alive.current) { setPlan(undefined); setMessages(items => [...items, { role: "assistant", text: tr("変更を反映しました。変更履歴に依頼文とあわせて記録しました。") }]); } })}>{tr("この内容で反映する")}</button>
       </div>
     </section>}
-    {voiceMode ? <LiveVoice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])])} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} /> : <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
-      <textarea aria-label={tr("アシスタントへの質問")} aria-keyshortcuts="Control+Enter Meta+Enter" rows={2} required maxLength={4000} disabled={busy} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => submitOnShortcut(event)} />
+    {voiceMode ? <LiveVoice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => { setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])]); void saveTurn(question, answer, sources, true).catch(error => { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }); }} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} /> : <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
+      <textarea aria-label={tr("アシスタントへの質問")} aria-keyshortcuts="Control+Enter Meta+Enter" rows={2} required maxLength={4000} disabled={busy || !loaded} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => submitOnShortcut(event)} />
       <div className="chat-composer-toolbar">
-        <button type="submit" className="primary chat-send" disabled={busy || !text.trim()}>{tr("送信")}</button>
+        <button type="submit" className="primary chat-send" disabled={busy || !loaded || !text.trim()}>{tr("送信")}</button>
       </div>
     </form>}
-  </section>;
-}
-
-const severityText = (value: PayPalSeverity) => ({ high: tr("緊急"), medium: tr("注意"), low: tr("確認") } satisfies Record<PayPalSeverity, string>)[value];
-const kindText = (value: PayPalAlertKind) => ({
-  refund_stalled: tr("返金の停滞"), awaiting_funds: tr("返金用残高の不足"), manual_review: tr("手動確認が必要"),
-  capture_stalled: tr("決済が未確定"), state_mismatch: tr("台帳とPayPalの状態不一致"), unsold_slot: tr("割引枠の売れ残り"),
-} satisfies Record<PayPalAlertKind, string>)[value];
-const proposalOpText = (value: PayPalProposalOperation) => ({
-  retry_refund: tr("返金の再試行"), resync: tr("状態の再同期"), complete_manual_review: tr("手動確認を完了にする"), close_transfer: tr("割引枠の再販を終了"),
-} satisfies Record<PayPalProposalOperation, string>)[value];
-
-function ProposalCard({ proposal, busy, owner, onExecute }: { proposal: PayPalProposal; busy: boolean; owner: boolean; onExecute: () => void }) {
-  return <div className="paypal-proposal">
-    <div><b>{proposalOpText(proposal.operation)}</b> <span>{proposal.target}</span></div>
-    {proposal.amount !== undefined && proposal.currency && <p className="small">{tr("サーバーが計算した金額：{0}", paid(proposal.amount, proposal.currency))}</p>}
-    <p className="small muted">{proposal.expected}</p>
-    {owner && <button type="button" className="primary" disabled={busy} onClick={onExecute}>{tr("承認して実行")}</button>}
-  </div>;
-}
-
-function AlertPanel({ alerts, checkResult, checking, busy, notify, digestHour, onNotify, onDigestHour, onSaveSettings, onCheck, onAsk, onExecute }: {
-  alerts?: PayPalAlertState; checkResult?: PayPalAlertState; checking: boolean; busy: boolean; notify: boolean; digestHour: number;
-  onNotify: (value: boolean) => void; onDigestHour: (value: number) => void; onSaveSettings: () => void;
-  onCheck: () => void; onAsk: (question: string) => void; onExecute: (proposal: PayPalProposal) => void;
-}) {
-  const items: PayPalAlertItem[] = alerts?.items || [];
-  const summary = !items.length ? tr("対応が必要な項目はありません。") : alerts?.locale === getLocale() && alerts.summary ? alerts.summary : tr("対応が必要な項目が{0}件あります。緊急{1}件、注意{2}件、確認{3}件です。", items.length, items.filter(item => item.severity === "high").length, items.filter(item => item.severity === "medium").length, items.filter(item => item.severity === "low").length);
-  return <section className="paypal-alerts" aria-label={tr("PayPalの要対応")}>
-    <div className="paypal-alerts-head">
-      <h3>{tr("要対応")}{!!items.length && <span className="alert-badge">{items.length}</span>}</h3>
-      <button type="button" disabled={checking || busy} onClick={onCheck}>{checking ? tr("確認しています…") : tr("今すぐチェック")}</button>
-    </div>
-    <p className="small muted">{summary}</p>
-    {checkResult && <p className="small paypal-check-result" role="status">{tr("確認が完了しました。要対応：{0}件。", checkResult.items.length)} <time dateTime={checkResult.checkedAt}>{new Date(checkResult.checkedAt).toLocaleString(intlLocale())}</time></p>}
-    {!!items.length && <ul className="paypal-alert-list">{items.map(item => <li key={item.id}>
-      <div className="paypal-alert-row"><span className={`status ${item.severity}`}>{severityText(item.severity)}</span><b>{kindText(item.kind)}</b><span>{item.target}</span></div>
-      <p className="small muted">{[item.bookingLabel, item.amount !== undefined && item.currency ? paid(item.amount, item.currency) : "", item.paypalId ? tr("PayPal ID: {0}", item.paypalId) : "", item.elapsedHours !== undefined ? tr("{0}時間経過", Math.round(item.elapsedHours * 10) / 10) : ""].filter(Boolean).join(" ・ ")}</p>
-      <div className="actions"><button type="button" onClick={() => onAsk(tr("この記録について説明してください。予約ID: {0}、PayPal ID: {1}、種類: {2}", item.bookingId || tr("なし"), item.paypalId || tr("なし"), kindText(item.kind)))}>{tr("相談する")}</button></div>
-      {item.proposal && <ProposalCard proposal={item.proposal} busy={busy} owner onExecute={() => onExecute(item.proposal!)} />}
-    </li>)}</ul>}
-    <details className="paypal-alert-settings">
-      <summary>{tr("通知の設定")}</summary>
-      <label><input type="checkbox" checked={notify} onChange={event => onNotify(event.target.checked)} /> {tr("メールで通知する")}</label>
-      <label>{tr("ダイジェストの時刻")} <select value={digestHour} onChange={event => onDigestHour(Number(event.target.value))}>{Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{tr("{0}時", hour)}</option>)}</select></label>
-      <button type="button" disabled={busy} onClick={onSaveSettings}>{tr("通知設定を保存")}</button>
-    </details>
   </section>;
 }
 

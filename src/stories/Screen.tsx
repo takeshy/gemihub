@@ -27,6 +27,7 @@ export function Screen({ scenario }: { scenario: Scenario; autoplay?: boolean })
           }).catch(error => setNotice(error instanceof Error ? error.message : String(error)));
           return;
         }
+        if(link?.hasAttribute("data-dashboard-link"))return;
         if(link?.hasAttribute("data-article-link")&&link.closest(".preview-surface,.local-preview-screen"))return;
         if (
           link &&

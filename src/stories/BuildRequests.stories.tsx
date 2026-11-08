@@ -18,13 +18,10 @@ export const Changes: Story = {
   args: { scenario: "changes" },
 };
 
-export const ShopSpecification: Story = { name: "トップの変更履歴・現在のお店の設定とAI相談", args: {scenario: "system"} };
-export const ShopSpecificationPayment: Story = { name: "現在の設定・PayPal決済と返金条件", args: { scenario: "system-payment" } };
-export const ShopSpecificationOwnerOnly: Story = { name: "現在の設定・店主のみ・ブログとお知らせなし", args: { scenario: "system-owner-only" } };
 
 export const AIPageBuilder: Story = { name: "相談・修正・新ページ作成を選ぶ", args: { scenario: "page-builder" } };
 
-export const WholePageChat: Story = { name: "ページ全体・部品の赤ペン修正と右側チャット", args: { scenario: "system" }, play: openEditingChat };
+export const WholePageChat: Story = { name: "ページ全体・部品の赤ペン修正と右側チャット", args: { scenario: "whole-page-editor" }, play: openEditingChat };
 
 export const DesignProposal: Story = {
   name: "変更案の画面一覧・追加ページ・全体デザイン",
@@ -32,7 +29,7 @@ export const DesignProposal: Story = {
   play: async ({ canvasElement, args }) => {
     if (args.autoplay === false) return;
     await sendFirstMessage(canvasElement, getLocale() === "en" ? "Add an FAQ page and update the overall design" : "よくある質問のページを追加して、全体のデザインも変えてください", ".chat-message button");
-    canvasElement.querySelector<HTMLButtonElement>(".chat-message button")!.click();
+    canvasElement.ownerDocument.querySelector<HTMLButtonElement>(".shop-change-chat .chat-message button")!.click();
   },
 };
 

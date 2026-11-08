@@ -4,7 +4,7 @@ import type { EditorIndex } from "../server/editor-index-schema";
 import type { LocalDraft } from "./local-preview";
 import type { SyncStatus } from "./editor-sync";
 import { articleKinds } from "../shared/article-features";
-export function ScreenTree({ draft, index, statuses, selected, disabled, onChoose }: { draft?: LocalDraft; index?: EditorIndex; statuses: Record<string, SyncStatus>; selected: string; disabled: boolean; onChoose: (screen: string) => void }) {
+export function ScreenTree({ draft, index, statuses, selected, disabled, onChoose, onChooseChanges }: { draft?: LocalDraft; index?: EditorIndex; statuses: Record<string, SyncStatus>; selected: string; disabled: boolean; onChoose: (screen: string) => void; onChooseChanges?: () => void }) {
   const articles = draft ? articleKinds(draft.config) : [];
   // Which side changed: this browser only, production only, or both.
   const badges = {
@@ -19,8 +19,8 @@ export function ScreenTree({ draft, index, statuses, selected, disabled, onChoos
     { label: tr("追加ページ"), items: pages.map(p => [`page:${p.id}`, p.title]) },
   ];
   const item = (id: string, label: string) => {
-    const status = statuses[id === "theme" ? "theme" : id.startsWith("page:") ? id.slice(5) : "content"];
-    return <button key={id} role="treeitem" aria-selected={selected === id} disabled={disabled} onClick={() => onChoose(id)}><span className="tree-name">{label}</span>{status && ["local", "remote", "conflict"].includes(status) && <span className={`sync-badge sync-${status}`} title={badges[status as "local" | "remote" | "conflict"].title}>{badges[status as "local" | "remote" | "conflict"].label}</span>}</button>;
+    const status = id === "build" ? undefined : statuses[id === "theme" ? "theme" : id.startsWith("page:") ? id.slice(5) : "content"];
+    return <button key={id} role="treeitem" aria-selected={selected === id} disabled={disabled} onClick={() => id === "build" ? onChooseChanges?.() : onChoose(id)}><span className="tree-name">{label}</span>{status && ["local", "remote", "conflict"].includes(status) && <span className={`sync-badge sync-${status}`} title={badges[status as "local" | "remote" | "conflict"].title}>{badges[status as "local" | "remote" | "conflict"].label}</span>}</button>;
   };
-  return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => item(id, label))}</div></details>)}</div>;
+  return <div className="screen-tree sidebar-screen-tree" role="tree" aria-label={tr("画面一覧")}>{item("theme", tr("ページ全体"))}{onChooseChanges && item("build", tr("ページ追加・機能変更"))}{groups.filter(group => group.items.length).map(group => <details open key={group.label}><summary>{group.label}</summary><div role="group">{group.items.map(([id, label]) => item(id, label))}</div></details>)}</div>;
 }

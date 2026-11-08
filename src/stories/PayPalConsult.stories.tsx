@@ -102,7 +102,7 @@ function Example({ initialLanguage = "current", alertsCase = "empty" }: { initia
       return result;
     }) as ApiClient;
   }, [initialLanguage, alertsCase]);
-  return <ApiProvider value={client}><App {...scenarioProps("owner-paid")} initialTab="assistant" navigate={() => {}} /></ApiProvider>;
+  return <ApiProvider value={client}><App {...scenarioProps("owner-paid")} initialTab="dashboard" navigate={() => {}} /></ApiProvider>;
 }
 
 /** Waits for an enabled element, so the play step runs after the workspace has loaded. */
@@ -115,7 +115,7 @@ async function find<T extends HTMLElement>(root: HTMLElement, selector: string, 
   throw new Error(`${selector} did not appear`);
 }
 
-const meta = { title: "運営/相談・質問/PayPal", component: Example, parameters: { layout: "fullscreen" } } satisfies Meta<typeof Example>;
+const meta = { title: "運営/ダッシュボード/PayPal", component: Example, parameters: { layout: "fullscreen" } } satisfies Meta<typeof Example>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Empty: Story = { name: "正常・確認日時と結果" };

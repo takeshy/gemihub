@@ -47,7 +47,7 @@ try {
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(`${origin}/?lang=ja`);
     if (width <= 760) await page.locator('.mobile-menu-toggle').click();
-    await page.locator('aside nav').getByRole('button', { name: /画面を試す・編集$/ }).click();
+    await page.locator('aside nav').getByRole('button', { name: /AIとお店をつくる$/ }).click();
     if (width <= 760) await page.locator('.mobile-menu-toggle').click();
     await page.getByRole('treeitem', { name: 'マイページ', exact: true }).click();
     const preview = page.locator('.local-preview-screen');

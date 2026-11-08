@@ -27,7 +27,7 @@ import { standardTheme, themeHtmlKey } from "../shared/theme-editing";
 import { createPreviewClient, draftKey, fixturesSchema, readDraft, sampleFixtures, syncPreviewArticleFeatures, writeDraft, type LocalDraft, type Fixtures } from "./local-preview";
 
 type Snapshot = Pick<LocalDraft, "base" | "source" | "config"> & { lastPublishedPlanId?: string };
-export function LocalPreview({ shop, email, reload, sidebar, active = true, activate, onScreenChange, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; active?: boolean; activate?: () => void; onScreenChange?: (screen: string, article?: string) => void; initialScreen?: string; initialArticleKey?: string }) {
+export function LocalPreview({ shop, email, reload, sidebar, active = true, changesSelected = false, onChooseChanges, activate, onScreenChange, initialScreen, initialArticleKey }: { shop: Workspace; email: string; reload: () => Promise<unknown>; sidebar?: HTMLElement | null; active?: boolean; changesSelected?: boolean; onChooseChanges?: () => void; activate?: () => void; onScreenChange?: (screen: string, article?: string) => void; initialScreen?: string; initialArticleKey?: string }) {
   const api = useApi();
   const key = draftKey(email, shop.id);
   const [draft, setDraft] = useState<LocalDraft>();
@@ -402,7 +402,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
   // Each screen restores only its own design; article screens have none of their own (use the whole-design history).
   const historyTarget = scope.kind === "theme" ? "theme" : scope.kind === "page" ? `page:${scope.pageId}` : scope.kind === "part" ? `part:${scope.part}` : (screenIds as readonly string[]).includes(screen) ? `screen:${screen}` : undefined;
   const screenFile = scope.kind === "page" ? `web/pages/${screenPage?.slug || scope.pageId}.html` : scope.kind === "part" ? `web/parts/${scope.part}.html` : `web/index.html#${screen}`;
-  const tree = <ScreenTree draft={draft} index={index} statuses={statuses} selected={active ? screen : ""} disabled={busy || !!draft?.pending || !!conflict} onChoose={value => void run(async () => choose(value))} />;
+  const tree = <ScreenTree draft={draft} index={index} statuses={statuses} selected={active ? screen : changesSelected ? "build" : ""} onChooseChanges={onChooseChanges} disabled={busy || !!draft?.pending || !!conflict} onChoose={value => void run(async () => choose(value))} />;
   return <div className="local-preview preview-first">
     {sidebar ? createPortal(tree, sidebar) : tree}
     <div className="editor-toolbar">
@@ -466,7 +466,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, acti
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
-      {!draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");

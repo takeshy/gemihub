@@ -2729,3 +2729,91 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 
 .phone-booking, .phone-customer { margin: 0 0 16px; }
 .phone-booking form, .phone-customer form { margin-top: 12px; }
+
+.management-dashboard { display: grid; gap: 22px; min-width: 0; }
+.management-dashboard > .section-top { margin: 0; flex-wrap: wrap; }
+.management-dashboard h1 { font-size: 24px; margin: 0 0 8px; }
+.dashboard-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
+.dashboard-summary-grid .panel { min-width: 0; margin: 0; }
+.dashboard-summary-grid .section-top { flex-wrap: wrap; gap: 10px; }
+.dashboard-summary-grid h2 { font-size: 18px; margin: 0; }
+.dashboard-item-list { display: grid; gap: 12px; }
+.dashboard-item-list article { padding: 14px 0; border-top: 1px solid var(--line); min-width: 0; overflow-wrap: anywhere; }
+.dashboard-item-list article > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; }
+.dashboard-item-list time { font-size: 12px; color: var(--muted); }
+.dashboard-item-list h3 { margin: 10px 0; font-size: 14px; }
+.dashboard-item-list p { font-size: 13px; line-height: 1.8; margin: 8px 0; }
+.dashboard-inquiry p { white-space: pre-wrap; max-height: 7.2em; overflow-y: auto; }
+.page-change-inventory { min-width: 0; }
+.page-change-inventory .editor-toolbar { margin: 0; }
+.page-change-inventory h2 { font-size: 20px; }
+.shop-change-review:empty { display: none; }
+.shop-change-review .request-review { margin: 0; padding: 24px; background: #fffdf8; border: 1px solid var(--line); border-radius: 14px; }
+.visual-chat-panel[hidden] { display: none; }
+.shop-change-chat > .shop-request { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+.shop-change-chat .shop-request > p { flex-shrink: 0; font-size: 12px; line-height: 1.7; }
+.shop-change-chat .shop-request .chat-log { flex: 1; min-height: 0; max-height: none; height: auto; overflow-y: auto; margin: 8px 0; }
+.shop-change-chat .request-intents-reset { flex-shrink: 0; }
+.shop-change-chat .chat-composer { margin-top: 8px; }
+.shop-change-chat .chat-composer textarea { width: 100%; }
+@media (max-width: 900px) { .dashboard-summary-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 600px) { .management-dashboard { gap: 16px; } .shop-change-review .request-review { padding: 16px; } }
+
+.chat-panel-heading-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.chat-panel-heading-actions > button { min-height: 36px; }
+.chat-panel-heading-actions > button:last-child { font-size: 22px; padding: 4px 10px; }
+.chat-panel-collapse { display: inline-flex; align-items: center; gap: 3px; padding: 6px 8px; font-size: 12px; }
+.chat-panel-heading-actions .chat-panel-collapse { font-size: 12px; }
+.visual-chat-heading > :first-child { min-width: 0; }
+.chat-panel-restore { position: fixed; z-index: 75; right: 0; top: 50%; display: inline-flex; align-items: center; gap: 5px; min-height: 44px; padding: 10px 12px; border-radius: 12px 0 0 12px; border-color: var(--green); background: var(--green); color: #fff; box-shadow: 0 3px 16px #183c3526; font-size: 13px; }
+@media (max-width: 760px) {
+  .chat-panel-heading-actions > button { min-height: 44px; }
+  .chat-panel-restore { top: auto; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); border-radius: 22px; }
+}
+
+.shop-change-history summary .small { margin-left: 8px; font-weight: normal; }
+.shop-change-history li { margin: 12px 0; overflow-wrap: anywhere; }
+.shop-change-history time { font-size: 12px; color: var(--muted); }
+.shop-change-history li p { margin: 4px 0; font-size: 13px; }
+
+.management-dashboard .paypal-alerts { margin: 0; }
+/* Consultation history belongs to the main workspace, alongside the conversation. */
+.consultation-workspace { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+.consultation-workspace.consultation-history-collapsed { grid-template-columns: 54px minmax(0, 1fr); }
+.consultation-conversation { min-width: 0; }
+.consultation-conversation > .panel { margin: 0; }
+.consultation-history { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: #fffdf8; }
+.consultation-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.consultation-history-heading h2 { font-size: 16px; margin: 0; }
+.consultation-count { margin-left: 8px; color: var(--muted); font-size: 12px; }
+.consultation-history-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 44px; min-height: 44px; padding: 8px; color: var(--green); background: var(--cream); }
+.consultation-history-toggle:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.consultation-history-toggle > svg { flex-shrink: 0; }
+.consultation-history-body { margin-top: 12px; }
+.consultation-history-body[hidden] { display: none; }
+.consultation-history .consultation-new { width: 100%; min-height: 44px; font-size: 14px; color: var(--green); background: var(--cream); border-color: var(--green); }
+.consultation-history ul { list-style: none; margin: 12px 0 0; padding: 0; max-height: 60vh; overflow-y: auto; }
+.consultation-history li { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; min-width: 0; gap: 2px; margin: 4px 0; }
+.consultation-history li > button:first-child { text-align: left; padding: 10px 8px; font-size: 14px; min-height: 44px; min-width: 0; border-color: transparent; overflow: hidden; overflow-wrap: anywhere; }
+.consultation-history li > button.active { background: var(--cream); border-color: var(--green); color: var(--green); font-weight: 600; }
+.consultation-history .consultation-delete { width: 36px; min-height: 44px; padding: 8px; border-color: transparent; color: var(--muted); }
+.consultation-history .consultation-delete:hover { color: #ad3525; background: #fff1ec; }
+.consultation-history p { font-size: 14px; overflow-wrap: anywhere; }
+.consultation-history-collapsed .consultation-history { padding: 4px; }
+.consultation-history-collapsed .consultation-history-toggle { flex-direction: column; padding: 8px 2px; font-size: 14px; border: 0; background: transparent; }
+@media (max-width: 1100px) and (min-width: 901px) {
+  .consultation-workspace { grid-template-columns: 200px minmax(0, 1fr); gap: 12px; }
+}
+@media (max-width: 900px) {
+  .consultation-workspace, .consultation-workspace.consultation-history-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .consultation-history-collapsed .consultation-history { width: fit-content; }
+  .consultation-history-collapsed .consultation-history-toggle { flex-direction: row; font-size: 14px; padding: 8px; }
+  .consultation-history ul { max-height: 240px; }
+}
+.consultation-delete-dialog { width: min(520px, calc(100vw - 32px)); max-height: 85dvh; overflow-y: auto; padding: 24px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: #fffdf8; }
+.consultation-delete-dialog::backdrop { background: #172a2366; }
+.assistant-conversation-title { overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .consultation-history li { grid-template-columns: minmax(0, 1fr) 44px; }
+  .consultation-history .consultation-delete { min-height: 44px; width: 44px; }
+}

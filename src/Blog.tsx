@@ -9,6 +9,7 @@ import { ArticleTextEditor } from "./ArticleTextEditor";
 import type { ArticleFile } from "../server/article-files";
 import { DateInput } from "./DateInput";
 import { createPortal } from "react-dom";
+import { useChatPanelCollapse } from "./ChatPanelCollapse";
 import { submitOnShortcut } from "./submit-shortcut";
 import "./BlogEditor.css";
 import React, { useEffect, useState, useRef, useId, lazy, Suspense } from "react";
@@ -59,6 +60,7 @@ export function BlogEditor({
   const [content, setContent] = useState<Content>(fresh),
     [step, setStep] = useState<"edit" | "draft">("edit"),
     [aiOpen, setAiOpen] = useState(false);
+  const aiChat = useChatPanelCollapse(aiOpen, tr("AIで記事を修正"));
   const [editorMode, setEditorMode] = useState<"text" | "visual">("text");
   const [instruction, setInstruction] = useState(""),
     [conversationId, setConversationId] = useState<string>();
@@ -115,11 +117,12 @@ export function BlogEditor({
   }, [step]);
   useEffect(() => {
     if (!aiOpen) return;
+    if (!aiChat.expanded) return;
     document.body.classList.add("article-ai-open");
     confirmBody.current?.scrollIntoView({ block: "start" });
     requestInput.current?.focus({ preventScroll: true });
     return () => { document.body.classList.remove("article-ai-open"); };
-  }, [aiOpen]);
+  }, [aiChat.expanded]);
   useEffect(() => {
     if (aiLog.current) aiLog.current.scrollTop = aiLog.current.scrollHeight;
   }, [aiOpen, messages, busy]);
@@ -254,13 +257,14 @@ export function BlogEditor({
       <button type="button" className="danger" disabled={blocked} onClick={removePost}>{tr("削除する")}</button>
     </div>
   </dialog>;
-  const aiPanel = aiOpen && createPortal(
+  const aiPanel = <>{aiChat.restoreButton}{aiOpen && createPortal(
     <section
+      id={aiChat.panelId} tabIndex={-1} hidden={!aiChat.expanded}
       className="visual-chat-panel article-ai-chat"
       aria-label={tr("AIで記事を修正")}
       onKeyDown={event => { if (event.key === "Escape" && !blocked && !imageOpen) { event.preventDefault(); closeAi(); } }}
     >
-      <div className="visual-chat-heading"><h3>{tr("AIで記事を修正")}</h3><button type="button" disabled={blocked} aria-label={tr("閉じる")} onClick={closeAi}>×</button></div>
+      <div className="visual-chat-heading"><h3>{tr("AIで記事を修正")}</h3><div className="chat-panel-heading-actions">{aiChat.collapseButton}<button type="button" disabled={blocked} aria-label={tr("閉じる")} onClick={closeAi}>×</button></div></div>
       <p className="small muted">{tr("指示した内容で下書きを修正して保存します。「公開する」を押すまで公開されません。")}</p>
       <div className="chat-log visual-chat-log" ref={aiLog} role="log" aria-label={tr("記事の依頼")} aria-live="polite">
         {messages.map((message, index) => (
@@ -373,7 +377,7 @@ export function BlogEditor({
         onBusy={setMediaBusy}
       />
     </section>, document.body
-  );
+  )}</>;
   if (step === "draft")
     return (
       <div className="blog-editor-layout article-confirm-layout">
@@ -396,7 +400,7 @@ export function BlogEditor({
             <button type="button" disabled={blocked} onClick={backToEdit}>
               {tr("編集に戻る")}
             </button>
-            <button type="button" ref={aiTrigger} disabled={blocked} aria-expanded={aiOpen} onClick={() => setAiOpen(true)}>
+            <button type="button" ref={aiTrigger} disabled={blocked} aria-expanded={aiChat.expanded} onClick={() => { aiChat.expand(); setAiOpen(true); }}>
               {tr("AIで修正")}
             </button>
             <button className="primary" disabled={blocked || !shop.published || !current || !clean} onClick={publish}>

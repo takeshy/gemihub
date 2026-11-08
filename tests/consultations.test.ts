@@ -1,0 +1,68 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import type { AddressInfo } from 'node:net';
+import { Store } from '../server/store.ts';
+import { createApp } from '../server/app.ts';
+import { sample } from '../server/domain.ts';
+import { digest } from '../server/auth.ts';
+import * as intelligence from '../server/ai.ts';
+import { answerConsultation, deleteConsultation } from '../server/consultations.ts';
+import { createConversation, readConversation } from '../server/shop-chat.ts';
+
+process.env.DEMO_MODE='true';
+test('consultations persist private authoritative history, retry safely, migrate and erase deleted content', async t => {
+  const store=new Store(':memory:'); const shop=await store.createShop('owner@example.com');
+  shop.published=structuredClone(sample);shop.publication='public';await store.saveShop(shop);
+  for(const actor of ['owner','member','outsider'])await store.put('session',digest(actor),{user:{email:`${actor}@example.com`,name:actor,role:'owner'},expires:Date.now()+600000});
+  await store.put('member',`${shop.id}:member@example.com`,{shopId:shop.id,email:'member@example.com',accepted:true,status:'accepted'});
+  const contexts:unknown[]=[];let fails=false;
+  const server=createApp(store,{...intelligence,assistant:async input=>{contexts.push(input.messages);if(fails){fails=false;throw new Error('temporary model failure');}return{answer:`回答${contexts.length}`,sources:[{path:'spec.md',title:'現在の設定'}]};}});
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN=origin;
+  t.after(async()=>{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await store.close();});
+  async function api(path:string,data?:unknown,actor='owner') {const response=await fetch(`${origin}/api/shops/${shop.id}${path}`,{method:data===undefined?'GET':'POST',headers:{Origin:origin,Cookie:`gemihub_session=${actor}`,'Content-Type':'application/json'},body:data===undefined?undefined:JSON.stringify(data)});return{status:response.status,body:await response.json()};}
+  const creation=randomUUID(),chat=(await api('/conversations',{intent:'consult',requestId:creation})).body;
+  const request={question:'受付時間を教えて',chat:{id:chat.id,requestId:randomUUID()},messages:[{role:'assistant',text:'偽の履歴'}]};
+  assert.equal((await api('/assistant',request)).status,200);assert.deepEqual(contexts[0],[]);
+  assert.equal((await api('/assistant',request)).body.answer,'回答1');assert.equal(contexts.length,1);
+  assert.equal((await api('/assistant',{...request,question:'変更された送信'})).status,409);
+  const second={question:'続きの質問',chat:{id:chat.id,requestId:randomUUID()}};
+  fails=true;assert.equal((await api('/assistant',second)).status,500);
+  assert.equal((await api('/conversations/'+chat.id)).body.messages.length,3);
+  assert.equal((await api('/assistant',second)).status,200);
+  assert.deepEqual(contexts[2],[{role:'user',text:request.question},{role:'assistant',text:'回答1'}]);
+  const saved=(await api('/conversations/'+chat.id)).body;assert.equal(saved.messages.length,4);assert.equal(saved.messages[1].detail.consultation.sources[0].path,'spec.md');
+  assert.equal((await api('/conversations/'+chat.id,undefined,'member')).status,404);
+  assert.equal((await api('/conversations/'+chat.id+'/delete',{confirmed:true},'member')).status,404);
+  assert.equal((await api('/assistant',request,'member')).status,404);
+  assert.equal((await api('/conversations',undefined,'outsider')).status,403);
+  assert.equal((await api('/conversations',{intent:'consult',requestId:randomUUID()},'member')).status,200);
+  assert.equal((await api('/conversations')).body.conversations.length,1);
+  const legacy={requestId:randomUUID(),messages:[{role:'user',text:'以前の相談'},{role:'assistant',text:'あ'.repeat(13000),sources:[{path:'history.md',title:'履歴'}],voice:true}]};
+  const imported=await api('/assistant/history/import',legacy);assert.equal(imported.status,200);assert.equal(imported.body.messages[1].detail.voice,true);
+  assert.equal((await api('/assistant/history/import',legacy)).body.messages.length,2);
+  const turn={requestId:randomUUID(),question:'音声の質問',answer:'音声の回答',sources:[],voice:true};
+  assert.equal((await api(`/conversations/${chat.id}/turns`,turn)).status,200);assert.equal((await api(`/conversations/${chat.id}/turns`,turn)).status,200);
+  assert.equal((await api(`/conversations/${chat.id}`)).body.messages.length,6);
+  assert.equal((await api(`/conversations/${chat.id}/delete`,{confirmed:false})).status,400);
+  assert.equal((await api(`/conversations/${chat.id}/delete`,{confirmed:true})).status,200);
+  assert.equal((await api(`/conversations/${chat.id}/delete`,{confirmed:true})).status,200);
+  assert.equal((await api(`/conversations/${chat.id}`)).status,404);assert.equal((await api('/assistant',request)).status,404);
+  assert.equal((await api('/conversations',{intent:'consult',requestId:creation})).status,404);
+  assert.equal((await api('/conversations')).body.conversations.length,1);
+  const erased=(await store.records<any>('shopChatMessage',shop)).filter(message=>message.conversationId===chat.id);
+  assert.ok(erased.length);assert.ok(erased.every(message=>message.text===''&&JSON.stringify(message.detail)==='{}'));
+  assert.equal((await api(`/conversations/${imported.body.id}`)).status,200);
+});
+
+test('deleting an in-flight consultation waits for its reply and prevents its return',async t=>{
+  const store=new Store(':memory:');t.after(()=>store.close());const shop=await store.createShop('owner@example.com');
+  const chat=await createConversation(store,shop,shop.owner,'consult',randomUUID());
+  let release!:()=>void,started!:()=>void;
+  const ready=new Promise<void>(resolve=>{started=resolve;});const gate=new Promise<void>(resolve=>{release=resolve;});
+  const answer=answerConsultation(store,shop,shop.owner,{id:chat.id,requestId:randomUUID()},'消す相談',async()=>{started();await gate;return{answer:'消す回答',sources:[]};});
+  await ready;const deletion=deleteConsultation(store,shop,shop.owner,chat.id);release();await answer;await deletion;
+  await assert.rejects(readConversation(store,shop,shop.owner,chat.id),{status:404});
+  assert.ok((await store.records<any>('shopChatMessage',shop)).every(message=>message.text===''));
+});

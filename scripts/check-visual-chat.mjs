@@ -52,7 +52,9 @@ try{
   const page=await context.newPage();active=page;page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(`${origin}/?lang=${language}`);
   if(width<=760)await page.locator('.mobile-menu-toggle').click();
-  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('画面を試す・編集')+'$')}).click();
+  await page.locator('aside nav').getByRole('button',{name:new RegExp(label('AIとお店をつくる')+'$')}).click();
+  if(width<=760)await page.locator('.mobile-menu-toggle').click();
+  await page.getByRole('treeitem',{name:label('予約'),exact:true}).click();
   const preview=page.locator('.local-preview-screen');await expect(preview).toBeVisible();
   await expect(page.getByRole('button',{name:label('修正する'),exact:true})).toBeVisible();
   await page.locator('.editor-toolbar').screenshot({path:`tmp/side-chat/toolbar-${language}-${width}.png`});

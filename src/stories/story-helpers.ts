@@ -14,14 +14,14 @@ export async function sendFirstMessage(canvasElement: HTMLElement, text: string,
   const find = <T extends Element>(selector: string, match?: (element: T) => boolean) => new Promise<T>((resolve, reject) => {
     let attempt = 0;
     const tick = () => {
-      const found = [...canvasElement.querySelectorAll<T>(selector)].find(element => !match || match(element));
+      const found = [...canvasElement.ownerDocument.querySelectorAll<T>(selector)].find(element => !match || match(element));
       if (found && !(found as unknown as HTMLButtonElement).disabled) resolve(found);
       else if (++attempt > 100) reject(new Error(`${selector} did not appear`));
       else setTimeout(tick, 50);
     };
     tick();
   });
-  (await find<HTMLButtonElement>(".panel button.primary, .panel button", button => button.textContent === tr("はじめる"))).click();
+  (await find<HTMLButtonElement>(".page-change-inventory .editor-pen-button, .panel button", button => !!button.closest(".page-change-inventory") || button.textContent === tr("はじめる"))).click();
   const composer = await find<HTMLTextAreaElement>(".chat-composer textarea");
   // React tracks the native value setter, so set it that way before dispatching input.
   Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(composer, text);
