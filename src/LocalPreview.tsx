@@ -535,10 +535,8 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
       <button disabled={busy} onClick={() => setPullReview(false)}>{tr("戻る")}</button>
       </div>
     </dialog>, document.body)}
-    {draft && createPortal(<dialog ref={releaseReview} className="editor-release-dialog" aria-label={tr("本番への反映内容")} onClose={() => setReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
-      <h3 ref={releaseHeading} tabIndex={-1}>{tr("本番への反映内容：")}{scope.kind === "page" ? allPages.find(p => p.id === scope.pageId)?.title || tr("ページ削除") : scope.kind === "part" ? (scope.part === "header" ? tr("ヘッダー") : tr("フッター")) : screen === "theme" ? tr("ページ全体") : tr("お店の共通設定")}</h3><ul>{summary.map(s => <li key={s}>{s}</li>)}</ul>
-      <details><summary>{tr("設定の変更前と変更後")}</summary><div className="local-diff"><pre>{JSON.stringify(draft.source, null, 2)}</pre><pre>{JSON.stringify(draft.config, null, 2)}</pre></div></details>
-      <p>{tr("選んだページ（または共通設定）だけを本番に反映します。他のページのローカル編集と、サンプルデータは含みません。")}</p>
+    {draft && createPortal(<dialog ref={releaseReview} className="editor-release-dialog" aria-label={tr("{0}を本番に反映していいですか？", screenLabel)} onClose={() => setReview(false)} onCancel={event => { if (busy) event.preventDefault(); }}>
+      <h3 ref={releaseHeading} tabIndex={-1}>{tr("{0}を本番に反映していいですか？", screenLabel)}</h3>
       {error && <p className="alert" role="alert">{error}</p>}
       {busy && <p className="notice" role="status">{tr("本番に反映しています…このままお待ちください。")}</p>}
       <div className="actions editor-release-actions">

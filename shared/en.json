@@ -997,6 +997,7 @@
   "この画面の変更を取り消しました。": "Changes to this screen discarded.",
   "戻る": "Back",
   "本番への反映内容": "Changes to apply",
+  "{0}を本番に反映していいですか？": "Apply {0} to the live site?",
   "本番への反映内容：": "Changes to apply: ",
   "ページ削除": "Page deletion",
   "お店の共通設定": "Shared shop settings",

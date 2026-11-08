@@ -14,9 +14,9 @@ const origin=`http://127.0.0.1:${server.address().port}`;process.env.APP_ORIGIN=
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM?{executablePath:process.env.CHROMIUM}:{}),args:['--no-sandbox']});
 await mkdir('tmp/theme-editors',{recursive:true});
 try{
- for(const [language,width] of [['ja',1280],['en',390]]){
+ for(const [language,width] of [['ja',1280],['ja',390],['en',1280],['en',390]]){
   const label=text=>language==='en'?catalog[text]||text:text;
-  const shop=await store.createShop(`frame-code-${language}@example.com`);shop.published={...structuredClone(sample),appearance:{accent:'sage',layout:'standard',imageUrl:'',theme:standardTheme}};await store.saveShop(shop);
+  const shop=await store.createShop(`frame-code-${language}-${width}@example.com`);shop.published={...structuredClone(sample),appearance:{accent:'sage',layout:'standard',imageUrl:'',theme:standardTheme}};await store.saveShop(shop);
   const cookie=randomUUID();await store.put('session',digest(cookie),{user:{email:shop.owner,name:'Owner',role:'owner',shopId:shop.id},expires:Date.now()+600000});
   const context=await browser.newContext({viewport:{width,height:950}});await context.addCookies([{name:'gemihub_session',value:cookie,url:origin}]);
   const page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -38,7 +38,19 @@ try{
   assert.deepEqual((await store.shop(shop.id)).published,shop.published);
   await page.getByRole('button',{name:label('変更を比較'),exact:true}).click();await expect(page.locator('.conflict-columns')).toContainText('EDITED HEADER');
   await page.getByRole('button',{name:label('変更を比較'),exact:true}).click();
-  await page.getByRole('button',{name:label('反映する'),exact:true}).click();await page.getByRole('button',{name:label('この内容を本番に反映'),exact:true}).click();
+  const openRelease=()=>page.getByRole('button',{name:label('反映する'),exact:true}).click();
+  const question=label('{0}を本番に反映していいですか？').replace('{0}',label('ページ全体'));
+  const confirmation=page.getByRole('dialog',{name:question,exact:true});
+  await openRelease();await expect(confirmation).toBeVisible();
+  await expect(confirmation.getByRole('heading')).toHaveText(question);
+  assert.equal(await confirmation.locator('details, pre, ul, p').count(),0,'confirmation contains no repeated comparison or explanatory copy');
+  await expect(confirmation.getByRole('button')).toHaveCount(2);
+  await confirmation.getByRole('button',{name:label('戻る'),exact:true}).click();await expect(confirmation).not.toBeVisible();
+  assert.deepEqual((await store.shop(shop.id)).published,shop.published,'cancel does not publish');
+  await openRelease();await page.keyboard.press('Escape');await expect(confirmation).not.toBeVisible();
+  assert.deepEqual((await store.shop(shop.id)).published,shop.published,'Escape does not publish');
+  await openRelease();await page.screenshot({path:`tmp/theme-editors/confirmation-${language}-${width}.png`});
+  await confirmation.getByRole('button',{name:label('この内容を本番に反映'),exact:true}).click();
   await expect.poll(async()=>(await store.shop(shop.id)).published.appearance.theme.headerHtml).toContain('EDITED HEADER');
   const theme=(await store.shop(shop.id)).published.appearance.theme;assert.match(theme.footerHtml,/EDITED FOOTER/);assert.match(theme.bodyHtml,/EDITED FRAME/);assert.match(theme.headerCss,/gap:20px/);assert.match(theme.footerCss,/padding:24px/);
   assert.deepEqual((await store.shop(shop.id)).published.rules,shop.published.rules);

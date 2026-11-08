@@ -166,7 +166,7 @@ try {
     // The pen chat panel covers the editor toolbar; close it before publishing.
     await page.getByRole("complementary", {name: "画面の修正チャット"}).getByRole("button", {name: "閉じる", exact: true}).click();
     await page.getByRole("button", {name: "反映する", exact: true}).click();
-    await capture("23-pen-plan.jpg", '.local-preview [role="dialog"][aria-label="本番への反映内容"]');
+    await capture("23-pen-plan.jpg", '.editor-release-dialog[open]');
     await page.getByRole("button", {name: "この内容を本番に反映", exact: true}).click();
     await page.getByText("本番に反映しました。", {exact: false}).waitFor();
   }
