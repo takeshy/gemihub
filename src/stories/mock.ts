@@ -605,12 +605,6 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
         result=chatData(id);
       }
     }
-    else if(action===`/api/shops/${shop.id}/assistant/history/import`){
-      const id=await fingerprint({shopId:shop.id,email:session.user!.email,requestId:input.requestId});
-      if(!chats.some(chat=>chat.id===id)){const now=new Date().toISOString();chats.push({id,shopId:shop.id,email:session.user!.email,intent:"consult",title:tr("新しいチャット"),createdAt:now,updatedAt:now,messages:[]});}
-      for(const [index,message] of (input.messages as {role:string;text:string;sources?:{path:string;title:string}[];voice?:boolean}[]).entries())addChatTurn(id,`legacy-${index}`,message.role==="user"?message.text:"",message.role==="assistant"?message.text:"",{voice:message.voice,consultation:{sources:message.sources||[]}});
-      result=chatData(id);
-    }
     else if(action.startsWith(`/api/shops/${shop.id}/conversations/`)&&action.endsWith("/delete")){
       chats=chats.filter(chat=>chat.id!==action.split("/").at(-2));saveChats();result={ok:true};
     }

@@ -112,8 +112,15 @@ try {
     await input.fill('plain'); await input.press('Control+Enter');
     await expect(page.locator('.assistant-markdown').nth(1).locator('p')).toHaveCount(2);
     assert.equal(calls.at(-1).messages.at(-1).text, markdown, 'formatting does not rewrite model history');
-    await page.evaluate(key => localStorage.removeItem(key), `gemihub:assistant:${shop.id}:${shop.owner}`);
     await page.reload();
+    await expect(input).toBeEditable();
+    // Saved consultations live on the server now; start a fresh one for the voice lifecycle checks.
+    const historyToggle=page.locator('.consultation-history-toggle');
+    if(await historyToggle.getAttribute('aria-expanded')==='false')await historyToggle.click();
+    const previousConversation=new URL(page.url()).searchParams.get('conversation');
+    await page.locator('.consultation-new').click();
+    await expect.poll(()=>new URL(page.url()).searchParams.get('conversation')).not.toBe(previousConversation);
+    await expect(input).toBeEditable();await expect(page.locator('.assistant-log .chat-message')).toHaveCount(0);
     await input.fill('Keep this unsent draft.');
     await voiceMode.click();
     await expect(voiceMode).toHaveAttribute('aria-pressed', 'true');
@@ -130,7 +137,7 @@ try {
       return { top: bounds.top, bottom: bounds.bottom, margin: style.margin, background: style.backgroundColor };
     }));
     assert.ok(bubbles.every(bubble => bubble.margin === '0px'), 'conversation spacing comes from one consistent gap');
-    assert.ok(bubbles[1].top - bubbles[0].bottom <= 13, 'short voice turns do not leave a large blank gap');
+    assert.ok(bubbles[1].top - bubbles[0].bottom <= 13, `short voice turns do not leave a large blank gap: ${JSON.stringify(bubbles)}`);
     assert.notEqual(bubbles[0].background, bubbles[1].background, 'user and assistant messages are visually distinct');
     await expect(page.locator('.assistant .chat-composer')).toHaveCount(0);
     await page.screenshot({ path: `tmp/assistant-markdown/voice-${language}-${width}.png`, fullPage: true });

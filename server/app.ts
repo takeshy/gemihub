@@ -29,7 +29,7 @@ import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } f
 import type { InquiryInteraction } from "./inquiries.ts";
 import { createPublicInquiry, inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, stageInquiryFiles, stagePublicInquiry, writeInquiry } from "./inquiry-service.ts";
 import type { InquiryFileStorage } from "./inquiry-files.ts";
-import { answerConsultation, importConsultation, appendVoiceConsultation, deleteConsultation, consultationImportSchema, consultationVoiceSchema } from "./consultations.ts";
+import { answerConsultation, appendVoiceConsultation, deleteConsultation, consultationVoiceSchema } from "./consultations.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
 import { customerProfileSchema, memberProfile } from "./customer-profile.ts";
@@ -2198,7 +2198,6 @@ export function createApp(
         }
         // These reads must stay available while a model call holds the shop write lock.
         if (action === "conversations" && method === "GET") return json(res, { email: user!.email, conversations: await conversations(store, shop, user!.email) });
-        if (action === "assistant/history/import" && method === "POST") return json(res, await importConsultation(store, shop, user!.email, consultationImportSchema.parse(await body(req, 10000000))));
         const consultAction = action.match(/^conversations\/([a-f0-9]{64})\/(delete|turns)$/);
         if (consultAction && method === "POST") {
           if (consultAction[2] === "turns") return json(res, await appendVoiceConsultation(store, shop, user!.email, consultAction[1], consultationVoiceSchema.parse(await body(req, 100000))));

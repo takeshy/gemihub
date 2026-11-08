@@ -4,7 +4,7 @@ import { tr } from "../shared/i18n";
 import type { ShopChat, ShopConversation } from "../server/shop-chat";
 import { useApi } from "./api";
 import { createRequestId } from "./request-id";
-import { assistantStorageKey, migrateAssistantHistory } from "./assistant-storage";
+import { assistantStorageKey } from "./assistant-storage";
 
 export function ConsultationWorkspace({ children, ...props }: Omit<React.ComponentProps<typeof ConsultationHistory>, "collapsed" | "onToggle"> & { children: React.ReactNode }) {
   const preferenceKey = `gemihub:consultation-pane:${props.shopId}:${props.email}`;
@@ -53,7 +53,6 @@ export function ConsultationHistory({ shopId, email, active, selected, revision,
     let alive = true;
     void (async () => {
       setError("");
-      await migrateAssistantHistory(api, shopId, email);
       const next = await load(); if (alive) setItems(next);
     })().catch(error => { if (alive) setError(error instanceof Error ? error.message : String(error)); });
     return () => { alive = false; };
@@ -79,11 +78,7 @@ export function ConsultationHistory({ shopId, email, active, selected, revision,
     setBusy(true); setDeleteError("");
     try {
       await api(`/api/shops/${shopId}/conversations/${remove.id}/delete`, {confirmed:true});
-      try {
-        localStorage.removeItem(assistantStorageKey(shopId,email,remove.id));
-        const legacy = assistantStorageKey(shopId,email);
-        if (localStorage.getItem(`${legacy}:migrated`) === remove.id) localStorage.removeItem(legacy);
-      } catch { /* The server copy is deleted even if local storage is unavailable. */ }
+      try { localStorage.removeItem(assistantStorageKey(shopId,email,remove.id)); } catch { /* The server copy is deleted even if local storage is unavailable. */ }
       const next = await load(); if (!alive.current) return; setItems(next);
       if (selected === remove.id) { suppressDefault.current = !next.length; onSelect(next[0]?.id, true); }
       setRemove(undefined);

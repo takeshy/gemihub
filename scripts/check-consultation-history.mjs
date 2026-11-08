@@ -64,12 +64,8 @@ try {
   await openHistory();await page.locator('.consultation-new').click();await expect(input).toBeEditable();await expect(input).toHaveValue('');
   await choose('ダッシュボード');await expect(page.locator('.management-dashboard .paypal-alerts')).toBeVisible();
   await page.getByRole('button',{name:label('今すぐチェック'),exact:true}).click();await expect(page.locator('.paypal-check-result')).toBeVisible();
-  // Import the old single browser conversation and retain its unfinished text and sources.
-  await page.evaluate(({shopId,email})=>localStorage.setItem(`gemihub:assistant:${shopId}:${email}`,JSON.stringify({messages:[{role:'user',text:'Legacy question'},{role:'assistant',text:'Legacy answer',sources:[{path:'history.md',title:'Legacy source'}]}],text:'Legacy unfinished draft'})),{shopId:shop.id,email:shop.owner});
-  await page.reload();await choose('相談・質問');await openHistory();await page.locator('.consultation-history li > button:first-child').filter({hasText:'Legacy question'}).click();
-  await expect(assistant).toContainText('Legacy answer');await expect(assistant.locator('.assistant-sources')).toContainText('Legacy source');await expect(input).toHaveValue('Legacy unfinished draft');
-  await openHistory();await page.screenshot({path:`tmp/consultations/history-${lang}-${width}.png`});
-  assert.deepEqual(errors,[]);await context.close();console.log(`${lang} ${width}px: attention/settings, new/switch/reload/draft, deletion and legacy migration passed.`);
+  await choose('相談・質問');await openHistory();await page.screenshot({path:`tmp/consultations/history-${lang}-${width}.png`});
+  assert.deepEqual(errors,[]);await context.close();console.log(`${lang} ${width}px: attention/settings, new/switch/reload/draft and deletion passed.`);
  }
 } catch(error){await active?.screenshot({path:'tmp/consultations/failure.png'});throw error;}
 finally{await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));await store.close();}

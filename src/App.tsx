@@ -398,8 +398,10 @@ function Dashboard({
   const shop = shops.find((s) => s.id === chosen) || shops[0];
   const creating = !!shop?.isOwner && !shop.published;
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
-  const activeTab = !publiclyPublished && ["bookings", "customers", "analytics", "coupons"].includes(tab)
-    ? "dashboard" : tab;
+  // The dashboard needs a published configuration; staff of an unpublished shop start on their own page.
+  const fallbackTab = shop?.published ? "dashboard" : "staff";
+  const activeTab = (!publiclyPublished && ["bookings", "customers", "analytics", "coupons"].includes(tab)) || (tab === "dashboard" && !shop?.published)
+    ? fallbackTab : tab;
   const view = creating ? "build" : activeTab;
   function closeMobileMenu() {
     setMobileMenuOpen(false);
@@ -422,7 +424,7 @@ function Dashboard({
   }
   useEffect(() => {
     if (!shop) return;
-    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons"].includes(tab) ? "dashboard" : view;
+    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons"].includes(tab) ? fallbackTab : view;
     if (allowed !== tab) navigation.visit(allowed, shop.id, undefined, undefined, true);
   }, [shop?.id, shop?.isOwner, view, tab, publiclyPublished]);
   useEffect(() => {

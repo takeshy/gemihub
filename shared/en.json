@@ -4026,5 +4026,9 @@
   "図を表示できないとき": "When a diagram cannot be displayed",
   "過去の相談を開く": "Open past consultations",
   "過去の相談を折り畳む": "Collapse past consultations",
-  "「相談・質問」を開くと、会話の左に過去の相談が並びます。ペインと二重矢印のアイコンで履歴を畳んだり、開き直したりできます。「＋新規の相談」で始め、過去の相談を選ぶと会話と書きかけを再表示します。不要な相談は横の「×」から削除できます。会話はお店・アカウントごとに保存され、他のアカウントには表示されません。": "Open Consult & ask to see past consultations beside the conversation. Use the panel icon with double chevrons to fold or reopen history. Start with “＋ New consultation”, or select a past consultation to restore its conversation and draft. Delete a consultation with its “×” button. Conversations are saved privately for each shop and account."
+  "「相談・質問」を開くと、会話の左に過去の相談が並びます。ペインと二重矢印のアイコンで履歴を畳んだり、開き直したりできます。「＋新規の相談」で始め、過去の相談を選ぶと会話と書きかけを再表示します。不要な相談は横の「×」から削除できます。会話はお店・アカウントごとに保存され、他のアカウントには表示されません。": "Open Consult & ask to see past consultations beside the conversation. Use the panel icon with double chevrons to fold or reopen history. Start with “＋ New consultation”, or select a past consultation to restore its conversation and draft. Delete a consultation with its “×” button. Conversations are saved privately for each shop and account.",
+  "Storybookの表示例です。マイクや実際の音声通話には接続しません。": "This is a Storybook preview. It does not access your microphone or connect to a real voice call.",
+  "通話中の表示例です。": "Preview of an active voice call.",
+  "AIと通話で相談（開始前）": "Consult the AI by voice (before starting)",
+  "AIと通話で相談（通話中）": "Consult the AI by voice (active call)"
 }

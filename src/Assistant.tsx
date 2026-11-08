@@ -1,5 +1,5 @@
 import { tr } from "../shared/i18n";
-import React, { useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { submitOnShortcut } from "./submit-shortcut";
 import { type Plan, type Workspace } from "./App";
@@ -15,7 +15,9 @@ import type { ShopChat } from "../server/shop-chat";
 type Source = { path: string; title: string };
 type Reply = { answer: string; sources: Source[]; request?: string; paypalProposals?: PayPalProposal[] };
 type Message = { role: "user" | "assistant"; text: string; sources?: Source[]; voice?: boolean };
-
+export type AssistantVoiceProps = { shopId: string; disabled: boolean; context: () => { role: string; text: string }[]; onTurn: (question: string, answer: string, sources: Source[]) => void; onDraft: (request: string) => void; onError: (message: string) => void };
+// Storybook can demonstrate voice states without microphone access or an external connection.
+export const AssistantVoiceContext = createContext<React.ComponentType<AssistantVoiceProps> | undefined>(undefined);
 
 /**
  * The shop assistant: questions answered from spec.md, history.md and the system OKF bundle.
@@ -24,6 +26,7 @@ type Message = { role: "user" | "assistant"; text: string; sources?: Source[]; v
  */
 export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversationId, initialQuestion, onInitialQuestionConsumed, onConversationChange }: { conversationId?: string; initialQuestion?: string; onInitialQuestionConsumed?: () => void; onConversationChange?: () => void; shop: Workspace; voice: boolean; userEmail: string; acceptPlan: (plan: Plan) => Promise<void>; reload: () => Promise<unknown> }) {
   const api = useApi();
+  const Voice = useContext(AssistantVoiceContext) || LiveVoice;
   const storageKey = assistantStorageKey(shop.id, userEmail, conversationId);
   const [saved] = useState(() => { try { return savedAssistantSchema.parse(JSON.parse(localStorage.getItem(storageKey) || "null")); } catch { return undefined; } });
   const [messages, setMessages] = useState<Message[]>(saved?.messages || []);
@@ -54,12 +57,14 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
       if (!active) return;
       if (chat.intent !== "consult") throw new Error(tr("チャットが見つかりません"));
       setConversationTitle(chat.title);
-      setMessages(chat.messages.map(message => ({role:message.role,text:message.text,sources:message.detail.consultation?.sources,voice:message.detail.voice})));
       const last = chat.messages.at(-1);
+      // A typed question without a reply is either the pending retry (kept last) or an abandoned failed attempt.
+      const answered = new Set(chat.messages.filter(message => message.role === "assistant").map(message => message.requestId));
+      setMessages(chat.messages.filter(message => message === last || message.role !== "user" || message.detail.voice || answered.has(message.requestId)).map(message => ({role:message.role,text:message.text,sources:message.detail.consultation?.sources,voice:message.detail.voice})));
       const reply = chat.messages.filter(message => message.role === "assistant").at(-1);
       if (reply) { lastReplyId.current = reply.requestId; setProposals(reply.detail.consultation?.paypalProposals || []); if (!saved?.draft && !saved?.planId && saved?.dismissedRequestId !== reply.requestId) setDraft(reply.detail.consultation?.request); }
       if (saved?.pending && chat.messages.some(message => message.role === "assistant" && message.requestId === saved.pending!.id) && saved.text === saved.pending.text) { setText(""); pending.current = undefined; }
-      if (last?.role === "user") { pending.current = {id:last.requestId,text:last.text}; if (!saved?.text.trim()) setText(last.text.slice(0,4000)); }
+      if (last?.role === "user" && !last.detail.voice) { pending.current = {id:last.requestId,text:last.text}; if (!saved?.text.trim()) setText(last.text.slice(0,4000)); }
       setLoaded(true);
     }).catch(error => { if (active) { setMessages([]); setError(error instanceof Error ? error.message : String(error)); } }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
@@ -69,7 +74,8 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
     consumedInitial.current = true; ask(initialQuestion); onInitialQuestionConsumed?.();
   }, [initialQuestion, loaded, busy]);
   async function saveTurn(question: string, answer: string, sources: Source[] = [], voice = false) {
-    if (conversationId) await api(`/api/shops/${shop.id}/conversations/${conversationId}/turns`, {requestId:createRequestId(),question,answer,sources,voice});
+    // Long spoken turns are clipped to the stored message limit instead of being rejected.
+    if (conversationId) await api(`/api/shops/${shop.id}/conversations/${conversationId}/turns`, {requestId:createRequestId(),question:question.slice(0,20000),answer:answer.slice(0,20000),sources,voice});
     onConversationChange?.();
   }
   async function run(action: () => Promise<void>) {
@@ -163,7 +169,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
         <button type="button" className="primary" disabled={busy} onClick={() => void run(async () => { await acceptPlan(plan); if (alive.current) { setPlan(undefined); setMessages(items => [...items, { role: "assistant", text: tr("変更を反映しました。変更履歴に依頼文とあわせて記録しました。") }]); } })}>{tr("この内容で反映する")}</button>
       </div>
     </section>}
-    {voiceMode ? <LiveVoice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => { setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])]); void saveTurn(question, answer, sources, true).catch(error => { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }); }} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} /> : <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
+    {voiceMode ? <Voice shopId={shop.id} disabled={busy} context={history} onTurn={(question, answer, sources) => { setMessages(items => [...items, ...(question ? [{ role: "user" as const, text: question, voice: true }] : []), ...(answer ? [{ role: "assistant" as const, text: answer, voice: true, sources }] : [])]); void saveTurn(question, answer, sources, true).catch(error => { if (alive.current) setError(error instanceof Error ? error.message : String(error)); }); }} onDraft={request => { setDraft(request); setPlan(undefined); }} onError={setError} /> : <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event => { event.preventDefault(); ask(); }}>
       <textarea aria-label={tr("アシスタントへの質問")} aria-keyshortcuts="Control+Enter Meta+Enter" rows={2} required maxLength={4000} disabled={busy || !loaded} value={text} onChange={event => setText(event.target.value)} placeholder={tr("質問や頼みたいことを入力…")} onKeyDown={event => submitOnShortcut(event)} />
       <div className="chat-composer-toolbar">
         <button type="submit" className="primary chat-send" disabled={busy || !loaded || !text.trim()}>{tr("送信")}</button>
@@ -173,7 +179,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
 }
 
 /** Gemini Live voice: 16 kHz microphone PCM up, 24 kHz speech down, transcripts into the chat. */
-function LiveVoice({ shopId, disabled, context, onTurn, onDraft, onError }: { shopId: string; disabled: boolean; context: () => { role: string; text: string }[]; onTurn: (question: string, answer: string, sources: Source[]) => void; onDraft: (request: string) => void; onError: (message: string) => void }) {
+function LiveVoice({ shopId, disabled, context, onTurn, onDraft, onError }: AssistantVoiceProps) {
   const [state, setState] = useState<"off" | "connecting" | "on">("off");
   const [caption, setCaption] = useState("");
   const socket = useRef<WebSocket | undefined>(undefined);

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { App } from '../App';
+import { App, type Session } from '../App';
+import { AssistantVoiceContext, type AssistantVoiceProps } from '../Assistant';
 import { ApiProvider, type ApiClient } from '../api';
 import { createMockClient, scenarioProps } from './mock';
 import { getLocale, tr } from '../../shared/i18n';
@@ -65,13 +66,25 @@ const answerExamples = {
     "source": "spec.md"
   }
 } as const;
-type Pattern = 'history' | 'new' | keyof typeof answerExamples;
+type Pattern = 'history' | 'new' | 'voice' | 'voice-active' | keyof typeof answerExamples;
+
+function PreviewVoice({ disabled, onTurn, context }: AssistantVoiceProps) {
+  const [connected, setConnected] = useState(false);
+  return <div className="assistant-voice assistant-voice-preview">
+    <p className="small muted">{tr('Storybookの表示例です。マイクや実際の音声通話には接続しません。')}</p>
+    <p className="assistant-voice-status small" aria-live="polite">{connected ? tr('通話中の表示例です。') : tr('開始ボタンを押して、AIに話しかけてください。')}</p>
+    <button type="button" className={connected ? 'primary' : ''} aria-pressed={connected} disabled={disabled && !connected} onClick={() => {
+      if (!connected && !context().some(message => message.role === 'user' && message.text === (getLocale() === 'en' ? 'How do cancellations work?' : 'キャンセルするとどうなりますか？'))) onTurn(getLocale() === 'en' ? 'How do cancellations work?' : 'キャンセルするとどうなりますか？', getLocale() === 'en' ? 'Check the cancellation terms and refund amount on My page before confirming cancellation.' : 'マイページで、予約時のキャンセル条件と確定前の返金額を確認できます。', [{ path: 'spec.md', title: tr('現在のお店の設定') }]);
+      setConnected(value => !value);
+    }}>{connected ? tr('■ 音声を終了') : tr('🎙 音声で話す')}</button>
+  </div>;
+}
 
 function Consultations({ pattern = 'history' }: { pattern?: Pattern }) {
   const fixture = useMemo(() => {
     const base = createMockClient('consultations', pattern);
     const locale = getLocale() === 'en' ? 'en' : 'ja';
-    const patternIndex = ['history', 'new', ...Object.keys(answerExamples)].indexOf(pattern);
+    const patternIndex = ['history', 'new', ...Object.keys(answerExamples), 'voice', 'voice-active'].indexOf(pattern);
     // Stable UUIDs keep reloads idempotent, while each pattern has independent drafts.
     const requestId = (index: number) => `810b583a-5f98-4f5f-b231-${String(patternIndex * 100 + index).padStart(12, '0')}`;
     const create = (index: number) => base<ShopChat>('/api/shops/story-shop/conversations', { intent: 'consult', requestId: requestId(index) });
@@ -80,7 +93,7 @@ function Consultations({ pattern = 'history' }: { pattern?: Pattern }) {
       sources: [{ path, title: path === 'spec.md' ? tr('現在のお店の設定') : tr('スタッフ別売上') }],
     });
     const ready = (async () => {
-      if (pattern === 'new') return (await create(1)).id;
+      if (pattern === 'new' || pattern === 'voice' || pattern === 'voice-active') return (await create(1)).id;
       const cancellation = await create(1);
       await turn(cancellation, 2, locale === 'en' ? 'How do cancellations work?' : 'キャンセルするとどうなりますか？', locale === 'en' ? 'You can check the cancellation terms and refund amount on My page before confirming cancellation.' : 'マイページで予約を開くと、予約時のキャンセル条件と、確定前の返金額を確認できます。');
       const hours = await create(3);
@@ -96,7 +109,11 @@ function Consultations({ pattern = 'history' }: { pattern?: Pattern }) {
       await turn(chat, 6, example.question[locale], example.answer[locale], example.source);
       return chat.id;
     })();
-    const client: ApiClient = async (path, data, options) => { await ready; return base(path, data, options); };
+    const client = (async (path: string, data?: unknown, options?: Parameters<ApiClient>[2]) => {
+      await ready;
+      if (path === '/api/session') return { ...await base<Session>(path, data, options), assistantVoice: true };
+      return base(path, data, options);
+    }) as ApiClient;
     return { client, ready };
   }, [pattern]);
   const [selected, setSelected] = useState<{ fixture: typeof fixture; id: string }>();
@@ -109,7 +126,7 @@ function Consultations({ pattern = 'history' }: { pattern?: Pattern }) {
   }, [fixture]);
   if (error) return <p role="alert">{error}</p>;
   if (selected?.fixture !== fixture) return <p role="status">{tr('読み込み中…')}</p>;
-  return <ApiProvider value={fixture.client}><App key={pattern} {...scenarioProps('consultations')} search={`?tab=assistant&conversation=${selected.id}`} navigate={() => {}} /></ApiProvider>;
+  return <ApiProvider value={fixture.client}><AssistantVoiceContext.Provider value={PreviewVoice}><App key={pattern} {...scenarioProps('consultations')} search={`?tab=assistant&conversation=${selected.id}`} navigate={() => {}} /></AssistantVoiceContext.Provider></ApiProvider>;
 }
 const meta = { title: '運営/相談・質問', component: Consultations, parameters: { layout: 'fullscreen' } } satisfies Meta<typeof Consultations>;
 export default meta;
@@ -121,3 +138,18 @@ export const Markdown: Story = { name: '返金条件の相談（表・説明）'
 export const Charts: Story = { name: '売上の相談（グラフ）', args: { pattern: 'Charts' } };
 export const BookingFlow: Story = { name: '予約の流れの相談（図）', args: { pattern: 'BookingFlow' } };
 export const InvalidDiagram: Story = { name: '図を表示できないとき', args: { pattern: 'InvalidDiagram' } };
+
+async function showVoice(canvasElement: HTMLElement, connected: boolean) {
+  async function button(text: string) {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const found = [...canvasElement.querySelectorAll<HTMLButtonElement>('.assistant button')].find(button => button.textContent === text && !button.disabled);
+      if (found) return found;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    throw new Error(`Voice control did not appear: ${text}`);
+  }
+  (await button(tr('AIと話す'))).click();
+  if (connected) (await button(tr('🎙 音声で話す'))).click();
+}
+export const Voice: Story = { name: 'AIと通話で相談（開始前）', args: { pattern: 'voice' }, play: async ({ canvasElement }) => showVoice(canvasElement, false) };
+export const VoiceActive: Story = { name: 'AIと通話で相談（通話中）', args: { pattern: 'voice-active' }, play: async ({ canvasElement }) => showVoice(canvasElement, true) };
