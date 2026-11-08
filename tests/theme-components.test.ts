@@ -45,13 +45,21 @@ test("all surfaces combine shared components and their own part CSS with unchang
 
 test("an icon-only AI edit receives relevant components and preserves every unrelated component and business field", async () => {
   const before = config();
+  const media = { mimeType: "image/png" as const, data: "aGVsbG8=" };
+  const messages = [{ role: "user" as const, text: "Keep the current layout and use a calm green." }];
   assert.ok(visualTargets(before).some(target => target.id === "component:icons"));
-  const { config: next } = await proposeVisualAppearance(before, "Make the icon green", [], { target: "component:icons", generate: async request => {
+  const { config: next } = await proposeVisualAppearance(before, "Make the icon green", [], { target: "component:icons", media, messages, generate: async request => {
     const context = JSON.parse(request.contents[0].parts![0].text!);
+    assert.deepEqual(context.previousMessages, messages);
+    assert.deepEqual(request.contents[0].parts!.at(-1), { inlineData: media });
     assert.deepEqual(context.appearance.theme.styles.map((style: { component: string }) => style.component), ["base", "icons"]);
     assert.equal(context.appearance.theme.headerCss, undefined);
     assert.equal(context.appearance.theme.bodyCss, undefined);
     assert.equal(context.appearance.theme.footerCss, undefined);
+    assert.equal(context.screens, undefined);
+    assert.equal(context.screenDefaults, undefined);
+    assert.equal(context.themeDefault, undefined);
+    assert.equal(request.timeoutMs, 30000, "a stalled generation retries before consuming the review budget");
     assert.ok(!("appearance" in (request.schema.properties as object)));
     assert.doesNotMatch(JSON.stringify(request.schema), /"(?:minItems|maxItems)":/);
     assert.match(JSON.stringify(request.schema), /At most 32 items\./);
