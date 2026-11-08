@@ -12,7 +12,7 @@ This **OKF v0.2 bundle** explains how gemihub works for every shop. It describes
 - [Payments, cancellation and refunds](./payments.md) - PayPal prepayment at booking, server-decided amounts, refund tiers fixed at booking time, customer and shop cancellations, rounding, no-shows, refund statuses, cancellation without prepayment, and reading PayPal in Consult & ask with background alerts and owner-approved fixes.
 - [Coupons and distribution](./coupons.md) - Owner-created eligibility rules, AI proposals, scheduled and manual grants, customer wallets, discount calculation, reservations during payment, and single-use redemption.
 - [Shop settings and changes](./shop-settings.md) - What each setting in `spec.md` means, provisional and public publication, how changes are requested, planned, approved and published, and how `history.md` records them.
-- [Customers, inquiries, staff and notifications](./operations.md) - Customer records and notes, inquiries and replies, staff accounts and Calendar connection, and the emails customers and the shop receive.
+- [Customers, inquiries, staff and notifications](./operations.md) - Customer records and notes, inquiries and replies, staff accounts and Calendar connection, the emails customers and the shop receive, and Google integration failure alerts.
 - [AI phone reception](./phone.md) - How Twilio calls reach Gemini Live, cash bookings share the online inventory, callers cancel cash bookings from the same number, and transcripts remain searchable.
 - [Data and storage](./data.md) - Where bookings, settings, files, specifications and history are kept, what the server keeps, and how owners export JSON or CSV.
 

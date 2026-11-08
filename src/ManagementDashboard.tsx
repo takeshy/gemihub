@@ -5,6 +5,7 @@ import { bookingMenuName, bookingStaffName } from "../server/domain";
 import { useShopDisplay } from "./money";
 import { Pagination, usePagination } from "./Pagination";
 import { PayPalAttention } from "./PayPalAttention";
+import { IntegrationAttention } from "./IntegrationAttention";
 import { ShopSettingsOverview } from "./ShopSettingsOverview";
 import { RecordDetailsDialog, bookingStatusText } from "./RecordDetailsDialog";
 import type { Workspace } from "./App";
@@ -56,6 +57,7 @@ export function ManagementDashboard({ shop, busy, refresh, open, reload, onAsk }
         <Pagination pagination={inquiries} label={tr("未対応のお問い合わせ")} />
       </section>
     </div>
+    {shop.isOwner && <IntegrationAttention shop={shop} open={open} />}
     {shop.isOwner && <PayPalAttention shop={shop} reload={reload} onAsk={onAsk} />}
     <ShopSettingsOverview config={config} isOwner={shop.isOwner} publiclyPublished={publiclyPublished} google={shop.judge ? undefined : shop.google} open={open} />
     {selectedBooking && <RecordDetailsDialog shop={shop} item={{ kind: "booking", value: selectedBooking }} close={() => setSelected(undefined)} open={open} />}

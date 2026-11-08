@@ -1,9 +1,9 @@
 ---
 type: "Process"
 title: "Customers, inquiries, staff and notifications"
-description: "Customer records, inquiries, staff accounts and Calendar connection, and email notifications."
-tags: ["customers", "inquiries", "staff", "notifications", "email"]
-updated: "2026-11-06"
+description: "Customer records, inquiries, staff accounts and Calendar connection, email notifications, and Google integration failure alerts."
+tags: ["customers", "inquiries", "staff", "notifications", "email", "alerts", "monitoring"]
+updated: "2026-11-08"
 ---
 
 Customer records, inquiries, staff accounts and Calendar connection, and email notifications.
@@ -57,3 +57,9 @@ The owner grants Calendar FreeBusy access during normal owner sign-in, alongside
 gemihub sends email from the owner's Gmail for: booking confirmation, payment confirmation, cancellation and refund results, opening alerts, inquiry replies and staff invitations. The shop's `notificationEmail` receives a copy of booking-related mail, except opening alerts, which go to the customer alone. Delivery is at least once; a lost response can cause a duplicate email, never a duplicate booking.
 
 Pending Google integration jobs do not show a global warning banner in management screens, including after a page release. The background queue and automatic retries continue independently of this display. Incomplete publication and payment-specific alerts retain their existing behavior.
+
+Google integration failures are tracked as incidents rather than inferred from retry counts. Jobs record their mail kind, booking or inquiry reference, first-failure time, last-attempt time, terminal reason, and incident ID. An incident aggregates a shop, operation type, safe error class, and occurrence generation under a persistent ID. A transient failure that recovers below the threshold notifies nobody. Mail notifies a developer after five minutes and three failures; Drive article export after fifteen minutes and three failures. Authentication loss, configuration defects, unexpected internal errors, and final failure notify immediately. A 403 is classified by its Google reason: only missing authentication or scope may ask the owner to reconnect, while rate limits are transient and disabled APIs or policy errors are configuration defects. Unknown 403s notify the developer without asking for a reconnect. Stalled jobs and a missing Google credential are detected even though they do not increment failure counts. Obsolete, cancelled, expired, or archived targets end an incident without counting as recovery.
+
+Developer alerts go to an HTTPS webhook configured with `OPS_WEBHOOK_URL`, through a notification outbox separate from mail and Drive jobs. The canonical event is converted by a `generic`, Slack or Google Chat adapter selected with `OPS_WEBHOOK_FORMAT`; an unknown format is not posted blindly. Alerts include only the environment, shop ID, incident ID, operation, safe error class and code, occurrence time, duration, affected count, retry state, and log ID. They never include customer identities, addresses, message bodies, inquiry text, recipients, attachments, credentials, or raw exception text. Retries of the same incident do not create more alerts; an open incident sends a six-hour summary, and an incident that alerted on opening sends one recovery alert. A recurrence after recovery is a new incident generation and sends a new opening alert. Notification failure never changes a booking, payment, mail, or Drive result, and a stopped channel is detected by separate log-based, queue-age, and uptime monitoring.
+
+Owners see confirmed impact and the next action, not technical errors. A Google reconnect is shown only when authentication or scope loss is confirmed; a 403 caused by rate limits, a disabled API, policy, or an unknown reason uses the impact message instead. Delayed mail appears after 30 minutes or earlier when a booking starts within two hours, a final inquiry-reply failure appears immediately, and a Drive copy delay appears only in the dashboard's Needs attention area. A mail failure alone never claims that a booking or payment failed. The existing publication and PayPal alerts and all retry limits are unchanged.

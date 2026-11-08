@@ -411,16 +411,10 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
       { email: "haru@example.com", accepted: true },
       { email: "family@example.com", accepted: false },
     ],
-    jobs:
-      scenario === "sync-error"
-        ? [
-            {
-              type: "sync",
-              error:
-                tr("保存先に接続できませんでした。再送をお試しください。"),
-            },
-          ]
-        : [],
+    jobs: [],
+    ...(scenario === "sync-error"
+      ? { integrationAlerts: [{ id: "incident-1", kind: "reconnect" as const, type: "mail" as const, since: new Date().toISOString(), affectedCount: 2 }] }
+      : {}),
     publicUrl: "/s/salon-nagi",
     domain: scenario === "settings" ? "reserve.example.com" : undefined,
     domainToken:

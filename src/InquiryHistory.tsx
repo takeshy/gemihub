@@ -28,6 +28,7 @@ export function InquiryHistory({ inquiry, shopId }: { inquiry: Inquiry; shopId: 
       {entry.by && <p className="small muted">{tr("記録者：{0}", entry.by)}</p>}
       {recipient(entry) && <p className="small muted">{tr("返信先：")}{recipient(entry)}</p>}
       {delivery(entry) && <span className="pill">{delivery(entry)}</span>}
+      {entry.delivery === "failed" && <p className="small muted">{tr("この返信メールを送信できませんでした。返信内容は記録に残っています。宛先と添付ファイルを確認してください。")}</p>}
     </li>)}</ol>
     <Pagination pagination={pagination} label={tr("やりとりの履歴")} />
   </section>;
