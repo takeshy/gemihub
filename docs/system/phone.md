@@ -32,7 +32,7 @@ AI phone reception lets a shop answer calls while the owner is working. Twilio s
 1. Withheld, anonymous and public/unknown caller IDs, including their numeric keypad spellings such as `+266696687`, are ended with a short request to call back with caller ID. They never reach Gemini and the outcome is logged.
 2. The AI answers with the shop name and asks whether the call is about a booking or another matter.
 3. For a booking it asks the menu, calls `check_availability`, offers real slots, asks the name and whether there is anything to pass on to the shop, repeats the menu, time, name and cash payment for the caller's agreement, then calls `create_booking`. A message becomes the booking's message and appears in the owner notification. After the booking succeeds, the AI states the confirmed date, time and menu and asks whether there is anything else before ending the call.
-4. For a cash phone booking cancellation, it looks up the caller's booking, confirms the details and uses `cancel_booking` to cancel it within the shop's deadline.
+4. For a cash phone booking cancellation, it looks up the caller's booking, confirms the details and uses `cancel_booking` to cancel it any time before the appointment starts.
 5. For a simple question it answers from the published record only: opening hours, address, menus and prices. Other inquiries are recorded with the caller's name and reason using `create_inquiry`, and the AI tells the caller the shop will call back.
 6. If listening fails, the AI stops guessing, takes a name and reason and creates an inquiry.
 
@@ -51,7 +51,7 @@ The caller never has to say their number, and the AI neither asks for it nor rea
 - `create_booking` compares `start` as an instant, so a slot still matches when the model rewrites it with an offset or as shop-local time.
 - `finish_call` runs after any other tool in the same turn. It is refused once while a booking or inquiry has failed, or while slots were offered and nothing was booked, so the caller can be told; the second request ends the call. A failure that was never resolved is recorded as outcome `error` and reaches the owner.
 - Booking retries use the Gemini tool-call ID within the Twilio call, and a booking with the same guest, menu, time, staff and options that is still active in the call is reused under any tool-call ID. A separate booking action can create a new reservation after cancellation; retrying a cancelled action cannot report success.
-- Callers can cancel an upcoming cash phone booking from the number recorded on the booking, within the shop's cancellation window. The AI looks up matches, repeats the appointment details and asks the caller to confirm before cancelling. It releases the slot, and no refund applies. The AI directs callers with online bookings to manage them online and records phone booking changes or late cancellation requests as inquiries for the shop to review.
+- Callers can cancel an upcoming cash phone booking from the number recorded on the booking any time before the appointment starts, regardless of `rules.cancelHours` or whether PayPal prepayment is enabled. The AI looks up matches, repeats the appointment details and asks the caller to confirm before cancelling. It releases the slot, and no refund applies. The AI directs callers with online bookings to manage them online and records phone booking changes or cancellation requests at or after the appointment start as inquiries for the shop to review.
 
 # Inquiries and notifications
 

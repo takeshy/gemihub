@@ -1065,9 +1065,6 @@ export function createApp(
           const cancelled = { ok: true as const, bookingId: booking.id, message: tr("予約をキャンセルしました。返金はありません。") };
           if (booking.status === "cancelled" && booking.updatedBy === actor) return cancelled;
           if (booking.status !== "active" || Date.parse(booking.start) <= now.getTime()) return { ok: false as const, message: tr("この予約はすでに処理済みです。") };
-          if (Date.parse(booking.start) - now.getTime() < published.rules.cancelHours * 3600000) return {
-            ok: false as const, message: tr("キャンセル期限を過ぎているため、電話ではキャンセルできません。名前と用件を聞いて create_inquiry で残してください。"),
-          };
           booking.status = "cancelled"; booking.updatedBy = actor; booking.updatedAt = now.toISOString();
           await store.transaction(async () => {
             await store.saveBooking(booking);

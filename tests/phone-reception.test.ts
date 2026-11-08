@@ -969,7 +969,7 @@ test("phone cancellation notifies the booking customer and owner once, and never
   ws.close();
 });
 
-test("phone cancellation respects the caller number, booking type and shop deadline", async t => {
+test("phone cancellation respects the caller number, booking type and appointment start", async t => {
   const f = await fixture(t), caller = "0312345678";
   const place = (id: string, startsIn: number, phone?: string, payment?: Booking["payment"]) => {
     const start = new Date(Date.now() + startsIn).toISOString();
@@ -983,10 +983,39 @@ test("phone cancellation respects the caller number, booking type and shop deadl
   const ws = await f.stream("CA-REJECT-CANCEL", caller);
   const lookup = await f.invoke("lookup", "cancel_booking", {});
   assert.deepEqual(lookup.choices.map((choice: { bookingId: string }) => choice.bookingId), ["past-deadline"]);
-  for (const bookingId of ["other-caller", "online", "prepaid", "past", "past-deadline"]) {
+  for (const bookingId of ["other-caller", "online", "prepaid", "past"]) {
     assert.equal((await f.invoke(bookingId, "cancel_booking", { bookingId })).ok, false);
     assert.equal((await f.store.get<Booking>("booking", bookingId))!.status, "active");
   }
+  assert.equal((await f.invoke("before-start", "cancel_booking", { bookingId: "past-deadline" })).ok, true);
+  assert.equal((await f.store.get<Booking>("booking", "past-deadline"))!.status, "cancelled");
+  ws.close();
+});
+
+for (const prepaid of [false, true]) test(`phone cash cancellations remain available until start with prepayment ${prepaid ? "on" : "off"}`, { timeout: 10000 }, async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-11-08T01:00:00Z") });
+  const f = await fixture(t), caller = "0312345678";
+  f.config.rules.cancelHours = 24;
+  if (prepaid) f.config.rules.payment = { enabled: true, refundTiers: [{ hoursBefore: 0, percent: 0 }] };
+  await f.store.saveShop(f.shop);
+  for (const [id, offset] of [["just-before", 1], ["at-start", 0], ["after-start", -1]] as const) {
+    const start = new Date(Date.now() + offset).toISOString();
+    await f.store.saveBooking({ id, shopId: f.shop.id, customer: phoneKey(caller), name: "Taro", phone: caller, message: "", menuId: "simple", price: 5500, staffId: "owner", start, end: new Date(Date.parse(start) + 3600000).toISOString(), status: "active", createdAt: new Date().toISOString() });
+  }
+  const ws = await f.stream("CA-CANCEL-BEFORE-START", caller);
+  const instruction = f.liveParameters().config.systemInstruction;
+  assert.match(instruction, /予約開始時刻の直前までキャンセルできます/);
+  assert.match(instruction, /"cancelHours":0/);
+  assert.doesNotMatch(instruction, /"cancelHours":24/);
+  const lookup = await f.invoke("lookup", "cancel_booking", {});
+  assert.deepEqual(lookup.choices.map((choice: { bookingId: string }) => choice.bookingId), ["just-before"]);
+  assert.equal((await f.invoke("confirm", "cancel_booking", { bookingId: "just-before" })).ok, true);
+  assert.equal((await f.store.get<Booking>("booking", "just-before"))!.status, "cancelled");
+  for (const id of ["at-start", "after-start"]) {
+    assert.equal((await f.invoke(id, "cancel_booking", { bookingId: id })).ok, false);
+    assert.equal((await f.store.get<Booking>("booking", id))!.status, "active");
+  }
+  assert.equal((await f.store.shop(f.shop.id))!.published!.rules.cancelHours, 24, "online cancellation settings stay unchanged");
   ws.close();
 });
 

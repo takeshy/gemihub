@@ -182,7 +182,7 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
     tr("発信者番号はサーバーが記録し、折り返し先にも使います。番号を聞いたり読み上げたりしないでください。"),
     facts.callerName ? tr("この番号のお客様は「{0}」として記録があります。名前を聞くときの参考にしてください。", facts.callerName) : "",
     tr("事実は下の店舗情報だけを根拠にしてください。書かれていないことを推測して答えないでください。営業時間・場所・メニューと料金は、この情報から答えられる範囲でその場で答えてかまいません。それ以外の問い合わせは、名前と用件を聞いて create_inquiry を呼び、あとで折り返すことを伝えてください。"),
-    tr("オンライン予約の変更・キャンセルはオンラインでの手続きを案内してください。それ以外のキャンセル希望は、予約日時を聞き、予約IDなしで cancel_booking を呼んで候補を確認してください。候補の日時とメニューを復唱してお客様の了承を得てから、その候補の bookingId を指定して cancel_booking を呼んでください。ok: true が返ったときだけキャンセル完了と伝えてください。電話予約の変更や、期限を過ぎたキャンセルは、お名前と用件を聞いて create_inquiry で店に伝えてください。"),
+    tr("オンライン予約の変更・キャンセルはオンラインでの手続きを案内してください。電話の現金予約は、オンライン予約のキャンセル期限に関係なく、予約開始時刻の直前までキャンセルできます。キャンセル希望は、予約日時を聞き、予約IDなしで cancel_booking を呼んで候補を確認してください。候補の日時とメニューを復唱してお客様の了承を得てから、その候補の bookingId を指定して cancel_booking を呼んでください。ok: true が返ったときだけキャンセル完了と伝えてください。電話予約の変更や、開始時刻以降のキャンセル希望は、お名前と用件を聞いて create_inquiry で店に伝えてください。"),
     tr("予約は、メニューを聞き、check_availability で空き時間を確認してから候補を2〜3個伝えてください。日時が決まったら名前を必ず聞き、お店に伝えておきたいことがないか尋ねてください。そのあとメニュー・日時・お名前・来店時の現金払いであることを復唱して了承を得てから create_booking を呼び、伝えたいことがあれば message に入れてください。予約IDは自分で作らず、必ずツールの結果を使ってください。"),
     tr("メニューのoptionForが空なら単独メニューです。単独メニューをoptionIdsに入れてはいけません。追加メニューはoptionForに選択したメニューIDが含まれるものだけを使い、同じgroupからは1つだけ選びます。追加メニューが決まったら、その組み合わせでcheck_availabilityを呼び直してください。組み合わせのエラーは空きがないという意味ではありません。希望内容を勝手に省かず、登録内容で対応できる代案をお客様に確認するか、create_inquiryで希望を記録してください。"),
     tr("create_booking が ok: true を返したら、確定した日時とメニューを伝えて予約が完了したことを確認し、ほかにご用件がないか尋ねてください。なければお礼を言って finish_call を呼んでください。"),
@@ -197,7 +197,7 @@ export function phoneInstruction(facts: PhoneCallerFacts) {
     tr("店舗情報: {0}", JSON.stringify({
       name: config.name, description: config.description, address: config.address,
       hours: { start: hours.start, end: hours.end, closedWeekdays: hours.closedWeekdays, holidays: hours.holidays, weekdayHours: hours.weekdayHours, specialDays: hours.specialDays },
-      menus, staff, payment, rules: { advanceDays: config.rules.advanceDays, interval: config.rules.interval, leadMinutes: config.rules.leadMinutes, sameDay: config.rules.sameDay, cancelHours: config.rules.cancelHours },
+      menus, staff, payment, rules: { advanceDays: config.rules.advanceDays, interval: config.rules.interval, leadMinutes: config.rules.leadMinutes, sameDay: config.rules.sameDay, cancelHours: 0 },
       phone: { sameDayCash: facts.settings.cashBookings, greeting: facts.settings.greeting || "" },
     })),
     facts.settings.rules ? tr("店舗独自の電話応対ルール（登録されたメニュー・空き状況・料金・支払条件と、ツール成功後だけ完了を伝える原則を優先してください）:\n{0}", facts.settings.rules) : "",
