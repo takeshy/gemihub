@@ -18,7 +18,9 @@ function featureDenied(text: string, kind: InitialFeature) {
   const match = text.match(featurePatterns[kind]);
   if (!match) return false;
   const start = match.index || 0;
-  return /^.{0,10}(?:不要|なし|いらな|要らな|使わな|作らな|付けな|なくして|削除|以外)/.test(text.slice(start + match[0].length)) || /(?:no|without|except|do not want|don't want)\s+(?:a\s+)?$/i.test(text.slice(0, start));
+  return /^.{0,10}(?:不要|なし|いらな|要らな|使わな|作らな|付けな|なくして|削除|以外)/.test(text.slice(start + match[0].length))
+    || /^\s*(?:(?:is|are)\s+)?(?:not (?:needed|necessary|wanted)|unnecessary)\b/i.test(text.slice(start + match[0].length))
+    || /\b(?:no(?: need(?: for)?)?|without|except|(?:do not|don't) (?:want|need)|remove|omit|disable|exclude)\s+(?:a\s+)?$/i.test(text.slice(0, start));
 }
 export function initialInterviewFacts(messages: { role: string; text: string; detail?: { imageIds?: string[] } }[]) {
   let name: string | undefined; let logoKnown = false; let awaiting: "name" | "logo" | "features" | undefined;

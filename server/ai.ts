@@ -5,6 +5,7 @@ import type { Content } from "@google/genai";
 import type { HistoricalContext } from "./chat-context.ts";
 import { adaptiveQuestionInstruction, initialSetupDemoReply, requestIntentInstruction } from "./request-intent.ts";
 import { generateJson, generateWithTools, requireText } from "./llm.ts";
+import { modelJsonSchema } from "./model-schema.ts";
 import { generateValidatedDesign } from "./generated-design.ts";
 import { currencyOf, defaultRegion, type Region } from "../shared/region.ts";
 import { shopSchema, sample, type ShopConfig, planSummary } from "./domain.ts";
@@ -31,18 +32,7 @@ const initialDetailsInstruction = "Extract only the shop facts and explicitly re
 
 // Bounded nested arrays make Vertex's structured-output grammar too complex (400).
 // Keep the limits as model guidance; shopSchema.parse still enforces every limit.
-const proposalConfigSchema = shopSchema.toJSONSchema({
-  override({ jsonSchema }) {
-    if (jsonSchema.type !== "array") return;
-    const limits = [
-      jsonSchema.minItems === undefined ? "" : `At least ${jsonSchema.minItems} items.`,
-      jsonSchema.maxItems === undefined ? "" : `At most ${jsonSchema.maxItems} items.`,
-    ].filter(Boolean);
-    if (limits.length) jsonSchema.description = [jsonSchema.description, ...limits].filter(Boolean).join(" ");
-    delete jsonSchema.minItems;
-    delete jsonSchema.maxItems;
-  },
-});
+const proposalConfigSchema = modelJsonSchema(shopSchema);
 
 export async function propose(
   text: string,

@@ -67,12 +67,12 @@ try{
   }
   assert.equal(reviews,0);
   const english=JSON.parse(await readFile('shared/en.json','utf8'));
-  for(const language of ['ja','en']){
+  for(const language of ['ja','en'])for(const width of [1280,390]){
     const label=text=>language==='en'?(english[text]||text):text;
-    const shop=await store.createShop(`interview-${language}@example.com`);
+    const shop=await store.createShop(`interview-${language}-${width}@example.com`);
     const user={email:shop.owner,name:'Owner',role:'owner',shopId:shop.id};await store.put('user',user.email,user);
     const session=randomUUID();await store.put('session',digest(session),{user,expires:Date.now()+3600000});
-    const context=await browser.newContext({viewport:{width:1280,height:950},locale:language==='en'?'en-US':'ja-JP'});
+    const context=await browser.newContext({viewport:{width,height:950},locale:language==='en'?'en-US':'ja-JP'});
     await context.addInitScript(()=>{window.__shortcutSpeech=[];window.SpeechRecognition=class {start(){this.active=true;window.__shortcutSpeech.push(this);this.onstart?.();}stop(){this.active=false;}abort(){this.active=false;}};});
     await context.addCookies([{name:'gemihub_session',value:session,url:origin}]);const page=await context.newPage();active=page;
     let sent=0;page.on('request',request=>{if(request.method()==='POST'&&request.url().endsWith('/system/question'))sent++;});
@@ -108,7 +108,21 @@ try{
     assert.equal(plan.config.name,'Moon Atelier');assert.deepEqual(plan.config.appearance.articles,{blogs:false,announcements:true});
     assert.deepEqual(plan.config.pages.map(p=>p.slug),['staff','products']);
     for(const name of [label('スタッフ紹介'),label('商品・サービス紹介')])await expect(page.locator('.screen-name-list').getByText(name,{exact:true})).toBeVisible();
-    await context.close();console.log(`${language}: Ctrl+Enter sends chat and dictation; Enter, IME and repeat guards work; interview choices persist.`);
+    await page.getByRole('button',{name:label('聞き取りに戻る'),exact:true}).click();
+    await expect(composer).toBeVisible();await expect(log).toContainText('Moon Atelier');
+    await composer.fill(language==='ja'?'お知らせは不要です。':'no need Announcements');await send.click();
+    await expect(log.getByText(label('ほかに伝えたいことはありますか？'),{exact:true})).toHaveCount(2);
+    await composer.fill(language==='ja'?'ありません。':'no');await send.click();
+    await expect(page.locator('.screen-name-list li')).toHaveCount(6);
+    const updated=await context.request.get(origin+'/api/workspace').then(r=>r.json());const replacement=updated.shops[0].plans.at(-1);
+    assert.notEqual(replacement.id,plan.id);assert.equal(replacement.config.name,'Moon Atelier');
+    assert.deepEqual(replacement.config.appearance.articles,{blogs:false,announcements:false});
+    assert.deepEqual(replacement.config.pages.map(p=>p.slug),['staff','products']);
+    assert.equal(updated.shops[0].plans.find(item=>item.id===plan.id).config.appearance.articles.announcements,true,'earlier proposal is preserved');
+    await expect(page.locator('.theme-preview .public-nav').getByText(label('お知らせ'),{exact:true})).toHaveCount(0);
+    assert.equal(updated.shops[0].published,null);
+    await page.screenshot({path:`tmp/initial-theme/without-announcements-${language}-${width}.png`,fullPage:true});
+    await context.close();console.log(`${language} ${width}px: interview history is preserved and announcements can be removed from a replacement proposal.`);
   }
 }catch(error){if(active&&!active.isClosed())await active.screenshot({path:'tmp/initial-theme/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

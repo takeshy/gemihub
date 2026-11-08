@@ -31,6 +31,32 @@ test("initial themes compact generated formatting before validation and review",
   assert.equal(result.review?.approved, true);
 });
 
+test("initial theme requests avoid Vertex's bounded-array grammar while retaining style limits", async () => {
+  let generated = 0;
+  const result = await createInitialTheme({ config: sample, request: "No announcements", images: [] }, {}, async call => {
+    if (call.purpose) return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
+    generated++;
+    if (/"(?:minItems|maxItems)":/.test(JSON.stringify(call.schema)))
+      throw Object.assign(new Error("Request contains an invalid argument."), { status: 400 });
+    const styles = (call.schema.properties as Record<string, { description?: string }>).styles;
+    assert.match(styles.description!, /At most 128 items/);
+    return JSON.stringify(theme);
+  });
+  assert.equal(generated, 1);
+  assert.equal(result.review?.approved, true);
+  const styles = Array.from({ length: 129 }, (_, index) => ({ id: `style-${index}`, component: "base", css: "" }));
+  assert.equal(themeSchema.safeParse({ ...theme, css: "", styles }).success, false, "the application still rejects too many styles");
+});
+
+test("returning to the interview can remove previously selected announcements in English", () => {
+  for (const text of ["no need Announcements", "No need for announcements", "I don't need announcements", "Announcements are not needed", "Remove announcements"]) {
+    const messages = [{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"2、3、4"},{role:"assistant",text:"Please review the proposed screens."},{role:"user",text}];
+    const facts = initialInterviewFacts(messages);
+    assert.deepEqual(facts.articles, { blogs: false, announcements: false }, text);
+    assert.deepEqual(facts.introductions, { staff: true, products: true }, text);
+  }
+});
+
 test("generation and review see the actual shop text and enabled navigation slot contents", async () => {
   const config = structuredClone(sample);
   config.header.title = "A long shop name with room for all navigation";
