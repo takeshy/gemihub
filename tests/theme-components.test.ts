@@ -60,6 +60,7 @@ test("an icon-only AI edit receives relevant components and preserves every unre
     assert.equal(context.screenDefaults, undefined);
     assert.equal(context.themeDefault, undefined);
     assert.equal(request.timeoutMs, 30000, "a stalled generation retries before consuming the review budget");
+    assert.ok(context.componentElements.some((element: { selector: string; description: string }) => element.selector === ".booking-summary .line-flower" && element.description.includes("Text flower")), "the real booking glyph is identified independently of SVG styles");
     assert.ok(!("appearance" in (request.schema.properties as object)));
     assert.doesNotMatch(JSON.stringify(request.schema), /"(?:minItems|maxItems)":/);
     assert.match(JSON.stringify(request.schema), /At most 32 items\./);
