@@ -55,3 +55,5 @@ The owner grants Calendar FreeBusy access during normal owner sign-in, alongside
 # Notifications
 
 gemihub sends email from the owner's Gmail for: booking confirmation, payment confirmation, cancellation and refund results, opening alerts, inquiry replies and staff invitations. The shop's `notificationEmail` receives a copy of booking-related mail, except opening alerts, which go to the customer alone. Delivery is at least once; a lost response can cause a duplicate email, never a duplicate booking.
+
+Pending Google integration jobs do not show a global warning banner in management screens, including after a page release. The background queue and automatic retries continue independently of this display. Incomplete publication and payment-specific alerts retain their existing behavior.

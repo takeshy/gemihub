@@ -709,18 +709,6 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
         image: "14-domain.jpg",
         get caption() { return tr("独自ドメインの設定画面。所有権確認だけでは接続先と HTTPS の設定は完了しません。"); },
       },
-      {
-        id: "retry",
-        get title() { return tr("Google 連携が止まったときに確認する"); },
-        get lead() { return tr("保存やメール送信に未処理がある場合は、運営画面に案内が表示されます。"); },
-        get instructions() { return [
-          tr("未処理件数とエラーの内容を確認します。予約が保存済みの案内がある場合、同じ予約を作り直す必要はありません。"),
-          tr("接続が戻ってから「再送する」を押します。未処理分は自動でも再試行されます。"),
-          tr("再送しても解消しない場合は、表示される内容を添えてサービスの運用担当者にお問い合わせください。"),
-        ]; },
-        image: "15-retry.jpg",
-        get caption() { return tr("未処理の案内と「再送する」。予約データを保持したまま再送を試せます。"); },
-      },
     ],
   },
 ];

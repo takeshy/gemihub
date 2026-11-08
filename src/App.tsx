@@ -572,25 +572,6 @@ function Dashboard({
                   <div className="alert">
                     {tr("保存・反映が未完了です。予約受付を一時停止しています。操作した管理画面から再試行してください。")}</div>
                 )}
-                {shop.jobs.length > 0 && (
-                  <div className="alert">
-                    {tr("Google 連携に未処理が ")}{shop.jobs.length}{" "}
-                    {tr("件あります。予約は保存されています。")}<button
-                      onClick={() =>
-                        run(async () => {
-                          await request("retry");
-                          await load();
-                        })
-                      }
-                    >
-                      {tr("再送する")}</button>
-                    {shop.jobs.some((j) => j.error) && (
-                      <p className="small">
-                        {shop.jobs.find((j) => j.error)?.error}
-                      </p>
-                    )}
-                  </div>
-                )}
                 {view === "dashboard" && shop.published && <ManagementDashboard key={shop.id} shop={shop} busy={busy} refresh={() => void run(async () => { await load(); })} reload={load} onAsk={askFromDashboard} open={setTab} />}
                 {view === "build" && (
                   <>

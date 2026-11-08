@@ -17,7 +17,7 @@ export const Settings: Story = {
 };
 
 export const SyncError: Story = {
-  name: "Google 連携の再送",
+  name: "Google 連携の処理待ち・警告なし",
   args: { scenario: "sync-error" },
 };
 

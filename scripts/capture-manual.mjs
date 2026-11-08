@@ -193,9 +193,6 @@ try {
   await capture("21-new-page.jpg", ".new-page-review");
   await open("settings", "お店のアドレス");
   await capture("14-domain.jpg");
-  await open("sync-error", /予約一覧/);
-  await page.getByRole("button", { name: "再送する", exact: true }).waitFor();
-  await capture("15-retry.jpg");
   await open("blog-editor", "お店のお便り");
   await capture("16-article-methods.jpg", ".article-writing-help");
   await page.getByLabel("タイトル",{exact:true}).fill("秋のおすすめネイル");
