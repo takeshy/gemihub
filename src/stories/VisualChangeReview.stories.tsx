@@ -1,15 +1,15 @@
+import { sampleConfig } from "./sample-data";
 import React, { useState } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { VisualChangeReview } from "../VisualChangeReview";
 import { ChromePreview } from "../SiteChrome";
-import { sample } from "../../server/domain";
 import { standardTheme } from "../../shared/theme-editing";
 import { tr } from "../../shared/i18n";
 
 function ReviewExample({ failed = false }: { failed?: boolean }) {
   const [open, setOpen] = useState(true);
-  const [before, setBefore] = useState(() => structuredClone(sample));
-  const [after, setAfter] = useState(() => ({ ...structuredClone(sample), appearance: {
+  const [before, setBefore] = useState(() => sampleConfig());
+  const [after, setAfter] = useState(() => ({ ...sampleConfig(), appearance: {
     accent: "sage" as const, layout: "standard" as const, imageUrl: "",
     copy: { navReserve: tr("予約する") },
     theme: { ...standardTheme, headerCss: ".public-nav{gap:24px;padding:18px}" },

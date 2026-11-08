@@ -1,3 +1,4 @@
+import { sampleCurrency } from "./sample-data";
 import React, { useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { App } from "../App";
@@ -26,25 +27,25 @@ function attentionItems(): PayPalAlertItem[] {
   return [
     item({
       id: "alert-capture", kind: "capture_stalled", severity: "high", bookingId: "b7c41e09-5d2a-4c1e-9b7f-2e8a61c0d4f3", bookingLabel: tr("予約 {0}", "b7c41e09"),
-      target: tr("決済（予約 {0}）", "b7c41e09"), amount: 6500, currency: "JPY", paypalId: "5O190127TN364715T", paypalKind: "order",
+      target: tr("決済（予約 {0}）", "b7c41e09"), amount: 6500, currency: sampleCurrency(), paypalId: "5O190127TN364715T", paypalKind: "order",
       since: hoursAgo(0.5), elapsedHours: 0.5, operation: "resync", targetKind: "order", targetId: "5O190127TN364715T",
       expected: tr("PayPalから決済状態を取り直して台帳を更新します。"),
     }),
     item({
       id: "alert-funds", kind: "awaiting_funds", severity: "medium", bookingId: "a3f9d2c1-5d2a-4c1e-9b7f-2e8a61c0d4f3", bookingLabel: tr("予約 {0}", "a3f9d2c1"),
-      target: tr("返金 {0}（予約 {1}）", "9c2e41aa", "a3f9d2c1"), amount: 4550, currency: "JPY",
+      target: tr("返金 {0}（予約 {1}）", "9c2e41aa", "a3f9d2c1"), amount: 4550, currency: sampleCurrency(),
       since: hoursAgo(5.2), elapsedHours: 5.2, operation: "retry_refund", targetKind: "refund", targetId: "9c2e41aa",
       expected: tr("残高を確認してから、同じ返金処理IDで再試行します。"),
     }),
     item({
       id: "alert-review", kind: "manual_review", severity: "high", bookingId: "e81b5f30-5d2a-4c1e-9b7f-2e8a61c0d4f3", bookingLabel: tr("予約 {0}", "e81b5f30"),
-      target: tr("返金 {0}（予約 {1}）", "1JU08902781691411", "e81b5f30"), amount: 3250, currency: "JPY", paypalId: "1JU08902781691411", paypalKind: "refund",
+      target: tr("返金 {0}（予約 {1}）", "1JU08902781691411", "e81b5f30"), amount: 3250, currency: sampleCurrency(), paypalId: "1JU08902781691411", paypalKind: "refund",
       since: hoursAgo(26), elapsedHours: 26, operation: "complete_manual_review", targetKind: "refund", targetId: "1JU08902781691411",
       expected: tr("PayPalで返金が完了していることを確認し、台帳を完了にします。"),
     }),
     item({
       id: "alert-unsold", kind: "unsold_slot", severity: "low", bookingId: "c05d7a62-5d2a-4c1e-9b7f-2e8a61c0d4f3",
-      target: tr("割引枠（予約 {0}）", "c05d7a62"), amount: 1950, currency: "JPY",
+      target: tr("割引枠（予約 {0}）", "c05d7a62"), amount: 1950, currency: sampleCurrency(),
       since: hoursAgo(-1.5), operation: "close_transfer", targetKind: "transfer", targetId: "transfer-c05d7a62",
       expected: tr("受付を今終了し、キャンセル受付時の返金額で確定します。"),
     }),
@@ -80,7 +81,7 @@ function Example({ initialLanguage = "current", alertsCase = "empty" }: { initia
         if (asked?.kind === "capture_stalled") return {
           answer: ja()
             ? "予約 b7c41e09 の注文 5O190127TN364715T は、PayPalでは COMPLETED（6,500円）で支払いが確定しています。台帳はまだ「確定処理中」のままで、30分たっても更新されていません。お客様の支払いは済んでいるため、台帳をPayPalの状態に合わせれば予約が確定します。\n\n下の提案を承認すると、サーバーがもう一度PayPalの状態を確認してから台帳を更新します。AIはPayPalを読むだけで、書き込みはしません。"
-            : "Order 5O190127TN364715T for booking b7c41e09 is COMPLETED in PayPal (¥6,500), so the customer has paid. The ledger still shows the capture as in progress after 30 minutes. Syncing the ledger with PayPal will confirm the booking.\n\nIf you approve the proposal below, the server checks PayPal again and then updates the ledger. The AI only reads PayPal and never writes to it.",
+            : "Order 5O190127TN364715T for booking b7c41e09 is COMPLETED in PayPal ($65.00), so the customer has paid. The ledger still shows the capture as in progress after 30 minutes. Syncing the ledger with PayPal will confirm the booking.\n\nIf you approve the proposal below, the server checks PayPal again and then updates the ledger. The AI only reads PayPal and never writes to it.",
           sources: [{ path: "sheet:paypal", title: tr("PayPalの台帳") }, { path: "paypal:order:5O190127TN364715T", title: ja() ? "PayPal注文 5O190127TN364715T" : "PayPal order 5O190127TN364715T" }],
           paypalProposals: asked.proposal ? [asked.proposal] : [],
         };

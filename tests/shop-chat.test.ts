@@ -33,7 +33,7 @@ test("begin asks the first question and supports initial shop creation without r
   const logo=await api("/system/question",{question:"ロゴはありません",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
   assert.equal(logo.body.answer,"どういう業種のお店ですか？");
   const second=await api("/system/question",{question:"ネイルサロンです。",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
-  assert.equal(second.status,200);assert.equal(second.body.ready,false);assert.match(second.body.answer,/ほしい機能を次から選んでください。\n1\./);
+  assert.equal(second.status,200);assert.equal(second.body.ready,false);assert.match(second.body.answer,/追加したい機能を次から選んでください。\n1\./);
   const third=await api("/system/question",{question:"1、2、3",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
   assert.equal(third.body.ready,false);assert.equal(third.body.answer,"それ以外に欲しいページはありますか？");
   const early={id:opened.id,requestId:randomUUID()};

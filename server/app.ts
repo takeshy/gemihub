@@ -1649,7 +1649,7 @@ export function createApp(
         const recordCreation = failedAttempt(`judge-start:${req.socket.remoteAddress}`, 10, 3600000);
         recordCreation();
         const email = `judge-${randomBytes(9).toString("hex")}@${judgeEmailDomain}`;
-        const shop = await store.createShop(email, regionForRequest(req));
+        const shop = await store.createShop(email, regionForRequest(req, localeForRequest(req)));
         shop.judge = { createdAt: new Date().toISOString() };
         await store.saveShop(shop);
         const judge: User = { email, name: tr("審査員"), role: "owner", shopId: shop.id, judge: true };
@@ -1729,7 +1729,7 @@ export function createApp(
                   await store.saveShop({ ...fresh, owner: `${user.email}#archived-${fresh.id}`, judge: { ...fresh.judge!, archivedAt: new Date().toISOString() } });
                 })));
               }
-              const shop = await store.createShop(user.email, regionForRequest(req));
+              const shop = await store.createShop(user.email, regionForRequest(req, localeForRequest(req)));
               if (!shop.judge) { shop.judge = { createdAt: new Date().toISOString() }; await store.saveShop(shop); }
               await store.put("user", user.email, { ...saved, shopId: shop.id });
               await store.put("judgeReset", input.requestId, { shopId: shop.id, email: user.email });
@@ -1811,7 +1811,7 @@ export function createApp(
         if (input.role === "owner") {
           shop =
             allShops.find((s) => s.owner === email) ||
-            (await store.createShop(email, regionForRequest(req)));
+            (await store.createShop(email, regionForRequest(req, localeForRequest(req))));
         }
         if (!shop) fail(404, tr("お店がありません"));
         const u: User = {

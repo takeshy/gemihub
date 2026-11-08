@@ -9,7 +9,7 @@ import { initialThemeConfig, createInitialTheme, normalizeInitialNavigation, ini
 import { initialIntroductionPages } from "../shared/initial-pages.ts";
 import { managedImageIds, withInlineImages } from "../server/image-references.ts";
 import { validateProposedImages } from "../server/request-images.ts";
-import { initialInterviewFacts, openingQuestions, logoQuestion, logoUploadQuestion, initialFeatureQuestion } from "../server/request-intent.ts";
+import { initialInterviewFacts, openingQuestions, logoQuestion, logoUploadQuestion, initialFeatureQuestion, initialSetupDemoReply, additionalPagesQuestion } from "../server/request-intent.ts";
 
 export const theme = { headerHtml: '<header class="brand"><slot name="title"></slot><slot name="navigation"></slot></header>', bodyHtml: '<main class="canvas"><slot name="content"></slot></main>', footerHtml: '<footer class="credits"><slot name="content"></slot></footer>', css: ':root { color:#f5eee9; background:#241432 } .brand { padding:clamp(16px,4vw,64px); } h1 { font-family:serif; font-size:clamp(36px,8vw,100px); } .canvas { max-width:72rem; margin:auto; padding:24px; } .public-nav { display:flex; flex-wrap:wrap; gap:12px; } .credits { padding:24px; } @media(max-width:600px){ .canvas { padding:12px } }' };
 const photo = (id: string) => ({ id: id.repeat(64), name: `${id}.png`, mimeType: "image/png", data: "aGVsbG8=" });
@@ -176,14 +176,14 @@ test("initial setup asks for a real name and logo, separates blog/news, and remo
   const messages=[{role:"assistant",text:openingQuestions["create-shop"]},{role:"user",text:"月のアトリエです"}];
   let facts=initialInterviewFacts(messages);assert.equal(facts.name,"月のアトリエ");assert.equal(facts.question,logoQuestion);
   messages.push({role:"assistant",text:logoQuestion},{role:"user",text:"あります"});assert.equal(initialInterviewFacts(messages).question,logoUploadQuestion);
-  messages.push({role:"assistant",text:logoUploadQuestion},{role:"user",text:"後で"},{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"1、2、4、5"});
+  messages.push({role:"assistant",text:logoUploadQuestion},{role:"user",text:"後で"},{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"2"});
   facts=initialInterviewFacts(messages);assert.equal(facts.question,undefined);assert.deepEqual(facts.articles,{blogs:false,announcements:true});
   const config=structuredClone(sample);config.pages=[{id:"contact-copy",slug:"contact-copy",title:"お問い合わせ",navigationLabel:"お問い合わせ",body:"",layout:"standard",imageUrl:""},{id:"faq",slug:"faq",title:"FAQ",navigationLabel:"FAQ",body:"",layout:"standard",imageUrl:""}];
   const cleaned=initialThemeConfig(config,[]);assert.deepEqual(cleaned.pages.map(p=>p.id),["faq"]);assert.deepEqual(cleaned.rules,config.rules);assert.deepEqual(cleaned.menus,config.menus);
 });
 
 test("staff and product introductions are independent choices and never fabricate booking master data", () => {
-  const messages=[{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"1、4、6、7"}];
+  const messages=[{role:"assistant",text:initialFeatureQuestion},{role:"user",text:"2、3、4"}];
   const facts=initialInterviewFacts(messages);
   assert.deepEqual(facts.articles,{blogs:false,announcements:true});
   assert.deepEqual(facts.introductions,{staff:true,products:true});
@@ -211,4 +211,15 @@ test("feature choices follow the actual question despite a preface, changed labe
   assert.deepEqual(initialInterviewFacts([{role:"assistant",text:question},{role:"user",text:"全部。ただしブログは不要"}]).articles,{blogs:false,announcements:true});
   const config={...structuredClone(sample),pages:[{id:"menu",slug:"menu",title:"メニュー・サービス紹介",navigationLabel:"メニュー・サービス紹介",body:"",layout:"standard" as const,imageUrl:""}]};
   assert.equal(initialIntroductionPages(config,facts.introductions).pages.length,1);
+});
+
+
+test("mandatory features are explained and optional features may all be declined", () => {
+  assert.match(initialFeatureQuestion, /お店の紹介・予約・お問い合わせは必須/);
+  assert.doesNotMatch(initialFeatureQuestion, /\n\d+\. (?:予約|お問い合わせ|お店の紹介)/);
+  const messages = [{role:"assistant",text:openingQuestions["create-shop"]},{role:"user",text:"店名は月のアトリエ。ネイルサロンです"},{role:"assistant",text:logoQuestion},{role:"user",text:"ロゴはなし"},{role:"assistant",text:initialFeatureQuestion}];
+  const facts = initialInterviewFacts([...messages,{role:"user",text:"なし"}]);
+  assert.deepEqual(facts.articles,{blogs:false,announcements:false});
+  assert.deepEqual(facts.introductions,{staff:false,products:false});
+  assert.equal(initialSetupDemoReply("なし",messages).answer,additionalPagesQuestion);
 });

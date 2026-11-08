@@ -51,51 +51,17 @@ try{
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await page.screenshot({path:`tmp/initial-theme/before-${language}-${width}.png`,fullPage:true});
     if(process.env.UPDATE_MANUAL==='1'&&width===1280)await writeFile(`public/manual/${language==='en'?'en/':''}04-plan.jpg`,await page.locator('.screen-gallery').screenshot({type:'jpeg',quality:86}));
-    await page.getByRole('button',{name:language==='ja'?'修正する':'Make changes',exact:true}).click();
-    await expect(page.locator('.annotation-canvas')).toBeVisible();
-    const chat=page.locator('.visual-chat-panel');await expect(chat).toBeVisible();await expect(preview).toBeHidden();
-    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-    if(width>=1000){const left=await page.locator('.annotation-canvas').boundingBox(),right=await chat.boundingBox();assert.ok(left.x+left.width<=right.x+1,'annotation and chat are side by side');}
-    const publish=page.getByRole('button',{name:language==='ja'?'仮公開する':'Publish private preview',exact:true});await expect(publish).toBeDisabled();
-    const rect=await page.locator('.annotation-canvas').boundingBox();await page.mouse.move(rect.x+40,rect.y+45);await page.mouse.down();await page.mouse.move(rect.x+180,rect.y+55);await page.mouse.up();
-    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please increase the heading letter spacing. Keep the logo and the booking rules unchanged.');
-    await page.screenshot({path:`tmp/initial-theme/side-chat-marked-${language}-${width}.png`,fullPage:true});
-    if(language==='ja')await page.getByRole('form',{name:'ペンで囲んだ箇所への依頼'}).getByRole('button',{name:'送信',exact:true}).click();
-    else await page.getByRole('textbox',{name:'How would you like to change this?'}).press('Control+Enter');
-    await expect(page.locator('.annotation-canvas')).toHaveCount(0);await expect(publish).toBeEnabled();
-    const workspace=await context.request.get(origin+'/api/workspace').then(r=>r.json());const next=workspace.shops[0].plans.at(-1);
-    assert.equal(next.themeReview.approved,true);assert.equal(next.themeReview.attempts,2);assert.notEqual(next.id,plan.id);
-    for(const key of ['menus','staff','rules','hours','region'])assert.deepEqual(next.config[key],config[key]);
-    assert.equal(workspace.shops[0].published,null);
-    const back=page.getByRole('button',{name:language==='ja'?'前の状態に戻る':'Go back to the previous version',exact:true}),forward=page.getByRole('button',{name:language==='ja'?'次の状態に進む':'Go forward to the next version',exact:true});
-    const firstSpacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);
-    const callsBeforeHistory=themeRequests.length;await back.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(originalSpacing);
-    await forward.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(firstSpacing);assert.equal(themeRequests.length,callsBeforeHistory);
-
-    await expect(chat).toBeVisible();await expect(preview).toBeVisible();
-    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please also make the footer more spacious.');
-    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
-    await expect(chat.locator('.chat-message-user')).toHaveCount(2);await expect(chat.locator('.chat-message-assistant')).toHaveCount(2);
-    const latest=await context.request.get(origin+'/api/workspace').then(r=>r.json());assert.notEqual(latest.shops[0].plans.at(-1).id,next.id,'the same chat revises the replacement plan');
-
-    await back.click();await back.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(originalSpacing);
-    await forward.click();await forward.click();await back.click();
-    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).fill('Please use a calmer heading.');
-    await page.getByRole('textbox',{name:language==='ja'?'ここをどう変えたいですか':'How would you like to change this?'}).press('Control+Enter');
-    await expect(chat.locator('.chat-message-assistant')).toHaveCount(3);await expect(forward).toBeDisabled();
-    assert.ok(themeRequests.at(-1).includes(`/plans/${next.id}/theme`),'a new correction uses the selected earlier plan');
-    const branchSpacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);assert.notEqual(branchSpacing,firstSpacing);
-    await back.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(firstSpacing);
-    await forward.click();await expect.poll(()=>preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing)).toBe(branchSpacing);
-    await page.screenshot({path:`tmp/initial-theme/side-chat-updated-${language}-${width}.png`,fullPage:true});
-    await page.reload();await expect(preview.locator('.theme-heading h1')).toBeVisible();await expect(preview.locator('.theme-image img')).toBeVisible();
-    assert.match(await preview.locator('.theme-heading h1').getAttribute('style')||'',/^$/);
-    const spacing=await preview.locator('.theme-heading h1').evaluate(el=>getComputedStyle(el).letterSpacing);assert.notEqual(spacing,'normal');
+    await expect(page.getByRole('button',{name:language==='ja'?'修正する':'Make changes',exact:true})).toHaveCount(0);
+    await expect(page.locator('.visual-chat-panel, .annotation-canvas')).toHaveCount(0);
+    await expect(page.getByText(language==='ja'?'ページの見た目は、仮公開したあと「画面を試す・編集」から変更できます。':'You can change the page appearance in “Try and edit screens” after publishing a private preview.',{exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:language==='ja'?'仮公開する':'Publish private preview',exact:true})).toBeEnabled();
+    assert.equal(themeRequests.length,0);
+    await page.reload();await expect(preview.locator('.theme-heading h1')).toBeVisible();
     await page.screenshot({path:`tmp/initial-theme/after-${language}-${width}.png`,fullPage:true});
     assert.deepEqual(errors,[]);await context.close();
-    console.log(`${language} ${width}px: custom HTML/CSS, scoped styles, news-only navigation, red-pen capture, review/repair loop and saved revision passed.`);
+    console.log(`${language} ${width}px: read-only theme, later-edit guidance, scoped styles and private publication controls passed.`);
   }
-  assert.equal(reviews,24);
+  assert.equal(reviews,0);
   const english=JSON.parse(await readFile('shared/en.json','utf8'));
   for(const language of ['ja','en']){
     const label=text=>language==='en'?(english[text]||text):text;
@@ -126,9 +92,9 @@ try{
     await expect(dictation).toHaveCount(0);assert.ok(await page.evaluate(()=>window.__shortcutSpeech.every(rec=>!rec.active)),'shortcut stops dictation before sending');
     await expect(log.getByText(label('どういう業種のお店ですか？'),{exact:true})).toBeVisible();
     await composer.fill(language==='ja'?'ネイルサロンです':'A nail salon');await send.click();
-    await expect(log.getByText(/6\.[\s\S]*7\./)).toBeVisible();
+    await expect(log.getByText(/3\.[\s\S]*4\./)).toBeVisible();
     if(process.env.UPDATE_MANUAL==='1')await writeFile(`public/manual/${language==='en'?'en/':''}02-interview.jpg`,await page.locator('.panel.interview').screenshot({type:'jpeg',quality:86}));
-    await composer.fill('1、4、6、7');await send.click();
+    await composer.fill('2、3、4');await send.click();
     await expect(log.getByText(label('それ以外に欲しいページはありますか？'),{exact:true})).toBeVisible();
     await composer.fill(language==='ja'?'ありません':'No other pages');await send.click();
     await expect(log.getByText(label('ほかに伝えたいことはありますか？'),{exact:true})).toBeVisible();

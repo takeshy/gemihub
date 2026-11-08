@@ -1,3 +1,4 @@
+import { sampleCurrency } from "./sample-data";
 import type { ArticleAccessDays, MonthlyTrafficResult, SiteTrafficResult } from "../../shared/article-access";
 import type { BookingAnalytics, ConversionCounts } from "../../shared/booking-analytics";
 import { fromMinor, toMinor, type Currency } from "../../shared/region";
@@ -6,7 +7,7 @@ import { bookingAnalytics } from "../../server/booking-analytics";
 import { sample } from "../../server/domain";
 
 export type AnalyticsFixtureState = "ready" | "empty" | "truncated";
-export function trafficFixture(days: ArticleAccessDays = 30, state: AnalyticsFixtureState = "ready", currency: Currency = "JPY", unit = "day"): SiteTrafficResult | MonthlyTrafficResult {
+export function trafficFixture(days: ArticleAccessDays = 30, state: AnalyticsFixtureState = "ready", currency: Currency = sampleCurrency(), unit = "day"): SiteTrafficResult | MonthlyTrafficResult {
   const data = analyticsFixture(days, state, currency);
   const base = { days, timeZone: data.timeZone, totalViews: data.funnel.entered };
   if (unit === "month") {
@@ -19,7 +20,7 @@ export function trafficFixture(days: ArticleAccessDays = 30, state: AnalyticsFix
   return { ...base, rows: [...data.cohorts].reverse().map(row => ({ date: row.date, views: row.entered, uniqueBrowsers: Math.min(40, row.entered) })) };
 }
 // Fixed observation date keeps screenshots, mature cohorts and pagination reproducible.
-export function analyticsFixture(days: ArticleAccessDays = 30, state: AnalyticsFixtureState = "ready", currency: Currency = "JPY"): BookingAnalytics {
+export function analyticsFixture(days: ArticleAccessDays = 30, state: AnalyticsFixtureState = "ready", currency: Currency = sampleCurrency()): BookingAnalytics {
   const config = structuredClone(sample);
   config.region = currency === "USD" ? { country: "US", timeZone: "America/New_York" } : { country: "JP", timeZone: "Asia/Tokyo" };
   const data = bookingAnalytics(config, [], [], days, new Date("2026-11-07T12:00:00Z"));

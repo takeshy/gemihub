@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AddressInfo } from "node:net";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
 import { google } from "googleapis";
@@ -37,6 +37,35 @@ async function start(t: { after: (fn: () => unknown) => void }, store = new Stor
   };
   return { store, base, call, cookies, session };
 }
+
+test("English judge samples use dollars despite Japanese browser settings, retaining the region on resume", async t => {
+  process.env.JUDGE_INVITE = invite;
+  process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
+  const { store, base, call, cookies } = await start(t);
+  const begin = (language: string, zone: string) => fetch(`${base}/api/judge/start?lang=${language}`, {
+    method: "POST", headers: { Origin: base, "Content-Type": "application/json", "Accept-Language": "ja-JP", Cookie: `gemihub_tz=${encodeURIComponent(zone)}` }, body: JSON.stringify({ invite }),
+  });
+  const response = await begin("en", "Asia/Tokyo");
+  assert.equal(response.status, 200);
+  const owner = cookies(response)[0];
+  const shop = (await store.list<Shop>("shop"))[0];
+  assert.deepEqual(shop.regionDefault, { country: "US", timeZone: "America/New_York" });
+  const proposal = await call(`/api/shops/${shop.id}/plan?lang=en`, { text: "A nail salon" }, owner);
+  assert.equal(proposal.status, 200);
+  const plan = await proposal.json() as { config: { region: { country: string }; menus: { price: number }[] } };
+  assert.equal(plan.config.region.country, "US");
+  assert.equal(plan.config.menus[0].price, 55);
+  assert.equal((await call("/api/judge/start?lang=ja", { invite }, owner)).status, 200);
+  assert.deepEqual((await store.shop(shop.id))!.regionDefault, shop.regionDefault, "a language switch does not convert an existing shop");
+  const reset = await call("/api/judge/reset?lang=en", { requestId: randomUUID() }, owner);
+  assert.equal(reset.status, 200);
+  const fresh = (await store.list<Shop>("shop")).find(item => !item.judge?.archivedAt)!;
+  assert.deepEqual(fresh.regionDefault, shop.regionDefault);
+  assert.equal((await begin("en", "America/Los_Angeles")).status, 200);
+  assert.ok((await store.list<Shop>("shop")).some(item => item.regionDefault?.timeZone === "America/Los_Angeles"));
+  assert.equal((await begin("ja", "America/Los_Angeles")).status, 200);
+  assert.ok((await store.list<Shop>("shop")).some(item => !item.regionDefault && !item.judge?.archivedAt));
+});
 
 test("judges start without Google, see recorded mail instead of sending it, switch to a trial customer and reset", async t => {
   process.env.JUDGE_INVITE = invite;

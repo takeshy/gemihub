@@ -1,7 +1,8 @@
+import { sampleConfig, samplePrice } from "./sample-data";
 import React from "react";
 import type {Meta,StoryObj} from "@storybook/react-vite";
 import {BookingComplete} from "../BookingComplete";
-import {sample,shopDate,type Booking,type ShopConfig} from "../../server/domain";
+import {shopDate,type Booking} from "../../server/domain";
 import {zonedDate,regionOf} from "../../shared/region";
 import {defaultRefundTiers} from "../../server/payment-domain";
 import {simulatePayment} from "../payment-mock";
@@ -9,11 +10,11 @@ import {ShopRegionContext} from "../money";
 import {tr} from "../../shared/i18n";
 
 function example(paid=false,usd=false,addons=false) {
-  const config:ShopConfig=structuredClone(sample);
+  const config=sampleConfig(usd);
   if(usd)config.region={country:"US",timeZone:"America/New_York"};
   config.rules.payment={enabled:paid,refundTiers:structuredClone(defaultRefundTiers)};
   const start=zonedDate(shopDate(config,Date.now()+3*86400000),"10:00",regionOf(config).timeZone);
-  const booking:Booking={id:"booking-example-001",shopId:"example",customer:"customer@example.com",name:tr("山田 花子"),menuId:config.menus[0].id,staffId:config.staff[0].id,price:usd?55.25:addons?6500:5500,message:"",start:start.toISOString(),end:new Date(start.getTime()+(addons?90:60)*60000).toISOString(),status:"active",createdAt:new Date().toISOString(),...(addons?{items:[{menuId:"simple",name:config.menus[0].name,price:5500,duration:60},{menuId:"care",name:tr("角質ケア"),price:1000,duration:30}]}:{})};
+  const booking:Booking={id:"booking-example-001",shopId:"example",customer:"customer@example.com",name:tr("山田 花子"),menuId:config.menus[0].id,staffId:config.staff[0].id,price:addons?samplePrice(config,6500):config.menus[0].price,message:"",start:start.toISOString(),end:new Date(start.getTime()+(addons?90:60)*60000).toISOString(),status:"active",createdAt:new Date().toISOString(),...(addons?{items:[{menuId:"simple",name:config.menus[0].name,price:samplePrice(config,5500),duration:60},{menuId:"care",name:tr("角質ケア"),price:samplePrice(config,1000),duration:30}]}:{})};
   return {config,booking:simulatePayment(booking,config),simulation:true,onMine:()=>{},onNew:()=>{}};
 }
 // The sample shop's names are translated when read, so examples are built while rendering (not at import).

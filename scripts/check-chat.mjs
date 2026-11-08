@@ -108,7 +108,7 @@ try{
     await composer.fill("なし");await page.getByRole("button",{name:"送信",exact:true}).click();
     await log.getByText("どういう業種のお店ですか？",{exact:true}).waitFor();
     await composer.fill("ネイルサロンです。");await page.getByRole("button",{name:"送信",exact:true}).click();
-    await log.getByText(/ほしい機能を次から選んでください。/).waitFor();
+    await log.getByText(/追加したい機能を次から選んでください。/).waitFor();
     assert.equal(await page.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).count(),0);
     await composer.fill("1、2、3");await page.getByRole("button",{name:"送信",exact:true}).click();
     await log.getByText("それ以外に欲しいページはありますか？",{exact:true}).waitFor();
@@ -127,7 +127,7 @@ try{
     await voiceToggle.click();await dictate([["なし。以上。",true]]);
     await log.getByText("どういう業種のお店ですか？",{exact:true}).waitFor();
     await voiceToggle.click();await dictate([["ネイルサロンです。以上。",true]]);
-    await log.getByText(/ほしい機能を次から選んでください。/).waitFor();
+    await log.getByText(/追加したい機能を次から選んでください。/).waitFor();
     await voiceToggle.click();await dictate([["1、2、3。以上。",true]]);
     await log.getByText("それ以外に欲しいページはありますか？",{exact:true}).waitFor();
     await voiceToggle.click();await dictate([["今はありません。以上。",true]]);

@@ -1,12 +1,12 @@
+import { sampleConfig } from "./sample-data";
 import { tr } from "../../shared/i18n";
-import { sample } from "../../server/domain";
 import { draftKey, sampleFixtures, writeDraft } from "../local-preview";
 import type { ShopPage } from "../../server/pages";
 export function seedEditor(state: "unfetched" | "remote" | "conflict" | "local") {
   const key = draftKey("owner@example.com", "story-shop");
   localStorage.removeItem(key);
   if (state === "unfetched") return;
-  const config = structuredClone(sample);
+  const config = sampleConfig();
   config.hours.closedWeekdays = [];
   config.pages = [
     { id: "faq", slug: "faq", title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>もとの案内</h2><p>初めてのお客様へ。</p>"), layout: "standard", imageUrl: "" },

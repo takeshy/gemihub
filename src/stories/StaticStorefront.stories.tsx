@@ -1,17 +1,17 @@
 import React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { StaticStorefront } from "../StaticStorefront";
-import { sample } from "../../server/domain";
+import { sampleConfig } from "./sample-data";
 import { exampleTheme } from "./themes";
 
-const config = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: exampleTheme } };
+const config = { ...sampleConfig(), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: exampleTheme } };
 const post = { id: "winter", category: "blogs" as const, date: "2030-01-02", slug: "winter", title: "Winter designs", excerpt: "Seasonal ideas from our atelier.", body: "## Winter collection\n\nA quiet moment for yourself.", publishedAt: "2030-01-02T00:00:00Z" };
 const meta = {
   title: "公開ページ/静的HTML",
   component: StaticStorefront,
   args: { config, base: "/s/sample", view: { kind: "home", posts: [post] } },
   // Links open generated HTML or authenticated operation screens in the real site.
-  render: args => <div onClick={event => { if ((event.target as HTMLElement).closest("a")) event.preventDefault(); }}><StaticStorefront {...args} /></div>,
+  render: args => <div onClick={event => { if ((event.target as HTMLElement).closest("a")) event.preventDefault(); }}><StaticStorefront {...args} config={{ ...sampleConfig(), appearance: config.appearance }} /></div>,
 } satisfies Meta<typeof StaticStorefront>;
 export default meta;
 type Story = StoryObj<typeof meta>;

@@ -1,3 +1,4 @@
+import { sampleCurrency } from "./sample-data";
 import React, { useMemo } from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { within, userEvent } from "storybook/test";
@@ -13,7 +14,7 @@ import type { AnalyticsUnit } from "../../shared/analytics-grouping";
 import { Screen } from "./Screen";
 
 type Props = { view: AccessView; state?: AnalyticsFixtureState; currency?: Currency; unit?: AnalyticsUnit };
-function AnalyticsPreview({ view, unit = "day", state = "ready", currency = "JPY" }: Props) {
+function AnalyticsPreview({ view, unit = "day", state = "ready", currency = sampleCurrency() }: Props) {
   const api = useMemo(() => (async (path: string) => {
     const url = new URL(path, "https://storybook.invalid");
     const days = Number(url.searchParams.get("days") || 30) as ArticleAccessDays;

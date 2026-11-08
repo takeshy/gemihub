@@ -70,7 +70,7 @@ try {
     await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText("どういう業種のお店ですか？",{exact:true}).waitFor();
   await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("ネイルサロンです。");
   await page.getByRole("button",{name:"送信",exact:true}).click();
-  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText(/ほしい機能を次から選んでください。/).waitFor();
+  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText(/追加したい機能を次から選んでください。/).waitFor();
   await page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true}).fill("1、2、3、4、5、6、7");
   await capture("02-interview.jpg", ".panel.interview");
   await page.getByRole("button",{name:"送信",exact:true}).click();

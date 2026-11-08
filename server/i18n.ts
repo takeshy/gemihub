@@ -17,10 +17,10 @@ export function browserLocale(acceptLanguage: string | undefined): Locale {
   if (!first || first === "*") return "ja";
   return /^ja\b/i.test(first) ? "ja" : "en";
 }
-/** A new shop's region from the first visit: the browser language and its time zone cookie. */
-export function regionForRequest(req: IncomingMessage) {
+/** Real shops use the browser language; judge samples may use the chosen interface language. */
+export function regionForRequest(req: IncomingMessage, language = browserLocale(req.headers["accept-language"])) {
   const zone = req.headers.cookie?.match(/(?:^|;\s*)gemihub_tz=([^;]*)/)?.[1];
   let timeZone: string | undefined;
   try { timeZone = zone ? decodeURIComponent(zone) : undefined; } catch { /* Ignore a malformed cookie. */ }
-  return regionForBrowser(browserLocale(req.headers["accept-language"]), timeZone);
+  return regionForBrowser(language, timeZone);
 }

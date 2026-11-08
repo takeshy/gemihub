@@ -95,7 +95,7 @@ test("initial page data loads during a blocked Drive export for owners, customer
       assert.equal(page.body.registrationRequired, false);
       if (who !== "owner") assert.equal(page.body.config.notificationEmail, undefined);
       const wallet = await f.call(`${base}/coupons`, undefined, who);
-      assert.equal(wallet.status, who === "customer" ? 200 : 403);
+      assert.equal(wallet.status, who === "customer" ? 200 : 401);
       if (who === "customer") assert.deepEqual(wallet.body, []);
     }
     assert.ok(await f.store.get("job", "files"), "reading never consumes the pending export");

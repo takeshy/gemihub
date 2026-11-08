@@ -186,7 +186,7 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
   if(restoring&&!viewPlan)return <p role="status">{tr("保存した会話を読み込んでいます…")}</p>;
   if(restoreError&&!viewPlan)return <div className="alert" role="alert"><p>{error}</p><button onClick={()=>setRestoreRetry(value=>value+1)}>{tr("もう一度読み込む")}</button></div>;
   if(published&&!isOwner)return <p className="muted">{tr("変更は店主が行います。質問はメニューの「相談・質問」からどうぞ。")}</p>;
-  if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={working} onBack={()=>void run(returnToChat)} onAccept={()=>void run(()=>onAccept(viewPlan))} onPlan={plan=>{setViewPlan(plan);setPlans(items=>[plan,...items.filter(item=>item.id!==plan.id)]);}}/></div>;
+  if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={working} onBack={()=>void run(returnToChat)} onAccept={()=>void run(()=>onAccept(viewPlan))}/></div>;
   return <div className="shop-request shop-chat">
     {published&&chat&&<div className="request-intents-reset"><button type="button" className="text-button" disabled={working} onClick={()=>void run(()=>start("modify"))}>{tr("新しい会話をはじめる")}</button></div>}
     <p>{description}</p>

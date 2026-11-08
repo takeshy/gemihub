@@ -1,6 +1,7 @@
+import { sampleConfig, samplePrice } from "./sample-data";
 import { storefrontText } from "../../shared/storefront-copy";
 import { screenStarter, type ScreenId } from "../../shared/screens";
-import { dateIn, regionOf, zonedDate } from "../../shared/region";
+import { currencyOf, dateIn, regionOf, zonedDate } from "../../shared/region";
 import { analyticsFixture, trafficFixture } from "./booking-analytics-fixtures";
 import type { ArticleAccessDays } from "../../shared/article-access";
 import { shopExport, exportColumns, exportCsv, type ExportTable } from "../../server/data-export";
@@ -264,15 +265,14 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
     const templates = [...posts];
     posts.splice(0, posts.length, ...Array.from({ length: 23 }, (_, index) => ({ ...structuredClone(templates[index % templates.length]), id: `pagination-post-${index}` })));
   }
-  const config = structuredClone(sample);
-  if (scenario.startsWith("us-")) { config.region = {country:"US",timeZone:"America/Los_Angeles"}; config.menus = config.menus.map((menu,i)=>({...menu,price:i?78:55.25})); }
+  const config = sampleConfig(scenario.startsWith("us-"));
   if (["menu-addons","manage-addons"].includes(scenario)) {
     config.staff=[];config.ownerBooking=true;config.hours.closedWeekdays=[];
     config.menus=[
       {...config.menus[0]}, {...config.menus[1],name:tr("フットワンカラー")},
       {id:"own-off",name:tr("当店ジェルオフ"),price:0,duration:35,active:true,optionFor:["simple","design"],optionGroup:tr("付替オフ")},
-      {id:"other-off",name:tr("他店ジェルオフ"),price:500,duration:35,active:true,optionFor:["simple","design"],optionGroup:tr("付替オフ")},
-      {id:"care",name:tr("角質ケア"),price:4000,duration:35,active:true,optionFor:["design"]},
+      {id:"other-off",name:tr("他店ジェルオフ"),price:samplePrice(config,500),duration:35,active:true,optionFor:["simple","design"],optionGroup:tr("付替オフ")},
+      {id:"care",name:tr("角質ケア"),price:samplePrice(config,4000),duration:35,active:true,optionFor:["design"]},
     ];
   }
   if(scenario==="weekday-hours"){config.staff=[];config.ownerBooking=true;config.hours={start:"09:00",end:"19:00",closedWeekdays:[3],holidays:[],weekdayHours:[{day:2,start:"09:00",end:"21:00"},{day:5,start:"09:00",end:"21:00"}]};}
@@ -468,7 +468,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
     if (scenario === "crm-empty") { shop.bookings = []; shop.inquiries = []; }
     else {
       shop.bookings.push(...[28, 7].map((days, index) => ({
-        ...bookings[0], id: `past-${index}`, price: index ? 6000 : 5500,
+        ...bookings[0], id: `past-${index}`, price: samplePrice(config, index ? 6000 : 5500),
         start: new Date(Date.now() - days * 86400000).toISOString(),
         end: new Date(Date.now() - days * 86400000 + 3600000).toISOString(),
         createdAt: new Date(Date.now() - (days + 1) * 86400000).toISOString(),
@@ -524,7 +524,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
         },
   };
   const transferFixtures = createTransferFixtures(scenario, shop, session);
-  const couponItems: CouponWalletItem[] = scenario.startsWith("coupon-") ? [{ id: "c".repeat(64), shopId: shop.id, campaignId: "welcome", customer: "guest@example.com", title: tr("初回クーポン"), discount: { type: "percent", value: 10 }, currency: "JPY", issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now()+30*86400000).toISOString(), state: "available" }] : [];
+  const couponItems: CouponWalletItem[] = scenario.startsWith("coupon-") ? [{ id: "c".repeat(64), shopId: shop.id, campaignId: "welcome", customer: "guest@example.com", title: tr("初回クーポン"), discount: { type: "percent", value: 10 }, currency: currencyOf(regionOf(config)), issuedAt: new Date().toISOString(), expiresAt: new Date(Date.now()+30*86400000).toISOString(), state: "available" }] : [];
   const phoneCustomers: CustomerRecord[] = [];
   shop.phoneSettings = { ...defaultPhoneSettings, ...(scenario === "settings" ? { enabled: true, twilioNumber: "+18312167968", rules: tr("希望日時とメニューを復唱してから予約する。") } : {}) };
   const phoneCalls = scenario === "settings" ? [{ id: "phone-sample", callId: "CA-SAMPLE", at: new Date().toISOString(), outcome: "error", transcript: tr("お客様: フットネイルと他店オフをお願いします。\nAI: メニューの組み合わせを確認できませんでした。") }] : [];
@@ -972,7 +972,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
           id: "special",
           name: tr("ご褒美ケアコース"),
           duration: 90,
-          price: 8500,
+          price: samplePrice(next, 8500),
           active: true,
         });
         for (const staff of next.staff) staff.menuIds.push("special");

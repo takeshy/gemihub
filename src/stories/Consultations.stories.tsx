@@ -39,7 +39,7 @@ const answerExamples = {
     },
     "answer": {
       "ja": "スタッフ別売上と日別推移です。金額は施術終了済みの予約に基づきます。\n\n```mermaid\nxychart-beta\ntitle \"スタッフ別売上\"\nx-axis [\"あおい\", \"はる\"]\ny-axis \"JPY\" 0 --> 60000\nbar [55000, 42000]\n```\n\n```mermaid\nxychart-beta\ntitle \"日別売上\"\nx-axis [\"11/01\", \"11/02\", \"11/03\", \"11/04\", \"11/05\"]\ny-axis \"JPY\" 0 --> 30000\nline \"あおい\" [7000, 10000, 8000, 13000, 17000]\nline \"はる\" [5000, 8000, 7000, 11000, 11000]\n```\n\n根拠：予約の完了率・スタッフ別売上（logs:booking-analytics）。",
-      "en": "Staff sales and daily trends, based on appointments whose service has ended.\n\n```mermaid\nxychart-beta\ntitle \"Staff sales\"\nx-axis [\"Aoi\", \"Haru\"]\ny-axis \"JPY\" 0 --> 60000\nbar [55000, 42000]\n```\n\n```mermaid\nxychart-beta\ntitle \"Daily sales\"\nx-axis [\"11/01\", \"11/02\", \"11/03\", \"11/04\", \"11/05\"]\ny-axis \"JPY\" 0 --> 30000\nline \"Aoi\" [7000, 10000, 8000, 13000, 17000]\nline \"Haru\" [5000, 8000, 7000, 11000, 11000]\n```\n\nSource: Booking conversion and staff sales (logs:booking-analytics)."
+      "en": "Staff sales and daily trends, based on appointments whose service has ended.\n\n```mermaid\nxychart-beta\ntitle \"Staff sales\"\nx-axis [\"Aoi\", \"Haru\"]\ny-axis \"USD\" 0 --> 600\nbar [550, 420]\n```\n\n```mermaid\nxychart-beta\ntitle \"Daily sales\"\nx-axis [\"11/01\", \"11/02\", \"11/03\", \"11/04\", \"11/05\"]\ny-axis \"USD\" 0 --> 300\nline \"Aoi\" [70, 100, 80, 130, 170]\nline \"Haru\" [50, 80, 70, 110, 110]\n```\n\nSource: Booking conversion and staff sales (logs:booking-analytics)."
     },
     "source": "logs:booking-analytics"
   },

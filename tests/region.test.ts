@@ -100,6 +100,9 @@ test("first-visit language and new-shop region are independent; explicit languag
   cookie=await login("ja-JP");assert.deepEqual((await store.shop(shop.id))!.regionDefault,shop.regionDefault);
   const response=await fetch(origin+`/api/shops/${shop.id}/plan`,{method:"POST",headers:{Origin:origin,Cookie:cookie,"Content-Type":"application/json"},body:JSON.stringify({text:"A small salon"})});
   assert.equal(response.status,200);const plan=await response.json();assert.equal(plan.config.region.country,"US");assert.equal(plan.config.menus[0].price,55);
+  const englishDemo=await fetch(origin+"/api/demo-login?lang=en",{method:"POST",headers:{Origin:origin,"Content-Type":"application/json","Accept-Language":"ja-JP",Cookie:"gemihub_tz=Asia%2FTokyo"},body:JSON.stringify({role:"owner",email:"english-demo@example.com"})});
+  assert.equal(englishDemo.status,200);
+  assert.deepEqual((await store.list<import("../server/store.ts").Shop>("shop")).find(shop=>shop.owner==="english-demo@example.com")!.regionDefault,us);
   const legacy=await store.createShop("legacy@example.com");assert.equal(legacy.regionDefault,undefined);
   assert.equal((await store.createShop("legacy@example.com",us)).regionDefault,undefined);
 });

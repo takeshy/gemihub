@@ -85,7 +85,7 @@ try {
       "ネイルサロンです。",
     );
   await page.getByRole("button", {name:"送信",exact:true}).click();
-  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText(/ほしい機能を次から選んでください。/).waitFor();
+  await page.getByRole("log",{name:"AIとのチャット",exact:true}).getByText(/追加したい機能を次から選んでください。/).waitFor();
   await capture("02-interview.jpg", ".interview");
   await open("staff", "スタッフ・勤務", "運営/設定/スタッフ・勤務");
   await capture("03-edit.jpg", ".panel:has(.editor)");
