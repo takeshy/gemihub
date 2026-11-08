@@ -29,14 +29,14 @@ Booking/payment reconciliation, configuration/file synchronization and mail deli
 | Shared VM, additional runtime impersonation, IAP, backend, configuration bundle | Kakeratta `infra/shared-vm/` |
 | Existing URL map and HTTPS frontend | kiokuflow `terraform/environments/prod/` |
 
-Do not import the same VM or URL map into a second state. Preserve the existing Kakeratta/kiokuflow tfvars and state, merging only the additional app's outputs. These instructions assume sibling checkouts of `omaiweb`, `kakeratta`, and `gemihub` (kiokuflow), each with the corresponding integration changes.
+Do not import the same VM or URL map into a second state. Preserve the existing Kakeratta/kiokuflow tfvars and state, merging only the additional app's outputs. These instructions assume sibling checkouts of `gemihub`, `kakeratta`, and `kiokuflow`, each with the corresponding integration changes. Adjust paths if your local checkout names differ.
 
 ## 1. Application resources
 
 Use Terraform 1.7 or later and Google Cloud CLI. Operators need permissions for the resources in each project. Configure ADC for the Google provider and GCS backend, for example with `gcloud auth application-default login`.
 
 ```sh
-cd /path/to/omaiweb
+cd /path/to/gemihub
 cp infra/backend.hcl.example infra/backend.hcl
 cp infra/terraform.tfvars.example infra/terraform.tfvars
 # Enter actual domains, existing DNS zone, OAuth client ID, and available models.
@@ -121,7 +121,7 @@ Bundles are private GCS objects referenced by immutable object name in VM metada
 ## 5. Add HTTPS host routing
 
 ```sh
-terraform -chdir=../omaiweb/infra output -json shared_lb_registration \
+terraform -chdir=../gemihub/infra output -json shared_lb_registration \
   > /tmp/gemihub-web-lb-registration.json
 ```
 
@@ -138,7 +138,7 @@ After initial validation, configure `repository` and review/apply the plan to tr
 After deployment, `deploy-gemihub.py` verifies HTTP 200 and a stable container without restarts before persisting the manifest and removing unused images from this service's repository. It keeps the current image, the image used immediately before deployment, and every image referenced by any container. Cleanup never runs before deployment or after a failed health check, and never prunes other apps, containers or volumes. The deployment lock prevents cleanup racing another deployment. The shared boot disk remains 30GB; successful deployments keep only the necessary rollback images.
 
 ```sh
-cd /path/to/omaiweb
+cd /path/to/gemihub
 npm ci --ignore-scripts
 npm run build
 npm test

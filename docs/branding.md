@@ -1,6 +1,6 @@
 # gemihub の識別子
 
-この予約サービスは **gemihub**（https://gemihub.net）、隣の `../gemihub` にあるサービスは **kiokuflow**（https://kiokuflow.net）です。チェックアウトのディレクトリ名はそのままです。この予約サービスはまだリリースされていないため、旧名称のデータ移行や互換処理は設けません。
+この予約サービスは **gemihub**（https://gemihub.net）、別リポジトリのサービスは **kiokuflow**（https://kiokuflow.net）です。GitHubリポジトリは `takeshy/gemihub`、Gitの接続先は `git@github.com:takeshy/gemihub.git` です。デプロイ手順は、このリポジトリを `gemihub`、kiokuflowを `kiokuflow` というディレクトリにチェックアウトした構成を想定します。この予約サービスはまだリリースされていないため、旧名称のデータ移行や互換処理は設けません。
 
 | 用途 | このサービスの名前 |
 | --- | --- |

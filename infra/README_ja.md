@@ -21,7 +21,7 @@ Firestoreロックは、5分間更新されなければ期限切れになりま�
 
 同じ VM や URL map を別の Terraform state に取り込まないでください。既存の Kakeratta / kiokuflow の tfvars と state を使用し、追加アプリの出力だけをマージします。
 
-以下の手順は、`omaiweb`・`kakeratta`・`gemihub`（kiokuflow） のチェックアウトが同じ親ディレクトリにある構成を想定します。各リポジトリで対応する変更を取り込んでから進めてください。
+以下の手順は、`gemihub`・`kakeratta`・`kiokuflow` のチェックアウトが同じ親ディレクトリにある構成を想定します。ローカルのチェックアウト名が異なる場合はパスを読み替えてください。各リポジトリで対応する変更を取り込んでから進めてください。
 
 ## 1. アプリ用リソース
 
@@ -30,7 +30,7 @@ Terraform 1.7 以上と Google Cloud CLI を使います。オペレーターに
 Google provider と GCS backend 用の ADC も設定してください（例：`gcloud auth application-default login`）。
 
 ```sh
-cd /path/to/omaiweb
+cd /path/to/gemihub
 cp infra/backend.hcl.example infra/backend.hcl
 cp infra/terraform.tfvars.example infra/terraform.tfvars
 # 実際のドメイン、既存 DNS zone、OAuth client ID、利用可能なモデルを入力する
@@ -113,7 +113,7 @@ plan は編集済みのローカル tfvars を明示し、適用後に wrapper �
 ## 5. HTTPS のホスト振り分けを追加する
 
 ```sh
-terraform -chdir=../omaiweb/infra output -json shared_lb_registration \
+terraform -chdir=../gemihub/infra output -json shared_lb_registration \
   > /tmp/gemihub-web-lb-registration.json
 ```
 
@@ -132,7 +132,7 @@ kiokuflow の既存 private 設定に、出力の `shared_vm_backends.gemihub-we
 GitHubリポジトリは `takeshy/gemihub` です。Cloud Buildの接続先は `remoteUri = https://github.com/takeshy/gemihub.git` の登録を選びます。現在の登録名は `projects/geminihub-486523/locations/asia-northeast1/connections/gemini-hub-github/repositories/gemihub` です。リポジトリ名を変更した場合は、Gitの転送だけに頼らず、`repository` とトリガーの参照先も確認してください。push後は、そのコミットSHAのビルドが起動・成功したことと、本番の画面が更新されたことを確認します。
 
 ```sh
-cd /path/to/omaiweb
+cd /path/to/gemihub
 npm ci --ignore-scripts
 npm run build
 npm test
