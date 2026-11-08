@@ -2453,6 +2453,15 @@ export function createApp(
         }
         // Browser capture and model calls must not hold the ordinary shop-operation lock.
         if (method === "POST" && (action === "visual/propose" || /^plans\/[^/]+\/theme$/.test(action))) {
+          assertOwner(user, shop);
+          const proposalInput = action === "visual/propose" ? z.object({ id: z.string(), requestId: z.uuid().optional(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), messages: visualMessagesSchema.optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000)) : undefined;
+          let queuedProgress: VisualGenerationProgress | undefined;
+          if (proposalInput) {
+            const visual = await store.get<VisualRequest>("visual", proposalInput.id);
+            if (!visual || visual.shopId !== shop.id) fail(409, tr("変更対象を選び直してください"));
+            queuedProgress = { shopId: shop.id, visualId: visual.id, requestId: proposalInput.requestId || randomUUID(), instruction: proposalInput.instruction, stage: "waiting", attempt: 0, startedAt: Date.now(), updatedAt: Date.now() };
+            await store.put("visualGenerationProgress", digest(`${visual.id}:${queuedProgress.requestId}`), queuedProgress);
+          }
           const generateVisual = () => store.locked(`visual-generation:${shop.id}:${action}`, async () => {
             const fresh = await store.locked(shop.id, async () => {
               const latest = (await store.shop(shop.id))!;
@@ -2499,14 +2508,14 @@ export function createApp(
             if (action === "visual/propose" && method === "POST") {
               assertOwner(user, fresh);
               if (fresh.publishingPlanId) fail(409, tr("公開処理が完了してからお試しください"));
-              const input = z.object({ id: z.string(), requestId: z.uuid().optional(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), messages: visualMessagesSchema.optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000));
+              const input = proposalInput!;
               if (input.applied && !input.revision) fail(400, tr("変更対象を選び直してください"));
               const visual = await store.get<VisualRequest>("visual", input.id);
               const source = fresh.published ? await effective(fresh) : null;
               if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || !same(source, visual.source))
                 fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
-              const requestId = input.requestId || randomUUID();
-              let progress: VisualGenerationProgress = { shopId: fresh.id, visualId: visual.id, requestId, instruction: input.instruction, stage: "preparing", attempt: 0, startedAt: Date.now(), updatedAt: Date.now() };
+              const requestId = queuedProgress!.requestId;
+              let progress: VisualGenerationProgress = { ...queuedProgress!, stage: "preparing", startedAt: Date.now(), updatedAt: Date.now() };
               const saveProgress = async (stage: VisualStage, attempt = progress.attempt, error?: string) => {
                 progress = { ...progress, stage, attempt, updatedAt: Date.now(), ...(error ? { error } : {}) };
                 await store.put("visualGenerationProgress", digest(`${visual.id}:${requestId}`), progress);
@@ -2524,6 +2533,7 @@ export function createApp(
                   const visualPhase = async <T>(phase: string, run: () => Promise<T>) => {
                     currentAiSignal()?.throwIfAborted();
                     if (phase === "generate") visualAttempt++;
+                    progress = { ...progress, modelAttempt: 1 };
                     await saveProgress(phase === "generate" ? visualAttempt > 1 ? "repairing" : "generating" : "reviewing", visualAttempt);
                     const started = Date.now();
                     const fields = { event: "visual_generation_phase", shopId: fresh.id, visualId: visual.id, target: input.target, phase, attempt: visualAttempt };
@@ -2555,7 +2565,7 @@ export function createApp(
                     assertOwner(user, latest);
                   });
                   return candidate;
-                });
+                }, async modelAttempt => { progress = { ...progress, modelAttempt };await saveProgress(progress.stage); });
                 await saveProgress("complete");
                 return json(res, { ...proposed, summary: planSummary(visual.config, proposed.config) });
               } catch (error) {
@@ -2565,7 +2575,15 @@ export function createApp(
             }
           });
           // The operation budget starts after the per-shop queue and request body.
-          return await generateVisual();
+          try { return await generateVisual(); }
+          catch (error) {
+            if (queuedProgress) {
+              const id = digest(`${queuedProgress.visualId}:${queuedProgress.requestId}`);
+              const current = await store.get<VisualGenerationProgress>("visualGenerationProgress", id);
+              if (current?.stage === "waiting") await store.put("visualGenerationProgress", id, { ...current, stage: "failed", updatedAt: Date.now(), error: error instanceof Error ? error.message.slice(0, 600) : tr("操作できませんでした") });
+            }
+            throw error;
+          }
         }
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;

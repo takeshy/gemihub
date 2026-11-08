@@ -3,7 +3,7 @@ import { z } from "zod";
 import { tr } from "../shared/i18n.ts";
 import type { ShopConfig } from "./domain.ts";
 import { compactGeneratedStyles } from "./generated-design.ts";
-import { componentCssLimit, selectorComponent, themeCssLimit, themeStyleSchema, themeStylesSchema } from "../shared/theme-styles.ts";
+import { componentCssLimit, selectorComponent, themeCssLimit, themeStyleSchema, themeStylesSchema, type StyleComponent } from "../shared/theme-styles.ts";
 import { presentationCssLimit } from "../shared/presentation.ts";
 
 // Declaration patches let small edits preserve accepted, potentially large styles.
@@ -72,7 +72,7 @@ export function applyPageCssEdits(css: string, input: z.infer<typeof pageCssEdit
   return result.css;
 }
 
-export function applyCssEdits(appearance: ShopConfig["appearance"], edits: z.infer<typeof cssEditsSchema>) {
+export function applyCssEdits(appearance: ShopConfig["appearance"], edits: z.infer<typeof cssEditsSchema>, owner?: StyleComponent) {
   if (!appearance?.theme) throw editFailed(tr("変更対象を選び直してください"));
   const theme = { ...appearance.theme, styles: appearance.theme.styles && [...appearance.theme.styles] };
   for (const edit of edits) {
@@ -95,6 +95,13 @@ export function applyCssEdits(appearance: ShopConfig["appearance"], edits: z.inf
       if (css !== undefined) { styles[index] = { ...style, css }; found = true; }
     });
     if (found) continue;
+    // A new child selector can belong to the selected card module even when its tag is a link.
+    // Append after existing modules so later rules cannot override the new declaration patch.
+    if (owner) {
+      const used = new Set(styles.map(style => style.id));let id = edit.styleId || `edit-${owner}`, sequence = 0;
+      while (used.has(id)) id = `edit-${owner}-${++sequence}`;
+      styles.push({ id, component: owner, css: newRule(edit) });theme.styles = styles;continue;
+    }
     // A new rule must come last so it is not overridden by later modules of the same specificity.
     if (!styles.length) { theme.css = [theme.css, newRule(edit)].filter(Boolean).join("\n"); continue; }
     const component = selectorComponent(edit.selector), last = styles.at(-1)!;

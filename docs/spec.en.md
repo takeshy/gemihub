@@ -454,6 +454,8 @@ Verify with `npm test`, `npm run check:storefront-static`, and the shared public
 - Render the owner's phone preview and comparisons in an independent phone-width viewport so authored media queries use the phone width even on desktop. Red-pen captures include the full phone page and its loaded photos. Preview interactions continue to use fictional data.
 - Generate small custom-page CSS changes as selector/declaration patches, with an optional media condition. Preserve unrelated rules and desktop layouts when changing a phone breakpoint.
 - Translate non-JSON upstream errors into readable error messages while retaining the instruction and pen marks.
+- Hide the sticky comparison action bar while a refinement is being entered or sent. Focus and scroll to the input, showing only Update proposal and Back to comparison. Return to comparison after success; retain input after failure. Distinguish waiting for another edit from retrying a model call that timed out.
+- Give card refinements the actual React selectors: `.recent-post-list > a` is each news/blog card and `.recent-post-list` is its shared grid wrapper. Add new selectors through small declaration patches owned by the selected component, preserving base styles and other components.
 
 ## Shared components and screen styles
 

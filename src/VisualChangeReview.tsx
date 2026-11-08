@@ -17,7 +17,11 @@ export function VisualChangeReview({ before, after, summary, busy, error, progre
   const [instruction, setInstruction] = useState("");
   const syncScroll = useComparisonScroll();
   useEffect(() => { dialog.current?.showModal(); heading.current?.focus(); }, []);
-  useEffect(() => { if (refining) input.current?.focus(); }, [refining]);
+  useEffect(() => {
+    if (!refining) return;
+    input.current?.focus({ preventScroll: true });
+    input.current?.scrollIntoView({ block: "center" });
+  }, [refining]);
   return createPortal(<dialog ref={dialog} className="visual-change-review" aria-labelledby="visual-review-heading" onCancel={event => { event.preventDefault(); if (!busy) onCancel(); }} onClose={event => {
     // Browsers may close a modal despite a prevented cancel; the proposal stays open while a refinement is running.
     if (busy) event.currentTarget.showModal(); else onCancel();
@@ -34,15 +38,20 @@ export function VisualChangeReview({ before, after, summary, busy, error, progre
     {busy && (progress || <p role="status">{tr("修正を確認しています…")}</p>)}
     {refining && <form className="visual-review-refine" onSubmit={event => {
       event.preventDefault(); if (!instruction.trim() || busy) return;
-      void onRefine(instruction.trim()).then(success => { if (success) setInstruction(""); });
+      void onRefine(instruction.trim()).then(success => {
+        if (success) { setInstruction("");setRefining(false);heading.current?.focus(); }
+      });
     }}>
       <label>{tr("さらに変更したいこと")}<textarea ref={input} rows={3} maxLength={4000} disabled={busy} value={instruction} onChange={event => setInstruction(event.target.value)} /></label>
-      <button type="submit" disabled={busy || !instruction.trim()}>{tr("修正案を更新")}</button>
+      <div className="actions">
+        <button type="submit" disabled={busy || !instruction.trim()}>{tr("修正案を更新")}</button>
+        <button type="button" disabled={busy} onClick={() => { setRefining(false);heading.current?.focus(); }}>{tr("比較に戻る")}</button>
+      </div>
     </form>}
-    <div className="actions visual-review-actions">
+    {!refining && <div className="actions visual-review-actions">
       <button type="button" disabled={busy} onClick={onCancel}>{tr("キャンセル")}</button>
       <button type="button" disabled={busy} onClick={() => { setRefining(true); input.current?.focus(); }}>{tr("さらに変更")}</button>
       <button type="button" className="primary" disabled={busy || !canAccept} onClick={onAccept}>OK</button>
-    </div>
+    </div>}
   </dialog>, document.body);
 }

@@ -193,7 +193,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   }, [chatPanel.expanded]);
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, result, error, busy]);
   async function run(fn: () => Promise<void>) {
-    if (locked) return;
+    if (locked || ownsBusy.current) return;
     ownsBusy.current = true; setBusy(true); setWork({ startedAt: Date.now(), stage: "preparing" }); onBusyChange?.(true); setError("");
     try { await fn(); }
     catch (e) { if (alive.current) setError(e instanceof Error ? e.message : String(e)); }

@@ -29,6 +29,7 @@ export function VisualGenerationStatus({ shopId, work }: { shopId: string; work:
   }, [shopId, work.visualId, work.requestId]);
   const stage = progress?.stage || work.stage;
   const labels: Record<VisualStage, string> = {
+    waiting: tr("別の画面修正が終わるのを待っています…"),
     preparing: tr("画面の情報を準備しています…"), identifying: tr("変更する箇所を確認しています…"),
     generating: tr("変更案を作成しています…"), reviewing: tr("PC・スマートフォンの表示を確認しています…"),
     repairing: tr("確認結果をもとに修正案を調整しています…"), complete: tr("修正案の確認が完了しました。"),
@@ -36,6 +37,7 @@ export function VisualGenerationStatus({ shopId, work }: { shopId: string; work:
   };
   return <div className="visual-generation-status" data-stage={stage}>
     <p role="status"><span className="visual-generation-indicator" aria-hidden="true" />{labels[stage]}</p>
+    {!!progress?.modelAttempt && progress.modelAttempt > 1 && stage !== "complete" && stage !== "failed" && <p className="small muted">{tr("AIから応答がなかったため、もう一度試しています（{0}回目）。", progress.modelAttempt)}</p>}
     <div className="small muted"><span role="timer" aria-live="off">{tr("経過：{0}秒", Math.max(0, Math.floor((now - work.startedAt) / 1000)))}</span>{progress && progress.attempt > 1 && <span>{tr("調整：{0}回目", progress.attempt)}</span>}</div>
   </div>;
 }

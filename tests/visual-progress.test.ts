@@ -19,6 +19,22 @@ test('temporary progress is cleaned up after the visual request window', async (
  await store.close();
 });
 const gate=()=>{let release!:()=>void;const promise=new Promise<void>(resolve=>{release=resolve;});return{promise,release};};
+test('a queued refinement reports waiting before its generation budget starts',async t=>{
+ const store=new Store(':memory:'),shop=await store.createShop('queue@example.com');shop.published=structuredClone(sample);await store.saveShop(shop);
+ await store.put('session',digest('owner'),{user:{email:shop.owner,name:'Owner',role:'owner'},expires:Date.now()+600000});
+ const held=gate();let generated=0;
+ const server=createApp(store,{...intelligence,visualAppearance:async current=>{generated++;if(generated===1)await held.promise;return{config:{...current,description:'Updated'},summary:[]};},visualReview:async()=>({approved:true,issues:[]})});
+ await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN=origin;
+ t.after(async()=>{held.release();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));await store.close();});
+ const id=randomUUID();await store.put('visual',id,{id,shopId:shop.id,base:0,source:shop.published,config:shop.published,candidates:[{id:'description',label:'Introduction'}],screen:'about',createdAt:Date.now()});
+ async function api(path:string,data?:unknown){const r=await fetch(`${origin}/api/shops/${shop.id}/${path}`,{method:data?'POST':'GET',headers:{Origin:origin,Cookie:'gemihub_session=owner','Content-Type':'application/json'},body:data?JSON.stringify(data):undefined});return{status:r.status,body:await r.json()};}
+ async function wait(requestId:string,expected:string){for(let i=0;i<100;i++){const p=(await api(`visual/${id}/progress?requestId=${requestId}`)).body;if(p?.stage===expected)return p;await new Promise(resolve=>setTimeout(resolve,10));}assert.fail(`missing ${expected}`);}
+ const firstId=randomUUID(),secondId=randomUUID();
+ const first=api('visual/propose',{id,requestId:firstId,target:'description',instruction:'First'});await wait(firstId,'generating');
+ const second=api('visual/propose',{id,requestId:secondId,target:'description',instruction:'Second'});await wait(secondId,'waiting');assert.equal(generated,1);
+ held.release();assert.equal((await first).status,200);assert.equal((await second).status,200);
+ assert.equal((await wait(secondId,'complete')).modelAttempt,1);assert.equal(generated,2);assert.deepEqual((await store.shop(shop.id))!.published,shop.published);
+});
 test('visual progress stays readable during generation/review, separates retries and protects the shop',async t=>{
  const store=new Store(':memory:');const shop=await store.createShop('owner@example.com');shop.published=structuredClone(sample);await store.saveShop(shop);
  await store.put('session',digest('owner'),{user:{email:shop.owner,name:'Owner',role:'owner'},expires:Date.now()+600000});

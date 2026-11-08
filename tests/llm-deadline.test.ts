@@ -25,11 +25,12 @@ test("each visual model call gets 120 seconds and a retry leaves room for render
   } } } as unknown as OpenAI);
   t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
   const before = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: { ...standardTheme, css: ".icon{color:red}" } } };
+  const retries: number[] = [];
   const pending = withAiDeadline(visualGenerationTimeoutMs, async () => {
     const result = await proposeVisualAppearance(before, "Make the icon green", [], { target: "component:icons" });
     assert.equal(currentAiSignal()!.aborted, false, "the operation still has time for review");
     return result;
-  });
+  }, async attempt => { retries.push(attempt); });
   await new Promise<void>(resolve => setImmediate(resolve));
   assert.equal(signals.length, 1);
   t.mock.timers.tick(90001);
@@ -38,6 +39,7 @@ test("each visual model call gets 120 seconds and a retry leaves room for render
   t.mock.timers.tick(visualModelTimeoutMs - 90001 + 1);
   const result = await pending;
   assert.equal(signals.length, 2);
+  assert.deepEqual(retries, [2], "the progress observer sees the model retry");
   assert.equal(signals[0].aborted, true);
   assert.equal(signals[1].aborted, false);
   assert.match(sharedThemeCss(result.config.appearance!.theme!), /#008000/);

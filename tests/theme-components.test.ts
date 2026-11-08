@@ -99,6 +99,28 @@ test("publication and restoration keep shared components, frame CSS and separate
   assert.deepEqual(restored.menus, local.menus);
 });
 
+test("news card refinement adds small rules for actual link cards without rewriting base styles", async () => {
+  const before = config();
+  before.appearance!.theme = { ...standardTheme, css: '.on-content{color:#383234}.recent-posts{padding:28px}' };
+  const split = splitThemeStyles(before.appearance!.theme!);
+  assert.ok(!split.styles!.some(style => style.component === "cards"));
+  const result = await proposeVisualAppearance(before, "お知らせとブログのカードに切れ目がほしい", [], { target: "component:cards", generate: async request => {
+    const context = JSON.parse(request.contents[0].parts![0].text!);
+    assert.equal(context.componentStyleId, "edit-cards");
+    assert.ok(context.componentElements.some((element: { selector: string }) => element.selector === ".recent-post-list > a"));
+    assert.ok(context.componentElements.some((element: { selector: string; description: string }) => element.selector === ".recent-post-list" && element.description.includes("wrapper")));
+    return JSON.stringify({ cssEdits: [
+      { field: "style", styleId: context.componentStyleId, selector: ".on-content .recent-post-list", declarations: [{ property: "gap", value: "16px" }] },
+      { field: "style", styleId: context.componentStyleId, selector: ".on-content .recent-post-list > a", declarations: [{ property: "border", value: "1px solid #ebdce0" }, { property: "background", value: "#fdf7f9" }] },
+    ] });
+  } });
+  const styles = result.config.appearance!.theme!.styles!;
+  assert.deepEqual(styles.filter(style => style.component !== "cards"), split.styles);
+  assert.match(styles.filter(style => style.component === "cards").map(style => style.css).join("\n"), /recent-post-list > a[\s\S]*border: 1px solid #ebdce0/);
+  assert.deepEqual({ ...result.config, appearance: before.appearance }, before);
+  assert.doesNotThrow(() => validateVisualChange(before, result.config, "component:cards"));
+});
+
 test("a part edit preserves an explicit standard-frame flag", async () => {
   const before = config(); before.appearance!.theme!.frame = false;
   const { config: next } = await proposeVisualAppearance(before, "Change header spacing", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { theme: { headerCss: "header{padding:40px}" } } }) });

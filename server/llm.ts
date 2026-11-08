@@ -25,11 +25,11 @@ async function beforeModelCall() {
 
 const unavailable = (message: string) => Object.assign(new Error(message), { status: 503 });
 const modelTimeout = () => Object.assign(new Error(tr("AIの応答に時間がかかっています。少し時間をおいてお試しください。")), { status: 504 });
-const aiDeadline = new AsyncLocalStorage<{ signal: AbortSignal; until: number }>();
+const aiDeadline = new AsyncLocalStorage<{ signal: AbortSignal; until: number; onRetry?: (attempt: number) => Promise<void> }>();
 export const currentAiSignal = () => aiDeadline.getStore()?.signal;
 
 /** One budget includes generation, repairs and rendered reviews; provider retries cannot extend it. */
-export async function withAiDeadline<T>(timeoutMs: number, run: () => Promise<T>): Promise<T> {
+export async function withAiDeadline<T>(timeoutMs: number, run: () => Promise<T>, onRetry?: (attempt: number) => Promise<void>): Promise<T> {
   const parent = aiDeadline.getStore();
   if (parent && (parent.signal.aborted || parent.until <= Date.now())) throw modelTimeout();
   const until = Math.min(Date.now() + timeoutMs, parent?.until ?? Infinity);
@@ -38,7 +38,7 @@ export async function withAiDeadline<T>(timeoutMs: number, run: () => Promise<T>
   let timer: ReturnType<typeof setTimeout> | undefined;
   let abort: (() => void) | undefined;
   try {
-    return await aiDeadline.run({ signal, until }, () => Promise.race([
+    return await aiDeadline.run({ signal, until, onRetry: onRetry || parent?.onRetry }, () => Promise.race([
       Promise.resolve().then(run),
       new Promise<never>((_, reject) => {
         abort = () => reject(modelTimeout());
@@ -76,6 +76,7 @@ async function withDeadline<T>(timeoutMs: number | undefined, run: (signal?: Abo
       if (!signal.aborted) throw error;
       if (operation?.signal.aborted || operation && duration >= remaining || attempt >= 1) throw modelTimeout();
       console.warn(`Model call exceeded ${duration} ms; retrying once`);
+      await operation?.onRetry?.(attempt + 2);
     } finally { clearTimeout(timer); if (abort) signal.removeEventListener("abort", abort); }
   }
 }
