@@ -26,4 +26,4 @@ const meta = { title: "運営/画面の編集/修正案を比較", component: Re
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Header: Story = {};
-export const Retry: Story = { args: { failed: true } };
+export const Retry: Story = { tags: ["expected-alert"], args: { failed: true } };

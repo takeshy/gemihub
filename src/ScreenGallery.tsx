@@ -103,7 +103,7 @@ function ThemeSamples() {
         <label className="field">{tr("メニュー")}<select defaultValue="sample"><option value="sample">{tr("サンプルメニュー")}</option></select></label>
         <label className="field">{tr("メッセージ")}<textarea readOnly rows={2} value={tr("メッセージの見本です。")} /></label>
       </div>
-      <div className="actions"><button type="button" className="primary">{tr("予約する")}</button><button type="button">{tr("戻る")}</button><a>{tr("詳しく見る")}</a></div>
+      <div className="actions"><button type="button" className="primary">{tr("予約する")}</button><button type="button">{tr("戻る")}</button><a>{tr("詳しく見る")}</a><svg className="icon" role="img" aria-label={tr("アイコン")} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg></div>
       <p className="notice">{tr("ご案内の見本です。実際の予約や送信は行いません。")}</p>
     </section>
   </div>;

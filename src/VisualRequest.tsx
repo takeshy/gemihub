@@ -11,6 +11,9 @@ import { submitOnShortcut } from "./submit-shortcut";
 import { MenuImage } from "./MenuImage";
 import { VisualChangeReview } from "./VisualChangeReview";
 import { useChatPanelCollapse } from "./ChatPanelCollapse";
+import { VisualGenerationStatus, type VisualWork } from "./VisualGenerationProgress";
+import { createRequestId } from "./request-id";
+import { visualGenerationTimeoutMs } from "../shared/visual-progress";
 import type { VisualMessage } from "../shared/visual-conversation";
 import type { VisualPreviewOptions } from "../shared/visual-review";
 
@@ -103,6 +106,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   const [imageIds, setImageIds] = useState<string[]>([]);
   const [instruction, setInstruction] = useState("");
   const [busy, setBusy] = useState(false);
+  const [work, setWork] = useState<VisualWork>();
   const ownsBusy = useRef(false);
   const locked = busy || disabled;
   const [listening, setListening] = useState(false);
@@ -172,10 +176,22 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   useEffect(() => { if (log.current) log.current.scrollTop = log.current.scrollHeight; }, [messages, result, error, busy]);
   async function run(fn: () => Promise<void>) {
     if (locked) return;
-    ownsBusy.current = true; setBusy(true); onBusyChange?.(true); setError("");
+    ownsBusy.current = true; setBusy(true); setWork({ startedAt: Date.now(), stage: "preparing" }); onBusyChange?.(true); setError("");
     try { await fn(); }
     catch (e) { if (alive.current) setError(e instanceof Error ? e.message : String(e)); }
-    finally { if (alive.current) { ownsBusy.current = false; setBusy(false); onBusyChange?.(false); } }
+    finally { if (alive.current) { ownsBusy.current = false; setBusy(false); setWork(undefined); onBusyChange?.(false); } }
+  }
+  async function propose(body: Record<string, unknown> & { id: string }) {
+    const requestId = createRequestId();
+    setWork(current => ({ startedAt: current?.startedAt || Date.now(), stage: "preparing", visualId: body.id, requestId }));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), visualGenerationTimeoutMs + 30000);
+    try {
+      return await api<{ config: ShopConfig; summary: string[]; visualReview: { approved: boolean; attempts: number } }>(`/api/shops/${shopId}/visual/propose`, { ...body, requestId }, { signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted) throw new Error(tr("AIの応答に時間がかかっています。少し時間をおいてお試しください。"));
+      throw error;
+    } finally { clearTimeout(timer); }
   }
   const capture = () => run(async () => {
     setOpen(true); await frame(); await frame();
@@ -195,6 +211,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         const media = { mimeType: "image/png" as const, data: source.split(",")[1] };
         submittedMedia.current = media;
         if (initialPlan) {
+          setWork(current => ({ startedAt: current?.startedAt || Date.now(), stage: "generating" }));
           const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlan.id}/theme`, { instruction: text, messages: previousMessages, preview: reviewPreview, imageIds, media });
           if (!alive.current) return;
           remember({ config: response.plan.config, plan: response.plan });
@@ -202,6 +219,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
           append({ role: "assistant", text: tr("画面イメージを更新しました。確認してください。") });
         } else {
           const combined = [pendingContext.current, text].filter(Boolean).join("\n\n").slice(-4000);
+          setWork(current => ({ startedAt: current?.startedAt || Date.now(), stage: "identifying" }));
           const response = await api<Identified>(`/api/shops/${shopId}/visual/identify`, { media, instruction: combined, messages: previousMessages, preview: reviewPreview, displayed: config, local, ...(screen ? { screen } : {}) });
           if (!alive.current) return;
           pendingContext.current = combined;
@@ -210,7 +228,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
           const selected = response.candidates[0]?.id;
           if (selected) {
             setResult({ ...response, before: structuredClone(config), key: currentKey, scope: scopeKey }); setTarget(selected);
-            const proposed = await api<{ config: ShopConfig; summary: string[]; visualReview: { approved: boolean; attempts: number } }>(`/api/shops/${shopId}/visual/propose`, { id: response.id, target: selected, instruction: combined, imageIds, media });
+            const proposed = await propose({ id: response.id, target: selected, instruction: combined, imageIds, media });
             if (!alive.current) return;
             setProposal({ ...proposed, before: structuredClone(config), context: combined, key: currentKey, scope: scopeKey });
           }
@@ -257,8 +275,8 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       <div ref={log} className="chat-log visual-chat-log" role="log" aria-label={tr("画面の修正の会話")} aria-live="polite">
         {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}><b>{message.role === "user" ? tr("あなた") : "AI"}</b><div className="pre-wrap">{message.text}</div>{!!message.imageIds?.length && <div className="chat-message-images">{message.imageIds.map((id, i) => <MenuImage key={id} imageId={id} imageBase={`/api/shops/${shopId}/menu-images`} name={tr("添付画像{0}", i + 1)} className="chat-message-image" />)}</div>}</article>)}
         {error && <p className="alert" role="alert">{error}</p>}
-        {busy && <p role="status">{tr("修正案を作成し、画面をAIで確認しています…")}</p>}
       </div>
+      {busy && work && !proposal && <VisualGenerationStatus shopId={shopId} work={work} />}
       <form className="chat-composer" aria-label={tr("ペンで囲んだ箇所への依頼")} onSubmit={event => { event.preventDefault(); void submitRequest(); }}>
         <textarea ref={composer} aria-label={tr("ここをどう変えたいですか")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event => submitOnShortcut(event)} rows={3} maxLength={4000} disabled={locked} value={instruction} onChange={event => setInstruction(event.target.value)} placeholder={tr("ここを『季節を楽しむネイル』に変えて")} />
         <div className="chat-composer-toolbar">
@@ -268,7 +286,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         </div>
       </form>
     </aside>, document.body)}
-    {proposal && <VisualChangeReview reviewed={proposal.visualReview?.approved} before={renderPreview?.(proposal.before)} after={renderPreview?.(proposal.config)} summary={proposal.summary} busy={locked} canAccept={proposalIsCurrent} error={proposalIsCurrent ? error : tr("編集中の内容が変わりました。修正案をキャンセルして依頼し直してください。")} onCancel={() => {
+    {proposal && <VisualChangeReview progress={work && <VisualGenerationStatus shopId={shopId} work={work} />} reviewed={proposal.visualReview?.approved} before={renderPreview?.(proposal.before)} after={renderPreview?.(proposal.config)} summary={proposal.summary} busy={locked} canAccept={proposalIsCurrent} error={proposalIsCurrent ? error : tr("編集中の内容が変わりました。修正案をキャンセルして依頼し直してください。")} onCancel={() => {
       discardProposal();
       append({ role: "assistant", text: tr("修正案をキャンセルしました。変更前の内容を保持しています。") });
     }} onAccept={() => {
@@ -280,7 +298,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       if (!result || !proposalIsCurrent) return false;
       let success = false;
       await run(async () => {
-        const next = await api<{ config: ShopConfig; summary: string[]; visualReview: { approved: boolean; attempts: number } }>(`/api/shops/${shopId}/visual/propose`, { id: result.id, target, instruction, messages: messages.map(({ role, text }) => ({ role, text })), applied: proposal.context, imageIds, media: submittedMedia.current, revision: proposal.config });
+        const next = await propose({ id: result.id, target, instruction, messages: messages.map(({ role, text }) => ({ role, text })), applied: proposal.context, imageIds, media: submittedMedia.current, revision: proposal.config });
         if (!alive.current) return;
         setProposal({ ...proposal, ...next, context: [proposal.context, instruction].join("\n\n").slice(-4000) });
         append({ role: "user", text: instruction });

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { fixturesSchema } from "../src/local-preview.ts";
 import type { VisualPreviewData } from "../shared/visual-review.ts";
 import { tr } from "../shared/i18n.ts";
+import { currentAiSignal } from "./llm.ts";
 
 export const visualPreviewOptionsSchema = z.object({
   fixtures: fixturesSchema.optional(), hideHeader: z.boolean().optional(), hideFooter: z.boolean().optional(), articleKey: z.string().max(240).optional(),
@@ -21,10 +22,15 @@ export async function captureVisualScreens(input: VisualPreviewData): Promise<Re
   try { return await capture(input); } finally { release(); }
 }
 async function capture(input: VisualPreviewData): Promise<RenderedVisual[]> {
+  const signal = currentAiSignal();
+  signal?.throwIfAborted();
   const assets = resolve("dist");
   let browser: Browser | undefined;
+  const stop = () => { void browser?.close().catch(() => {}); };
+  signal?.addEventListener("abort", stop, { once: true });
   try {
     browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {}), args: ["--no-sandbox", "--disable-dev-shm-usage"], timeout: 20000 });
+    signal?.throwIfAborted();
     const context = await browser.newContext({ serviceWorkers: "block", locale: input.locale === "ja" ? "ja-JP" : "en-US", reducedMotion: "reduce" });
     const unavailableImages = new Set<string>();
     // A synthetic origin serves only our built preview bundle, never shop/API credentials.
@@ -72,5 +78,5 @@ async function capture(input: VisualPreviewData): Promise<RenderedVisual[]> {
     return results;
   } catch (error) {
     throw Object.assign(new Error(tr("修正後の画面を撮影できませんでした。依頼の内容は保持しています。もう一度お試しください。"), { cause: error }), { status: 503 });
-  } finally { await browser?.close(); }
+  } finally { signal?.removeEventListener("abort", stop); await browser?.close(); }
 }

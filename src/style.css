@@ -2589,7 +2589,7 @@ pre {
 @media (max-width: 600px) { .theme-placeholder { margin: 8px; padding: 10px; } .theme-sample-card { padding: 14px; } }
 .theme-placeholder span { font-size: 14px; }
 .public-shop.custom-theme { max-width: none; padding: 0; }
-.design-root main { min-height: 0; }
+.design-boundary:not([data-style-only]) .design-root main { min-height: 0; }
 .design-boundary { display: block; width: 100%; }
 .theme-image { display: inline-block; max-width: 100%; vertical-align: middle; }
 .theme-image img { display: block; width: 100%; max-width: 100%; height: 100%; object-fit: contain; }
@@ -2839,3 +2839,12 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
   .consultation-history li { grid-template-columns: minmax(0, 1fr) 44px; }
   .consultation-history .consultation-delete { min-height: 44px; width: 44px; }
 }
+
+.visual-generation-status { flex-shrink: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #f0f4eb; }
+.visual-generation-status p { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 14px; }
+.visual-generation-status > div { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.visual-generation-indicator { flex: 0 0 14px; width: 14px; height: 14px; border: 2px solid #b9cbb2; border-top-color: var(--green); border-radius: 50%; animation: visual-generation-spin 1s linear infinite; }
+.visual-generation-status[data-stage="failed"] .visual-generation-indicator { animation: none; border-color: #b4412b; }
+.visual-generation-status[data-stage="complete"] .visual-generation-indicator { animation: none; border-color: var(--green); background: #cddfc4; }
+@keyframes visual-generation-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .visual-generation-indicator { animation: none; } }

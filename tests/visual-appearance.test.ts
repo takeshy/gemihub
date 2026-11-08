@@ -17,15 +17,44 @@ import { designOf, restoreDesign } from "../server/design-versions.ts";
 import { ChromePreview } from "../src/SiteChrome.tsx";
 
 const theme = { headerHtml: '<header><h1>Original headline</h1><slot name="navigation"></slot></header>', bodyHtml: '<main><slot name="content"></slot></main>', footerHtml: '<footer><slot name="content"></slot></footer>', css: 'h1{color:#193e32}' };
+test("small icon color patches preserve large accepted CSS, media rules, importance and business data", async () => {
+  const padding = Array.from({ length: 180 }, (_, i) => `.item-${i}{padding:${i}px;margin:0}`).join("");
+  const css = `${padding}\n.icon { color: blue !important; width: 20px; } @media(max-width:600px){.icon{color:blue;width:18px}}`;
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: { ...theme, css } } };
+  const before = structuredClone(current);
+  const { config } = await proposeVisualAppearance(current, "Make the icon green", [], { generate: async request => {
+    assert.match(request.system, /prefer cssEdits/);
+    return JSON.stringify({ cssEdits: [{ field: "css", selector: ".icon", declarations: [{ property: "color", value: "#198754" }] }] });
+  } });
+  assert.equal(config.appearance!.theme!.css, css.replaceAll("blue", "#198754"));
+  assert.deepEqual({ ...config, appearance: current.appearance }, current);
+  assert.deepEqual(current, before);
+  const added = await proposeVisualAppearance(config, "Style another icon", [], { generate: async () => JSON.stringify({ cssEdits: [{ field: "css", selector: ".new-icon", declarations: [{ property: "fill", value: "currentColor" }] }] }) });
+  assert.match(added.config.appearance!.theme!.css, /\.new-icon\s*\{\s*fill:\s*currentColor/);
+});
+
+test("CSS patches retain scope and safety validation and require an existing theme", async () => {
+  const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme } };
+  const patch = (field = "headerCss", value = "green") => ({ cssEdits: [{ field, selector: ".icon", declarations: [{ property: "color", value }] }] });
+  const next = await proposeVisualAppearance(current, "Change header icon", [], { target: "part:header", generate: async () => JSON.stringify(patch()) });
+  assert.equal(next.config.appearance!.theme!.css, theme.css);
+  for (const [target, result] of [
+    ["part:header", patch("css")], ["appearance", patch("headerCss")],
+    ["appearance", patch("css", "red;display:none")], ["appearance", patch("css", "url(https://example.com/track)")],
+  ] as const) await assert.rejects(proposeVisualAppearance(current, "Change icon", [], { target, generate: async () => JSON.stringify(result) }));
+  await assert.rejects(proposeVisualAppearance({ ...current, appearance: undefined }, "Change icon", [], { generate: async () => JSON.stringify(patch("css")) }));
+});
+
 test("pen changes compact long formatting and repair truly oversized CSS within the selected scope", async () => {
   const current = { ...structuredClone(sample), appearance: { accent: "sage" as const, layout: "standard" as const, imageUrl: "", theme: structuredClone(theme) } };
   const before = structuredClone(current);
-  let calls = 0;
-  const { config } = await proposeVisualAppearance(current, "Adjust the header", [], { target: "part:header", generate: async () => {
+  let calls = 0; const repairs: number[] = [];
+  const { config } = await proposeVisualAppearance(current, "Adjust the header", [], { target: "part:header", onRepair: async attempt => { repairs.push(attempt); }, generate: async () => {
     calls++;
     return JSON.stringify({ appearance: { theme: { headerCss: calls === 1 ? ':root{--large:"' + "x".repeat(12000) + '"}' : '/* ' + "formatting".repeat(1600) + ' */ header { padding: 24px; }' } } });
   } });
   assert.equal(calls, 2);
+  assert.deepEqual(repairs, [1]);
   assert.equal(config.appearance?.theme?.headerCss, "header{padding:24px;}");
   assert.equal(config.appearance?.theme?.css, theme.css);
   assert.deepEqual(config.footer, current.footer);

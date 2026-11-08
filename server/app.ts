@@ -29,6 +29,7 @@ import { staffAccounts, staffAccountKey, type StaffAccount, type StaffMember } f
 import type { InquiryInteraction } from "./inquiries.ts";
 import { createPublicInquiry, inquiryMailRecipient, maxInquiryMailAttempts, readInquiries, stageInquiryFiles, stagePublicInquiry, writeInquiry } from "./inquiry-service.ts";
 import type { InquiryFileStorage } from "./inquiry-files.ts";
+import { visualGenerationTimeoutMs, type VisualGenerationProgress, type VisualStage } from "../shared/visual-progress.ts";
 import { answerConsultation, appendVoiceConsultation, deleteConsultation, consultationVoiceSchema } from "./consultations.ts";
 import { conversations, createConversation, readConversation, searchConversationHistory, conversationContext, appendChatMessage, attachChatPlan, conversationInputSchema, chatReferenceSchema, chatMessageId, type ShopConversation, type ShopChatMessage, type ChatReference, type ChatGeneration } from "./shop-chat.ts";
 import { answeredFinalDetails, finalDetailsQuestion, initialInterviewFacts, requestIntentSchema, requestIntentInstruction } from "./request-intent.ts";
@@ -97,7 +98,7 @@ import { converse, draftText, type ShopData } from "./assistant.ts";
 import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
 import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, requirePhoneMenuSelection, samePhoneNumber, twilioCredentials, twimlConnect, twimlGatherPin, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
-import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, type AiProvider } from "./llm.ts";
+import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, withAiDeadline, currentAiSignal, type AiProvider } from "./llm.ts";
 import {
   session,
   login,
@@ -2200,6 +2201,15 @@ export function createApp(
         }
         // These reads must stay available while a model call holds the shop write lock.
         if (action === "conversations" && method === "GET") return json(res, { email: user!.email, conversations: await conversations(store, shop, user!.email) });
+        const visualProgress = action.match(/^visual\/([^/]+)\/progress$/);
+        if (visualProgress && method === "GET") {
+          assertOwner(user, shop);
+          const visual = await store.get<VisualRequest>("visual", visualProgress[1]);
+          if (!visual || visual.shopId !== shop.id || Date.now() - visual.createdAt > 1800000) fail(404, tr("見つかりません"));
+          const requestId = z.uuid().parse(url.searchParams.get("requestId"));
+          const progress = await store.get<VisualGenerationProgress>("visualGenerationProgress", digest(`${visual.id}:${requestId}`));
+          return json(res, progress?.shopId === shop.id ? progress : null);
+        }
         const consultAction = action.match(/^conversations\/([a-f0-9]{64})\/(delete|turns)$/);
         if (consultAction && method === "POST") {
           if (consultAction[2] === "turns") return json(res, await appendVoiceConsultation(store, shop, user!.email, consultAction[1], consultationVoiceSchema.parse(await body(req, 100000))));
@@ -2399,7 +2409,8 @@ export function createApp(
         }
         // Browser capture and model calls must not hold the ordinary shop-operation lock.
         if (method === "POST" && (action === "visual/propose" || /^plans\/[^/]+\/theme$/.test(action))) {
-          return await store.locked(`visual-generation:${shop.id}:${action}`, async () => {
+          const generateVisual = () => store.locked(`visual-generation:${shop.id}:${action}`, async () => {
+            currentAiSignal()?.throwIfAborted();
             const fresh = await store.locked(shop.id, async () => {
               const latest = (await store.shop(shop.id))!;
               await assertOperator(user, latest); assertOwner(user, latest);
@@ -2445,34 +2456,63 @@ export function createApp(
             if (action === "visual/propose" && method === "POST") {
               assertOwner(user, fresh);
               if (fresh.publishingPlanId) fail(409, tr("公開処理が完了してからお試しください"));
-              const input = z.object({ id: z.string(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), messages: visualMessagesSchema.optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000));
+              const input = z.object({ id: z.string(), requestId: z.uuid().optional(), target: z.string(), instruction: z.string().trim().min(1).max(4000), applied: z.string().max(4000).optional(), messages: visualMessagesSchema.optional(), imageIds: requestImageIdsSchema.default([]), media: mediaSchema.optional(), revision: shopSchema.optional() }).parse(await body(req, 12000000));
               if (input.applied && !input.revision) fail(400, tr("変更対象を選び直してください"));
               const visual = await store.get<VisualRequest>("visual", input.id);
               const source = fresh.published ? await effective(fresh) : null;
               if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
                 fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
-              const current = input.revision ? validateVisualChange(visual.config, input.revision, input.target) : visual.config;
-              const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
-              // Earlier requests are already in `revision`; repeating them as new work would apply relative changes twice.
-              const instruction = input.applied ? `Already applied to the current draft; do not apply these again:\n${input.applied}\n\nNew request:\n${input.instruction}` : input.instruction;
-              const messages = input.messages ?? visual.messages ?? [];
-              const proposed = await generateReviewedVisual(async (feedback, previous) => {
-                const repair = feedback.length ? `\n\nRepair the previous candidate to satisfy the ORIGINAL request and these rendered-screen review issues. Do not repeat relative edits already present in the candidate.\n${JSON.stringify(feedback)}` : "";
-                const base = previous?.config || current;
-                const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:")) && intelligence.visualAppearance
-                  ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages })
-                  : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, withVisualConversation(instruction + repair, messages)), base, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, base.region, {}, input.media);
-                validateProposedImages(next.config, visual.config, images);
-                return { config: validateVisualChange(visual.config, next.config, input.target) };
-              }, proposal => reviewVisual(fresh, { before: current, after: proposal.config, instruction, target: input.target, screen: visual.screen || (input.target.startsWith("part:") ? input.target.slice(5) : input.target.startsWith("page:") ? `page:${input.target.split(":")[1]}` : "reserve"), messages, preview: visual.preview, images }));
-              await store.locked(shop.id, async () => {
-                const latest = await store.shop(shop.id);
-                if (!latest || latest.publishingPlanId || latest.revision !== visual.base || JSON.stringify(latest.published ? await effective(latest) : null) !== JSON.stringify(visual.source)) fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
-                assertOwner(user, latest);
-              });
-              return json(res, { ...proposed, summary: planSummary(visual.config, proposed.config) });
+              const requestId = input.requestId || randomUUID();
+              let progress: VisualGenerationProgress = { shopId: fresh.id, visualId: visual.id, requestId, stage: "preparing", attempt: 0, startedAt: Date.now(), updatedAt: Date.now() };
+              const saveProgress = async (stage: VisualStage, attempt = progress.attempt, error?: string) => {
+                progress = { ...progress, stage, attempt, updatedAt: Date.now(), ...(error ? { error } : {}) };
+                await store.put("visualGenerationProgress", digest(`${visual.id}:${requestId}`), progress);
+              };
+              await saveProgress("preparing");
+              try {
+                const proposed = await withAiDeadline(visualGenerationTimeoutMs, async () => {
+                  const current = input.revision ? validateVisualChange(visual.config, input.revision, input.target) : visual.config;
+                  const images = await readRequestImages(store, fresh, input.imageIds, crmFiles, store.memory || !input.imageIds.length ? "" : await ownerToken(fresh) || fail(503, tr("店主の Google 再接続が必要です")));
+                  // Earlier requests are already in `revision`; repeating them as new work would apply relative changes twice.
+                  const instruction = input.applied ? `Already applied to the current draft; do not apply these again:\n${input.applied}\n\nNew request:\n${input.instruction}` : input.instruction;
+                  const messages = input.messages ?? visual.messages ?? [];
+                  let visualAttempt = 0;
+                  const visualPhase = async <T>(phase: string, run: () => Promise<T>) => {
+                    currentAiSignal()?.throwIfAborted();
+                    if (phase === "generate") visualAttempt++;
+                    await saveProgress(phase === "generate" ? visualAttempt > 1 ? "repairing" : "generating" : "reviewing", visualAttempt);
+                    const started = Date.now();
+                    const fields = { event: "visual_generation_phase", shopId: fresh.id, visualId: visual.id, target: input.target, phase, attempt: visualAttempt };
+                    if (!store.memory) console.info(JSON.stringify({ ...fields, state: "started" }));
+                    try { return await run(); }
+                    finally { if (!store.memory) console.info(JSON.stringify({ ...fields, state: "finished", durationMs: Date.now() - started })); }
+                  };
+                  const candidate = await generateReviewedVisual((feedback, previous) => visualPhase("generate", async () => {
+                    const repair = feedback.length ? `\n\nRepair the previous candidate to satisfy the ORIGINAL request and these rendered-screen review issues. Do not repeat relative edits already present in the candidate.\n${JSON.stringify(feedback)}` : "";
+                    const base = previous?.config || current;
+                    const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:") || input.target.startsWith("component:")) && intelligence.visualAppearance
+                      ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages, splitStyles: true, onRepair: async () => { currentAiSignal()?.throwIfAborted(); await saveProgress("repairing", ++visualAttempt); } })
+                      : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, withVisualConversation(instruction + repair, messages)), base, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, base.region, {}, input.media);
+                    validateProposedImages(next.config, visual.config, images);
+                    return { config: validateVisualChange(visual.config, next.config, input.target) };
+                  }), proposal => visualPhase("review", () => reviewVisual(fresh, { before: current, after: proposal.config, instruction, target: input.target, screen: visual.screen || (input.target.startsWith("part:") ? input.target.slice(5) : input.target.startsWith("page:") ? `page:${input.target.split(":")[1]}` : "reserve"), messages, preview: visual.preview, images })));
+                  await store.locked(shop.id, async () => {
+                    const latest = await store.shop(shop.id);
+                    if (!latest || latest.publishingPlanId || latest.revision !== visual.base || JSON.stringify(latest.published ? await effective(latest) : null) !== JSON.stringify(visual.source)) fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
+                    assertOwner(user, latest);
+                  });
+                  return candidate;
+                });
+                await saveProgress("complete");
+                currentAiSignal()?.throwIfAborted();
+                return json(res, { ...proposed, summary: planSummary(visual.config, proposed.config) });
+              } catch (error) {
+                await saveProgress("failed", progress.attempt, error instanceof Error ? error.message.slice(0, 600) : tr("操作できませんでした")).catch(reportError);
+                throw error;
+              }
             }
           });
+          return await (action === "visual/propose" ? withAiDeadline(visualGenerationTimeoutMs, generateVisual) : generateVisual());
         }
         return await store.locked(shop.id, async () => {
           const fresh = (await store.shop(shop.id))!;
@@ -2891,17 +2931,17 @@ export function createApp(
                 tr("画面の設定が古くなっています。開き直して印をつけてください"),
               );
             if (input.local?.pageId && !config.pages.some(p => p.id === input.local!.pageId)) fail(400, tr("対象ページがありません"));
-            const targets = visualTargets(config).filter(t => !input.local || (input.local.theme ? t.id === "theme" : input.local.part ? t.id === `part:${input.local.part}` || input.local.part === "header" && headerCopyKeys.some(key => t.id === `copy:${key}`) : input.local.pageId
+            const targets = visualTargets(config).filter(t => !input.local || (input.local.theme ? t.id === "theme" || t.id.startsWith("component:") : input.local.part ? t.id === `part:${input.local.part}` || input.local.part === "header" && headerCopyKeys.some(key => t.id === `copy:${key}`) : input.local.pageId
               ? t.id.startsWith(`page:${input.local.pageId}:`)
               : t.id !== "theme" && !t.id.startsWith("menu:") && !t.id.startsWith("staff:") && !t.id.startsWith("page:") && !t.id.startsWith("part:") && !headerCopyKeys.some(key => t.id === `copy:${key}`)));
             const availableTargets = targets.filter(t => !t.id.startsWith("screen:") || !input.screen || t.id === `screen:${input.screen.id}`);
-            const result = await intelligence.identifyVisual(
+            const result = await withAiDeadline(45000, () => intelligence.identifyVisual(
               input.media,
               availableTargets,
               input.instruction,
               input.screen,
               input.messages,
-            );
+            ));
             const candidates = result.ids.flatMap(id => availableTargets.filter(target => target.id === id)).slice(0, 1);
             if (!candidates.length) return json(res, { id: "", candidates: [], explanation: result.explanation });
             const visual: VisualRequest = {

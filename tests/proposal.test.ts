@@ -4,6 +4,7 @@ import type OpenAI from "openai";
 import { propose } from "../server/ai.ts";
 import { sample, shopSchema } from "../server/domain.ts";
 import { setOpenAiClient, setProviderResolver } from "../server/llm.ts";
+import { splitThemeStyles } from "../shared/theme-styles.ts";
 import { standardTheme } from "../shared/theme-editing.ts";
 
 test("AI shop edits repair oversized theme CSS without losing current facts or repeating the edit", async t => {
@@ -17,7 +18,7 @@ test("AI shop edits repair oversized theme CSS without losing current facts or r
   setOpenAiClient({ responses: { create: async (body: { input: unknown }) => {
     calls++;
     if (calls > 1) assert.match(JSON.stringify(body.input), /without applying the original edit again/);
-    return { output_text: JSON.stringify({ config: { ...(calls > 1 ? { header: { title: "Unrequested replacement" }, menus: [] } : {}), appearance: { theme: { css: calls === 1 ? ':root{--large:"' + "x".repeat(12000) + '"}' : '.public-nav{gap:24px}' } } } }), output: [] };
+    return { output_text: JSON.stringify({ config: { ...(calls > 1 ? { header: { title: "Unrequested replacement" }, menus: [] } : {}), appearance: { theme: { css: calls === 1 ? ':root{--large:"' + "x".repeat(24000) + '"}' : '.public-nav{gap:24px}' } } } }), output: [] };
   } } } as unknown as OpenAI);
   const result = await propose("メニューの間隔を少し広げて", current, "owner@example.com");
   assert.equal(calls, 2);
@@ -100,7 +101,7 @@ test("initial GPT proposals accept interview facts without requesting full booki
   assert.equal(calls, 3);assert.equal(result.config.name, "Moon Atelier");
   assert.equal(result.config.description, "");assert.equal(result.config.address, "");
   assert.equal(result.config.pages[0].layout, "standard");assert.equal(result.config.pages[0].imageUrl, "");
-  assert.deepEqual(result.config.appearance!.theme, theme);assert.equal(result.themeReview!.approved, true);
+  assert.deepEqual(result.config.appearance!.theme, splitThemeStyles(theme));assert.equal(result.themeReview!.approved, true);
   assert.equal(result.config.menus[0].price, Math.round(sample.menus[0].price / 100));
   assert.deepEqual(result.config.staff, []);assert.equal(result.config.ownerBooking, true);assert.deepEqual(result.config.rules, sample.rules);
   assert.ok(shopSchema.safeParse(result.config).success);

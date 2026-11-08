@@ -102,10 +102,10 @@ export function replaceShared(config: ShopConfig, value: unknown): ShopConfig {
   const shared = value as Partial<ShopConfig>;
   const appearance: NonNullable<ShopConfig["appearance"]> = shared.appearance || defaultAppearance;
   const incoming = appearance.theme || standardTheme;
-  const theme: Theme = { ...(config.appearance?.theme || standardTheme), bodyHtml: incoming.bodyHtml, css: incoming.css };
+  const theme: Theme = compactTheme({ ...(config.appearance?.theme || standardTheme), bodyHtml: incoming.bodyHtml, css: incoming.css, styles: incoming.styles, bodyCss: incoming.bodyCss, frame: incoming.frame });
   const nextAppearance = withHeaderCopy(appearance, config.appearance?.copy);
   delete nextAppearance.theme;
-  if (config.appearance?.theme || theme.bodyHtml !== standardTheme.bodyHtml || theme.css !== standardTheme.css) nextAppearance.theme = theme;
+  if (config.appearance?.theme || theme.bodyHtml !== standardTheme.bodyHtml || theme.css !== standardTheme.css || theme.styles?.length || theme.bodyCss || theme.frame) nextAppearance.theme = theme;
   const next = { ...config, ...shared, appearance: !config.appearance && same(nextAppearance, defaultAppearance) ? undefined : nextAppearance };
   // A scope is a complete value. An omitted optional setting means the default,
   // so a comparison or restore must not retain the other side's custom screen.
@@ -124,7 +124,7 @@ export function scopedSource(config: ShopConfig | null, scope: ReleaseScope) {
   for (const key of headerCopyKeys) delete copy[key];
   if (Object.keys(copy).length) sharedAppearance.copy = copy; else delete sharedAppearance.copy;
   if (scope.kind === "content") return { ...shared, appearance: { ...defaultAppearance, ...(Object.keys(copy).length ? { copy } : {}), ...(config.appearance?.articles ? { articles: config.appearance.articles } : {}) } };
-  return { ...shared, appearance: { ...sharedAppearance, theme: { ...standardTheme, bodyHtml: appearance.theme?.bodyHtml || standardTheme.bodyHtml, css: appearance.theme?.css || "" } } };
+  return { ...shared, appearance: { ...sharedAppearance, theme: { ...standardTheme, bodyHtml: appearance.theme?.bodyHtml || standardTheme.bodyHtml, css: appearance.theme?.css || "", ...(appearance.theme?.frame ? { frame: true } : {}), ...(appearance.theme?.styles ? { styles: appearance.theme.styles } : {}), ...(appearance.theme?.bodyCss ? { bodyCss: appearance.theme.bodyCss } : {}) } } };
 }
 export function scopedConfig(current: ShopConfig | null, local: ShopConfig, scope: ReleaseScope): ShopConfig {
   if (scope.kind === "content") return replaceContent(current || local, scopedSource(local, scope));

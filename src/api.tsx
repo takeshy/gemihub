@@ -1,6 +1,6 @@
-import { tr } from "../shared/i18n";
 import { getLocale } from "../shared/i18n";
 import { createContext, useContext } from "react";
+import { readApiResponse } from "./api-response";
 
 async function api<T = Record<string, unknown>>(
   path: string,
@@ -14,9 +14,7 @@ async function api<T = Record<string, unknown>>(
     signal: options?.signal,
     keepalive: options?.keepalive,
   });
-  const v = await r.json();
-  if (!r.ok) throw new Error(v.error || tr("操作できませんでした"));
-  return v;
+  return readApiResponse<T>(r);
 }
 
 export type ApiClient = typeof api;

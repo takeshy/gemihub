@@ -24,27 +24,59 @@ async function beforeModelCall() {
 }
 
 const unavailable = (message: string) => Object.assign(new Error(message), { status: 503 });
+const modelTimeout = () => Object.assign(new Error(tr("AIの応答に時間がかかっています。少し時間をおいてお試しください。")), { status: 504 });
+const aiDeadline = new AsyncLocalStorage<{ signal: AbortSignal; until: number }>();
+export const currentAiSignal = () => aiDeadline.getStore()?.signal;
+
+/** One budget includes generation, repairs and rendered reviews; provider retries cannot extend it. */
+export async function withAiDeadline<T>(timeoutMs: number, run: () => Promise<T>): Promise<T> {
+  const parent = aiDeadline.getStore();
+  if (parent && (parent.signal.aborted || parent.until <= Date.now())) throw modelTimeout();
+  const until = Math.min(Date.now() + timeoutMs, parent?.until ?? Infinity);
+  const controller = new AbortController();
+  const signal = parent ? AbortSignal.any([controller.signal, parent.signal]) : controller.signal;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let abort: (() => void) | undefined;
+  try {
+    return await aiDeadline.run({ signal, until }, () => Promise.race([
+      Promise.resolve().then(run),
+      new Promise<never>((_, reject) => {
+        abort = () => reject(modelTimeout());
+        signal.addEventListener("abort", abort, { once: true });
+        timer = setTimeout(() => controller.abort(), Math.max(1, until - Date.now()));
+      }),
+    ]));
+  } finally { clearTimeout(timer); if (abort) signal.removeEventListener("abort", abort); }
+}
 /**
  * Runs one model call. With `timeoutMs`, a call that has not answered in time is aborted and retried
  * once: an occasional response takes minutes while the same request normally answers in seconds.
  */
 async function withDeadline<T>(timeoutMs: number | undefined, run: (signal?: AbortSignal) => Promise<T>): Promise<T> {
-  if (!timeoutMs) return run();
+  const operation = aiDeadline.getStore();
+  if (!timeoutMs && !operation) return run();
   for (let attempt = 0; ; attempt++) {
-    const controller = new AbortController(), signal = controller.signal;
+    if (operation && (operation.signal.aborted || operation.until <= Date.now())) throw modelTimeout();
+    const remaining = operation ? operation.until - Date.now() : Infinity;
+    const duration = Math.min(timeoutMs || Infinity, remaining);
+    const controller = new AbortController();
+    const signal = operation ? AbortSignal.any([controller.signal, operation.signal]) : controller.signal;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let abort: (() => void) | undefined;
     try {
       // SDK work such as credential lookup may not observe the signal.
       // Enforce the deadline ourselves as well as asking the provider to abort.
       const deadline = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => { controller.abort(); reject(signal.reason); }, timeoutMs);
+        abort = () => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        timer = setTimeout(() => controller.abort(), duration);
       });
       return await Promise.race([run(signal), deadline]);
     } catch (error) {
       if (!signal.aborted) throw error;
-      if (attempt >= 1) throw Object.assign(new Error(tr("AIの応答に時間がかかっています。少し時間をおいてお試しください。")), { status: 504 });
-      console.warn(`Model call exceeded ${timeoutMs} ms; retrying once`);
-    } finally { clearTimeout(timer); }
+      if (operation?.signal.aborted || operation && duration >= remaining || attempt >= 1) throw modelTimeout();
+      console.warn(`Model call exceeded ${duration} ms; retrying once`);
+    } finally { clearTimeout(timer); if (abort) signal.removeEventListener("abort", abort); }
   }
 }
 export function openAiStatus() {

@@ -5,6 +5,7 @@ import selectorParser from "postcss-selector-parser";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
 import { tr } from "./i18n.ts";
+import { themeCssLimit, themeStylesSchema, sharedThemeCss, type StyledTheme } from "./theme-styles.ts";
 
 export type Presentation = { html: string; css: string };
 export const presentationCssLimit = 12000;
@@ -111,10 +112,9 @@ export function presentationSlots(design: Presentation | undefined, allowed: str
 }
 
 const html = z.string().min(1).max(20000);
-type ThemeCss = { css: string; headerCss?: string; footerCss?: string };
 // Validation and rendering must see the same stylesheet for a part.
-const themePartCss = (theme: ThemeCss, part: "header" | "body" | "footer") => [theme.css, part === "header" ? theme.headerCss : part === "footer" ? theme.footerCss : ""].filter(Boolean).join("\n");
-export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHtml: html, css: z.string().max(presentationCssLimit), headerCss: z.string().max(presentationCssLimit).optional(), footerCss: z.string().max(presentationCssLimit).optional() }).superRefine((theme, ctx) => {
+const themePartCss = (theme: StyledTheme, part: "header" | "body" | "footer") => [sharedThemeCss(theme), theme[`${part}Css`]].filter(Boolean).join("\n");
+export const themeSchema = z.object({ headerHtml: html, bodyHtml: html, footerHtml: html, css: z.string().max(themeCssLimit), frame: z.boolean().optional(), styles: themeStylesSchema.optional(), bodyCss: z.string().max(presentationCssLimit).optional(), headerCss: z.string().max(presentationCssLimit).optional(), footerCss: z.string().max(presentationCssLimit).optional() }).superRefine((theme, ctx) => {
   const parts = [
     ["header", theme.headerHtml, ["title", "subtitle", "details", "image", "navigation"], ["navigation"]],
     ["body", theme.bodyHtml, ["content"], ["content"]],

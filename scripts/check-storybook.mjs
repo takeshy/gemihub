@@ -25,7 +25,7 @@ try {
     args: ["--no-sandbox", "--no-proxy-server", "--host-resolver-rules=MAP storybook.test 127.0.0.1"],
   });
   const index = JSON.parse(await readFile(resolve(root, "index.json"), "utf8"));
-  const entries = Object.values(index.entries).filter(entry => entry.type === "story");
+  const entries = Object.values(index.entries).filter(entry => entry.type === "story" && (!process.env.STORYBOOK_ONLY || entry.id.includes(process.env.STORYBOOK_ONLY)));
   assert.ok(entries.length > 0);
   const failures = [];
   for (const language of ["ja", "en"]) for (const host of ["127.0.0.1", "storybook.test"]) {
@@ -54,8 +54,9 @@ try {
         assert.equal(await page.getByText("画面を読み込めませんでした。ページを再読み込みしてください。", { exact: true }).count(), 0);
         // Stories that demonstrate a failure are tagged "expected-alert" and must actually show one
         // (their play function drives the UI there, so wait for it rather than racing it).
-        if (entry.tags?.includes("expected-alert")) await page.locator('#storybook-root [role="alert"]').first().waitFor();
-        const alerts = await page.locator('#storybook-root [role="alert"]').allTextContents();
+        // Review dialogs are portals outside #storybook-root, including their error messages.
+        if (entry.tags?.includes("expected-alert")) await page.locator('[role="alert"]').first().waitFor();
+        const alerts = await page.locator('[role="alert"]').allTextContents();
         if (entry.tags?.includes("expected-alert")) assert.ok(alerts.length > 0, "expected an error state");
         else assert.deepEqual(alerts, []);
         assert.deepEqual(errors, []);

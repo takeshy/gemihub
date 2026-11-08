@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { parseFragment, serialize, type DefaultTreeAdapterTypes as Html } from "parse5";
 import { themeSchema, themeImageIds, type Theme } from "../shared/presentation.ts";
+import { splitThemeStyles, themeStylesSchema, componentCssLimit } from "../shared/theme-styles.ts";
 import { tr, getLocale } from "../shared/i18n.ts";
 import { generateJson } from "./llm.ts";
 import { compactGeneratedStyles, generatedStyleInstruction } from "./generated-design.ts";
@@ -93,6 +94,9 @@ function themeLayoutContext(config: ShopConfig, images: RequestImage[]) {
   return { headerSlotExample: renderedHeader, footerSlotExample: renderedFooter, navigation: { items: navigationItems(config), count: navigationItems(config).length, instruction: "The application supplies exactly these items inside ONE navigation slot. Do not add hard-coded copies. The owner never needs to specify a link count. Do not impose the reference image's link count on the application's menu. Review only additional navigation authored by the theme, not the required slot items." }, navigationItemTags: ["span", "button", "a"], targetWidths: [320, 390, 768, 1280], note: "These examples show the actual slot wrappers, shop text, enabled navigation labels and structural base CSS. Choose your own layout. Preview/container width can be smaller than the viewport." };
 }
 export async function createInitialTheme(input: { config: ShopConfig; request: string; images: RequestImage[]; screen?: { mimeType: "image/png"; data: string } }, context: ThemeContext = {}, model = generateJson) {
+  // New designs must choose component/part ownership from the first generation.
+  const generationSchema = z.strictObject({ ...themeSchema.shape, css: z.literal(""), styles: themeStylesSchema,
+    headerCss: z.string().max(componentCssLimit), bodyCss: z.string().max(componentCssLimit), footerCss: z.string().max(componentCssLimit) });
   let state: ThemeRun = context.state || { config: input.config, request: input.request, imageIds: input.images.map(image => image.id), attempts: 0, feedback: [] };
   const persist = async () => context.save?.(structuredClone(state));
   const parts = (value: unknown) => [...requestImageParts(value, input.images), ...(input.screen ? [{ text: "Current theme with correction marks. This screen is context, never an asset; exclude it from imageUsage." }, { inlineData: input.screen }] : [])];
@@ -109,10 +113,10 @@ export async function createInitialTheme(input: { config: ShopConfig; request: s
   while (state.attempts < 3 || state.candidate) {
     if (!state.candidate) {
       state = { ...state, attempts: state.attempts + 1, review: undefined, renderedReview: undefined }; await persist();
-      const raw = await model({ system: generationSystem + "\n" + layoutInstruction + "\n" + themeComponentInstruction + "\n" + generatedStyleInstruction, schema: themeSchema.toJSONSchema(), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
+      const raw = await model({ system: generationSystem + "\n" + layoutInstruction + "\n" + themeComponentInstruction + "\n" + generatedStyleInstruction, schema: generationSchema.toJSONSchema(), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
       const parsed = themeSchema.safeParse(normalizeInitialNavigation(compactGeneratedStyles((() => { try { return JSON.parse(raw); } catch { return null; } })()), state.config));
       if (!parsed.success) { state = { ...state, feedback: parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`), candidate: undefined }; await persist(); continue; }
-      state = { ...state, candidate: parsed.data }; await persist();
+      state = { ...state, candidate: splitThemeStyles(parsed.data) }; await persist();
     }
     const candidate = state.candidate!; const used = themeImageIds(candidate);
     const deterministic = [

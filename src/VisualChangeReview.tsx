@@ -3,11 +3,12 @@ import { createPortal } from "react-dom";
 import { tr } from "../shared/i18n";
 import { useComparisonScroll } from "./comparison-scroll";
 
-export function VisualChangeReview({ before, after, summary, busy, error, canAccept = true, reviewed = false, onAccept, onCancel, onRefine }: {
+export function VisualChangeReview({ before, after, summary, busy, error, progress, canAccept = true, reviewed = false, onAccept, onCancel, onRefine }: {
   before: React.ReactNode; after: React.ReactNode; summary: string[]; busy: boolean; error: string;
   onAccept: () => void; onCancel: () => void; onRefine: (instruction: string) => Promise<boolean>;
   canAccept?: boolean;
   reviewed?: boolean;
+  progress?: React.ReactNode;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -30,7 +31,7 @@ export function VisualChangeReview({ before, after, summary, busy, error, canAcc
       <section aria-label={tr("修正案")}><h3>{tr("修正案")}</h3>{after}</section>
     </div>
     {error && <p className="alert" role="alert">{error}</p>}
-    {busy && <p role="status">{tr("修正を確認しています…")}</p>}
+    {busy && (progress || <p role="status">{tr("修正を確認しています…")}</p>)}
     {refining && <form className="visual-review-refine" onSubmit={event => {
       event.preventDefault(); if (!instruction.trim() || busy) return;
       void onRefine(instruction.trim()).then(success => { if (success) setInstruction(""); });

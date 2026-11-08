@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { sharedThemeCss } from "../shared/theme-styles.ts";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
@@ -31,7 +32,7 @@ test("first-review red pen saves a reviewed replacement, preserves backend confi
   const res=await request(path,body,owner);assert.equal(res.status,200);const next=(await res.json()).plan;
   assert.notEqual(next.id,plan.id);assert.equal(next.approved,false);assert.equal(next.themeReview.approved,true);assert.equal(next.themeReview.rendered,true);
   for(const key of ["name","menus","staff","hours","rules","region","pages"] as const)assert.deepEqual(next.config[key],config[key]);
-  assert.match(next.config.appearance.theme.css,/padding:48px/);assert.equal((await store.shop(shop.id))!.published,null);
+  assert.match(sharedThemeCss(next.config.appearance.theme),/padding:48px/);assert.equal((await store.shop(shop.id))!.published,null);
   assert.equal((await request(path,body,owner)).status,200);assert.equal(calls,1,"a lost response does not repeat generation/review");
   assert.equal((await store.get<ThemeRun>("initialThemeRun",next.themeRunId))!.review!.approved,true);
   assert.equal((await readConversation(store,shop,shop.owner,chat.id)).messages.at(-1)!.detail.planId,next.id);

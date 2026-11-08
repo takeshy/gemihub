@@ -12,7 +12,7 @@ import {articlePlainText,articleImagePath,wikiPaths,postImageIds} from "../../se
 import { inquiryStatus, inquiryStatuses } from "../../server/inquiries";
 import { answeredFinalDetails, initialSetupDemoReply, initialInterviewFacts, openingQuestions } from "../../server/request-intent";
 import { initialIntroductionPages } from "../../shared/initial-pages";
-import { exampleTheme } from "./themes";
+import { exampleTheme, contrastTheme } from "./themes";
 import { findRelevantHistory } from "../../server/chat-context";
 import type { ShopChat, ShopChatMessage } from "../../server/shop-chat";
 import { customerProfileSchema, type MemberProfile } from "../../server/customer-profile";
@@ -63,6 +63,7 @@ export type Scenario =
   | "management-dashboard-provisional"
   | "management-dashboard-staff"
   | "whole-page-editor"
+  | "whole-page-editor-contrast"
   | "system-payment"
   | "system-owner-only"
   | "us-settings"
@@ -214,7 +215,7 @@ export function scenarioProps(scenario: Scenario) {
                 ? "/s/salon-nagi"
                 : "/",
     // Remote/conflict fixtures change the FAQ page, so open that page rather than the default booking screen.
-    search: scenario === "whole-page-editor" ? "?screen=theme" : ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry-long" ? "?customer=guest%40example.com&inquiry=pagination-inquiry-22" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : ["crm-detail", "crm-activity-long", "crm-pagination"].includes(scenario) ? "?customer=guest%40example.com" : "",
+    search: scenario.startsWith("whole-page-editor") ? "?screen=theme" : ["editor-remote", "editor-conflict", "editor-local"].includes(scenario) ? "?screen=page%3Afaq" : scenario === "page-builder" ? "?request=1" : scenario.startsWith("crm-images") ? "?customer=guest%40example.com&customerView=images" : scenario === "crm-inquiry-long" ? "?customer=guest%40example.com&inquiry=pagination-inquiry-22" : scenario === "crm-inquiry" ? "?customer=guest%40example.com&inquiry=guest-inquiry" : ["crm-detail", "crm-activity-long", "crm-pagination"].includes(scenario) ? "?customer=guest%40example.com" : "",
     initialTab: scenario.startsWith("owner-transfer-") ? "bookings" : ["editor-unfetched", "onboarding"].includes(scenario) ? undefined :
       (
         {
@@ -223,7 +224,7 @@ export function scenarioProps(scenario: Scenario) {
           manual: "manual",
           analytics: "analytics", consultations: "assistant",
           system: "dashboard", "system-payment": "dashboard", "system-owner-only": "dashboard",
-          "management-dashboard-empty": "dashboard", "management-dashboard-provisional": "dashboard", "management-dashboard-staff": "dashboard", "whole-page-editor": "try",
+          "management-dashboard-empty": "dashboard", "management-dashboard-provisional": "dashboard", "management-dashboard-staff": "dashboard", "whole-page-editor": "try", "whole-page-editor-contrast": "try",
           "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
           "local-editor-pages": "try",
@@ -278,8 +279,8 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
   // Monday is the regular day off; a public holiday Monday opens and the Tuesday after closes instead.
   if(scenario==="special-days-staff")config.hours={start:"10:00",end:"19:00",closedWeekdays:[1],holidays:["2027-01-12"],specialDays:[{date:"2027-01-11",start:"10:00",end:"18:00",staffIds:["haru"]},{date:"2026-12-24",start:"10:00",end:"22:00"}]};
   if(scenario==="special-days"){config.staff=[];config.ownerBooking=true;config.hours={start:"10:00",end:"19:00",closedWeekdays:[1],holidays:["2027-01-12"],specialDays:[{date:"2027-01-11",start:"10:00",end:"18:00"},{date:"2026-12-24",start:"10:00",end:"22:00"}]};}
-  if (scenario === "initial-theme") {
-    config.appearance = { accent: "sage", layout: "standard", imageUrl: "", theme: exampleTheme, articles: { blogs: false, announcements: true } };
+  if (scenario === "initial-theme" || scenario.startsWith("whole-page-editor")) {
+    config.appearance = { accent: "sage", layout: "standard", imageUrl: "", theme: scenario.endsWith("contrast") ? contrastTheme : exampleTheme, articles: { blogs: false, announcements: true } };
     config.pages = initialIntroductionPages(config, { staff: true, products: true }).pages;
   }
   config.hours.closedWeekdays = [];
@@ -812,6 +813,10 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
         if (field === "body") page.body = tr("<h2>ペンで変更した内容</h2><p>ローカルのページ本文を更新しました。</p>");
         else page.title = tr("ペンで変更したページ");
       } else if (input.target === "part:header") next.header.title = tr("季節を楽しむアトリエ");
+      else if (String(input.target).startsWith("component:") && next.appearance?.theme?.styles) {
+        const component = String(input.target).slice(10);
+        next.appearance.theme.styles = next.appearance.theme.styles.map(style => style.component === component ? { ...style, css: style.css.replaceAll("#70435c", "#237c45").replaceAll("#006d77", "#237c45") } : style);
+      }
       else if (input.target === "theme") { next.header.title = tr("季節を楽しむアトリエ"); next.footer.text = tr("お会いできる日を楽しみにしています。"); }
       else if (input.target === "part:footer") next.footer.text = tr("お会いできる日を楽しみにしています。");
       else if (input.target === "name") next.name = tr("季節のアトリエ");
@@ -923,7 +928,8 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
     } else if (action === `/api/shops/${shop.id}/visual/identify`) {
       visualConfig = structuredClone((input.displayed || config) as typeof config);
       const part = (input.local as { part?: "header" | "footer" } | undefined)?.part;
-      if ((input.local as {theme?:boolean})?.theme) result = {id:"story-visual",explanation:tr("ページ全体の見た目をまとめて修正します。"),candidates:[{id:"theme",label:tr("ページ全体")}]};
+      if ((input.local as {theme?:boolean})?.theme && /アイコン|icon/i.test(String(input.instruction))) result = {id:"story-visual",explanation:tr("共通部品：{0}",tr("アイコン")),candidates:[{id:"component:icons",label:tr("アイコン")}]};
+      else if ((input.local as {theme?:boolean})?.theme) result = {id:"story-visual",explanation:tr("ページ全体の見た目をまとめて修正します。"),candidates:[{id:"theme",label:tr("ページ全体")}]};
       else if (part) result = { id: "story-visual", explanation: tr("共通パーツの変更対象を確認してください。"), candidates: [{ id: `part:${part}`, label: part === "header" ? tr("共通ヘッダー") : tr("共通フッター") }] };
       else if (/お便り|ニュース|news|updates/i.test(String(input.instruction))) result = { id: "story-visual", explanation: tr("お便りの見出しを変更できます。内容を確認してください。"), candidates: [{ id: "copy:recentPosts", label: tr("画面の文言：{0}", storefrontText(visualConfig, "recentPosts")) }] };
       else if (/配置|layout/i.test(String(input.instruction)) && ["about", "reserve", "mine", "contact"].includes(String((input.screen as { id?: string })?.id))) {

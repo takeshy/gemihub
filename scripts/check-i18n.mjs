@@ -9,7 +9,7 @@ for(const [source,target] of Object.entries(english)){
 }
 const missing=[];
 const files=['src','server'].flatMap(dir=>fs.readdirSync(dir,{recursive:true}).filter(file=>/\.tsx?$/.test(file)).map(file=>`${dir}/${file}`));
-files.push('shared/shop-infographic.ts','shared/coupons.ts');
+files.push('shared/shop-infographic.ts','shared/coupons.ts','shared/theme-styles.ts');
 let used=0;
 for(const file of files){const text=fs.readFileSync(file,'utf8');const source=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true);function visit(n){
  if(ts.isCallExpression(n)&&ts.isIdentifier(n.expression)&&n.expression.text==='tr'){

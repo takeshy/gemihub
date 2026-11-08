@@ -19,10 +19,14 @@ test("initial themes compact generated formatting before validation and review",
   const result = await createInitialTheme({ config: sample, request: "Keep the design", images: [] }, {}, async call => {
     if (call.purpose) return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
     generations++;
+    const schema = call.schema as { required: string[]; properties: { css: { const: string } } };
+    for (const field of ["styles", "headerCss", "bodyCss", "footerCss"]) assert.ok(schema.required.includes(field));
+    assert.equal(schema.properties.css.const, "");
     return JSON.stringify({ ...theme, css: '/* ' + "formatting".repeat(1600) + ' */ ' + theme.css });
   });
   assert.equal(generations, 1);
-  assert.ok(result.candidate!.css.length < 12000);
+  assert.equal(result.candidate!.css, "");
+  assert.ok(result.candidate!.styles!.length > 0);
   assert.equal(result.review?.approved, true);
 });
 

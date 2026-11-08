@@ -6,7 +6,7 @@ import { MenuImage } from "./MenuImage";
 
 const attributes = new Set("id class title role lang dir width height alt href src target loading decoding viewbox d x y x1 x2 y1 y2 cx cy r rx ry points fill fill-rule fill-opacity stroke stroke-width stroke-linecap stroke-linejoin stroke-dasharray stroke-dashoffset stroke-opacity opacity transform offset stop-color stop-opacity gradientunits gradienttransform preserveaspectratio clip-path mask colspan rowspan scope datetime open".split(" "));
 const property: Record<string, string> = { class: "className", viewbox: "viewBox", colspan: "colSpan", rowspan: "rowSpan", datetime: "dateTime", gradientunits: "gradientUnits", gradienttransform: "gradientTransform", preserveaspectratio: "preserveAspectRatio" };
-export function Presentation({ design, slots, fallback, imageBase, imageSuffix, resolvedImages }: { design?: Design; slots: Record<string, React.ReactNode>; fallback: React.ReactNode; imageBase?: string; imageSuffix?: string; resolvedImages?: Record<string, string> }) {
+export function Presentation({ design, slots, fallback, imageBase, imageSuffix, resolvedImages, resetStructure = true }: { design?: Design; slots: Record<string, React.ReactNode>; fallback: React.ReactNode; imageBase?: string; imageSuffix?: string; resolvedImages?: Record<string, string>; resetStructure?: boolean }) {
   if (!design) return <>{fallback}</>;
   let compiled: ReturnType<typeof compilePresentation>;
   try { compiled = compilePresentation(design); } catch { return <>{fallback}</>; }
@@ -27,10 +27,10 @@ export function Presentation({ design, slots, fallback, imageBase, imageSuffix, 
     }
     if (node.tagName === "a") props.rel = "noopener noreferrer";
     const slot = node.tagName === "slot" ? node.attrs.find(a => a.name === "name")?.value : node.attrs.find(a => a.name === "data-slot")?.value;
-    if (slot) return React.createElement(node.tagName === "slot" ? "div" : node.tagName, { ...props, "data-design-slot": slot }, slots[slot] ?? null);
+    if (slot) return React.createElement(node.tagName === "slot" ? "div" : node.tagName, { ...props, ...(!resetStructure ? { style: { display: "contents" } } : {}), "data-design-slot": slot }, slots[slot] ?? null);
     return React.createElement(node.tagName, props, ["img", "br", "hr", "col"].includes(node.tagName) ? undefined : node.childNodes.map(render));
   };
-  return <div className={`design-boundary ${compiled.id}`} style={{ contain: "layout paint", isolation: "isolate" }}>
-    <style>{presentationBaseCss + "\n" + compiled.css}</style><div className="design-root">{compiled.nodes.map(render)}</div>
+  return <div className={`design-boundary ${compiled.id}`} data-style-only={resetStructure ? undefined : true} style={resetStructure ? { contain: "layout paint", isolation: "isolate" } : { display: "contents" }}>
+    <style>{(resetStructure ? presentationBaseCss + "\n" : "") + compiled.css}</style><div className="design-root" style={resetStructure ? undefined : { display: "contents" }}>{compiled.nodes.map(render)}</div>
   </div>;
 }

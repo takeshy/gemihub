@@ -5,6 +5,7 @@ import { themeSchema, type Theme } from "../shared/presentation";
 import { screenDesignError, screenSlots, screenStarter, type ScreenId } from "../shared/screens";
 import { compactTheme, defaultAppearance, standardTheme, themeHtmlKey, type ThemePart } from "../shared/theme-editing";
 import { ImagePicker } from "./ImageLibrary";
+import { splitThemeStyles, styleComponents, componentLabel, type StyleComponent } from "../shared/theme-styles";
 
 // HTML/CSS editors for built-in screens and the shared theme. Text stays local while it is being
 // written; "Apply to preview" validates it with the same checks as publication.
@@ -84,25 +85,25 @@ export function ThemeDesignEditor({ config, part, shopId, onChange, openFrame }:
   const saved = config.appearance?.theme;
   const base = saved || standardTheme;
   const [html, setHtml] = useState(base[themeHtmlKey(part)]);
-  const [css, setCss] = useState(part === "body" ? base.css : base[`${part}Css`] || "");
+  const [css, setCss] = useState(base[`${part}Css`] || "");
   const [error, setError] = useState("");
   function apply(nextHtml = html, nextCss = css) {
-    const theme: Theme = { ...base, [themeHtmlKey(part)]: nextHtml, ...(part === "body" ? { css: nextCss } : { [`${part}Css`]: nextCss }) };
+    const theme: Theme = { ...base, [themeHtmlKey(part)]: nextHtml, [`${part}Css`]: nextCss };
     const parsed = themeSchema.safeParse(compactTheme(theme));
     if (!parsed.success) { setError(parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(" / ")); return; }
     setError(""); onChange({ ...config, appearance: { ...(config.appearance || defaultAppearance), theme: parsed.data } });
   }
   return <div className="design-editor">
-    <p className="small muted">{part === "body" ? tr("ページ中央の枠の HTML と、ページ全体に使う CSS を編集します。") : tr("ページの上部または下部の HTML と、その部分の CSS を編集します。")}</p>
+    <p className="small muted">{part === "body" ? tr("ページ中央の枠の HTML と、その枠専用の CSS を編集します。") : tr("ページの上部または下部の HTML と、その部分の CSS を編集します。")}</p>
     <SlotList allowed={part === "header" ? ["title", "subtitle", "details", "image", "navigation"] : ["content"]} required={part === "header" ? ["navigation"] : ["content"]} />
     <CodeArea label={part === "header" ? tr("ヘッダーの HTML") : part === "footer" ? tr("フッターの HTML") : tr("全体の枠の HTML")} value={html} onChange={setHtml} rows={part === "header" ? 8 : 5} shopId={shopId} />
-    <CodeArea label={part === "body" ? tr("全体の CSS（ヘッダー・枠・フッター共通）") : part === "header" ? tr("ヘッダー専用の CSS") : tr("フッター専用の CSS")} value={css} onChange={setCss} rows={12} />
+    <CodeArea label={part === "body" ? tr("中央の枠専用の CSS") : part === "header" ? tr("ヘッダー専用の CSS") : tr("フッター専用の CSS")} value={css} onChange={setCss} rows={12} />
     {part !== "body" && openFrame && <button type="button" className="text-button" onClick={openFrame}>{tr("全体の枠・共通 CSS を編集")}</button>}
     <p className="small muted">{rules()}</p>
     {error && <p className="alert" role="alert">{error}</p>}
     <div className="actions">
       {saved && <button type="button" onClick={() => {
-        if (!window.confirm(part === "body" ? tr("枠の HTML と共通 CSS を標準に戻しますか？ヘッダー・フッターの HTML は残ります。") : tr("このパーツの HTML と専用 CSS を標準に戻しますか？他のパーツと共通 CSS は残ります。"))) return;
+        if (!window.confirm(tr("このパーツの HTML と専用 CSS を標準に戻しますか？他のパーツと共通 CSS は残ります。"))) return;
         setHtml(standardTheme[themeHtmlKey(part)]); setCss("");
         apply(standardTheme[themeHtmlKey(part)], "");
       }}>{tr("標準の表示に戻す")}</button>}
@@ -113,7 +114,7 @@ export function ThemeDesignEditor({ config, part, shopId, onChange, openFrame }:
 
 /** One draft and one apply action for the complete frame. */
 export function WholeThemeDesignEditor({ config, shopId, onChange }: { config: ShopConfig; shopId: string; onChange: (config: ShopConfig) => void }) {
-  const [theme, setTheme] = useState<Theme>(() => structuredClone(config.appearance?.theme || standardTheme));
+  const [theme, setTheme] = useState<Theme>(() => splitThemeStyles(structuredClone(config.appearance?.theme || standardTheme)));
   const [error, setError] = useState("");
   const set = (key: keyof Theme, value: string) => setTheme(current => ({ ...current, [key]: value }));
   function apply(value = theme) {
@@ -126,7 +127,21 @@ export function WholeThemeDesignEditor({ config, shopId, onChange }: { config: S
     <CodeArea label={tr("ヘッダーの HTML")} value={theme.headerHtml} onChange={value => set("headerHtml", value)} rows={8} shopId={shopId} />
     <CodeArea label={tr("全体の枠の HTML")} value={theme.bodyHtml} onChange={value => set("bodyHtml", value)} rows={5} shopId={shopId} />
     <CodeArea label={tr("フッターの HTML")} value={theme.footerHtml} onChange={value => set("footerHtml", value)} rows={5} shopId={shopId} />
-    <CodeArea label={tr("全体の CSS（ヘッダー・枠・フッター共通）")} value={theme.css} onChange={value => set("css", value)} rows={10} />
+    <CodeArea label={tr("共通の CSS（部品に分けていないスタイル）")} value={theme.css} onChange={value => set("css", value)} rows={5} />
+    <div className="theme-component-editors">
+      <h4>{tr("共通部品のスタイル")}</h4>
+      <p className="small muted">{tr("部品ごとに編集できます。適用する順序は保持されます。各部品のスマホ表示や選択中のスタイルも同じ部品に置きます。")}</p>
+      {styleComponents.map(component => <details key={component}>
+        <summary>{componentLabel(component)} <span className="small muted">{tr("{0}文字", (theme.styles || []).filter(style => style.component === component).reduce((total, style) => total + style.css.length, 0))}</span></summary>
+        {(theme.styles || []).filter(style => style.component === component).map(style => <CodeArea key={style.id} label={tr("{0}の CSS：{1}", componentLabel(component), style.id)} value={style.css} rows={7} onChange={css => setTheme(current => ({ ...current, styles: current.styles!.map(entry => entry.id === style.id ? { ...entry, css } : entry) }))} />)}
+        <button type="button" onClick={() => setTheme(current => {
+          const styles = current.styles || []; let sequence = 1;
+          while (styles.some(style => style.id === `${component}-${sequence}`)) sequence++;
+          return { ...current, styles: [...styles, { id: `${component}-${sequence}`, component: component as StyleComponent, css: "" }] };
+        })}>{tr("{0}のスタイルを追加", componentLabel(component))}</button>
+      </details>)}
+    </div>
+    <CodeArea label={tr("中央の枠専用の CSS")} value={theme.bodyCss || ""} onChange={value => set("bodyCss", value)} rows={5} />
     <CodeArea label={tr("ヘッダー専用の CSS")} value={theme.headerCss || ""} onChange={value => set("headerCss", value)} rows={5} />
     <CodeArea label={tr("フッター専用の CSS")} value={theme.footerCss || ""} onChange={value => set("footerCss", value)} rows={5} />
     <p className="small muted">{rules()}</p>

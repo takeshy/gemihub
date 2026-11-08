@@ -22,7 +22,7 @@ test("oversized CSS preserves the visual request and live configuration for a su
     async visualAppearance(current, instruction, images, options) {
       return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => {
         generations++;
-        return JSON.stringify({ appearance: { theme: { css: oversized ? ':root{--large:"' + "x".repeat(12000) + '"}' : '.public-nav{gap:24px}' } } });
+        return JSON.stringify({ appearance: { theme: { css: oversized ? ':root{--large:"' + "x".repeat(24000) + '"}' : '.public-nav{gap:24px}' } } });
       } });
     },
     async visualReview() { reviews++;return { approved: true, issues: [] }; },

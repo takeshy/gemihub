@@ -58,3 +58,12 @@ export const CustomPagesEditor: Story = {
   name: "追加ページ・画面ツリーと個別反映",
   args: { scenario: "local-editor-pages" },
 };
+
+export const SharedComponents: Story = {
+  name: "共通部品を分けたページ全体",
+  args: { scenario: "whole-page-editor" },
+};
+export const SharedComponentsContrast: Story = {
+  name: "青系の共通部品とページ全体",
+  args: { scenario: "whole-page-editor-contrast" },
+};

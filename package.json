@@ -97,7 +97,9 @@
     "check:inquiry-workflow": "node --import tsx scripts/check-inquiry-workflow.mjs",
     "capture:manual:inquiries": "node --import tsx scripts/check-inquiry-workflow.mjs --capture",
     "check:consultation-history": "node --import tsx scripts/check-consultation-history.mjs",
-    "check:consultation-stories": "node scripts/check-consultation-stories.mjs"
+    "check:consultation-stories": "node scripts/check-consultation-stories.mjs",
+    "check:visual-progress": "node --import tsx scripts/check-visual-progress.mjs",
+    "check:theme-components": "node --import tsx scripts/check-theme-components.mjs"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",
