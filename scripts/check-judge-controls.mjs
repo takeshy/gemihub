@@ -134,8 +134,9 @@ try {
     await expect(phoneDemo).toContainText(label('電話用の暗証番号'));
     await expect(phoneDemo.locator('a[href^="tel:"]')).toHaveCount(0);
     await expect(phoneDemo.locator('input[type="tel"], form')).toHaveCount(0);
-    await expect(phoneDemo).toContainText('00000000');
-    await expect(phoneDemo).toContainText(label('電話の案内に従い、毎回この8桁の暗証番号を入力してください。8桁で自動確定し、最後のシャープは不要です。番号通知でおかけください。暗証番号はお店の初期化で変わります。'));
+    await expect(phoneDemo).not.toContainText('00000000');
+    await expect(phoneDemo).not.toContainText(language==='ja'?'シャープ':'pound');
+    await expect(phoneDemo).toContainText(label('電話の案内に従い、毎回この8桁の暗証番号を入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。'));
     assert.equal(Object.hasOwn(phoneStatus.phone,'caller'),false);
     const removedRegistration=await context.request.post(`${origin}/api/judge/phone`,{headers:{Origin:origin},data:{caller:'2025550101'}});
     assert.equal(removedRegistration.status(),404);

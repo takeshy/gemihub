@@ -104,8 +104,7 @@ function JudgePhoneDemo({ phone, published }: { phone: JudgePhone; published: bo
     <p>{tr("お店を公開したら、下の番号にかけてテスト予約や問い合わせを試せます。")}</p>
     <p>{tr("かけ先の番号")} <strong>{displayJudgePhone(phone.number)}</strong></p>
     <p>{tr("電話用の暗証番号")} <strong>{phone.pin}</strong></p>
-    <p className="small muted">{tr("電話の案内に従い、毎回この8桁の暗証番号を入力してください。8桁で自動確定し、最後のシャープは不要です。番号通知でおかけください。暗証番号はお店の初期化で変わります。")}</p>
-    <p className="small muted">{tr("00000000 は本来の店舗用の暗証番号です。")}</p>
+    <p className="small muted">{tr("電話の案内に従い、毎回この8桁の暗証番号を入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。")}</p>
     <p className="small muted">{tr("キー入力を確認できない場合は、8桁の番号を1桁ずつお話しください。電話のキーでも入力できます。")}</p>
     {!published && <p className="small muted">{tr("自分のお店を公開してからお試しください")}</p>}
   </section>;

@@ -225,99 +225,41 @@ test("judge phone menus always require scoped PINs and ignore legacy caller regi
   assert.equal(webhookUrl(await f.webhook("+12025550101", "CA-RESET", env.JUDGE_PHONE_NUMBER)), undefined);
 });
 
-test("00000000 routes a shared judge number to its original shop with ordinary reception settings", async t => {
-  const env = {
-    SESSION_SECRET: "original-phone-test-private-session-secret-12345",
-    JUDGE_INVITE: "original-phone-test-invitation-1234567890",
-    JUDGE_UNTIL: new Date(Date.now() + 86400000).toISOString(),
-    JUDGE_PHONE_NUMBER: "+12025550120",
-    JUDGE_PHONE_NUMBER_JA: "+18312167968",
-  };
-  for (const [key, value] of Object.entries(env)) {
-    const previous = process.env[key];
-    process.env[key] = value;
-    t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
-  }
-  const f = await fixture(t);
-  f.config.name = "Original real shop";
-  f.shop.published = f.config;
-  f.shop.locale = "ja";
-  applyPhoneSettings(f.shop, { enabled: true, twilioNumber: env.JUDGE_PHONE_NUMBER_JA, cashBookings: false });
-  await f.store.saveShop(f.shop);
-  const judge = await f.store.createShop("judge-shared@judge.gemihub.invalid");
-  judge.judge = { createdAt: new Date().toISOString() };
-  judge.published = { ...fixtureConfig(), name: "Shared demo shop" };
-  judge.publication = "provisional";
-  await f.store.saveShop(judge);
-  const caller = "+819033334444", registeredCaller = "+819011112222";
-  await f.store.put("judgePhone", judge.id, { shopId: judge.id, caller: registeredCaller });
-  const webhookUrl = (result: { text: string }) => result.text.match(/<Stream url="([^"]+)"/)?.[1];
-  const keypad = (digits = "00000000", from = caller, sid = "CA-ORIGINAL", attempt = 1, to = env.JUDGE_PHONE_NUMBER_JA) =>
-    f.webhook(from, sid, to, { Digits: digits }, `/phone/incoming?pinAttempt=${attempt}`);
-  for (const from of [caller, registeredCaller]) {
-    const prompt = await f.webhook(from, "CA-SHARED-MENU", env.JUDGE_PHONE_NUMBER_JA);
-    assert.match(prompt.text, /<Gather/);
-    assert.match(prompt.text, /0を8回/);
-    assert.equal(webhookUrl(prompt), undefined, "registered judges can also choose the original shop");
-    const selected = phoneStreamContext(new URL(webhookUrl(await keypad("00000000", from))!))!;
-    assert.equal(selected.shopId, f.shop.id);
-    assert.equal(selected.token, phoneStreamToken(f.shop.id, "CA-ORIGINAL", from));
-    assert.equal((await f.store.get<{ caller: string }>("judgePhone", judge.id))?.caller, registeredCaller);
-  }
-  const pin = judgePhonePin(judge.id);
-  const judgeContext = phoneStreamContext(new URL(webhookUrl(await keypad(pin, registeredCaller, "CA-DEMO"))!))!;
-  assert.equal(judgeContext.shopId, judge.id);
-  assert.match(judgeContext.token, /^judge-pin-/);
-
-  const url = webhookUrl(await keypad())!;
-  const ws = await f.stream("CA-ORIGINAL", caller, url);
-  await f.waitFor(() => !!f.liveParameters());
-  assert.match(f.liveParameters().config.systemInstruction, /Original real shop/);
-  const day = dateIn(Date.now(), "Asia/Tokyo");
-  assert.match((await f.invoke("book", "create_booking", { name: "Pat", menuId: "simple", start: `${day}T10:00:00+09:00` })).error, /電話での現金予約は現在受け付けていません/, "the original shop disables cash bookings even though the judge line enables them");
-  assert.equal((await f.invoke("inquiry", "create_inquiry", { name: "Pat", reason: "Original shop inquiry" })).ok, true);
-  assert.equal((await f.store.records<Inquiry>("inquiry", f.shop)).length, 1);
-  assert.equal((await f.store.records<Inquiry>("inquiry", judge)).length, 0);
-  ws.close();
-  await assert.rejects(f.stream("CA-ORIGINAL", caller, url.replace("CA-ORIGINAL", "CA-CHANGED")), /403/);
-  await assert.rejects(f.stream("CA-ORIGINAL", caller, streamUrl(f.origin, f.shop.id, "CA-ORIGINAL", caller, "pin")), /403/);
-
-  await f.store.put("judgePhonePinAttempts", digest(caller), { count: 10, until: Date.now() + 60000 });
-  assert.ok(webhookUrl(await keypad()), "public original-shop routing is independent of the judge PIN guessing budget");
-  assert.equal((await f.store.get<{ count: number }>("judgePhonePinAttempts", digest(caller)))?.count, 10);
-  assert.equal(webhookUrl(await keypad(pin)), undefined, "judge PIN attempts remain limited");
-  assert.equal(webhookUrl(await keypad("00000000", caller, "CA-EXPIRED", 4)), undefined);
-  assert.equal(webhookUrl(await keypad("00000000", "anonymous")), undefined);
-  assert.equal(webhookUrl(await keypad("00000000", caller, "CA-NO-TARGET", 1, env.JUDGE_PHONE_NUMBER)), undefined, "zero never falls back to a demo shop when the dialled number has no original shop");
-  const unsigned = await fetch(`${f.origin}/phone/incoming?pinAttempt=1`, { method: "POST", body: new URLSearchParams({ To: env.JUDGE_PHONE_NUMBER_JA, From: caller, CallSid: "CA-UNSIGNED", Digits: "00000000" }) });
-  assert.equal(unsigned.status, 403);
-
-  f.shop.phone!.enabled = false;
-  await f.store.saveShop(f.shop);
-  assert.equal(webhookUrl(await keypad()), undefined);
-  await assert.rejects(f.stream("CA-ORIGINAL", caller, url), /403/, "disabling the original shop also rejects an already-issued stream");
-  f.shop.phone!.enabled = true;
-  f.shop.phone!.hours = { start: "00:00", end: "23:59", weekdays: [] };
-  await f.store.saveShop(f.shop);
-  assert.match((await keypad()).text, /電話受付の時間外/);
-  await assert.rejects(f.stream("CA-ORIGINAL", caller, url), /403/);
-  delete f.shop.phone!.hours;
-  await f.store.saveShop({ ...f.shop, published: null });
-  assert.equal(webhookUrl(await keypad()), undefined);
-  f.shop.published = f.config;
-  await f.store.saveShop(f.shop);
-
-  const duplicate = await f.store.createShop("duplicate@example.com");
-  duplicate.published = fixtureConfig();
-  applyPhoneSettings(duplicate, { enabled: true, twilioNumber: env.JUDGE_PHONE_NUMBER_JA, cashBookings: true });
-  await f.store.saveShop(duplicate);
-  assert.equal(webhookUrl(await keypad()), undefined, "ambiguous original shops never choose an arbitrary destination");
-  duplicate.archivedAt = new Date().toISOString();
-  await f.store.saveShop(duplicate);
-  assert.ok(webhookUrl(await keypad()), "archived shops do not interfere with routing");
-  f.shop.archivedAt = new Date().toISOString();
-  await f.store.saveShop(f.shop);
-  assert.equal(webhookUrl(await keypad()), undefined, "archived original shops cannot receive calls");
+test("the private operator reaches the original shop only through 050 forwarding and ahead of judge PINs", async t => {
+  const caller = "+819033334444", other = "+819011112222";
+  const env = { SESSION_SECRET: "original-phone-test-private-session-secret-12345", JUDGE_INVITE: "original-phone-test-invitation-1234567890", JUDGE_UNTIL: new Date(Date.now()+86400000).toISOString(), JUDGE_PHONE_NUMBER: "+18312167968", JUDGE_PHONE_NUMBER_JA: "+815055556666", PHONE_ORIGINAL_CALLER: caller };
+  for (const [key,value] of Object.entries(env)) { const previous=process.env[key];process.env[key]=value;t.after(()=>{if(previous===undefined)delete process.env[key];else process.env[key]=previous;}); }
+  const f=await fixture(t);f.config.name="Original real shop";f.shop.published=f.config;f.shop.locale="ja";
+  applyPhoneSettings(f.shop,{enabled:true,twilioNumber:env.JUDGE_PHONE_NUMBER,cashBookings:false});await f.store.saveShop(f.shop);
+  const judge=await f.store.createShop("judge-shared@judge.gemihub.invalid");judge.judge={createdAt:new Date().toISOString()};judge.published={...fixtureConfig(),name:"Shared demo shop"};judge.publication="provisional";await f.store.saveShop(judge);
+  await f.store.put("judgePhone",judge.id,{shopId:judge.id,caller});
+  const forwarded=(from=caller,sid="CA-ORIGINAL",extra:Record<string,string>={})=>f.webhook(from,sid,env.JUDGE_PHONE_NUMBER,{ForwardedFrom:env.JUDGE_PHONE_NUMBER_JA,...extra});
+  const stream=(r:{text:string})=>r.text.match(/<Stream url="([^"]+)"/)?.[1];
+  const selected=await forwarded();const url=stream(selected)!;
+  assert.ok(url);assert.doesNotMatch(selected.text,/<Gather/);
+  const context=phoneStreamContext(new URL(url))!;assert.equal(context.shopId,f.shop.id);assert.equal(context.locale,"ja");
+  assert.equal(context.token,phoneStreamToken(f.shop.id,"CA-ORIGINAL",caller,undefined,false,"ja"));
+  const pin=judgePhonePin(judge.id);
+  assert.equal(phoneStreamContext(new URL(stream(await forwarded(caller,"CA-PRIORITY",{Digits:pin}))!))?.shopId,f.shop.id,"operator priority wins even if a judge PIN or legacy registration exists");
+  assert.match((await f.webhook(caller,"CA-US-DIRECT",env.JUDGE_PHONE_NUMBER)).text,/<Gather/);
+  assert.equal(stream(await f.webhook(caller,"CA-WRONG-FORWARD",env.JUDGE_PHONE_NUMBER,{ForwardedFrom:"+815099998888"})),undefined);
+  const prompt=await forwarded(other);assert.match(prompt.text,/<Gather/);assert.doesNotMatch(prompt.text,/00000000|0を8回|シャープ|pound/);
+  const otherSelected=await f.webhook(other,"CA-JUDGE",env.JUDGE_PHONE_NUMBER,{ForwardedFrom:env.JUDGE_PHONE_NUMBER_JA,Digits:pin},"/phone/incoming?pinAttempt=1");
+  assert.equal(phoneStreamContext(new URL(stream(otherSelected)!))?.shopId,judge.id);
+  for(const from of [caller,other])assert.equal(stream(await f.webhook(from,"CA-ZERO-REMOVED",env.JUDGE_PHONE_NUMBER,{Digits:"00000000"},"/phone/incoming?pinAttempt=1")),undefined,"the zero code is not an original-shop selector");
+  const ws=await f.stream("CA-ORIGINAL",caller,url);await f.waitFor(()=>!!f.liveParameters());assert.match(f.liveParameters().config.systemInstruction,/Original real shop/);
+  const day=dateIn(Date.now(),"Asia/Tokyo");assert.match((await f.invoke("book","create_booking",{name:"Pat",menuId:"simple",start:`${day}T10:00:00+09:00`})).error,/電話での現金予約は現在受け付けていません/);
+  assert.equal((await f.invoke("inquiry","create_inquiry",{name:"Pat",reason:"Original shop inquiry"})).ok,true);
+  assert.equal((await f.store.records<Inquiry>("inquiry",f.shop)).length,1);assert.equal((await f.store.records<Inquiry>("inquiry",judge)).length,0);ws.close();
+  await assert.rejects(f.stream("CA-ORIGINAL",caller,url.replace("CA-ORIGINAL","CA-CHANGED")),/403/);
+  await f.store.put("judgePhonePinAttempts",digest(caller),{count:10,until:Date.now()+60000});assert.ok(stream(await forwarded()),"operator routing precedes the judge guessing budget");
+  assert.equal(stream(await forwarded("anonymous")),undefined);
+  const unsigned=await fetch(f.origin+"/phone/incoming",{method:"POST",body:new URLSearchParams({To:env.JUDGE_PHONE_NUMBER,From:caller,CallSid:"CA-UNSIGNED",ForwardedFrom:env.JUDGE_PHONE_NUMBER_JA})});assert.equal(unsigned.status,403);
+  f.shop.phone!.enabled=false;await f.store.saveShop(f.shop);assert.equal(stream(await forwarded()),undefined);await assert.rejects(f.stream("CA-ORIGINAL",caller,url),/403/);
+  f.shop.phone!.enabled=true;f.shop.phone!.hours={start:"00:00",end:"23:59",weekdays:[]};await f.store.saveShop(f.shop);assert.match((await forwarded()).text,/電話受付の時間外/);
+  delete f.shop.phone!.hours;await f.store.saveShop({...f.shop,published:null});assert.equal(stream(await forwarded()),undefined);f.shop.published=f.config;await f.store.saveShop(f.shop);
+  const duplicate=await f.store.createShop("duplicate@example.com");duplicate.published=fixtureConfig();applyPhoneSettings(duplicate,{enabled:true,twilioNumber:env.JUDGE_PHONE_NUMBER,cashBookings:true});await f.store.saveShop(duplicate);assert.equal(stream(await forwarded()),undefined,"ambiguous targets fail closed");
+  duplicate.archivedAt=new Date().toISOString();await f.store.saveShop(duplicate);assert.ok(stream(await forwarded()));f.shop.archivedAt=new Date().toISOString();await f.store.saveShop(f.shop);assert.equal(stream(await forwarded()),undefined);
 });
 
 test("a known caller reaches a signed Twilio media stream, and settings can disable it", async t => {
@@ -575,7 +517,7 @@ test("050 forwarding keeps Japanese shop selection and accepts spoken PINs only 
   const incoming = await f.webhook(caller, sid, env.JUDGE_PHONE_NUMBER, forwarded);
   assert.match(incoming.text, /<Gather input="dtmf" numDigits="8"/);
   assert.match(incoming.text, /language="ja-JP"/);
-  assert.match(incoming.text, /シャープは不要/);
+  assert.doesNotMatch(incoming.text, /シャープ|pound|00000000/);
   assert.ok(!incoming.text.includes("<Stream"), "even registered Japanese judges choose a shop; forwarding never bypasses the menu");
   const direct = await f.webhook(caller, "CA-DIRECT-US", env.JUDGE_PHONE_NUMBER);
   assert.match(direct.text, /<Gather/);
@@ -584,7 +526,7 @@ test("050 forwarding keeps Japanese shop selection and accepts spoken PINs only 
   await assert.rejects(f.stream("CA-DIRECT-US", caller, legacyUrl), /403/, "old registration cannot bypass mandatory PIN entry");
   const unknown = await f.webhook("+12025550999", "CA-DIRECT-US-UNREGISTERED", env.JUDGE_PHONE_NUMBER);
   assert.match(unknown.text, /language="en-US"/);
-  assert.match(unknown.text, /do not need to press the pound key/);
+  assert.doesNotMatch(unknown.text, /pound|00000000/);
   const empty = await f.webhook(caller, sid, env.JUDGE_PHONE_NUMBER, { ...forwarded, Digits: "" }, "/phone/incoming?pinAttempt=1");
   assert.match(empty.text, /input="dtmf speech"/);
   assert.match(empty.text, /speechTimeout="2"/);
@@ -594,24 +536,18 @@ test("050 forwarding keeps Japanese shop selection and accepts spoken PINs only 
   const action = new URL(empty.text.match(/action="([^"]+)"/)![1].replaceAll("&amp;", "&"));
   const path = action.pathname + action.search;
   const streamShop = (text: string) => phoneStreamContext(new URL(text.match(/<Stream url="([^"]+)"/)![1]));
-  const original = await f.webhook(caller, sid, env.JUDGE_PHONE_NUMBER, { ...forwarded, SpeechResult: "ゼロ ゼロ ゼロ ゼロ ゼロ ゼロ ゼロ ゼロ" }, path);
-  const originalContext = streamShop(original.text)!;
-  assert.equal(originalContext.shopId, f.shop.id);
-  assert.equal(originalContext.token, phoneStreamToken(f.shop.id, sid, caller, undefined, false, "ja"));
-  assert.equal(originalContext.locale, "ja");
-  const originalUrl = original.text.match(/<Stream url="([^"]+)"/)![1];
-  await assert.rejects(f.stream(sid, caller, originalUrl.replace('/ja-', '/en-')), /403/, "the selected language is signed with the stream context");
-  const ws = await f.stream(sid, caller, originalUrl);
-  await f.waitFor(() => !!f.liveParameters());
-  assert.match(f.liveParameters().config.systemInstruction, /日本語/);
-  ws.close();
+  const zero = await f.webhook(caller,sid,env.JUDGE_PHONE_NUMBER,{...forwarded,SpeechResult:"ゼロ ゼロ ゼロ ゼロ ゼロ ゼロ ゼロ ゼロ"},path);
+  assert.ok(!zero.text.includes("<Stream"),"the old zero code no longer selects a shop");
   const pin = judgePhonePin(judge.id);
   const selected = await f.webhook(caller, sid, env.JUDGE_PHONE_NUMBER, { ...forwarded, SpeechResult: pin.split("").join(" ") }, path);
   assert.equal(streamShop(selected.text)?.shopId, judge.id);
   assert.equal(streamShop(selected.text)?.locale, "ja");
   assert.match(streamShop(selected.text)!.token, /^judge-pin-/);
-  const keypad = await f.webhook(caller, sid, env.JUDGE_PHONE_NUMBER, { ...forwarded, Digits: "00000000" }, path);
-  assert.equal(streamShop(keypad.text)?.shopId, f.shop.id, "keypad input continues to work in the speech fallback");
+  const selectedUrl=selected.text.match(/<Stream url="([^"]+)"/)![1];
+  await assert.rejects(f.stream(sid,caller,selectedUrl.replace('judge-pin-ja-','judge-pin-en-')),/403/);
+  const ws=await f.stream(sid,caller,selectedUrl);await f.waitFor(()=>!!f.liveParameters());assert.match(f.liveParameters().config.systemInstruction,/日本語/);ws.close();
+  const keypad=await f.webhook(caller,sid,env.JUDGE_PHONE_NUMBER,{...forwarded,Digits:pin},path);
+  assert.equal(streamShop(keypad.text)?.shopId,judge.id,"keypad input continues to work in the speech fallback");
   await f.store.put("judgePhonePinAttempts", digest(caller), { count: 10, until: Date.now() + 60000 });
   const limited = await f.webhook(caller, sid, env.JUDGE_PHONE_NUMBER, { ...forwarded, SpeechResult: pin }, path);
   assert.ok(!limited.text.includes("<Stream"), "spoken PINs retain the guessing limit");

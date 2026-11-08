@@ -3,6 +3,7 @@ locals {
 }
 
 output "shared_vm_registration" {
+  sensitive   = true
   description = "Pass this JSON to Kakeratta's prepare-bundle.py. Contains settings and secret references only, never secret payloads."
   value = {
     additional_build_accounts = [google_service_account.build.email]
@@ -47,6 +48,8 @@ output "shared_vm_registration" {
           JUDGE_PHONE_NUMBER = var.judge_phone_number
           } : {}, var.enable_judge_access && var.judge_phone_number_ja != "" ? {
           JUDGE_PHONE_NUMBER_JA = var.judge_phone_number_ja
+          } : {}, var.phone_original_caller != "" ? {
+          PHONE_ORIGINAL_CALLER = var.phone_original_caller
         } : {})
         secrets = merge({
           SESSION_SECRET                                                  = { project = var.project_id, name = google_secret_manager_secret.app["gemihub-web-session-secret"].secret_id, version = var.session_secret_version }

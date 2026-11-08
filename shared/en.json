@@ -8,7 +8,6 @@
   "暗証番号を確認できませんでした。審査メニューを確認して、しばらくしてからおかけ直しください。": "We could not verify the PIN. Check your judge menu and try calling again later.",
   "暗証番号が違うか、お店が利用できません。審査メニューに表示された8桁の暗証番号をもう一度入力してください。": "The PIN is incorrect or the shop is unavailable. Please enter the 8-digit PIN shown in your judge menu again.",
   "審査用のお店をご利用の場合は、審査メニューに表示された8桁の暗証番号を電話のキーで入力してください。": "For a judge demo shop, please enter the 8-digit PIN shown in your judge menu using your phone keypad.",
-  "本来のお店をご利用の場合は、0を8回入力してください。": "For the original shop, please enter zero eight times.",
   "当日の電話予約を登録": "Add a same-day phone booking",
   "今日の空き枠だけを、店頭での現金払いとして登録します。オンライン予約と同じ枠を使うので二重予約になりません。キャンセル受付中の枠は選べません。お名前と電話番号はお客様一覧にも登録します。": "Adds one of today's open slots, paid in cash at the shop. It shares availability with online bookings, so it cannot double-book, and slots awaiting a replacement customer are not offered. The name and phone number are also added to your customers.",
   "{0} 様の電話予約を登録しました。": "Phone booking added for {0}.",
@@ -4100,7 +4099,5 @@
   "単独で予約できるすべてのメニュー": "All standalone services",
   "すべての通常メニューへの追加は、単独予約不可のメニューに設定してください": "Only add-ons can be set to accompany all standalone services",
   "キー入力を確認できない場合は、8桁の番号を1桁ずつお話しください。電話のキーでも入力できます。": "If keypad input is not detected, say the eight digits one at a time. You can also use your phone keypad.",
-  "8桁で自動的につながります。最後のシャープは不要です。": "You will connect automatically after eight digits. You do not need to press the pound key.",
-  "電話の案内に従い、毎回この8桁の暗証番号を入力してください。8桁で自動確定し、最後のシャープは不要です。番号通知でおかけください。暗証番号はお店の初期化で変わります。": "Follow the phone instructions and enter this 8-digit PIN on every call. Eight digits submit automatically; the pound key is not needed. Call with caller ID enabled. The PIN changes when you reset your shop.",
-  "00000000 は本来の店舗用の暗証番号です。": "00000000 is reserved for the original shop."
+  "電話の案内に従い、毎回この8桁の暗証番号を入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。": "Follow the phone instructions and enter this 8-digit PIN on every call. Call with caller ID enabled. The PIN changes when you reset your shop."
 }

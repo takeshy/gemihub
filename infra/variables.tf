@@ -224,6 +224,13 @@ variable "judge_phone_number_ja" {
   default     = ""
 }
 
+variable "phone_original_caller" {
+  description = "Private E.164 caller allowed to reach the original shop directly through the configured Japanese forwarding line."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
 variable "judge_ai_limit" {
   description = "Maximum AI requests per judge."
   type        = number
