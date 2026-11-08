@@ -1,3 +1,17 @@
+## Is your project new, or did it exist before Oct 1, 2026 (9:15 am PT)?
+
+Existing
+
+## If it existed before, explain what already existed and what you built or changed during the submission period.
+
+gemihub was inspired by hubwork, a website-building feature in a personal AI workspace I developed earlier. That workspace was previously called gemihub and continues separately as kiokuflow. I had registered the gemihub trademark, so I decided to use the name for this new product.
+
+The earlier hubwork used conversation to create web pages, with backend behavior also driven by workflows built with AI. Building a site therefore involved reviewing Mermaid workflows.
+
+For the current gemihub, I redesigned the approach so beginners without programming experience could use it. Booking, payments, and access control run on fixed, deterministic backend code, removing the complexity of designing backend workflows. Owners can freely build and customize their storefront through conversation and on-screen annotations.
+
+During the submission period, I implemented PayPal prepayment at booking, automatic policy-based refunds, discounted rebooking after eligible cancellations with a larger refund when someone else books, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, AI-assisted PayPal operations (read-only PayPal lookups in the assistant, stuck-payment alerts with AI summaries, and owner-approved fixes), AI phone reception with Twilio and Gemini Live (cash bookings, phone cancellations, inquiries and call transcripts), a CRM, and design version history with one-click rollback.
+
 ## Explain how your project meets the main technology requirement.
 * Please name each PayPal tool and AI tool (model or AI service) you used and what it does in your project. Requirement: Your project must integrate the PayPal developer platform (using the free sandbox environment) along with an AI tool, model, or platform of your choice.
 
@@ -22,19 +36,6 @@ AI phone reception follows the same rule: the AI talks, the server decides. Avai
 
 Judges can try it: after publishing the demo shop, call the number shown in the judge menu with caller ID enabled, and enter the 8-digit phone PIN shown there when asked. The demo accepts cash test bookings and inquiries; no real payment is involved.
 
-## Is your project new, or did it exist before Oct 1, 2026 (9:15 am PT)?
-
-Existing
-
-## If it existed before, explain what already existed and what you built or changed during the submission period.
-
-gemihub was inspired by hubwork, a website-building feature in a personal AI workspace I developed earlier. That workspace was previously called gemihub and continues separately as kiokuflow. I had registered the gemihub trademark, so I decided to use the name for this new product.
-
-The earlier hubwork used conversation to create web pages, with backend behavior also driven by workflows built with AI. Building a site therefore involved reviewing Mermaid workflows.
-
-For the current gemihub, I redesigned the approach so beginners without programming experience could use it. Booking, payments, and access control run on fixed, deterministic backend code, removing the complexity of designing backend workflows. Owners can freely build and customize their storefront through conversation and on-screen annotations.
-
-During the submission period, I implemented PayPal prepayment at booking, automatic policy-based refunds, discounted rebooking after eligible cancellations with a larger refund when someone else books, an invitation-based judge demo mode, a voice-enabled assistant grounded in the shop’s own documents and records, AI-assisted PayPal operations (read-only PayPal lookups in the assistant, stuck-payment alerts with AI summaries, and owner-approved fixes), AI phone reception with Twilio and Gemini Live (cash bookings, phone cancellations, inquiries and call transcripts), a CRM, and design version history with one-click rollback.
 
 
 ## Which additional sponsor tool(s) did you use for this project?
