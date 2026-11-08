@@ -4091,6 +4091,7 @@
   "必要なページや機能の希望は、聞き取りの中でAIに伝えてください。お知らせやブログは、必要な場合だけ選べます。": "Tell the AI which pages and features you need during the interview. Announcements and blogs are optional.",
   "テーマの見本と、聞き取りで選んだ機能を確認します。この例では「お知らせ」を選んでいます。ページの見た目は、仮公開したあとに編集できます。": "Review the theme sample and the features selected during the interview. This example includes Announcements. You can edit the page appearance after publishing a private preview.",
   "2をお願いします。": "Please use 2.",
+  "保存しました。": "Saved.",
   "非表示も表示": "Show hidden menus",
   "有効なメニューはありません。「非表示も表示」をONにすると、無効なメニューを確認・編集できます。": "No menus are enabled. Turn on “Show hidden menus” to view and edit disabled menus.",
   "無効なメニューは初期状態で非表示": "Disabled menus are hidden by default",

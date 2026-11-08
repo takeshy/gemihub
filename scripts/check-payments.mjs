@@ -64,7 +64,7 @@ try {
     await open("policy");
     await page.getByLabel("返金条件2・返金率（%）").fill("60");
     await page.locator(".live-settings-rules").getByRole("button", { name: "保存", exact: true }).click();
-    await page.getByText("保存して本番に反映しました。", { exact: true }).waitFor();
+    await page.getByText("保存しました。", { exact: true }).waitFor();
     for (const [suffix, text] of [["partial-refund", "返金完了：¥3,850"], ["zero-refund", "返金なし：¥0"], ["full-refund", "返金完了：¥5,500"], ["pending-refund", "PayPalで返金を確認中"], ["failed-refund", "返金の確認が必要です"]]) {
       await open(suffix); await page.getByText(text, { exact: false }).waitFor();
       assert.deepEqual(await page.locator('[role="alert"]').allTextContents(), []);

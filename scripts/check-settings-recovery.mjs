@@ -33,9 +33,10 @@ try{
   // A completed save with a lost response is recovered automatically after reload.
   const existing=await store.shop(shop.id);existing.published=structuredClone(old);await store.saveShop(existing);await page.reload();await expect(panel.locator('.staff-editor')).toHaveCount(1);
   await panel.getByRole('button',{name:label('このスタッフを削除'),exact:true}).click();
-  await page.route(origin+path,async route=>{if(route.request().method()==='POST'){await route.fetch();await route.abort('failed');}else await route.continue();});
-  await panel.getByRole('button',{name:label('保存'),exact:true}).click();await expect(cancel).toBeVisible();await expect(panel.getByRole('alert')).toBeVisible();assert.equal((await store.shop(shop.id)).published.staff.length,0);assert.ok(await page.evaluate(key=>localStorage.getItem(key),key));
-  await page.unroute(origin+path);await page.reload();await expect(cancel).toHaveCount(0);await expect(panel.getByRole('status')).toContainText(label('保存済みの設定を確認しました。'));await expect(panel.locator('.staff-editor')).toHaveCount(0);await expect(panel.locator('fieldset').first()).toHaveJSProperty('disabled',false);assert.equal(await page.evaluate(key=>localStorage.getItem(key),key),null);assert.equal(posts,1,'restoring a completed save does not submit it again');
+  let releaseSave;const heldResponse=new Promise(resolve=>{releaseSave=resolve;});
+  await page.route(origin+path,async route=>{if(route.request().method()==='POST'){await route.fetch();await heldResponse;await route.abort('failed');}else await route.continue();});
+  await panel.getByRole('button',{name:label('保存'),exact:true}).click();try{await expect(panel.getByRole('button',{name:label('保存しています…'),exact:true})).toBeDisabled();}finally{releaseSave();}await expect(cancel).toBeVisible();await expect(panel.getByRole('alert')).toBeVisible();assert.equal((await store.shop(shop.id)).published.staff.length,0);assert.ok(await page.evaluate(key=>localStorage.getItem(key),key));
+  await page.unroute(origin+path);await page.reload();await expect(cancel).toHaveCount(0);await expect(panel.getByRole('status')).toContainText(label('保存しました。'));await expect(panel.locator('.staff-editor')).toHaveCount(0);await expect(panel.locator('fieldset').first()).toHaveJSProperty('disabled',false);assert.equal(await page.evaluate(key=>localStorage.getItem(key),key),null);assert.equal(posts,1,'restoring a completed save does not submit it again');
   await context.close();console.log(`${language} ${width}px: stale Haru cache reproduced; failed recovery preserves retry state; discard loads saved zero-staff data without POST; lost successful response recovers automatically.`);
  }
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));await store.close();}

@@ -124,7 +124,7 @@ try {
           if (section === 'menus') { await panel.getByRole('checkbox', { name: label('非表示も表示'), exact: true }).check(); const row = panel.locator('.menu-edit-block').last(); await expect(row.getByLabel(label('メニュー名'), { exact: true })).toHaveValue('Care'); await expect(row.getByRole('checkbox', { name: label('有効'), exact: true })).not.toBeChecked(); }
         }
         await panel.getByRole('button', { name: label('保存'), exact: true }).click();
-        await expect(panel.getByRole('status')).toContainText(label(mode === 'app' ? '保存して仮公開に反映しました。' : '保存して本番に反映しました。'));
+        await expect(panel.getByRole('status')).toContainText(label('保存しました。'));
         if (mode === 'app') assert.notDeepEqual((await store.shop(shop.id)).published, before, 'save persists the reviewed form');
         if (mode === 'app' && section === 'rules') {
           const payment = (await store.shop(shop.id)).published.rules.payment;

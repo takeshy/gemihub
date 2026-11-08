@@ -848,7 +848,7 @@ export function createApp(
     // Converts old publications and refreshes releases from an older generator.
     await ensureStorefront(fresh).catch(error => console.error(`Storefront ${fresh.id}: background release failed`, error));
   });
-  async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional")) {
+  async function publishConfiguration(fresh: Shop, plan: Plan, publication = fresh.publication || (fresh.published ? "public" : "provisional"), menusOnly = false) {
     const timed = async <T,>(phase: string, work: () => Promise<T>): Promise<T> => {
       const started = Date.now();
       if (!store.memory) console.info(JSON.stringify({ event: "publication_phase", shopId: fresh.id, planId: plan.id, phase, state: "started" }));
@@ -896,7 +896,7 @@ export function createApp(
           plan.config,
           token,
           async () => await store.saveShop(fresh),
-          plan.scope,
+          menusOnly && !designChanged ? { kind: "menus" } : plan.scope,
           await menuImageSnapshot(store, fresh, plan.config, crmFiles, token),
         ));
       } catch (error) {
@@ -925,7 +925,7 @@ export function createApp(
     retireDesignVersions(fresh);
     await timed("storefront", () => savePublicShop(fresh));
     await pruneDesignVersions(fresh, versions, async () => store.saveShop(fresh)).catch(reportError);
-    if (!plan.scope || plan.scope.kind === "shared" || plan.scope.kind === "theme" || plan.scope.kind === "content") await enqueue(fresh, "posts");
+    if (!menusOnly && (!plan.scope || plan.scope.kind === "shared" || plan.scope.kind === "theme" || plan.scope.kind === "content")) await enqueue(fresh, "posts");
     // The public release and the complete design snapshot are committed. Article exports retry in the durable worker.
     return { ok: true, url: `/s/${fresh.slug}` };
   }
@@ -2697,7 +2697,7 @@ export function createApp(
               if (!plan.summary.length) return json(res, { ok: true });
               await store.put("plan", id, plan);
             }
-            return json(res, await publishConfiguration(fresh, plan));
+            return json(res, await publishConfiguration(fresh, plan, undefined, section === "menus"));
           }
           if (action === "pages/create-with-ai" && method === "POST") {
             assertOwner(user, fresh);

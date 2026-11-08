@@ -115,6 +115,56 @@ test("storefront uploads assets before pages, reuses committed assets and skips 
   assert.equal(written.length, 0);
 });
 
+test("menu saves update operational exports without rewriting designs and remain retryable", async t => {
+  process.env.DEMO_MODE = "true";
+  const drive = designDrive();
+  t.mock.method(google, "drive", (() => drive.client) as never);
+  const store = new Store(":memory:"), shop = await store.createShop("menu-owner@example.com");
+  shop.published = structuredClone(sample);
+  shop.published.pages = [{ id: "faq", slug: "faq", title: "FAQ", navigationLabel: "FAQ", body: "<p>Original page</p>", layout: "standard", imageUrl: "" }];
+  const token = encrypt("fixture");
+  shop.google = { folderId: "root", specId: (await drive.client.files.create({ requestBody: { name: "spec.md" } })).data.id, historyId: (await drive.client.files.create({ requestBody: { name: "history.md" } })).data.id };
+  await syncConfig(shop, shop.published, token);
+  const staleId = (await drive.client.files.create({ requestBody: { name: "old.html" } })).data.id;
+  shop.google.artifactIds!["web/pages/old.html"] = staleId;
+  await store.saveShop(shop);
+  const user = { email: shop.owner, role: "owner", name: "Owner", shopId: shop.id, refreshToken: token };
+  await store.put("user", shop.owner, user);
+  await store.put("session", digest("menu-owner"), { user, expires: Date.now() + 60000 });
+  const ids = shop.google.artifactIds!, paths = ["web/index.html", "web/data.js", "web/shop.json", "web/mock.json", "admin/system.svg"];
+  const expectedIds = new Set([shop.google.specId, shop.google.historyId, ...paths.map(path => ids[path])]);
+  const protectedFiles = new Map(Object.entries(ids).filter(([path]) => !paths.includes(path)).map(([, id]) => [id, drive.files.get(id)!.content]));
+  const writes = new Set<string>(), update = drive.client.files.update;
+  drive.client.files.update = async input => {
+    assert.ok(expectedIds.has(input.fileId!), "menu saves never rewrite or remove design artifacts");
+    writes.add(input.fileId!);
+    return update(input);
+  };
+  const server = createApp(store);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
+  const menus = structuredClone(shop.published.menus); menus[0].price += 500;
+  const requestId = randomUUID(), request = () => fetch(`${origin}/api/shops/${shop.id}/live-settings/menus`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=menu-owner", "Content-Type": "application/json" }, body: JSON.stringify({ requestId, value: menus }) });
+  drive.failNextUpdate(input => input.fileId === ids["web/data.js"]);
+  assert.equal((await request()).status, 503);
+  assert.equal((await store.shop(shop.id))!.published!.menus[0].price, shop.published.menus[0].price, "failed exports keep the previous published settings");
+  assert.ok((await store.shop(shop.id))!.publishingPlanId);
+  writes.clear();
+  assert.equal((await request()).status, 200);
+  assert.deepEqual(writes, expectedIds, "only the two documents, operational snapshot and overview are uploaded");
+  const saved = (await store.shop(shop.id))!;
+  assert.equal(saved.published!.menus[0].price, menus[0].price);
+  assert.ok(saved.storefrontRelease); assert.equal(saved.publishingPlanId, undefined);
+  assert.equal(JSON.parse(drive.files.get(ids["web/shop.json"])!.content).menus[0].price, menus[0].price);
+  for (const [id, content] of protectedFiles) { assert.equal(drive.files.get(id)!.content, content); assert.ok(!drive.files.get(id)!.trashed); }
+  assert.equal((await store.records<{ type: string }>("job", shop)).filter(job => job.type === "posts").length, 0, "menu-only saves do not enqueue unchanged articles");
+  writes.clear();
+  assert.equal((await request()).status, 200);
+  assert.equal(writes.size, 0, "a repeated successful save never uploads again");
+  assert.equal((await store.shop(shop.id))!.revision, saved.revision);
+});
+
 test("publishing commits the live page without waiting for queued article exports", async t => {
   process.env.DEMO_MODE = "true";
   const drive = designDrive();

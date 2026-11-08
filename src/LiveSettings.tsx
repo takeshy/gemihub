@@ -15,6 +15,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
   const [source, setSource] = useState<ShopConfig>();
   const [pending, setPending] = useState<Pending>();
   const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -49,7 +50,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
         setConfig(data.config); setPending(undefined);
         if (cached) {
           localStorage.removeItem(key);
-          setNotice(tr("保存済みの設定を確認しました。"));
+          setNotice(tr("保存しました。"));
         }
       }
     }).catch(e => { if (!cancelled) setError(e.message); });
@@ -98,7 +99,7 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
     <div className="actions">
       <button className="primary" disabled={busy || imageUploading || !!proposal || (!pending && (!config || !source || JSON.stringify(liveValue(config, section)) === JSON.stringify(liveValue(source, section))))} onClick={async () => {
         if (!pending && (!config || !source)) return;
-        setBusy(true); setError(""); setNotice("");
+        setBusy(true); setSaving(true); setError(""); setNotice("");
         try {
           let action = pending;
           if (!action) {
@@ -108,10 +109,10 @@ export function LiveSettings({ shop, section, reload }: { shop: Workspace; secti
             localStorage.setItem(key, JSON.stringify(action)); setPending(action);
           }
           await api(`/api/shops/${shop.id}/live-settings/${section}`, { value: liveValue(action.config, section), requestId: action.requestId });
-          await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice(shop.publication === "provisional" ? tr("保存して仮公開に反映しました。") : tr("保存して本番に反映しました。"));
+          await load(); localStorage.removeItem(key); setPending(undefined); await reload(); setNotice(tr("保存しました。"));
         } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
-        finally { setBusy(false); }
-      }}>{tr("保存")}</button>
+        finally { setBusy(false); setSaving(false); }
+      }}>{saving ? tr("保存しています…") : tr("保存")}</button>
       {pending && <button type="button" disabled={busy || imageUploading} onClick={async () => {
         setBusy(true); setError("");
         try {

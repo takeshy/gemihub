@@ -101,7 +101,7 @@ try {
   await page.locator(".staff-editor").getByLabel("名前",{exact:true}).first().fill("実際に働くスタッフ");
   await capture("04-settings.jpg", ".panel:has(.editor)");
   await page.getByRole("button",{name:"保存",exact:true}).click();
-  await page.getByText("保存して仮公開に反映しました。",{exact:true}).waitFor();
+  await page.getByText("保存しました。",{exact:true}).waitFor();
   await publication.getByRole("link",{name:"画面を確認して本番公開へ",exact:true}).click();
   await page.getByRole("heading",{name:"画面の確認・本番公開",exact:true}).waitFor();
   assert.equal(await page.getByLabel("確認する画面",{exact:true}).count(), 0);

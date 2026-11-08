@@ -267,7 +267,7 @@ try {
   await page.locator(".menu-image-editor img").first().waitFor();
   await capture("25-menu-images.jpg", ".menu-edit-block");
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await page.getByRole("status").filter({ hasText: "保存して本番に反映しました" }).waitFor();
+  await page.getByRole("status").filter({ hasText: "保存しました。" }).waitFor();
   await open("reservation", "自分のための、ひとときを。", "運営/設定/メニュー画像");
   await page.locator(".menu-image img").first().waitFor();
   await capture("25-menu-public.jpg", ".reservation-layout");
