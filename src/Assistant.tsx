@@ -128,7 +128,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
   return <section className="panel assistant" aria-labelledby="assistant-title">
     <div className="section-top"><span className="ai-mark">✳</span><div>
       <h2 id="assistant-title">{tr("相談・質問")}</h2>
-      <p className="small muted">{tr("使い方や現在のお店の設定について質問できます。見た目の修正は「AIとお店をつくる」の各画面、ページ追加や機能の変更は「ページ追加・機能変更」で依頼できます。")}</p>
+      <p className="small muted">{tr("使い方や現在のお店の設定、売上・予約・お客様などのデータについて相談できます。見た目の修正は「AIとお店をつくる」の各画面、ページ追加や機能の変更は「ページ追加・機能変更」で依頼できます。")}</p>
     </div></div>
     {conversationTitle && <h3 className="assistant-conversation-title">{conversationTitle}</h3>}
     {conversationId && !loaded && error && <button type="button" disabled={busy} onClick={() => setLoadRetry(value => value + 1)}>{tr("もう一度読み込む")}</button>}
@@ -137,7 +137,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
       <button type="button" aria-pressed={voiceMode} onClick={() => setMode("voice")}>{tr("AIと話す")}</button>
     </div>}
     <div ref={log} className="chat-log assistant-log" role="log" aria-label={tr("アシスタントとの会話")} aria-live="polite">
-      {!messages.length && <p className="muted">{tr("例：「キャンセルしたら返金はどうなる？」「なぜ水曜が定休日なの？」「来月から水曜を定休日にして」")}</p>}
+      {!messages.length && <p className="muted">{tr("例：「直近30日の売上は？」「売上が多いメニューは？」「キャンセルしたら返金はどうなる？」")}</p>}
       {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}>
         <b>{message.role === "user" ? tr("あなた") : "AI"}{message.voice && <small className="muted">{tr("（音声）")}</small>}</b>
         {message.role === "assistant" ? <AssistantAnswer text={message.text} /> : <div className="pre-wrap">{message.text}</div>}
