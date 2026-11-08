@@ -4,6 +4,24 @@ import { generateReviewedVisual, reviewRenderedVisual } from "../server/visual-r
 import { createInitialTheme } from "../server/initial-theme.ts";
 import { sample } from "../server/domain.ts";
 
+test("review sees the red marks together with all four unmarked before/after screenshots for a vague request", async () => {
+  const media = { mimeType: "image/png" as const, data: Buffer.from("red circle around the booking flower").toString("base64") };
+  const review = await reviewRenderedVisual({ before: sample, after: sample, instruction: "色味があっていない", screen: "reserve", target: "component:icons", images: [], renderImages: {}, media }, {
+    capture: async () => [1280, 390].map(width => ({ width, height: 1000, mimeType: "image/jpeg" as const, data: Buffer.from(`rendered-${width}`).toString("base64"), unavailableImages: [] })),
+    model: async input => {
+      const parts = input.contents[0].parts!;
+      const images = parts.flatMap(part => part.inlineData ? [part.inlineData] : []);
+      assert.equal(images.length, 5);
+      assert.deepEqual(images[0], media);
+      assert.match(parts[0].text!, /色味があっていない/);
+      assert.ok(parts.some(part => part.text?.includes("ANNOTATED REQUEST")));
+      assert.deepEqual(images.slice(1).map(image => Buffer.from(image.data!, "base64").toString()), ["rendered-1280", "rendered-390", "rendered-1280", "rendered-390"]);
+      return JSON.stringify({ approved: true, issues: [] });
+    },
+  });
+  assert.equal(review.approved, true);
+});
+
 test("visual review receives the rendered before/after pixels at both widths and uses the review model", async () => {
   const after = { ...structuredClone(sample), description: "The requested text" };
   const captured: string[] = [];

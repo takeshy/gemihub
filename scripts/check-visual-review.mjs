@@ -46,15 +46,17 @@ const server = createApp(store, { ...intelligence,
       assert.equal(request.purpose, 'review');
       const parts = request.contents[0].parts;
       const pixels = parts.flatMap(part => part.inlineData ? [part.inlineData] : []);
-      assert.equal(pixels.length, 4, 'the review sees before and after at desktop/mobile widths');
-      for (const [index, image] of pixels.entries()) {
+      assert.equal(pixels.length, input.media ? 5 : 4, 'the review sees the marks plus before and after at desktop/mobile widths');
+      if (input.media) assert.deepEqual(pixels[0], input.media);
+      const screenshots = input.media ? pixels.slice(1) : pixels;
+      for (const [index, image] of screenshots.entries()) {
         const bytes = Buffer.from(image.data, 'base64');
         const metadata = await sharp(bytes).metadata();
         assert.equal(metadata.format, 'jpeg');assert.equal(metadata.width, index % 2 ? 390 : 1280);
         assert.ok(metadata.height > 100);
         await writeFile(`tmp/visual-review/${initial ? 'initial' : 'header'}-${reviews}-${index}.jpg`, bytes);
       }
-      const hashes = pixels.map(image => digest(image.data));
+      const hashes = screenshots.map(image => digest(image.data));
       screenshotHashes.push(hashes);
       assert.notEqual(hashes[0], hashes[1], 'desktop and mobile are separate browser layouts');
       const broken = !initial && input.after.appearance.theme.headerCss.includes('height:20px');
@@ -71,7 +73,7 @@ async function api(id, action, body, actor = cookie) {
 try {
   const media = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' };
   const identified = await api(shop.id, 'visual/identify', { media, instruction: 'Increase the header navigation spacing', displayed: shop.published, local: { base: shop.revision, source: shop.published, theme: true }, screen: { id: 'theme', label: 'Entire page', file: 'web/parts/header.html' } });
-  const proposal = await api(shop.id, 'visual/propose', { id: identified.id, target: 'theme', instruction: 'Increase the header navigation spacing' });
+  const proposal = await api(shop.id, 'visual/propose', { id: identified.id, target: 'theme', instruction: 'Increase the header navigation spacing', media });
   assert.deepEqual(proposal.visualReview, { approved: true, attempts: 2 });
   assert.equal(generations, 2);assert.equal(reviews, 2);
   assert.notDeepEqual(screenshotHashes[0].slice(2), screenshotHashes[1].slice(2), 'the repaired proposal is rendered and captured again');

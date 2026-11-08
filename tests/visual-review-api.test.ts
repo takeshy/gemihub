@@ -113,6 +113,8 @@ test("rendered review releases the shop lock, rejects stale results and never sa
   reject = true;gate = Promise.resolve();reviews = 0;
   const rejected = await api("visual/propose", { ...request, id: second.id });
   assert.equal(rejected.status, 422);assert.equal(reviews, 3);
+  const progress = (await store.list<{ visualId: string; lastReview?: { approved: boolean; issues: string[] } }>("visualGenerationProgress")).find(progress => progress.visualId === second.id);
+  assert.deepEqual(progress?.lastReview, { approved: false, issues: ["The text is clipped on phones"] }, "review feedback survives the failed request for owner diagnostics");
   assert.equal((await store.list("plan")).length, 0);
   assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
   reject = false;

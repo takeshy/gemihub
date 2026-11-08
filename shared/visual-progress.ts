@@ -3,4 +3,6 @@ export type VisualStage = "preparing" | "identifying" | "generating" | "reviewin
 export type VisualGenerationProgress = {
   shopId: string; visualId: string; requestId: string; stage: VisualStage;
   attempt: number; startedAt: number; updatedAt: number; error?: string;
+  lastReview?: { approved: boolean; issues: string[] };
+  instruction?: string;
 };

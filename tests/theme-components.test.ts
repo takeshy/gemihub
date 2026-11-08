@@ -123,11 +123,12 @@ test("the real identify/propose API accepts component targets, returns progress 
   const store = new Store(":memory:");
   const shop = await store.createShop("components@example.com"); shop.published = config(); await store.saveShop(shop);
   await store.put("session", digest("components"), { user: { email: shop.owner, name: "Owner", role: "owner" }, expires: Date.now() + 600000 });
+  const media = { mimeType: "image/png" as const, data: "aGVsbG8=" };
   let invoked = false;
   const server = createApp(store, { ...intelligence,
     identifyVisual: async (_media, targets) => { assert.ok(targets.some(target => target.id === "component:icons")); return { ids: ["component:icons"], explanation: "Change the icon" }; },
     visualAppearance: async (current, instruction, images, options) => { invoked = true; assert.equal(options?.splitStyles, true); return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => JSON.stringify({ cssEdits: [{ field: "style", styleId: "icons", selector: ".icon", declarations: [{ property: "color", value: "green" }] }] }) }); },
-    visualReview: async () => ({ approved: true, issues: [] }),
+    visualReview: async input => { assert.deepEqual(input.media, media, "the original marks reach rendered review too");return { approved: true, issues: [] }; },
   });
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
   t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
@@ -137,12 +138,14 @@ test("the real identify/propose API accepts component targets, returns progress 
     const response = await fetch(`${origin}/api/shops/${shop.id}/${path}`, { method: data ? "POST" : "GET", headers: { Origin: origin, Cookie: "gemihub_session=components", "Content-Type": "application/json" }, body: data ? JSON.stringify(data) : undefined });
     assert.equal(response.status, 200); return response.json();
   };
-  const identified = await api("visual/identify", { instruction: "Change the icon", media: { mimeType: "image/png", data: "aGVsbG8=" }, displayed: shop.published, local: { base: shop.revision, source: shop.published, theme: true } });
+  const identified = await api("visual/identify", { instruction: "Change the icon", media, displayed: shop.published, local: { base: shop.revision, source: shop.published, theme: true } });
   const requestId = crypto.randomUUID();
-  const result = await api("visual/propose", { id: identified.id, requestId, target: "component:icons", instruction: "Change the icon" });
+  const result = await api("visual/propose", { id: identified.id, requestId, target: "component:icons", instruction: "Change the icon", media });
   assert.ok(invoked); assert.equal(result.visualReview.approved, true);
   assert.match(result.config.appearance.theme.styles.find((style: { id: string }) => style.id === "icons").css, /color:green/);
-  assert.equal((await api(`visual/${identified.id}/progress?requestId=${requestId}`)).stage, "complete");
+  const progress = await api(`visual/${identified.id}/progress?requestId=${requestId}`);
+  assert.equal(progress.stage, "complete");
+  assert.deepEqual(progress.lastReview, { approved: true, issues: [] });
   assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
 });
 
