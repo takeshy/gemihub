@@ -597,7 +597,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
       else {
         const id=await fingerprint({shopId:shop.id,email:session.user!.email,requestId:input.requestId});
         let chat=chats.find(item=>item.id===id);
-        if(!chat){const now=new Date().toISOString();chat={id,shopId:shop.id,email:session.user!.email,intent:input.intent as ShopChat["intent"],title:tr("新しいチャット"),createdAt:now,updatedAt:now,messages:[]};chats.push(chat);saveChats();}
+        if(!chat){const now=new Date().toISOString();chat={id,shopId:shop.id,email:session.user!.email,intent:input.intent as ShopChat["intent"],title:tr("新しいチャット"),revision:shop.revision,createdAt:now,updatedAt:now,messages:[]};chats.push(chat);saveChats();}
         if(input.begin&&!chat.messages.length)addChatTurn(id,"opening","",openingQuestions[chat.intent]);
         result=chatData(id);
       }
@@ -948,7 +948,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
         : structuredClone(config);
       const local = input.local as { scope?: ReleaseScope } | undefined;
       if (local?.scope) next = scopedConfig(shop.published, next, local.scope);
-      if (input.intent === "new-page") {
+      if (input.intent === "new-page" || scenario === "page-builder" && /ページ.*追加|add.*page/i.test(String(input.text))) {
         const id = `faq-${shop.plans.length + 1}`;
         next = { ...structuredClone(shop.published || config), pages: [...(shop.published || config).pages, { id, slug: id, title: tr("よくある質問"), navigationLabel: tr("よくある質問"), body: tr("<h2>初めてのお客様へ</h2><p>予約方法・持ち物・キャンセルについてご案内します。</p>"), layout: "standard", imageUrl: "", imageId: (input.imageIds as string[] | undefined)?.[0] }] };
       } else if (input.visual) {

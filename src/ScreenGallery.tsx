@@ -55,7 +55,7 @@ export function PreviewSurface({ config, shopId, screen, fixtures: suppliedFixtu
 
 /**
  * Initial and subsequent proposal reviews share the screen inventory and whole-page sample.
- * Later proposals also compare the published design and mark screen changes.
+ * Later proposals mark screen changes and compare the design when it changes.
  */
 export function ScreenList({ config, previousConfig }: { config: ShopConfig; previousConfig?: ShopConfig }) {
   const screens = previewScreens(config);
@@ -84,11 +84,13 @@ export function ScreenGallery({ config, shopId, themeRef, previousConfig }: { co
     <h4>{tr("用意する画面")}</h4>
     <ScreenList config={config} previousConfig={previousConfig} />
     <p className="small muted">{tr("全画面に共通のヘッダー・フッターが付きます。")}</p>
+    {(!previousConfig || themeChanged) && <>
     <h4>{tr("ページの雰囲気")}</h4>
     {themeChanged && <p className="notice">{tr("ページ全体のデザインに変更があります。変更前と変更後を切り替えて確認できます。")}</p>}
     {previousConfig && <div className="actions" aria-label={tr("ページ全体の比較")}><button type="button" aria-pressed={before} onClick={() => setBefore(true)}>{tr("変更前")}</button><button type="button" aria-pressed={!before} onClick={() => setBefore(false)}>{tr("変更後")}</button></div>}
     <p className="small muted">{tr("色・配置・ヘッダー・フッターの見本です。中身は仮の表示です。")}</p>
     <ThemePreview config={before && previousConfig ? previousConfig : config} shopId={shopId} themeRef={themeRef} />
+    </>}
   </section>;
 }
 

@@ -24,6 +24,7 @@ test("begin asks the first question and supports initial shop creation without r
   async function api(path:string,body:unknown){const response=await fetch(prefix+path,{method:"POST",headers:{Origin:origin,Cookie:"gemihub_session=owner","Content-Type":"application/json"},body:JSON.stringify(body)});return{status:response.status,body:await response.json()};}
   const start={intent:"create-shop",requestId:randomUUID(),begin:true};
   const opened=(await api("/conversations",start)).body;
+  assert.equal(opened.revision,0);
   assert.equal(opened.messages.length,1);assert.equal(opened.messages[0].role,"assistant");assert.equal(opened.messages[0].text,"お店の名前を教えてください。");assert.equal(called,0);
   assert.equal((await api("/conversations",start)).body.messages.length,1,"retrying begin does not duplicate the opening question");
   const first=await api("/system/question",{question:"はじめまして",intent:"create-shop",revision:0,chat:{id:opened.id,requestId:randomUUID()}});
@@ -111,4 +112,15 @@ test("saved chats are private, resumable, deduplicate retries and supply server-
   assert.equal((await api(`/conversations/${failedChat.id}`)).body.messages.length,1);
   assert.equal((await api("/system/question",retry)).status,200);
   assert.equal((await api(`/conversations/${failedChat.id}`)).body.messages.length,2);
+  // A successful publication advances the conversation boundary without deleting saved context.
+  assert.equal(saved.revision,context.revision);
+  assert.equal((await api(`/plans/${planned.body.id}/approve`,{})).status,200);
+  assert.equal((await api(`/plans/${planned.body.id}/publish`,{publication:"public"})).status,200);
+  const publishedContext=(await api("/build-context")).body;
+  const fresh=(await api("/conversations",{intent:"modify",requestId:randomUUID(),begin:true})).body;
+  assert.equal(fresh.revision,publishedContext.revision);
+  assert.ok(fresh.revision>saved.revision);
+  assert.equal(fresh.messages.length,1);
+  assert.equal((await api(`/conversations/${pageChat.id}`)).body.revision,context.revision);
+  assert.ok((await api(`/conversations/${pageChat.id}`)).body.messages.some((message:{text:string})=>message.text.includes("FAQ")),"published conversations remain available as private history");
 });

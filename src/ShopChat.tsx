@@ -63,10 +63,17 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
     setRestoring(true); setRestoreError(false);
     void (async () => {
       const index = await api<{email:string;conversations:ShopConversation[]}>(`${prefix}/conversations`);
-      const latest = index.conversations.find(item => published ? ["modify", "new-page"].includes(item.intent) : item.intent === "create-shop");
+      // A publication starts a new change request; only resume chats for the current revision.
+      const latest = index.conversations.find(item => published ? ["modify", "new-page"].includes(item.intent) && item.revision === context?.revision : item.intent === "create-shop");
       const saved = latest ? await api<ChatData>(`${prefix}/conversations/${latest.id}`) : undefined;
       if (cancelled) return;
       if (saved) { acceptChat(saved); setGeneration(saved.generation || undefined); }
+      else {
+        creationId.current = createRequestId();
+        current.current = undefined; setChat(undefined); setIntent(published ? "modify" : "create-shop");
+        setGeneration(undefined); setViewPlan(!published ? legacyPlan : interrupted); setPlans(legacyPlan ? [legacyPlan] : []);
+        setText(""); setImageIds([]); pending.current = undefined;
+      }
       const key = `gemihub:shop-chat-draft:${shopId}:${index.email}`;
       let restoredDraft = false;
       try {
@@ -86,7 +93,7 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
       setDraftKey(key);
     })().catch(error => { if (!cancelled) { setRestoreError(true); setError(error instanceof Error ? error.message : String(error)); } }).finally(() => { if (!cancelled) setRestoring(false); });
     return () => { cancelled = true; };
-  }, [shopId, published, restoreRetry]);
+  }, [shopId, published, context?.revision, restoreRetry]);
   useEffect(() => {
     if (!draftKey || restoring) return;
     try { localStorage.setItem(draftKey, JSON.stringify({chatId:chat?.id || "",text,imageIds,pending:pending.current})); } catch { /* Server conversation remains available. */ }
@@ -181,14 +188,14 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
   const description=!published?(chat?tr("AIの質問に答えながら、直したいことや追加したいことを伝えられます。"):tr("「はじめる」を押して、AIの質問に答えながらお店のページをつくります。")):intent==="consult"?tr("質問や使い方について相談できます。お店の設定は変更しません。"):intent==="modify"?tr("直したいことや追加したいページを伝えてください。AIと話しながら内容をまとめられます。"):tr("作りたいページを教えてください。本文とメニュー名を、AIと話しながら決められます。");
   const messages=chat?.messages || [];
   const extraPages=viewPlan?.config.pages.filter(page=>!currentConfig?.pages.some(existing=>existing.id===page.id)) || [];
-  const reviewContent=viewPlan&&<section className="request-review" aria-label={tr("変更案の確認")}><h3>{intent==="new-page"?tr("このページを追加してよいですか？"):tr("このように変更してよいですか？")}</h3><ul className="check-list">{viewPlan.summary.map((summary,index)=><li key={index}>{summary}</li>)}</ul><ScreenGallery key={viewPlan.id} config={viewPlan.config} previousConfig={currentConfig} shopId={shopId}/>{extraPages.length>0&&<section className="new-page-review" aria-label={tr("追加するページ")}><h4>{tr("追加するページとメニュー")}</h4>{extraPages.map(page=><div key={page.id}><h5>{page.title}</h5><p>{tr("お客様向けのメニューに「")}{page.navigationLabel}{tr("」を追加します。")}</p><details><summary>{tr("ページの内容を見る")}</summary><CustomPage page={page} imageBase={`${prefix}/images`}/></details></div>)}</section>}<p>{viewPlan.base===context?.revision?tr("まだ反映していません。直したいことは、修正チャットで続けて伝えられます。"):tr("以前の変更案です。今の設定に合わせて直す場合は、チャットで続けて依頼してください。")}</p><div className="actions"><button type="button" onClick={()=>{setViewPlan(undefined);onReturnToChat?.();}}>{tr("チャットに戻る")}</button><button type="button" className="primary" disabled={working||viewPlan.base!==context?.revision} onClick={()=>void run(()=>onAccept(viewPlan))}>{viewPlan.approved?tr("反映を再試行"):tr("変更内容を反映する")}</button></div></section>;
+  const reviewContent=viewPlan&&<section className="request-review" aria-label={tr("変更案の確認")}><h3>{intent==="new-page"?tr("このページを追加してよいですか？"):tr("このように変更してよいですか？")}</h3><ul className="check-list">{viewPlan.summary.map((summary,index)=><li key={index}>{summary}</li>)}</ul><ScreenGallery key={viewPlan.id} config={viewPlan.config} previousConfig={currentConfig} shopId={shopId}/>{extraPages.length>0&&<section className="new-page-review" aria-label={tr("追加するページ")}><h4>{tr("追加するページとメニュー")}</h4>{extraPages.map(page=><div key={page.id}><h5>{page.title}</h5><p>{tr("お客様向けのメニューに「")}{page.navigationLabel}{tr("」を追加します。")}</p><details open><summary>{tr("ページの内容を見る")}</summary><CustomPage page={page} imageBase={`${prefix}/images`}/></details></div>)}</section>}<p>{viewPlan.base===context?.revision?tr("まだ反映していません。直したいことは、修正チャットで続けて伝えられます。"):tr("以前の変更案です。今の設定に合わせて直す場合は、チャットで続けて依頼してください。")}</p><div className="actions"><button type="button" onClick={()=>{setViewPlan(undefined);onReturnToChat?.();}}>{tr("チャットに戻る")}</button><button type="button" className="primary" disabled={working||viewPlan.base!==context?.revision} onClick={()=>void run(()=>onAccept(viewPlan))}>{viewPlan.approved?tr("反映を再試行"):tr("変更内容を反映する")}</button></div></section>;
   const review = reviewHost && reviewContent ? createPortal(reviewContent, reviewHost) : reviewContent;
   if(restoring&&!viewPlan)return <p role="status">{tr("保存した会話を読み込んでいます…")}</p>;
   if(restoreError&&!viewPlan)return <div className="alert" role="alert"><p>{error}</p><button onClick={()=>setRestoreRetry(value=>value+1)}>{tr("もう一度読み込む")}</button></div>;
   if(published&&!isOwner)return <p className="muted">{tr("変更は店主が行います。質問はメニューの「相談・質問」からどうぞ。")}</p>;
   if(!published&&viewPlan)return <div className="shop-request">{error&&<p className="alert" role="alert">{error}</p>}<InitialPlanReview shopId={shopId} plan={viewPlan} busy={working} onBack={()=>void run(returnToChat)} onAccept={()=>void run(()=>onAccept(viewPlan))}/></div>;
   return <div className="shop-request shop-chat">
-    {published&&chat&&<div className="request-intents-reset"><button type="button" className="text-button" disabled={working} onClick={()=>void run(()=>start("modify"))}>{tr("新しい会話をはじめる")}</button></div>}
+    {published&&chat&&<div className="request-intents-reset"><button type="button" className="primary chat-new-conversation" aria-describedby="new-conversation-hint" disabled={working} onClick={()=>void run(()=>start("modify"))}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>{tr("新しい会話をはじめる")}</button><p id="new-conversation-hint" className="small muted">{tr("話題を変えるときは新しい会話をはじめると、AIが前の話題と混同しにくくなります。")}</p></div>}
     <p>{description}</p>
     {!chat&&error&&<p className="alert" role="alert">{error}</p>}
     {/* An unfinished publication is retried from here, even before a chat is opened. */}

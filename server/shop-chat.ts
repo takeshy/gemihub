@@ -7,7 +7,7 @@ import { findRelevantHistory } from "./chat-context.ts";
 import type { ShopConfig } from "./domain.ts";
 import type { PayPalProposal } from "./paypal-ops.ts";
 
-export type ShopConversation = { id: string; shopId: string; email: string; intent: RequestIntent; title: string; createdAt: string; updatedAt: string; deletedAt?: string };
+export type ShopConversation = { id: string; shopId: string; email: string; intent: RequestIntent; title: string; revision?: number; createdAt: string; updatedAt: string; deletedAt?: string };
 export type ConsultationReply = { answer: string; sources: {path:string;title:string}[]; request?: string; draft?: unknown; paypalProposals?: PayPalProposal[] };
 export type ShopChatMessage = { id: string; shopId: string; conversationId: string; email: string; role: "user" | "assistant"; text: string; requestId: string; sequence: number; createdAt: string; updatedAt: string; detail: { consultation?: Omit<ConsultationReply,"answer">; voice?: boolean; article?:{title:string;excerpt:string;body:string}; imageIds?: string[]; changeRequest?: boolean; ready?: boolean; planId?: string; partial?: boolean } };
 export type ShopChat = ShopConversation & { messages: ShopChatMessage[] };
@@ -47,7 +47,7 @@ export async function createConversation(store: Store, shop: Shop, email: string
   if (previous && previous.intent !== intent) throw Object.assign(new Error(tr("作成するチャットの種類が変わっています")),{status:409});
   if (!previous) {
     const now = new Date().toISOString();
-    await store.put("shopChat",id,{id,shopId:shop.id,email,intent,title:chatLabels[intent],createdAt:now,updatedAt:now} satisfies ShopConversation);
+    await store.put("shopChat",id,{id,shopId:shop.id,email,intent,title:chatLabels[intent],revision:shop.revision,createdAt:now,updatedAt:now} satisfies ShopConversation);
   }
   const chat=await readConversation(store,shop,email,id);
   if(begin&&!chat.messages.length)await appendChatMessage(store,shop,chat,{role:"assistant",text:openingQuestions[intent],requestId:"opening"});

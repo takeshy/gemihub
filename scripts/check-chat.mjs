@@ -22,7 +22,7 @@ try{
     await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`);
     const composer=page.getByRole("textbox",{name:"AIに伝えたいこと",exact:true});
     const log=page.getByRole("log",{name:"AIとのチャット",exact:true});
-    await page.getByRole("button",{name:"はじめる",exact:true}).click();
+    await composer.waitFor();
     const inputArea=page.getByRole("form",{name:"メッセージの入力",exact:true});
     const attachment=inputArea.getByRole("button",{name:"画像を添付",exact:true});
     const voiceToggle=inputArea.getByRole("button",{name:"音声入力",exact:true});
@@ -38,23 +38,60 @@ try{
     assert.equal(await page.getByRole("button",{name:"変更案を確認する",exact:true}).count(),0);
     // A new page is requested in a fresh conversation of the same chat.
     const restart=page.getByRole("button",{name:"新しい会話をはじめる",exact:true});
+    await page.getByText("話題を変えるときは新しい会話をはじめると、AIが前の話題と混同しにくくなります。",{exact:true}).waitFor();
+    const restartStyle=await restart.evaluate(button=>{const style=getComputedStyle(button);return {background:style.backgroundColor,color:style.color,height:button.getBoundingClientRect().height};});
+    assert.notEqual(restartStyle.background,"rgba(0, 0, 0, 0)","new conversation has a visible button background");
+    assert.notEqual(restartStyle.background,restartStyle.color);
+    assert.ok(restartStyle.height>=44,"new conversation has a touch-sized target");
+    const chatBounds=await page.locator('.shop-change-chat').boundingBox();
+    const sendBounds=await submit.boundingBox();
+    assert.ok(sendBounds.y+sendBounds.height<=chatBounds.y+chatBounds.height,"send button fits inside the chat panel");
+    assert.ok((await log.boundingBox()).height>=100,"conversation remains readable alongside the topic hint");
     await restart.click();await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
     await composer.fill("予約方法と持ち物を載せるFAQページを追加したいです。メニューは「よくある質問」にしてください。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await page.getByRole("button",{name:"変更案を確認する",exact:true}).waitFor();
     assert.equal(await page.locator('.request-review').count(),0);
     await page.getByRole("button",{name:"変更案を確認する",exact:true}).click();
     await page.getByRole("heading",{name:"このように変更してよいですか？",exact:true}).waitFor();
+    assert.equal(await page.locator('.request-review .theme-preview').count(),0,"page additions omit the unchanged theme sample");
+    const newPage=page.getByRole("region",{name:"追加するページ",exact:true});
+    await newPage.waitFor();
+    assert.equal(await newPage.locator('details').getAttribute('open'),"","new page content is expanded immediately");
+    await newPage.getByRole('heading',{name:'初めてのお客様へ',exact:true}).waitFor();
+    await page.locator('.shop-change-chat .chat-panel-collapse').click();
+    await page.locator('.request-review').screenshot({path:`tmp/new-page-review-${width}.png`});
     await page.getByRole("button",{name:"チャットに戻る",exact:true}).click();
     // Reloading restores the current conversation; a new one keeps past conversations behind the scenes.
     await page.reload();
     await log.getByText(/予約方法と持ち物を載せるFAQページ/).first().waitFor();
     assert.equal(await page.getByRole("button",{name:"はじめる",exact:true}).count(),0);
     assert.equal(await page.getByText(/保存したチャット|新しいチャット|このチャットの文脈/).count(),0);
+    // A successful publication leaves the old transcript in history and opens a fresh chat.
+    await page.getByRole("button",{name:"変更案を確認する",exact:true}).click();
+    await page.locator('.shop-change-chat .chat-panel-collapse').click();
+    await page.getByRole("button",{name:"変更内容を反映する",exact:true}).click();
+    await composer.waitFor();
+    assert.equal(await page.locator('.chat-message-user').count(),0,"publication starts a fresh conversation");
+    assert.equal(await log.getByText(/予約方法と持ち物を載せるFAQページ/).count(),0);
+    assert.equal(await page.getByRole("button",{name:"変更案を確認する",exact:true}).count(),0);
+    await page.reload();await composer.waitFor();
+    assert.equal(await page.locator('.chat-message-user').count(),0,"reload does not restore a pre-publication conversation");
+    await page.locator('.shop-change-chat').screenshot({path:`tmp/new-conversation-${width}.png`});
     await restart.click();await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
     assert.equal(await log.getByText(/予約方法と持ち物を載せるFAQページ/).count(),0,"past conversations stay behind the scenes");
     await composer.fill("以前に相談したFAQの内容を教えてください。");await page.getByRole("button",{name:"送信",exact:true}).click();
     await log.getByText(/以前は「.*予約方法と持ち物/).waitFor();
     assert.ok(await page.evaluate(()=>window.__omaiStoryLastHistory.length>0),"the AI receives relevant saved history automatically");
+    if(process.argv.includes("--changes-only")){
+      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+      const design=entries.find(entry=>entry.id.endsWith("--design-proposal"));assert.ok(design);
+      await page.goto(`${origin}/iframe.html?id=${encodeURIComponent(design.id)}&viewMode=story`);
+      await page.locator('.request-review .theme-preview').waitFor();
+      assert.deepEqual(errors,[]);
+      await context.close();
+      console.log(`${width}px: visible new-conversation button and hint, expanded page content, conditional theme preview, restored conversation and fresh chat after publication passed (fixtures).`);
+      continue;
+    }
     await restart.click();await page.waitForFunction(()=>document.querySelectorAll('.chat-message-user').length===0);
     const speechDialog=page.getByRole("dialog",{name:"音声入力",exact:true});
     const transcript=speechDialog.getByRole("textbox",{name:"書き起こした内容",exact:true});
