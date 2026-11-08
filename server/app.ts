@@ -2541,7 +2541,7 @@ export function createApp(
                   const candidate = await generateReviewedVisual((feedback, previous) => visualPhase("generate", async () => {
                     const repair = feedback.length ? `\n\nRepair the previous candidate to satisfy the ORIGINAL request and these rendered-screen review issues. Do not repeat relative edits already present in the candidate.\n${JSON.stringify(feedback)}` : "";
                     const base = previous?.config || current;
-                    const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:") || input.target.startsWith("component:")) && intelligence.visualAppearance
+                    const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:") || input.target.startsWith("component:") || input.target.startsWith("page:")) && intelligence.visualAppearance
                       ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages, splitStyles: true, onRepair: async () => { currentAiSignal()?.throwIfAborted(); await saveProgress("repairing", visualAttempt); } })
                       : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, withVisualConversation(instruction + repair, messages)), base, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, base.region, {}, input.media);
                     validateProposedImages(next.config, visual.config, images);

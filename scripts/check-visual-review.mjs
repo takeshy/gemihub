@@ -25,10 +25,12 @@ const cookie = 'visual-review-test';
 await store.put('session', digest(cookie), { user: { email: shop.owner, name: 'Owner', role: 'owner' }, expires: Date.now() + 3600000 });
 let generations = 0, reviews = 0, initial = false;
 const screenshotHashes = [];
+const ownerIntroduction = '<section class="profile"><h2>店主の紹介</h2><p>丁寧なケアと持ちの良さにこだわっています。</p><ul><li>保有資格：JNECネイリスト技能検定1級、JNAジェルネイル技能検定上級、ネイルサロン衛生管理士</li><li>得意なデザイン：ニュアンスネイル、大人可愛い上品デザイン、シンプルオフィスネイル</li></ul></section>';
 const server = createApp(store, { ...intelligence,
-  async identifyVisual() { return { ids: ['theme'], explanation: 'The header is selected.' }; },
+  async identifyVisual(_media, _targets, instruction) { return instruction.includes('店主') ? { ids: ['page:staff-introduction:body'], explanation: '紹介文を反映します。' } : { ids: ['theme'], explanation: 'The header is selected.' }; },
   async visualAppearance(current, instruction, images, options) {
     generations++;
+    if (options.target.startsWith('page:')) return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => JSON.stringify({ body: ownerIntroduction }) });
     const repair = /mobile navigation is clipped/.test(instruction);
     if (repair) assert.match(current.appearance.theme.headerCss, /height:20px/, 'repair starts from the rejected candidate');
     return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => JSON.stringify({ appearance: { theme: { headerCss: repair || instruction.includes('24 pixels') ? '.public-nav{gap:24px}' : '.public-nav{height:20px;overflow:hidden}' } } }) });
@@ -54,12 +56,12 @@ const server = createApp(store, { ...intelligence,
         const metadata = await sharp(bytes).metadata();
         assert.equal(metadata.format, 'jpeg');assert.equal(metadata.width, index % 2 ? 390 : 1280);
         assert.ok(metadata.height > 100);
-        await writeFile(`tmp/visual-review/${initial ? 'initial' : 'header'}-${reviews}-${index}.jpg`, bytes);
+        await writeFile(`tmp/visual-review/${input.target.startsWith('page:') ? 'page' : initial ? 'initial' : 'header'}-${reviews}-${index}.jpg`, bytes);
       }
       const hashes = screenshots.map(image => digest(image.data));
       screenshotHashes.push(hashes);
       assert.notEqual(hashes[0], hashes[1], 'desktop and mobile are separate browser layouts');
-      const broken = !initial && input.after.appearance.theme.headerCss.includes('height:20px');
+      const broken = !input.target.startsWith('page:') && !initial && input.after.appearance.theme.headerCss.includes('height:20px');
       return JSON.stringify({ approved: !broken, issues: broken ? ['The mobile navigation is clipped.'] : [] });
     } });
   },
@@ -89,6 +91,15 @@ try {
   const changed = await api(setup.id, `plans/${plan.id}/theme`, { media, instruction: 'Increase the hero padding to 40 pixels' }, 'initial-review');
   assert.equal(changed.plan.themeReview.rendered, true);
   assert.equal((await store.shop(setup.id)).published, null);
+  initial = false;
+  const pageDraft = structuredClone(shop.published);
+  pageDraft.pages.push({ id: 'staff-introduction', slug: 'staff', title: 'スタッフ紹介', navigationLabel: 'スタッフ紹介', body: '<p>紹介文を準備中です。</p>', css: '.profile{line-height:1.8}', layout: 'standard', imageUrl: '' });
+  const pageRequest = await api(shop.id, 'visual/identify', { media, instruction: '店主の紹介文・保有資格・得意なデザインを反映して', displayed: pageDraft, local: { base: shop.revision, source: shop.published, pageId: 'staff-introduction' } });
+  const pageResult = await api(shop.id, 'visual/propose', { id: pageRequest.id, target: 'page:staff-introduction:body', instruction: '店主の紹介文・保有資格・得意なデザインを反映して', media });
+  assert.equal(pageResult.visualReview.approved, true);
+  assert.equal(pageResult.config.pages.at(-1).body, ownerIntroduction);
+  assert.deepEqual({ ...pageResult.config, pages: pageDraft.pages }, pageDraft);
+  assert.deepEqual((await store.shop(shop.id)).published, shop.published);
   const oversized = structuredClone(shop.published);
   oversized.appearance.theme.css = '/* ' + 'formatting '.repeat(1500) + ' */\nh1 { letter-spacing: 0.03em; }\n@media (max-width: 600px) { h1 { letter-spacing: 0.01em; } }';
   const compacted = shopSchema.parse(compactGeneratedStyles(oversized));
@@ -98,5 +109,5 @@ try {
   const afterCompact = await captureVisualScreens({ ...captureInput, config: compacted });
   assert.deepEqual(afterCompact.map(shot => shot.data), beforeCompact.map(shot => shot.data), 'compacting oversized formatting preserves the actual desktop/mobile pixels');
   console.log('Oversized CSS formatting compacts below the limit with identical Chromium screenshots at 1280/390px.');
-  console.log('Real Chromium before/after captures reach the review model at 1280/390px. Rejection -> repair -> recapture -> approval, refinement, and initial-theme correction passed; publication is unchanged.');
+  console.log('Real Chromium before/after captures reach the review model at 1280/390px. Rejection -> repair -> recapture -> approval, refinement, custom page introduction, and initial-theme correction passed; publication is unchanged.');
 } finally { await new Promise(resolve => server.close(resolve));await store.close(); }

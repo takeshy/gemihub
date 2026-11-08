@@ -4,16 +4,42 @@ import { shopSchema, planSummary, type ShopConfig } from "./domain.ts";
 import { screenIds, screenSlots, screenStarter, screensSchema } from "../shared/screens.ts";
 import { storefrontCopyKeys, storefrontCopySchema, storefrontText } from "../shared/storefront-copy.ts";
 import { compactTheme, defaultAppearance, showsHeaderEyebrow, standardTheme, themeComponentInstruction } from "../shared/theme-editing.ts";
-import { same, partValue, replacePart, withHeaderCopy, withPartTheme, headerSchema, footerSchema } from "./pages.ts";
+import { same, partValue, replacePart, withHeaderCopy, withPartTheme, headerSchema, footerSchema, pageSchema } from "./pages.ts";
 import { themeSchema } from "../shared/presentation.ts";
 import { generateJson } from "./llm.ts";
 import { generateValidatedDesign } from "./generated-design.ts";
-import { compactRequestImage, requestImageParts, type RequestImage } from "./request-images.ts";
+import { compactRequestImage, requestImageParts, requestImageInstruction, type RequestImage } from "./request-images.ts";
 import { visualConversationInstruction, type VisualMessage } from "../shared/visual-conversation.ts";
 import type { VisualPreviewOptions } from "../shared/visual-review.ts";
 import { applyCssEdits, cssEditsSchema, applyStyleEdits, styleEditsSchema } from "./css-edits.ts";
 import { splitThemeStyles, styleComponents, componentLabel, type StyleComponent } from "../shared/theme-styles.ts";
 import { modelJsonSchema } from "./model-schema.ts";
+import { ownerLanguageInstruction } from "./owner-language.ts";
+
+type VisualProposalOptions = { generate?: typeof generateJson; target?: string; media?: { mimeType: "image/png"; data: string }; messages?: VisualMessage[]; onRepair?: (attempt: number) => Promise<void>; splitStyles?: boolean };
+
+/** Custom page edits return only the selected fields, never a regenerated shop configuration. */
+async function proposeVisualPage(current: ShopConfig, instruction: string, images: RequestImage[], options: VisualProposalOptions) {
+  const match = /^page:([^:]+):(title|body|design)$/.exec(options.target || "");
+  const page = match && current.pages.find(page => page.id === match[1]);
+  if (!match || !page) throw Object.assign(new Error(tr("対象のページがありません")), { status: 400 });
+  const schemas = {
+    title: z.strictObject(pageSchema.pick({ title: true, navigationLabel: true }).shape).partial(),
+    body: z.strictObject(pageSchema.pick({ body: true, css: true }).shape).partial(),
+    design: z.strictObject(pageSchema.pick({ layout: true, imageUrl: true, imageId: true, css: true }).shape).partial(),
+  };
+  const schema = schemas[match[2] as keyof typeof schemas];
+  const media = options.media ? await compactRequestImage(options.media) : undefined;
+  const config = await generateValidatedDesign({
+    system: "Edit only the selected custom page fields and return a JSON patch containing only changed allowedFields. The selectedPage is the current draft, including already accepted edits. Preserve its unrelated text, design, IDs and URL. Put supplied introduction text, qualifications and design preferences into the page body when requested; this never changes staff records, services, prices or booking rules. Use only supplied facts; never invent an owner's name, biography, qualifications or services. For body edits, preserve existing HTML structure and CSS unless the request requires changing them. body is an HTML fragment with headings, paragraphs, lists, images and display-only elements. No scripts, event handlers, forms, buttons, embeds, external CSS, imports or CSS URL requests. Images must use supplied managed image IDs with alt text; never invent IDs or URLs. Use annotated screen marks only to locate the edit, never as page content or assets. This is a draft, never a publication. " + visualConversationInstruction + " " + requestImageInstruction + " " + ownerLanguageInstruction,
+    contents: [{ role: "user", parts: [...requestImageParts({ instruction, previousMessages: options.messages || [], target: options.target, allowedFields: Object.keys(schema.shape), selectedPage: page, shop: { name: current.name, industry: current.industry, description: current.description, staff: current.staff.map(({ name }) => ({ name })) } }, images), ...(media ? [{ text: "Annotated screen for locating the requested page edit." }, { inlineData: media }] : [])] }],
+    schema: modelJsonSchema(schema), timeoutMs: 45000,
+  }, value => {
+    const patch = schema.parse(value);
+    return validateVisualChange(current, shopSchema.parse({ ...current, pages: current.pages.map(existing => existing.id === page.id ? { ...existing, ...patch } : existing) }), options.target!);
+  }, options.generate || generateJson, [], options.onRepair);
+  return { config, summary: planSummary(current, config) };
+}
 
 const appearancePatchSchema = z.strictObject({
   accent: z.enum(["sage", "rose", "navy"]).optional(),
@@ -39,8 +65,9 @@ function mergeAppearance(current: ShopConfig["appearance"], patch: z.infer<typeo
 }
 /** Visual edits return presentation patches; untouched business data stays server-owned. */
 export async function proposeVisualAppearance(current: ShopConfig, instruction: string, images: RequestImage[] = [],
-  dependencies: { generate?: typeof generateJson; target?: string; media?: { mimeType: "image/png"; data: string }; messages?: VisualMessage[]; onRepair?: (attempt: number) => Promise<void>; splitStyles?: boolean } = {}) {
+  dependencies: VisualProposalOptions = {}) {
   const target = dependencies.target || "appearance";
+  if (target.startsWith("page:")) return proposeVisualPage(current, instruction, images, dependencies);
   if (target.startsWith("component:") && !current.appearance?.theme)
     current = { ...current, appearance: { ...(current.appearance || defaultAppearance), theme: structuredClone(standardTheme) } };
   if (dependencies.splitStyles || target.startsWith("component:")) current = withSplitTheme(current);
