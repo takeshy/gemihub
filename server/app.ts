@@ -565,14 +565,15 @@ export function createApp(
     config = initialIntroductionPages(config, facts.introductions);
     return JSON.stringify(config) === JSON.stringify(plan.config) ? plan : { ...plan, config, summary: planSummary(null, config) };
   }
-  async function reviewVisual(shop: Shop, input: Omit<VisualReviewInput, "renderImages">) {
+  async function reviewVisual(shop: Shop, input: Omit<VisualReviewInput, "renderImages">, cache: VisualReviewInput["renderImages"] = {}) {
     const wholeFrame = input.screen === "theme" || input.screen === "initial-theme";
     const frameIds = (config: ShopConfig) => [...themeImageIds(config.appearance?.theme), ...(config.header.imageId ? [config.header.imageId] : [])];
     const required = new Set(wholeFrame ? [...frameIds(input.before), ...frameIds(input.after)] : [...managedImageIds(input.before), ...managedImageIds(input.after), ...(input.preview?.fixtures?.posts.flatMap(post => postImageIds(post.body)) || [])]);
-    const renderImages = Object.fromEntries(input.images.filter(image => required.has(image.id)).map(image => [image.id, { mimeType: image.mimeType, data: image.data }]));
+    const renderImages = { ...cache, ...Object.fromEntries(input.images.filter(image => required.has(image.id)).map(image => [image.id, { mimeType: image.mimeType, data: image.data }])) };
     const ids = [...required].filter(id => !renderImages[id]);
     const token = !store.memory && ids.length ? await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")) : "";
     for (const id of ids) renderImages[id] = await readMenuImage(store, shop, id, crmFiles, token, "display");
+    Object.assign(cache, renderImages);
     return (intelligence.visualReview || reviewRenderedVisual)({ ...input, renderImages });
   }
   async function enqueue(
@@ -2475,7 +2476,7 @@ export function createApp(
               const state = await store.get<ThemeRun>("initialThemeRun", id);
               const base = structuredClone(original.config);
               const request = `${previous?.request || (chat ? conversationContext(chat).map(m => `${m.role}: ${m.text}`).join("\n") : original.request || "")}\nCurrent accepted theme: ${JSON.stringify(original.config.appearance?.theme || null)}\nCorrection: ${withVisualConversation(input.instruction, input.messages)}`;
-              const reviewed = await (intelligence.initialTheme || createInitialTheme)({ config: base, request, images, screen: input.media }, { state, save: next => store.put("initialThemeRun", id, next), reviewRendered: candidate => reviewVisual(fresh, { before: base, after: candidate, instruction: input.instruction, target: "theme", screen: "initial-theme", messages: input.messages, preview: input.preview, images }) });
+              const reviewed = await (intelligence.initialTheme || createInitialTheme)({ config: base, request, images, screen: input.media }, { state, save: next => store.put("initialThemeRun", id, next), reviewRendered: candidate => reviewVisual(fresh, { before: base, after: candidate, instruction: input.instruction, target: "theme", screen: "initial-theme", messages: input.messages, preview: input.preview, media: input.media, images }) });
               const config = shopSchema.parse({ ...base, appearance: { accent: "sage", layout: "standard", imageUrl: "", ...base.appearance, theme: reviewed.candidate } });
               validateProposedImages(config, original.config, images);
               if (!reviewed.renderedReview?.approved) fail(422, tr("修正後の画面の自動レビューが完了しませんでした。依頼の内容は保持しています。もう一度お試しください。"));
@@ -2503,7 +2504,7 @@ export function createApp(
               if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || !same(source, visual.source))
                 fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
               const requestId = input.requestId || randomUUID();
-              let progress: VisualGenerationProgress = { shopId: fresh.id, visualId: visual.id, requestId, stage: "preparing", attempt: 0, startedAt: Date.now(), updatedAt: Date.now() };
+              let progress: VisualGenerationProgress = { shopId: fresh.id, visualId: visual.id, requestId, instruction: input.instruction, stage: "preparing", attempt: 0, startedAt: Date.now(), updatedAt: Date.now() };
               const saveProgress = async (stage: VisualStage, attempt = progress.attempt, error?: string) => {
                 progress = { ...progress, stage, attempt, updatedAt: Date.now(), ...(error ? { error } : {}) };
                 await store.put("visualGenerationProgress", digest(`${visual.id}:${requestId}`), progress);
@@ -2516,6 +2517,7 @@ export function createApp(
                   // Earlier requests are already in `revision`; repeating them as new work would apply relative changes twice.
                   const instruction = input.applied ? `Already applied to the current draft; do not apply these again:\n${input.applied}\n\nNew request:\n${input.instruction}` : input.instruction;
                   const messages = input.messages ?? visual.messages ?? [];
+                  const reviewImages: VisualReviewInput["renderImages"] = {};
                   let visualAttempt = 0;
                   const visualPhase = async <T>(phase: string, run: () => Promise<T>) => {
                     currentAiSignal()?.throwIfAborted();
@@ -2524,18 +2526,27 @@ export function createApp(
                     const started = Date.now();
                     const fields = { event: "visual_generation_phase", shopId: fresh.id, visualId: visual.id, target: input.target, phase, attempt: visualAttempt };
                     if (!store.memory) console.info(JSON.stringify({ ...fields, state: "started" }));
-                    try { return await run(); }
+                    try {
+                      const result = await run();
+                      if (phase === "review") {
+                        const review = result as { approved: boolean; issues: string[] };
+                        progress = { ...progress, lastReview: { approved: review.approved, issues: review.issues } };
+                        await saveProgress("reviewing", visualAttempt);
+                        if (!store.memory) console.info(JSON.stringify({ ...fields, event: "visual_review_result", approved: review.approved, issueCount: review.issues.length }));
+                      }
+                      return result;
+                    }
                     finally { if (!store.memory) console.info(JSON.stringify({ ...fields, state: "finished", durationMs: Date.now() - started })); }
                   };
                   const candidate = await generateReviewedVisual((feedback, previous) => visualPhase("generate", async () => {
                     const repair = feedback.length ? `\n\nRepair the previous candidate to satisfy the ORIGINAL request and these rendered-screen review issues. Do not repeat relative edits already present in the candidate.\n${JSON.stringify(feedback)}` : "";
                     const base = previous?.config || current;
-                    const next = (input.target === "theme" || input.target === "appearance" || input.target.startsWith("copy:") || input.target.startsWith("screen:") || input.target.startsWith("part:") || input.target.startsWith("component:")) && intelligence.visualAppearance
+                    const next = intelligence.visualAppearance
                       ? await intelligence.visualAppearance(base, instruction + repair, images, { target: input.target, media: input.media, messages, splitStyles: true, onRepair: async () => { currentAiSignal()?.throwIfAborted(); await saveProgress("repairing", visualAttempt); } })
                       : await intelligence.propose(tr("ペンで選んだ対象 {0} のみ変更する。他の箇所は変更しない。依頼：{1}", input.target, withVisualConversation(instruction + repair, messages)), base, user!.email, demoEnabled() && !process.env.GOOGLE_CLOUD_PROJECT, images, base.region, {}, input.media);
                     validateProposedImages(next.config, visual.config, images);
                     return { config: validateVisualChange(visual.config, next.config, input.target) };
-                  }), proposal => visualPhase("review", () => reviewVisual(fresh, { before: current, after: proposal.config, instruction, target: input.target, screen: visual.screen || (input.target.startsWith("part:") ? input.target.slice(5) : input.target.startsWith("page:") ? `page:${input.target.split(":")[1]}` : "reserve"), messages, preview: visual.preview, images })));
+                  }), proposal => visualPhase("review", () => reviewVisual(fresh, { before: current, after: proposal.config, instruction, target: input.target, screen: visual.screen || (input.target.startsWith("part:") ? input.target.slice(5) : input.target.startsWith("page:") ? `page:${input.target.split(":")[1]}` : "reserve"), messages, preview: visual.preview, media: input.media, images }, reviewImages)));
                   await store.locked(shop.id, async () => {
                     const latest = await store.shop(shop.id);
                     if (!latest || latest.publishingPlanId || latest.revision !== visual.base || !same(latest.published ? await effective(latest) : null, visual.source)) fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
