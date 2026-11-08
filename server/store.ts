@@ -301,10 +301,15 @@ export class Store {
       } catch (error) { if (commit.status === "pending") commit.status = "failed"; throw error; }
     }));
   }
+  /**
+   * Runs after the surrounding transaction commits, outside its batch and locks: writes made by the
+   * action persist on their own instead of joining an already committed batch or a released lease.
+   */
   afterCommit(action: () => void) {
+    const detached = () => this.batch.exit(() => this.commitActions.exit(() => this.leases.exit(action)));
     const commit = this.commitActions.getStore();
-    if (!commit || commit.status === "committed") action();
-    else if (commit.status === "pending") commit.actions.push(action);
+    if (!commit || commit.status === "committed") detached();
+    else if (commit.status === "pending") commit.actions.push(detached);
   }
   async cleanup() {
     for (const kind of ["session", "oauth", "ticket", "emailLogin", "emailLoginLimit", "visual", "visualGenerationProgress", "imageGenerationData", "settingsAiProposal", "inquiryQuota"]) {

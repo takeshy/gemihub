@@ -65,7 +65,7 @@ export async function stageInquiryFiles(store: Store, shop: Shop, id: string | u
   if (action === "reply") assertReplyAllowed(store, shop, q, input);
   await prepareInquiryFiles(store, shop, requestKey, input.files, storage);
 }
-type InquiryMail = { to: string; subject: string; body: string; inquiryInteractionId: string; attachments?: CustomerAttachment[] };
+type InquiryMail = { to: string; subject: string; body: string; inquiryInteractionId: string; inquiryId?: string; mailKind?: string; attachments?: CustomerAttachment[] };
 /** Caller holds the shop lock and has staged attachments; the record and mail intent commit atomically.
  * interactionAt and interactionPart are trusted server values that keep one phone transcript in order. */
 export async function writeInquiry(store: Store, shop: Shop, actor: string, id: string | undefined, action: string, data: unknown, enqueue: (mail: InquiryMail, id: string) => Promise<unknown>, interactionAt = new Date().toISOString(), interactionPart?: number) {
@@ -121,7 +121,7 @@ export async function writeInquiry(store: Store, shop: Shop, actor: string, id: 
     }
     const entry: InquiryInteraction = { id: requestKey, shopId: shop.id, inquiryId: q.id, kind: email ? "email" : "kind" in input ? input.kind : "note", text: input.text, at: interactionAt, ...(interactionPart === undefined ? {} : { part: interactionPart }), by: actor, ...(attachments.length ? { attachments } : {}), ...(email ? { delivery: shop.judge || (store.memory && !shop.google) ? "simulated" : "queued", to: q.email } : {}) };
     await store.put("inquiryInteraction", entry.id, entry);
-    if (email) await enqueue({ to: q.email, subject: tr("{0} からの返信", shop.published?.name || shop.draft?.name || ""), body: input.text, inquiryInteractionId: entry.id, ...(attachments.length ? { attachments } : {}) }, digest(`${requestKey}:mail`));
+    if (email) await enqueue({ to: q.email, subject: tr("{0} からの返信", shop.published?.name || shop.draft?.name || ""), body: input.text, inquiryInteractionId: entry.id, inquiryId: q.id, mailKind: "inquiry_reply", ...(attachments.length ? { attachments } : {}) }, digest(`${requestKey}:mail`));
     await store.put("inquiryEntryRequest", requestKey, { shopId: shop.id, inquiryId: q.id, hash, done: true }); return { ok: true };
   });
 }

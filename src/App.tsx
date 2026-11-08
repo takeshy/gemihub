@@ -58,6 +58,7 @@ import { articleKinds } from "../shared/article-features";
 import { Admin } from "./Admin";
 import { Assistant } from "./Assistant";
 import type { PayPalAlertState } from "../server/paypal-ops";
+import type { OwnerIntegrationAlert } from "../server/integration-alerts";
 import { ShopAbout } from "./ShopAbout";
 import { Presentation } from "./Presentation";
 import type { ScreenId } from "../shared/screens";
@@ -85,7 +86,8 @@ export type Workspace = Shop & {
   phoneSettings?: PhoneSettings;
   inquiries: Inquiry[];
   members: { email: string; accepted: boolean; status?: string }[];
-  jobs: { type: string; error?: string }[];
+  jobs: { type: string; attempts?: number; mailKind?: string; terminalReason?: string }[];
+  integrationAlerts?: OwnerIntegrationAlert[];
   publicUrl: string;
 };
 export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; judgeOwnerAvailable?: boolean; judgePublished?: boolean; assistantVoice?: boolean };
@@ -97,6 +99,7 @@ export type AppProps = {
   initialPane?: string;
   navigate?: Navigate;
 };
+const attentionCount = (shop?: Workspace) => (shop?.paypalAlerts?.items.length || 0) + (shop?.integrationAlerts?.length || 0);
 export function App({
   path = location.pathname,
   search = location.search,
@@ -533,7 +536,7 @@ function Dashboard({
             >
               <span aria-hidden="true">{icon}</span>
               {label}
-              {id === "dashboard" && shop?.isOwner && !!shop?.paypalAlerts?.items.length && <span className="alert-badge" aria-label={tr("要対応 {0}件", shop.paypalAlerts.items.length)}>{shop.paypalAlerts.items.length}</span>}
+              {id === "dashboard" && shop?.isOwner && attentionCount(shop) > 0 && <span className="alert-badge" aria-label={tr("要対応 {0}件", attentionCount(shop))}>{attentionCount(shop)}</span>}
             </button>
           ))}
           <div className="sidebar-language">

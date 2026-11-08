@@ -4090,5 +4090,14 @@
   "単独で予約できるすべてのメニュー": "All standalone services",
   "すべての通常メニューへの追加は、単独予約不可のメニューに設定してください": "Only add-ons can be set to accompany all standalone services",
   "キー入力を確認できない場合は、8桁の番号を1桁ずつお話しください。電話のキーでも入力できます。": "If keypad input is not detected, say the eight digits one at a time. You can also use your phone keypad.",
-  "電話の案内に従い、毎回この8桁の暗証番号を入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。": "Follow the phone instructions and enter this 8-digit PIN on every call. Call with caller ID enabled. The PIN changes when you reset your shop."
+  "電話の案内に従い、毎回この8桁の暗証番号を入力してください。番号通知でおかけください。暗証番号はお店の初期化で変わります。": "Follow the phone instructions and enter this 8-digit PIN on every call. Call with caller ID enabled. The PIN changes when you reset your shop.",
+  "Google連携の要対応": "Google integration attention",
+  "Googleとの接続を確認してください。お客様へのメール送信が止まっています。": "Check your Google connection. Email to customers has stopped.",
+  "Googleとの接続を確認してください。Google Driveへの保存用コピーの更新が止まっています。": "Check your Google connection. The Google Drive backup copy has stopped updating.",
+  "この返信メールを送信できませんでした。返信内容は記録に残っています。宛先と添付ファイルを確認してください。": "This reply could not be sent. The reply is still recorded. Check the recipient and attachments.",
+  "Google Driveへの保存用コピーの更新が遅れています。自動で再試行しています。": "The Google Drive backup copy is behind. Retrying automatically.",
+  "お客様へのメール送信が遅れています。自動で再試行しています。急ぎの連絡は、電話など別の方法でお願いします。": "Email to customers is delayed. Retrying automatically. For urgent matters, use another method such as phone.",
+  "Googleに再接続する": "Reconnect Google",
+  "問い合わせを確認する": "Review inquiry",
+  "{0}件の処理に影響しています。": "Affects {0} item(s)."
 }

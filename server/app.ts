@@ -39,6 +39,7 @@ import { issueCoupons, hasActiveCoupons, campaignEnabled, couponWallet, applyCou
 import { proposeCoupon } from "./coupon-ai.ts";
 import { couponRuleSchema, type CouponCampaign, type CouponGrant } from "../shared/coupons.ts";
 import { listedBookingIds, queueBookingReminders, reminderCurrent, type BookingReminder } from "./booking-reminders.ts";
+import { integrationAlerts, type IntegrationErrorClass, type IntegrationMailKind, type IntegrationTerminalReason } from "./integration-alerts.ts";
 import {
   createServer,
   type IncomingMessage,
@@ -205,6 +206,18 @@ type Job = {
   reminder?: BookingReminder;
   wishId?: string;
   inquiryInteractionId?: string;
+  inquiryId?: string;
+  mailKind?: IntegrationMailKind | string;
+  bookingId?: string;
+  bookingStart?: string;
+  createdAt?: string;
+  firstFailedAt?: string;
+  lastAttemptAt?: string;
+  lastErrorCode?: string;
+  lastErrorClass?: IntegrationErrorClass;
+  terminalReason?: IntegrationTerminalReason;
+  incidentId?: string;
+  incidentIds?: string[];
   attachments?: CustomerAttachment[];
 };
 async function body(req: IncomingMessage, limit = 65536) {
@@ -278,6 +291,7 @@ export function createApp(
   const logs = new ShopLogs(store);
   paymentGateway = loggedPaymentGateway(paymentGateway, logs);
   const reportError = (error: unknown) => { logs.error(error); console.error(error); };
+  const integration = integrationAlerts({ store, appOrigin: () => origin(), log: (event, data) => console.error(JSON.stringify({ event, ...data })) });
   const crmFiles = customerFiles || (store.memory ? memoryCustomerFiles(store) : googleCustomerFiles);
   const inquiryStorage = (shop: Shop): InquiryFileStorage => async () => ({ files: crmFiles, token: store.memory ? "" : await store.ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")) });
   const pageFiles = storefrontFiles || (store.memory ? memoryStorefrontFiles(store) : bucketStorefrontFiles());
@@ -573,14 +587,21 @@ export function createApp(
       await store.put("judgeMail", id, { id, shopId: shop.id, owner: shop.owner, to: data.to || "", ...(data.cc?.length ? { cc: data.cc } : {}), subject: data.subject || "", body: data.body || "", at: new Date().toISOString() } satisfies JudgeMail);
       return;
     }
-    if (!shop.google) return;
+    if (!shop.google) {
+      // Keep the intent visible as a blocked integration instead of silently discarding it.
+      if (!store.memory) store.afterCommit(() => { void integration.recordBlocked({ shop, type: type === "mail" ? "mail" : "drive", ...(data.mailKind ? { mailKind: data.mailKind } : {}) }).catch(reportError); });
+      return;
+    }
     if(await store.get("job",id))return;
+    const mailKind = data.mailKind ?? (type === "mail" ? data.inquiryInteractionId ? "inquiry_reply" : data.reminder ? "reminder" : data.wishId ? "waitlist" : "booking" : undefined);
     await store.put("job", id, {
       id,
       shopId: shop.id,
       type,
       attempts: 0,
+      createdAt: new Date().toISOString(),
       locale: getLocale(),
+      ...(mailKind ? { mailKind } : {}),
       ...data,
     });
   }
@@ -596,6 +617,11 @@ export function createApp(
         if (entry?.shopId === shop.id) await store.put("inquiryInteraction", entry.id, { ...entry, delivery, ...(to ? { to } : {}) });
       } catch (error) { reportError(error); }
     };
+    const recordObsolete = async (job: Job) => {
+      job.terminalReason = "obsolete";
+      await store.delete("job", job.id);
+      await integration.recordObsolete({ shop, job }).catch(reportError);
+    };
     let reminderState: Promise<[Booking[], Set<string>]> | undefined;
     for (const job of (await store.list<Job>("job")).filter(
       // Post pages wait for an in-flight publish/restore; mail is never held back by it.
@@ -607,14 +633,14 @@ export function createApp(
           if (job.wishId) {
             const wish = await store.get<SlotWish>("slotWish", job.wishId);
             if (!wish || wish.shopId !== shop.id || wish.customer !== job.to) {
-              await store.delete("job", job.id);
+              await recordObsolete(job);
               return;
             }
           }
           if (job.reminder) {
             const [bookings, listed] = await (reminderState ??= Promise.all([store.bookings(shop.id), listedBookingIds(store, shop)]));
             if (!shop.published || !reminderCurrent(bookings.find(b => b.id === job.reminder!.bookingId), job.reminder, listed)) {
-              await store.delete("job", job.id);
+              await recordObsolete(job);
               return;
             }
           }
@@ -624,7 +650,9 @@ export function createApp(
           } else {
             const to = job.inquiryInteractionId ? await inquiryMailRecipient(store, shop, job.inquiryInteractionId) : job.to!;
             if (!to) {
+              job.terminalReason = "unavailable";
               await markDelivery(job.inquiryInteractionId, "failed");
+              await integration.recordFailure({ shop, job, error: Object.assign(new Error("recipient missing"), { code: "RECIPIENT_MISSING" }), final: true }).catch(reportError);
               await store.delete("job", job.id);
               return;
             }
@@ -633,13 +661,28 @@ export function createApp(
             await sendMail(token, to, job.subject!, job.body!, job.cc, attachments);
             await markDelivery(job.inquiryInteractionId, "sent", to);
           }
+          job.terminalReason = "sent";
           await store.delete("job", job.id);
+          await integration.recordSuccess({ shop, job }).catch(reportError);
         } catch (err) {
+          const at = new Date().toISOString();
+          const firstFailure = !job.firstFailedAt;
           job.error = err instanceof Error ? err.message : tr("連携エラー");
           job.attempts++;
+          job.lastAttemptAt = at;
+          if (firstFailure) job.firstFailedAt = at;
           const attached = !!job.attachments?.length;
-          if ((job.inquiryInteractionId || attached) && (job.attempts >= maxInquiryMailAttempts || attached && !attachmentsRead && attachmentUnavailable(err))) {
+          const final = !!((job.inquiryInteractionId || attached) && (job.attempts >= maxInquiryMailAttempts || attached && !attachmentsRead && attachmentUnavailable(err)));
+          const result = await integration.recordFailure({ shop, job, error: err, final }).catch(error => { reportError(error); return undefined; });
+          if (result) {
+            job.lastErrorClass = result.errorClass;
+            job.lastErrorCode = result.errorCode;
+            job.incidentId = result.incident.id;
+            job.incidentIds = result.incidentIds;
+          }
+          if (final) {
             reportError(err);
+            job.terminalReason = "failed_final";
             await markDelivery(job.inquiryInteractionId, "failed");
             await store.delete("job", job.id);
             return;
@@ -674,15 +717,16 @@ export function createApp(
     text: string,
     cc?: string[],
     attachments?: CustomerAttachment[],
+    meta: Partial<Job> = {},
   ) {
     if (cc) {
       const recipients = new Map(cc.map(address => [address.toLowerCase(), address]));
       recipients.delete(to.toLowerCase());
-      await enqueue(shop, "mail", { to, cc: [...recipients.values()], subject, body: text, ...(attachments?.length ? { attachments } : {}) });
+      await enqueue(shop, "mail", { to, cc: [...recipients.values()], subject, body: text, ...meta, ...(attachments?.length ? { attachments } : {}) });
       return;
     }
     for (const address of new Set([to, config.notificationEmail]))
-      await enqueue(shop, "mail", { to: address, subject, body: text, ...(attachments?.length ? { attachments } : {}) });
+      await enqueue(shop, "mail", { to: address, subject, body: text, ...meta, ...(attachments?.length ? { attachments } : {}) });
   }
   const payments = paymentService(store, paymentGateway, async (booking, event) => {
     const key = `${booking.id}:${event}`;
@@ -698,7 +742,7 @@ export function createApp(
     const status = refund ? { completed: tr("返金完了"), pending: tr("返金確認中"), awaiting_funds: tr("お店で返金手続きの確認中"), retrying: tr("返金処理中（自動で再確認します）"), not_required: tr("返金なし"), manual_review: tr("返金の確認が必要です。お店にお問い合わせください") }[refund.status] : booking.status === "no_show" ? tr("無断キャンセルを記録しました（返金なし）") : tr("支払い完了・予約確定");
     await store.transaction(async () => {
       await notify(shop, config, booking.customer, `${config.name} ${refund ? tr("予約キャンセル・返金") : booking.status === "no_show" ? tr("予約の状態が変更されました") : tr("ご予約を承りました")}`,
-        tr("{0} 様\n予約: {1}\nメニュー: {2}{3}\n支払額: {4}\n{5}{6}", booking.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined);
+        tr("{0} 様\n予約: {1}\nメニュー: {2}{3}\n支払額: {4}\n{5}{6}", booking.name, new Date(booking.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, booking), booking.message ? tr("\nメッセージ: {0}", booking.message) : "", formatMinor(booking.payment!.amount, booking.payment!.currency, intlLocale()), status, refund ? tr("\n返金額: {0}", formatMinor(refund.amount, booking.payment!.currency, intlLocale())) : tr("\n返金条件: {0}", policyText(booking.payment!.policy))), event === "paid" ? [shop.owner, config.notificationEmail] : undefined, undefined, { mailKind: refund ? "cancellation" : booking.status === "no_show" ? "booking" : "booking_confirmation", bookingId: booking.id, bookingStart: booking.start });
       await store.put("paymentNotice", key, { at: new Date().toISOString() });
       activity();
     });
@@ -1325,6 +1369,11 @@ export function createApp(
             for (const [k, v] of rate) if (v.until < Date.now()) rate.delete(k);
         }
       }
+      if (path === "/health" && (method === "GET" || method === "HEAD")) {
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+        res.end(method === "HEAD" ? undefined : JSON.stringify({ ok: true }));
+        return;
+      }
       if (path === "/api/session" && method === "GET") {
         const judgeOwner = !publicHost ? await savedJudgeOwner() : undefined;
         const judgeShop = user?.judge && user.role === "owner" && user.shopId ? await store.shop(user.shopId) : undefined;
@@ -1860,9 +1909,11 @@ export function createApp(
                 .filter((j) => j.shopId === shop.id)
                 .map((j) => ({
                   type: j.type,
-                  error: j.error,
                   attempts: j.attempts,
+                  ...(j.mailKind ? { mailKind: j.mailKind } : {}),
+                  ...(j.terminalReason ? { terminalReason: j.terminalReason } : {}),
                 })),
+              ...(user.email === shop.owner ? { integrationAlerts: await integration.ownerAlerts(shop) } : {}),
               // Judges stay on the management origin, where their trial customer session also lives.
               publicUrl: shop.judge
                 ? `/s/${shop.slug}`
@@ -3333,6 +3384,7 @@ export function createApp(
               });
             await enqueue(fresh, "mail", {
               to: email,
+              mailKind: "staff_invite",
               subject: tr("お店の運営に招待されました"),
               body: tr("{0}の運営に招待されました。{1} にこのメールアドレスの Google アカウントでログインして招待を承諾してください。", fresh.published?.name || tr("お店"), origin()),
             });
@@ -3492,7 +3544,7 @@ export function createApp(
             const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
             assertStorefrontAccess(fresh);
             const config = await effective(fresh);
-            return createPublicInquiry(store, fresh, user.email, input, q => notify(fresh, config, user.email, tr("{0} お問い合わせを受け付けました", config.name), q.message, undefined, q.attachments));
+            return createPublicInquiry(store, fresh, user.email, input, q => notify(fresh, config, user.email, tr("{0} お問い合わせを受け付けました", config.name), q.message, undefined, q.attachments, { mailKind: "inquiry_receipt", inquiryId: q.id }));
           });
           await flushMail(shop);
           void syncPaymentHistory(shop.id).catch(reportError);
@@ -3861,6 +3913,8 @@ export function createApp(
                 tr("{0} ご予約を承りました", config.name),
                 tr("{0} 様\n{1}\n{2}{3}", b.name, bookingMenuName(config, b), new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), b.message ? tr("\nメッセージ: {0}", b.message) : ""),
                 [shop.owner, config.notificationEmail],
+                undefined,
+                { mailKind: "booking_confirmation", bookingId: b.id, bookingStart: b.start },
               );
             });
             deliverMail = true;
@@ -3896,6 +3950,9 @@ export function createApp(
                 u.email,
                 tr("予約をキャンセルしました"),
                 tr("{0} 様\n予約: {1}\nメニュー: {2}", b.name, new Date(b.start).toLocaleString(intlLocale(), { timeZone: regionOf(config).timeZone, timeZoneName: "short" }), bookingMenuName(config, b)),
+                undefined,
+                undefined,
+                { mailKind: "cancellation", bookingId: b.id, bookingStart: b.start },
               );
             });
             deliverMail = true;
@@ -4149,12 +4206,19 @@ export function createApp(
         job("reconcile_payments", () => reconcilePayments(shop.id).then(() => stopped ? undefined : flushMail(shop)));
         job("sync_files", () => syncFiles(shop.id));
         job("deliver_mail", () => flushMail(shop, true));
+        job("integration_sweep", async () => {
+          const hasToken = !!(await ownerToken(shop));
+          // Mail jobs are sent and deleted under the mail lock, Drive jobs under the shop lock (syncFiles).
+          await integration.sweepShop(shop, { hasToken, lock: (type, fn) => store.locked(type === "mail" ? mailLockKey(shop.id) : shop.id, fn) });
+        });
         job("paypal_check", () => paypal.check(shop, { notify: true }));
         job("issue_coupons", () => hasActiveCoupons(store, shop).then(active => active ? store.locked(bookingLockKey(shop.id), async () => {
           const fresh = await store.shop(shop.id);
           if (fresh) await issueCoupons(store, fresh);
         }) : undefined));
       }
+      await integration.endArchived(shops);
+      await integration.processOutbox();
     })().catch(reportError);
   }, 60000);
   timer.unref();

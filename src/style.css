@@ -2802,6 +2802,12 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .shop-change-history li p { margin: 4px 0; font-size: 13px; }
 
 .management-dashboard .paypal-alerts { margin: 0; }
+.management-dashboard .integration-alerts { margin: 0 0 16px; }
+.integration-alerts h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 18px; }
+.integration-alerts ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.integration-alerts li { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fffdf8; }
+.integration-alerts li p { margin: 0 0 8px; }
+.integration-alerts li a.button, .integration-alerts li button { margin-top: 4px; }
 /* Consultation history belongs to the main workspace, alongside the conversation. */
 .consultation-workspace { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
 .consultation-workspace.consultation-history-collapsed { grid-template-columns: 54px minmax(0, 1fr); }
