@@ -2449,7 +2449,7 @@ export function createApp(
               if (input.applied && !input.revision) fail(400, tr("変更対象を選び直してください"));
               const visual = await store.get<VisualRequest>("visual", input.id);
               const source = fresh.published ? await effective(fresh) : null;
-              if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || JSON.stringify(source) !== JSON.stringify(visual.source))
+              if (!visual || visual.shopId !== fresh.id || visual.base !== fresh.revision || Date.now() - visual.createdAt > 1800000 || !visual.candidates.some(c => c.id === input.target) || !same(source, visual.source))
                 fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
               const requestId = input.requestId || randomUUID();
               let progress: VisualGenerationProgress = { shopId: fresh.id, visualId: visual.id, requestId, stage: "preparing", attempt: 0, startedAt: Date.now(), updatedAt: Date.now() };
@@ -2487,7 +2487,7 @@ export function createApp(
                   }), proposal => visualPhase("review", () => reviewVisual(fresh, { before: current, after: proposal.config, instruction, target: input.target, screen: visual.screen || (input.target.startsWith("part:") ? input.target.slice(5) : input.target.startsWith("page:") ? `page:${input.target.split(":")[1]}` : "reserve"), messages, preview: visual.preview, images })));
                   await store.locked(shop.id, async () => {
                     const latest = await store.shop(shop.id);
-                    if (!latest || latest.publishingPlanId || latest.revision !== visual.base || JSON.stringify(latest.published ? await effective(latest) : null) !== JSON.stringify(visual.source)) fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
+                    if (!latest || latest.publishingPlanId || latest.revision !== visual.base || !same(latest.published ? await effective(latest) : null, visual.source)) fail(409, tr("本番の内容が変わりました。最新の内容を取り込んで印を確認し直してください"));
                     assertOwner(user, latest);
                   });
                   return candidate;
@@ -2882,7 +2882,7 @@ export function createApp(
                 preview: visualPreviewOptionsSchema.optional(),
                 planId: z.string().optional(),
                 displayed: shopSchema,
-                local: z.object({ base: z.number().int(), source: shopSchema.nullable(), pageId: z.string().optional(), part: z.enum(["header", "footer"]).optional(), theme: z.boolean().optional() }).optional(),
+                local: z.object({ base: z.number().int(), source: shopSchema.nullable(), pageId: z.string().optional(), part: z.enum(["header", "footer"]).optional(), theme: z.boolean().optional(), content: z.boolean().optional() }).optional(),
                 screen: z.object({ id: z.string().max(200), label: z.string().max(200), file: z.string().max(300) }).optional(),
               })
               .parse(await body(req, 12000000));
@@ -2894,7 +2894,7 @@ export function createApp(
             const source = fresh.published ? await effective(fresh) : null;
             let config = source;
             if (input.local) {
-              const scope = input.local.theme ? { kind: "theme" as const } : input.local.part ? { kind: "part" as const, part: input.local.part } : input.local.pageId ? { kind: "page" as const, pageId: input.local.pageId } : { kind: "shared" as const };
+              const scope = input.local.theme ? { kind: "theme" as const } : input.local.part ? { kind: "part" as const, part: input.local.part } : input.local.pageId ? { kind: "page" as const, pageId: input.local.pageId } : { kind: input.local.content ? "content" as const : "shared" as const };
               if (input.planId || !same(scopedSource(input.local.source, scope), scopedSource(source, scope)))
                 fail(409, tr("本番の内容が変わりました。最新の内容を取り込んでください"));
               config = input.displayed;
@@ -2912,8 +2912,7 @@ export function createApp(
             }
             if (
               !config ||
-              JSON.stringify(shopSchema.parse(config)) !==
-                JSON.stringify(input.displayed)
+              !same(shopSchema.parse(config), input.displayed)
             )
               fail(
                 409,

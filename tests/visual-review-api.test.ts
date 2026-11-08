@@ -3,13 +3,48 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import { createApp } from "../server/app.ts";
 import { Store } from "../server/store.ts";
-import { sample, planSummary } from "../server/domain.ts";
+import { sample, planSummary, type ShopConfig } from "../server/domain.ts";
 import { digest } from "../server/auth.ts";
 import * as intelligence from "../server/ai.ts";
 import { proposeVisualAppearance } from "../server/visual.ts";
 import { standardTheme } from "../shared/theme-editing.ts";
 
 process.env.DEMO_MODE = "true";
+test("content visual retries ignore unrelated frame updates and Firestore key ordering while retaining real conflicts", async t => {
+  const store = new Store(":memory:"), shop = await store.createShop("owner@example.com");
+  const baseline = structuredClone(sample);
+  shop.published = { ...structuredClone(baseline), header: { ...baseline.header, title: "Updated live header" }, appearance: { accent: "rose", layout: "standard", imageUrl: "" } };
+  shop.revision = 1;
+  await store.saveShop(shop);
+  await store.put("session", digest("owner"), { user: { email: shop.owner, name: "Owner", role: "owner" }, expires: Date.now() + 600000 });
+  let identifications = 0;
+  const server = createApp(store, { ...intelligence,
+    async identifyVisual() { identifications++;return { ids: ["description"], explanation: "Adjust the description" }; },
+    async propose(_text, current) { return { config: { ...structuredClone(current!), description: "Edited description" }, summary: [] }; },
+    async visualReview() { return { approved: true, issues: [] }; },
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.closeAllConnections();await new Promise<void>(resolve => server.close(() => resolve()));await store.close(); });
+  const api = (path: string, data: unknown) => fetch(`${origin}/api/shops/${shop.id}/${path}`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  const identify = { media: { mimeType: "image/png", data: "aGVsbG8=" }, instruction: "Change the description", displayed: baseline, local: { base: 0, source: baseline, content: true } };
+  const response = await api("visual/identify", identify);
+  assert.equal(response.status, 200);
+  const identified = await response.json();
+  const visual = (await store.get<{ source: ShopConfig }>("visual", identified.id))!;
+  const reversed = JSON.parse(JSON.stringify(visual.source, (_key, value) => value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).reverse()) : value));
+  await store.put("visual", identified.id, { ...visual, source: reversed });
+  const generated = await api("visual/propose", { id: identified.id, target: "description", instruction: "Change the description" });
+  assert.equal(generated.status, 200);
+  assert.equal((await generated.json()).config.description, "Edited description");
+  assert.equal((await store.shop(shop.id))!.published!.header.title, "Updated live header");
+  assert.equal((await store.shop(shop.id))!.published!.description, baseline.description);
+  assert.equal((await api("visual/identify", { ...identify, local: { ...identify.local, content: false } })).status, 409, "older shared-scope clients still check their whole scope");
+  assert.equal((await api("visual/identify", { ...identify, local: { ...identify.local, theme: true } })).status, 409, "a real frame conflict is retained");
+  shop.published!.description = "Updated live description";shop.revision++;await store.saveShop(shop);
+  assert.equal((await api("visual/identify", identify)).status, 409, "a real content conflict is retained");
+  assert.equal(identifications, 1, "stale requests are rejected before spending a model call");
+});
 test("oversized CSS preserves the visual request and live configuration for a successful retry", async t => {
   const store = new Store(":memory:");
   const shop = await store.createShop("owner@example.com");

@@ -6,7 +6,7 @@ import { google } from "googleapis";
 import { sample, shopSchema, planSummary, type ShopConfig } from "../server/domain.ts";
 import { syncConfig, encrypt } from "../server/google.ts";
 import { contentHash, editorIndex } from "../server/editor-sync.ts";
-import { fingerprint, syncStatus, replaceScope } from "../src/editor-sync.ts";
+import { fingerprint, syncStatus, replaceScope, refreshUneditedScopes } from "../src/editor-sync.ts";
 import { sampleFixtures, type LocalDraft } from "../src/local-preview.ts";
 import { pageValue, scopedSource, scopedConfig, same, type ShopPage } from "../server/pages.ts";
 import { createApp } from "../server/app.ts";
@@ -16,6 +16,40 @@ import { randomUUID } from "node:crypto";
 import { digest } from "../server/auth.ts";
 import type { AddressInfo } from "node:net";
 const page = (id: string): ShopPage => ({ id, slug: id, title: id, navigationLabel: id, body: "もとの本文", layout: "standard", imageUrl: "" });
+
+test("opening cached content refreshes untouched frames and baselines while retaining unpublished edits and page caches", async () => {
+  const source = structuredClone(sample), config = { ...structuredClone(source), description: "Keep this unsaved description", pages: [page("cached")] };
+  source.pages = [page("cached")];
+  config.pages[0].body = "Keep this unsaved page";
+  const draft: LocalDraft = { config, source, base: 0, downloaded: ["cached"], fixtures: sampleFixtures(config) };
+  const remote = { ...structuredClone(source), header: { ...source.header, title: "New live header" }, pages: [page("cached"), page("unfetched")] };
+  const updated = refreshUneditedScopes(draft, remote, 1);
+  assert.equal(updated.config.header.title, remote.header.title);
+  assert.equal(updated.source!.header.title, remote.header.title);
+  assert.equal(updated.config.description, config.description);
+  assert.equal(updated.source!.description, source.description);
+  assert.deepEqual(updated.config.pages, config.pages);
+  assert.deepEqual(updated.downloaded, draft.downloaded);
+  assert.deepEqual(updated.fixtures, draft.fixtures);
+  assert.equal(await syncStatus(updated, editorIndex(remote, 1), { kind: "theme" }), "synced");
+  assert.equal(await syncStatus(updated, editorIndex(remote, 1), { kind: "content" }), "local");
+  assert.equal(draft.config.header.title, source.header.title, "the existing draft is not mutated");
+});
+
+test("cached editor refresh retains real conflicts and pending releases, and acknowledges already published edits", async () => {
+  const source = structuredClone(sample), local = { ...structuredClone(source), description: "Local description" };
+  const draft: LocalDraft = { config: local, source, base: 0, fixtures: sampleFixtures(local) };
+  const remote = { ...structuredClone(source), description: "Another live description" };
+  const updated = refreshUneditedScopes(draft, remote, 1);
+  assert.equal(updated.config.description, local.description);
+  assert.equal(updated.source!.description, source.description);
+  assert.equal(await syncStatus(updated, editorIndex(remote, 1), { kind: "content" }), "conflict");
+  const published = refreshUneditedScopes(draft, local, 1);
+  assert.equal(published.source!.description, local.description);
+  assert.equal(await syncStatus(published, editorIndex(local, 1), { kind: "content" }), "synced");
+  const pending = { ...draft, pending: { requestId: randomUUID(), config: local } };
+  assert.equal(refreshUneditedScopes(pending, remote, 1), pending);
+});
 
 test("publication summaries and tree status agree when stored JSON keys have a different order", async () => {
   const config = shopSchema.parse({ ...sample, pages: [page("faq")] });

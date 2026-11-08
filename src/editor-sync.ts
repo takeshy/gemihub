@@ -1,5 +1,5 @@
 import { tr } from "../shared/i18n";
-import { pageValue, scopedSource, replacePart, replaceShared, replaceTheme, replaceContent, type ReleaseScope } from "../server/pages";
+import { pageValue, scopedSource, same, replacePart, replaceShared, replaceTheme, replaceContent, type ReleaseScope } from "../server/pages";
 import { sha256 } from "@noble/hashes/sha2.js";
 import type { EditorIndex } from "../server/editor-index-schema";
 import type { LocalDraft } from "./local-preview";
@@ -19,6 +19,19 @@ export async function syncStatus(draft: LocalDraft, index: EditorIndex, scope: R
   if (localHash === remoteHash) return "synced";
   const changedHere = localHash !== baseHash, changedThere = remoteHash !== baseHash;
   return changedHere && changedThere ? "conflict" : changedThere ? "remote" : "local";
+}
+
+/** Refresh untouched shared scopes on entry, retaining unpublished edits and page caches. */
+export function refreshUneditedScopes(draft: LocalDraft, remote: ShopConfig, base: number): LocalDraft {
+  if (!draft.source || draft.pending) return draft;
+  let config = draft.config, source = draft.source;
+  for (const scope of [{ kind: "content" }, { kind: "theme" }, { kind: "part", part: "header" }, { kind: "part", part: "footer" }] as const) {
+    const local = scopedSource(config, scope), baseline = scopedSource(source, scope), published = scopedSource(remote, scope);
+    if ((!same(local, baseline) && !same(local, published)) || (same(local, published) && same(baseline, published))) continue;
+    config = replaceScope(config, scope, published);
+    source = replaceScope(source, scope, published);
+  }
+  return config === draft.config && source === draft.source && base === draft.base ? draft : { ...draft, config, source, base };
 }
 
 import { shopSchema, type ShopConfig } from "../server/domain";

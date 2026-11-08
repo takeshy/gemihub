@@ -85,7 +85,7 @@ type Identified = { id: string; explanation: string; candidates: { id: string; l
 type Revision = { config: ShopConfig; plan?: Plan };
 export function VisualRequest({shopId, config, root, local, screen, onLocalChange, onBusyChange, onActiveChange, triggerHost, historyHost, initialPlan, onPlan, renderPreview, reviewPreview, disabled = false}: {
   shopId: string; config: ShopConfig; root: React.RefObject<HTMLDivElement | null>;
-  local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer"; theme?: boolean };
+  local: { base: number; source: ShopConfig | null; pageId?: string; part?: "header" | "footer"; theme?: boolean; content?: boolean };
   screen?: { id: string; label: string; file: string };
   onLocalChange: (config: ShopConfig) => void;
   onBusyChange?: (busy: boolean) => void;

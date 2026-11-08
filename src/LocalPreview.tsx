@@ -6,7 +6,7 @@ import { ChromeEditor, ChromePreview } from "./SiteChrome";
 import { ThemePreview } from "./ScreenGallery";
 import { ScreenTree } from "./ScreenTree";
 import { SyncPreview } from "./SyncPreview";
-import { syncStatus, replaceScope, type SyncStatus } from "./editor-sync";
+import { syncStatus, replaceScope, refreshUneditedScopes, type SyncStatus } from "./editor-sync";
 import type { EditorIndex } from "../server/editor-index-schema";
 import { ApiProvider, useApi } from "./api";
 import { PublicShop, type Workspace, type Session } from "./App";
@@ -140,7 +140,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
           // (e.g. a published article added to the fixtures) must not be reverted to the cached copy.
           const local = latestDraft.current || cached;
           if (!local.pending) {
-            const updated = syncPreviewArticleFeatures(local, current.config);
+            const updated = refreshUneditedScopes(syncPreviewArticleFeatures(local, current.config), current.config, current.base);
             restore({ ...updated, index: remote, downloaded: local.downloaded || local.source?.pages.map(p => p.id) || [], config: { ...updated.config, region: current.config.region, menus: current.config.menus, staff: current.config.staff, hours: current.config.hours, rules: current.config.rules } });
           }
         }
@@ -472,7 +472,7 @@ export function LocalPreview({ shop, email, reload, sidebar, active = true, chan
       <div className="actions"><button onClick={() => setComparing(false)}>{tr("比較を閉じる")}</button></div>
     </section>}
     {draft && !(comparing && status === "local") && <>
-      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
+      {active && !draft.pending && !invalid && !conflict && (scope.kind !== "page" || selectedPage) && <VisualRequest key={screen} disabled={busy} shopId={shop.id} config={draft.config} root={root} triggerHost={penHost} historyHost={historyHost} onBusyChange={setBusy} onActiveChange={setPenOpen} screen={{ id: screen, label: screenLabel, file: screenFile }} reviewPreview={{ fixtures: draft.fixtures, hideHeader, hideFooter, articleKey: route.articleKey }} renderPreview={config => <SyncPreview config={config} value={scopedSource(config, scope)} scope={scope} fixtures={draft.fixtures} shopId={shop.id} route={route} hideHeader={hideHeader} hideFooter={hideFooter} />} local={{ base: draft.base, source: draft.source, theme: scope.kind === "theme", content: scope.kind === "content", pageId: scope.kind === "page" ? scope.pageId : undefined, part: scope.kind === "part" ? scope.part : undefined }} onLocalChange={config => { changeConfig(config); setNotice(tr("ペンの変更をローカルに保存しました。本番に反映する前に画面を確認してください。")); }} />}    </>}
     {draft && mock && !conflict && !(comparing && status === "local") && <>
       {scope.kind === "page" && !selectedPage ? <p className="panel">{status === "unfetched" ? tr("ページを自動で読み込んでいます。") : tr("削除予定のページはプレビューに表示しません。")}</p> : <div ref={root} tabIndex={-1} role="region" aria-label={tr("プレビュー")} hidden={penOpen} className="local-preview-screen" data-device={device} onClickCapture={e => {
         const link = (e.target as HTMLElement).closest("a");
