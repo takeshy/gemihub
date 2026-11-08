@@ -14,7 +14,7 @@ const text = z.string().trim().min(1).max(100);
 const clock = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const facts = {
   basic: z.object({ name: shopSchema.shape.name, industry: shopSchema.shape.industry, description: shopSchema.shape.description, address: shopSchema.shape.address }).partial(),
-  menus: z.object({ items: z.array(z.object({ id: identity.optional(), name: text, duration: z.number().int().min(15).max(480).optional(), price: z.number().min(0).max(1000000).optional(), currency: z.enum(["JPY", "USD"]).optional(), optionFor: z.array(identity).max(50).nullable().optional(), optionGroup: z.string().trim().min(1).max(80).nullable().optional() })).max(50) }),
+  menus: z.object({ items: z.array(z.object({ id: identity.optional(), name: text, duration: z.number().int().min(15).max(480).optional(), price: z.number().min(0).max(1000000).optional(), currency: z.enum(["JPY", "USD"]).optional(), optionFor: z.array(identity).max(50).nullable().optional(), optionForAll: z.boolean().optional(), optionGroup: z.string().trim().min(1).max(80).nullable().optional() })).max(50) }),
   staff: z.object({ items: z.array(z.object({ id: identity.optional(), name: text, menuIds: z.array(identity).min(1).max(50).optional(), weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7).optional(), start: clock.optional(), end: clock.optional() })).max(30) }),
   hours: shopSchema.shape.hours.partial(),
   rules: shopSchema.shape.rules.omit({ payment: true }).partial().extend({ payment: paymentRulesSchema.partial().optional() }),
@@ -37,7 +37,7 @@ export function settingsChanges(before: ShopConfig, after: ShopConfig, section: 
   if (section === "menus" || section === "staff") {
     const items = before[section];
     const show = (item: ShopConfig["menus"][number] | ShopConfig["staff"][number]) => "price" in item
-      ? `${item.name} / ${item.duration}${tr("分")} / ${formatMoney(item.price, currencyOf(regionOf(after)), intlLocale())} / ${item.active ? tr("有効") : tr("無効")} / ${item.optionFor ? tr("追加先：{0}", item.optionFor.map(id=>after.menus.find(menu=>menu.id===id)?.name||id).join(", ")) : tr("単独予約")}${item.optionGroup ? ` / ${tr("選択グループ：{0}",item.optionGroup)}` : ""}`
+      ? `${item.name} / ${item.duration}${tr("分")} / ${formatMoney(item.price, currencyOf(regionOf(after)), intlLocale())} / ${item.active ? tr("有効") : tr("無効")} / ${item.optionFor ? tr("追加先：{0}", item.optionForAll ? tr("単独で予約できるすべてのメニュー") : item.optionFor.map(id=>after.menus.find(menu=>menu.id===id)?.name||id).join(", ")) : tr("単独予約")}${item.optionGroup ? ` / ${tr("選択グループ：{0}",item.optionGroup)}` : ""}`
       : `${item.name} / ${valueLabel("closedWeekdays", item.weekdays)} / ${item.start}–${item.end} / ${item.menuIds.map(id => after.menus.find(menu => menu.id === id)?.name || id).join(", ")}`;
     return after[section].flatMap(item => {
       const previous = items.find(row => row.id === item.id);
@@ -88,12 +88,13 @@ export function applySettingsFacts(current: ShopConfig, section: LiveSection, in
         existing.name = row.name;
         if (row.duration !== undefined) existing.duration = row.duration;
         if (price !== undefined) existing.price = price;
-        if (row.optionFor === null) { delete existing.optionFor; delete existing.optionGroup; }
+        if (row.optionFor === null) { delete existing.optionFor; delete existing.optionForAll; delete existing.optionGroup; }
         else if (row.optionFor !== undefined) existing.optionFor = row.optionFor;
+        if (row.optionForAll !== undefined) { existing.optionForAll = row.optionForAll; if (row.optionForAll) existing.optionFor ??= []; }
         if (row.optionGroup === null) delete existing.optionGroup;
         else if (row.optionGroup !== undefined) existing.optionGroup = row.optionGroup;
       } else if (row.duration !== undefined && price !== undefined) {
-        config.menus.push({ id: `menu-${randomUUID()}`, name: row.name, duration: row.duration, price, active: false, ...(row.optionFor ? {optionFor:row.optionFor} : {}), ...(row.optionGroup ? {optionGroup:row.optionGroup} : {}) });
+        config.menus.push({ id: `menu-${randomUUID()}`, name: row.name, duration: row.duration, price, active: false, ...(row.optionFor || row.optionForAll ? {optionFor:row.optionFor || []} : {}), ...(row.optionForAll !== undefined ? {optionForAll:row.optionForAll} : {}), ...(row.optionGroup ? {optionGroup:row.optionGroup} : {}) });
       } else warnings.push(tr("「{0}」は料金や所要時間が不明なため追加していません。メモに補足してください。", row.name));
     }
   } else {

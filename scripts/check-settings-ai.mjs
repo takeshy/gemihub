@@ -65,6 +65,7 @@ try {
       for (const section of ['basic', 'menus', 'staff', 'hours', 'rules']) {
         if (mode === 'app') {
           const menu = section === 'menus' ? 'メニュー・料金' : section === 'staff' ? 'スタッフ・勤務' : 'お店の基本情報';
+          const mobileMenu=page.locator('.mobile-menu-toggle');await mobileMenu.waitFor({state:'attached'});if(await mobileMenu.isVisible()&&await mobileMenu.getAttribute('aria-expanded')!=='true')await mobileMenu.click();
           await page.locator('aside nav').getByRole('button', { name: new RegExp(label(menu) + '$') }).click();
         } else {
           const entry = entries.find(entry => entry.title === '運営/設定/AIで設定' && entry.id.endsWith(`--${section}`)); assert.ok(entry, section);
@@ -120,7 +121,7 @@ try {
         }
         if (mode === 'app') {
           assert.deepEqual((await store.shop(shop.id)).published, before, 'apply to form must not save');
-          if (section === 'menus') { const row = panel.locator('.menu-edit-block').last(); await expect(row.getByLabel(label('メニュー名'), { exact: true })).toHaveValue('Care'); await expect(row.getByRole('checkbox', { name: label('有効'), exact: true })).not.toBeChecked(); }
+          if (section === 'menus') { await panel.getByRole('checkbox', { name: label('非表示も表示'), exact: true }).check(); const row = panel.locator('.menu-edit-block').last(); await expect(row.getByLabel(label('メニュー名'), { exact: true })).toHaveValue('Care'); await expect(row.getByRole('checkbox', { name: label('有効'), exact: true })).not.toBeChecked(); }
         }
         await panel.getByRole('button', { name: label('保存'), exact: true }).click();
         await expect(panel.getByRole('status')).toContainText(label(mode === 'app' ? '保存して仮公開に反映しました。' : '保存して本番に反映しました。'));

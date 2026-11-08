@@ -404,6 +404,27 @@ test("phone calls reject standalone services as addons before offering times and
   ws.close();
 });
 
+test("phone calls expand universal addon targets and keep their selection groups", async t => {
+  const f = await fixture(t);
+  f.config.menus.push(
+    { id: "any-addon", name: "Any addon", duration: 30, price: 500, active: true, optionFor: [], optionForAll: true, optionGroup: "extras" },
+    { id: "other-addon", name: "Other addon", duration: 30, price: 1000, active: true, optionFor: [], optionForAll: true, optionGroup: "extras" },
+  );
+  await f.store.saveShop(f.shop);
+  const ws = await f.stream("CA-ANY-ADDON");
+  assert.match(f.liveParameters().config.systemInstruction, /"id":"any-addon"[^\n]*?"optionFor":\["simple","design"\]/);
+  const input = { menuId: "design", optionIds: ["any-addon"], date: dateIn(Date.now() + 5 * 86400000, "Asia/Tokyo") };
+  const checked = await f.invoke("check-any", "check_availability", input);
+  assert.ok(checked.slots.length);
+  assert.equal((await f.invoke("check-group", "check_availability", { ...input, optionIds: ["any-addon", "other-addon"] })).code, "INVALID_MENU_SELECTION");
+  assert.equal((await f.invoke("book-any", "create_booking", { ...input, name: "Caller", start: checked.slots[0].start })).ok, true);
+  const booking = (await f.store.bookings(f.shop.id))[0];
+  assert.deepEqual(booking.optionIds, ["any-addon"]);
+  assert.equal(booking.price, checked.selection.price);
+  assert.equal(Date.parse(booking.end) - Date.parse(booking.start), checked.selection.duration * 60000);
+  ws.close();
+});
+
 test("phone booking rechecks menu compatibility if an addon changes after availability", async t => {
   const f = await fixture(t);
   f.config.menus.push({ id: "addon", name: "Addon", duration: 30, price: 500, active: true, optionFor: ["simple"] });

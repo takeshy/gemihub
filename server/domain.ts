@@ -46,6 +46,8 @@ export const shopSchema = z
           imageId: z.string().regex(/^[a-f0-9]{64}$/).optional(),
           /** Present only for add-ons; the IDs of standalone menus that allow this option. */
           optionFor: z.array(z.string().regex(/^[a-z0-9_-]+$/)).max(50).optional(),
+          /** Add-on may accompany any standalone menu, including menus added later. */
+          optionForAll: z.boolean().optional(),
           /** Only one option in the same group may be selected for a booking. */
           optionGroup: z.string().trim().min(1).max(80).optional(),
           /** false: bookings with this menu cannot be offered for transfer (absent means allowed). */
@@ -122,9 +124,10 @@ export const shopSchema = z
     const currency = currencyOf(regionOf(s));
     for (const menu of s.menus) {
       if (menu.optionFor) {
-        if (menu.active && !menu.optionFor.length) fail(tr("追加メニューの対象を選択してください"));
-        if (new Set(menu.optionFor).size !== menu.optionFor.length || menu.optionFor.some(id => !s.menus.some(base => base.id === id && !base.optionFor))) fail(tr("追加先には実在する通常メニューを指定してください"));
+        if (menu.active && !menu.optionForAll && !menu.optionFor.length) fail(tr("追加メニューの対象を選択してください"));
+        if (new Set(menu.optionFor).size !== menu.optionFor.length || !menu.optionForAll && menu.optionFor.some(id => !s.menus.some(base => base.id === id && !base.optionFor))) fail(tr("追加先には実在する通常メニューを指定してください"));
       } else if (menu.optionGroup) fail(tr("選択グループは追加メニューに設定してください"));
+      if (menu.optionForAll && !menu.optionFor) fail(tr("すべての通常メニューへの追加は、単独予約不可のメニューに設定してください"));
     }
     for (const m of s.menus)
       if (!validPrice(m.price, currency)) fail(currency === "JPY" ? tr("料金は1円単位で入力してください") : tr("料金はセント単位（小数2桁まで）で入力してください"));
@@ -143,10 +146,12 @@ export function bookingStaff(config: Pick<ShopConfig, "staff" | "menus" | "hours
   return [...config.staff.filter(staff => staff.id !== ownerStaffId), owner];
 }
 export const bookingStaffName = (config: ShopConfig | null | undefined, id: string) => config?.staff.find(staff => staff.id === id)?.name || (id === ownerStaffId ? tr("店主") : id);
+export const menuAllowsOption = (option: ShopConfig["menus"][number], menuId: string) =>
+  !!option.optionFor && (option.optionForAll === true || option.optionFor.includes(menuId));
 export function menuSelection(config: ShopConfig, menuId: string, optionIds: readonly string[] = []) {
   const base = config.menus.find(menu => menu.id === menuId && menu.active && !menu.optionFor);
   if (!base || optionIds.length > 10 || new Set(optionIds).size !== optionIds.length) return undefined;
-  const options = [...optionIds].sort().map(id => config.menus.find(menu => menu.id === id && menu.active && menu.optionFor?.includes(menuId)));
+  const options = [...optionIds].sort().map(id => config.menus.find(menu => menu.id === id && menu.active && menuAllowsOption(menu, menuId)));
   if (options.some(option => !option)) return undefined;
   const selected = options as ShopConfig["menus"];
   const groups = selected.map(option => option.optionGroup).filter(Boolean);

@@ -114,6 +114,7 @@ export type Scenario =
   | "custom-page"
   | "manage-basic"
   | "manage-menus"
+  | "manage-hidden-menus"
   | "menu-images"
   | "menu-images-public"
   | "manage-staff"
@@ -230,7 +231,7 @@ export function scenarioProps(scenario: Scenario) {
           "local-editor": "try",
           "local-editor-pages": "try",
           "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "editor-local": "try", "page-builder": "build",
-          "manage-basic": "basic", "manage-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "special-days": "hours", "special-days-staff": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
+          "manage-basic": "basic", "manage-menus": "menus", "manage-hidden-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "special-days": "hours", "special-days-staff": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
           bookings: "bookings", "owner-paid": "bookings", "manage-payment": "rules", "insufficient-refund": "bookings",
@@ -266,6 +267,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
     posts.splice(0, posts.length, ...Array.from({ length: 23 }, (_, index) => ({ ...structuredClone(templates[index % templates.length]), id: `pagination-post-${index}` })));
   }
   const config = sampleConfig(scenario.startsWith("us-"));
+  if (scenario === "manage-hidden-menus") config.menus[0].active = false;
   if (["menu-addons","manage-addons"].includes(scenario)) {
     config.staff=[];config.ownerBooking=true;config.hours.closedWeekdays=[];
     config.menus=[

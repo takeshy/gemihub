@@ -45,7 +45,7 @@ import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
 import React, { useCallback, useEffect, useState, useRef, useId } from "react";
 import { useApi } from "./api";
-import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
+import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, menuAllowsOption, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import "./ManagementTypography.css";
@@ -738,6 +738,7 @@ export function ConfigEditor({
   section?: "basic" | "profile" | "menus" | "staff" | "hours" | "rules";
   onChange: (c: ShopConfig) => void;
 }) {
+  const [showHiddenMenus, setShowHiddenMenus] = useState(false);
   const put = <K extends keyof ShopConfig>(k: K, v: ShopConfig[K]) =>
     set({ ...c, [k]: v });
   const owner = bookingStaff(c).find(staff => staff.id === ownerStaffId);
@@ -809,7 +810,9 @@ export function ConfigEditor({
       </>}
       {(!section || section === "menus") && <>
       <h3>{tr("メニュー")}</h3>
-      {c.menus.map((m, i) => (
+      <label className="check-field"><input type="checkbox" checked={showHiddenMenus} onChange={event => setShowHiddenMenus(event.target.checked)} /><span>{tr("非表示も表示")}</span></label>
+      {!showHiddenMenus && !c.menus.some(menu => menu.active) && <p className="small muted">{tr("有効なメニューはありません。「非表示も表示」をONにすると、無効なメニューを確認・編集できます。")}</p>}
+      {c.menus.map((m, i) => !showHiddenMenus && !m.active ? null : (
         <div className="menu-edit-block" key={m.id}><div className="edit-row">
           <Field label={tr("メニュー名")}>
           <input
@@ -877,13 +880,23 @@ export function ConfigEditor({
         }))} /><span>{tr("キャンセル後に代わりの予約を受け付ける（指名・事前カウンセリング前提なら外す）")}</span></label>}<label className="check-field"><input type="checkbox" checked={m.optionFor !== undefined} onChange={event => put("menus", c.menus.map((menu,index) => {
           if (index !== i) return menu;
           if (event.target.checked) return { ...menu, optionFor: [] };
-          const { optionFor: _for, optionGroup: _group, ...standalone } = menu; return standalone;
+          const { optionFor: _for, optionForAll: _all, optionGroup: _group, ...standalone } = menu; return standalone;
         }))}/><span>{tr("ほかのメニューに追加して予約する（単独予約不可）")}</span></label>
-        {m.optionFor && <fieldset className="menu-option-settings"><legend>{tr("追加できるメニュー")}</legend><div className="checkboxes">{c.menus.filter(base => base.id !== m.id && !base.optionFor).map(base => <label key={base.id}><input type="checkbox" checked={m.optionFor!.includes(base.id)} onChange={event => put("menus", c.menus.map((menu,index) => index === i ? {...menu,optionFor:event.target.checked?[...m.optionFor!,base.id]:m.optionFor!.filter(id=>id!==base.id)} : menu))}/>{base.name}</label>)}</div><Field label={tr("選択グループ（同じグループは1つまで・任意）")}><input value={m.optionGroup || ""} maxLength={80} onChange={event=>put("menus",c.menus.map((menu,index)=>index===i?{...menu,optionGroup:event.target.value||undefined}:menu))}/></Field><p className="small muted">{tr("例：当店オフと他店オフを同じグループにすると、予約時にどちらか1つを選べます。料金と所要時間は通常メニューに加算されます。")}</p></fieldset>}
+        {m.optionFor && <fieldset className="menu-option-settings">
+          <legend>{tr("追加できるメニュー")}</legend>
+          <label className="check-field"><input type="checkbox" checked={!!m.optionForAll} onChange={event => put("menus", c.menus.map((menu,index) => {
+            if (index !== i) return menu;
+            const { optionForAll: _all, ...rest } = menu;
+            return event.target.checked ? { ...menu, optionForAll: true } : rest;
+          }))}/><span>{tr("単独で予約できるメニューなら、どれにでも追加できる")}</span></label>
+          {!m.optionForAll && <div className="checkboxes">{c.menus.filter(base => base.id !== m.id && !base.optionFor).map(base => <label key={base.id}><input type="checkbox" checked={m.optionFor!.includes(base.id)} onChange={event => put("menus", c.menus.map((menu,index) => index === i ? {...menu,optionFor:event.target.checked?[...m.optionFor!,base.id]:m.optionFor!.filter(id=>id!==base.id)} : menu))}/>{base.name}</label>)}</div>}
+          <Field label={tr("選択グループ（同じグループは1つまで・任意）")}><input value={m.optionGroup || ""} maxLength={80} onChange={event=>put("menus",c.menus.map((menu,index)=>index===i?{...menu,optionGroup:event.target.value||undefined}:menu))}/></Field><p className="small muted">{tr("例：当店オフと他店オフを同じグループにすると、予約時にどちらか1つを選べます。料金と所要時間は通常メニューに加算されます。")}</p>
+        </fieldset>}
         {shopId && <MenuImageEditor shopId={shopId} imageId={m.imageId} name={m.name} uploading={onImageUploading} change={imageId => put("menus", c.menus.map((menu, index) => index === i ? { ...menu, imageId } : menu))} />}</div>
       ))}
       <button
-        onClick={() =>
+        onClick={() => {
+          if (section === "menus") setShowHiddenMenus(true);
           put("menus", [
             ...c.menus,
             {
@@ -893,8 +906,8 @@ export function ConfigEditor({
               price: 5000,
               active: section === "menus" ? false : true,
             },
-          ])
-        }
+          ]);
+        }}
       >
         {tr("＋ メニューを追加")}</button>
       </>}
@@ -1586,7 +1599,7 @@ export function PublicShop({
   const selectedCoupon = selectableCoupons.find(coupon => coupon.id === couponId);
   const discountAmount = selectedCoupon ? couponDiscount(selection?.price || 0, selectedCoupon.discount, selectedCoupon.currency) : 0;
   const totalPrice = Math.round(((selection?.price || 0) - discountAmount) * 100) / 100;
-  const allowedOptions = c.menus.filter(option => option.active && option.optionFor?.includes(menu));
+  const allowedOptions = c.menus.filter(option => option.active && menuAllowsOption(option, menu));
   // Built-in screens may be laid out in the owner's checked HTML; the working parts below are inserted
   // through slots, so booking, sign-in, payment and inquiries keep their behavior either way.
   const screen = (id: ScreenId, slots: Record<string, React.ReactNode>, fallback: React.ReactNode) => {

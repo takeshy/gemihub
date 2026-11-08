@@ -132,7 +132,7 @@ export class TwilioAudioBridge {
 // ---- Prompt and tools -------------------------------------------------------------------------
 const phoneMenus = (config: ShopConfig) => config.menus.filter(menu => menu.active).map(menu => ({
   id: menu.id, name: menu.name, duration: menu.duration, price: menu.price,
-  optionFor: menu.optionFor || [], ...(menu.optionGroup ? { group: menu.optionGroup } : {}),
+  optionFor: menu.optionFor && menu.optionForAll ? config.menus.filter(base => base.active && !base.optionFor).map(base => base.id) : menu.optionFor || [], ...(menu.optionGroup ? { group: menu.optionGroup } : {}),
 }));
 class PhoneMenuSelectionError extends Error {
   readonly code = "INVALID_MENU_SELECTION";

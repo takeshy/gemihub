@@ -26,6 +26,11 @@ test("AI settings apply only selected facts, preserve existing rows and append i
   assert.throws(() => applySettingsFacts(before, "menus", { items: [{ id: "not-existing", name: "Overwrite", price: 1 }] }));
   const option = applySettingsFacts(before, "menus", {items:[{id:before.menus[1].id,name:before.menus[1].name,optionFor:[before.menus[0].id],optionGroup:"removal"}]}).config;
   assert.deepEqual(option.menus[1].optionFor,[before.menus[0].id]);
+  const universal = applySettingsFacts(option,"menus",{items:[{id:option.menus[1].id,name:option.menus[1].name,optionForAll:true}]}).config;
+  assert.equal(universal.menus[1].optionForAll,true);assert.deepEqual(universal.menus[1].optionFor,option.menus[1].optionFor);assert.equal(universal.menus[1].optionGroup,"removal");
+  assert.match(settingsChanges(option,universal,"menus")[0].after,/すべてのメニュー/);
+  const cleared = applySettingsFacts(universal,"menus",{items:[{id:universal.menus[1].id,name:universal.menus[1].name,optionFor:null}]}).config;
+  assert.equal(cleared.menus[1].optionForAll,undefined);assert.equal(cleared.menus[1].optionFor,undefined);assert.equal(cleared.menus[1].optionGroup,undefined);
   const standalone = applySettingsFacts(option,"menus",{items:[{id:option.menus[1].id,name:option.menus[1].name,optionFor:null,optionGroup:null}]}).config;
   assert.equal(standalone.menus[1].optionFor,undefined);assert.equal(standalone.menus[1].optionGroup,undefined);
   assert.throws(() => applySettingsFacts(before, "staff", { items: [{ name: "New staff", menuIds: ["not-existing"] }] }));

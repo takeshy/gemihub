@@ -26,6 +26,30 @@ test("add-ons enforce parent menus and exclusive groups, and extend the full occ
   assert.equal(shopSchema.safeParse({...config,menus:config.menus.map(menu=>menu.id==="care"?{...menu,optionFor:[]}:menu)}).success,false);
 });
 
+test("an all-standalone addon includes future services while preserving target lists and exclusive groups", () => {
+  const config = optionShop(), care = config.menus.find(menu => menu.id === "care")!;
+  assert.equal(menuSelection(config, "hand", ["care"]), undefined);
+  care.optionForAll = true;
+  assert.deepEqual(shopSchema.parse(config).menus.find(menu => menu.id === "care")!.optionFor, ["foot"]);
+  assert.equal(menuSelection(config, "hand", ["care"])!.price, 9000);
+  config.menus.push({ id: "new-service", name: "New service", duration: 60, price: 1000, active: true });
+  assert.equal(menuSelection(config, "new-service", ["care"])!.price, 5000);
+  care.optionFor = [];
+  assert.equal(shopSchema.safeParse(config).success, true);
+  assert.equal(menuSelection(config, "care", []), undefined, "universal add-ons still cannot be booked alone");
+  care.optionGroup = "removal";
+  assert.equal(menuSelection(config, "hand", ["care", "own-off"]), undefined, "groups remain exclusive for universal add-ons");
+  care.active = false;
+  assert.equal(menuSelection(config, "hand", ["care"]), undefined);
+  care.active = true; care.optionForAll = false;
+  assert.equal(shopSchema.safeParse(config).success, false, "turning off universal mode requires individual targets");
+  care.optionFor = ["foot"];
+  assert.equal(menuSelection(config, "hand", ["care"]), undefined);
+  assert.equal(menuSelection(config, "foot", ["care"])!.duration, 95);
+  config.menus[0].optionForAll = true;
+  assert.equal(shopSchema.safeParse(config).success, false, "universal mode cannot make a standalone service an add-on implicitly");
+});
+
 for(const usd of [false,true])test(`HTTP add-on booking charges and refunds the total with a frozen item snapshot (${usd?"USD":"JPY"})`,async t=>{
   process.env.DEMO_MODE="true";const config=optionShop(usd),currency=currencyOf(regionOf(config)),total=usd?85.06:10500,minor=toMinor(total,currency);config.rules.payment={enabled:true,refundTiers:structuredClone(defaultRefundTiers)};
   const store=new Store(":memory:"),shop=await store.createShop("owner@example.com");shop.published=config;await store.saveShop(shop);

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
 import { tr } from "../shared/i18n";
 import { dateIn, regionOf, type Currency } from "../shared/region";
-import { bookingStaff, menuSelection, type ShopConfig } from "../server/domain";
+import { bookingStaff, menuSelection, menuAllowsOption, type ShopConfig } from "../server/domain";
 import { createRequestId } from "./request-id";
 import { DateInput } from "./DateInput";
 import { paid, useShopDisplay } from "./money";
@@ -41,7 +41,7 @@ export function PhoneBooking({ shopId, config, reload }: { shopId: string; confi
   const [times, setTimes] = useState<Slot[]>(), [start, setStart] = useState(""), [name, setName] = useState(""), [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState(""), [requestId, setRequestId] = useState(createRequestId);
   const prepaid = !!config.rules.payment?.enabled, [date, setDate] = useState(() => dateIn(new Date(), regionOf(config).timeZone));
-  const selection = menuSelection(config, menu, optionIds), options = config.menus.filter(option => option.active && option.optionFor?.includes(menu));
+  const selection = menuSelection(config, menu, optionIds), options = config.menus.filter(option => option.active && menuAllowsOption(option, menu));
   const load = async () => {
     const query = new URLSearchParams({ menu, ...(staff ? { staff } : {}), ...(prepaid ? {} : { date }) });
     for (const id of optionIds) query.append("option", id);
