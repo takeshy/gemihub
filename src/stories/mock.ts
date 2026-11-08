@@ -105,6 +105,7 @@ export type Scenario =
   | "editor-remote"
   | "editor-remote-tree"
   | "editor-conflict"
+  | "integration-alerts"
   | "editor-local"
   | "page-builder"
   | "design-proposal"
@@ -230,7 +231,7 @@ export function scenarioProps(scenario: Scenario) {
           "us-settings": "basic", "us-menus": "menus",
           "local-editor": "try",
           "local-editor-pages": "try",
-          "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "editor-local": "try", "page-builder": "build",
+          "integration-alerts": "dashboard", "editor-unfetched": "try", "editor-remote": "try", "editor-remote-tree": "try", "editor-conflict": "try", "editor-local": "try", "page-builder": "build",
           "manage-basic": "basic", "manage-menus": "menus", "manage-hidden-menus": "menus", "manage-addons": "menus", "weekday-hours": "hours", "special-days": "hours", "special-days-staff": "hours", "menu-images": "menus", "manage-staff": "staff", "manage-hours": "hours", "manage-rules": "rules",
           "local-editor-new": "try",
           "blog-editor": "blog",
@@ -412,8 +413,15 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
       { email: "family@example.com", accepted: false },
     ],
     jobs: [],
-    ...(scenario === "sync-error"
-      ? { integrationAlerts: [{ id: "incident-1", kind: "reconnect" as const, type: "mail" as const, since: new Date().toISOString(), affectedCount: 2 }] }
+    ...(["sync-error", "integration-alerts"].includes(scenario)
+      ? { integrationAlerts: scenario === "sync-error"
+        ? [{ id: "incident-1", kind: "reconnect" as const, type: "mail" as const, since: new Date().toISOString(), affectedCount: 2 }]
+        : ([
+          { id: "incident-1", kind: "reconnect", type: "mail", affectedCount: 2 },
+          { id: "incident-2", kind: "mail_delay", type: "mail", affectedCount: 1 },
+          { id: "incident-3", kind: "inquiry_failed", type: "mail", affectedCount: 1, inquiryId: "guest-inquiry" },
+          { id: "incident-4", kind: "drive_delay", type: "drive", affectedCount: 1 },
+        ] as const).map(alert => ({ ...alert, since: new Date().toISOString() })) }
       : {}),
     publicUrl: "/s/salon-nagi",
     domain: scenario === "settings" ? "reserve.example.com" : undefined,

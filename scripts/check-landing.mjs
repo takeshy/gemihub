@@ -30,12 +30,20 @@ try {
     await page.getByRole('heading',{level:1}).waitFor();
     assert.equal(await page.locator('html').getAttribute('lang'),locale);
     assert.ok((await page.title()).startsWith('gemihub —'));
-    assert.equal(await page.locator('#operations .lp-feature-layout').count(),4);
-    assert.equal(await page.locator('#features [data-creation]').count(),3);
+    assert.equal(await page.locator('#operations .lp-feature-layout').count(),5);
+    assert.equal(await page.locator('#features [data-creation]').count(),4);
     assert.match(await page.locator('.lp-hero-copy').innerText(), /AI/);
     assert.ok(await page.locator('#features').evaluate(element => !!(element.compareDocumentPosition(document.querySelector('#operations')) & Node.DOCUMENT_POSITION_FOLLOWING)));
     assert.equal(await page.locator('.lp-feature-tabs, [aria-controls="lp-feature-panel"]').count(),0);
     assert.equal(await page.locator('[data-feature="analytics"] .lp-feature-copy a').getAttribute('href'),`/manual?lang=${locale}#guide-staff-sales`);
+    assert.match(await page.locator('.lp-hero .lp-cta-note').innerText(), locale === 'ja' ? /招待制.*招待パスワード/ : /invitation-only.*invitation password/);
+    assert.match(await page.locator('.lp-final .lp-cta-note').innerText(), locale === 'ja' ? /招待制/ : /invitation-only/);
+    const refund = page.locator('.lp-payments');
+    assert.equal(await refund.locator('.lp-resale-steps li').count(), 3);
+    assert.match(await refund.innerText(), /7,000/);
+    assert.match(await refund.innerText(), /9,000/);
+    assert.match(await refund.innerText(), locale === 'ja' ? /再予約は保証されません/ : /not guaranteed/);
+    assert.match(await page.locator('.lp-data').innerText(), locale === 'ja' ? /公開ページはサービス側から配信/ : /Published pages are served by the service/);
     const faq=page.locator('.lp-faq summary').first();await faq.focus();await faq.press('Enter');
     assert.equal(await page.locator('.lp-faq details').first().getAttribute('open'),'');
     await faq.press('Enter');
@@ -46,11 +54,11 @@ try {
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`${locale}: horizontal overflow at ${width}px`);
       let previousBottom=0;
       let previousRowTop=-1;
-      for(const feature of ['create','red-circle','consult','booking','customers','analytics','posts']) {
-        const creation=['create','red-circle','consult'].includes(feature);
+      for(const feature of ['create','red-circle','review','consult','booking','customers','analytics','posts','phone']) {
+        const creation=['create','red-circle','review','consult'].includes(feature);
         const section=page.locator(`article[${creation?'data-creation':'data-feature'}="${feature}"]`);
         await section.scrollIntoViewIfNeeded();
-        if(await section.locator('img').count()) await section.locator('img').evaluate(image=>image.decode());
+        if(await section.locator('img').count()) await section.locator('img').evaluateAll(images=>Promise.all(images.map(image=>image.decode())));
         assert.ok(await section.isVisible(),`${locale}/${feature}: visible without switching controls`);
         const bounds=await section.evaluate(element=>{const rect=element.getBoundingClientRect();return {top:rect.top+scrollY,bottom:rect.bottom+scrollY};});
         assert.ok(bounds.top>=previousBottom || bounds.top===previousRowTop,`${locale}/${feature}: follows or shares a row with the previous feature`);
@@ -81,7 +89,7 @@ try {
   const page=await context.newPage();
   await page.goto(origin+'/lp?lang=en');
   assert.ok((await page.getByRole('heading',{level:1}).innerText()).includes('Your shop’s website.'));
-  for(const feature of ['booking','customers','analytics','posts']) {
+  for(const feature of ['booking','customers','analytics','posts','phone']) {
     assert.ok(await page.locator(`article[data-feature="${feature}"]`).isVisible(),`${feature}: visible with JavaScript disabled`);
   }
   await page.locator('.lp-faq summary').first().click();

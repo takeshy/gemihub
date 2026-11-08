@@ -10,3 +10,5 @@ export const ShopSpecificationOwnerOnly: Story = { name: "現在の設定・店�
 export const Empty: Story = { name: "予約も未対応の問い合わせもない", args: { scenario: "management-dashboard-empty" } };
 export const Provisional: Story = { name: "仮公開中のダッシュボード", args: { scenario: "management-dashboard-provisional" } };
 export const Staff: Story = { name: "スタッフのダッシュボード", args: { scenario: "management-dashboard-staff" } };
+
+export const GoogleIntegration: Story = { name: "Google連携の要対応", args: { scenario: "integration-alerts" } };
