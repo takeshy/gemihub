@@ -53,7 +53,7 @@ import { resolve, extname } from "node:path";
 import { z } from "zod";
 import { Store, bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
-import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions } from "./design-versions.ts";
+import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions, hasCurrentDesignIndex } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, phoneCustomerSchema, phoneKey, ensurePhoneCustomer, savePhoneCustomer, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type CustomerAttachment, type Inquiry, type CustomerRecord } from "./customers.ts";
 import { attachmentUnavailable, googleCustomerFiles, memoryCustomerFiles, readAttachment, type CustomerFiles } from "./customer-files.ts";
@@ -2578,7 +2578,7 @@ export function createApp(
             // Read-only: retired versions are trashed by the next publish/restore, not while holding the lock here.
             // A screen's history lists only versions whose state of that screen differs from now.
             let retained = (fresh.designVersions || []).slice(0, 10);
-            if (fresh.published && target && retained.some(version => target.kind === "theme" ? !version.fingerprints?.theme : !version.fingerprints)) {
+            if (fresh.published && target && retained.some(version => !hasCurrentDesignIndex(version))) {
               // Without a connection the older versions just stay unlisted for this screen; the history itself still loads.
               const token = await ownerToken(fresh);
               if (token || demoEnabled()) retained = await indexedDesignVersions(retained, token ? driveDesignVersions(token) : demoDesignVersions(store));

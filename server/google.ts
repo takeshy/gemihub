@@ -127,6 +127,8 @@ export async function syncConfig(
   await syncShopDocuments(shop, config, token);
   const selectedPage = scope?.kind === "page" ? config.pages.find(p => p.id === scope.pageId) : undefined;
   const previousPage = scope?.kind === "page" ? shop.published?.pages.find(p => p.id === scope.pageId) : undefined;
+  // A page's URL and navigation label are also rendered into the shared Drive header.
+  const pageNavigationChanged = scope?.kind === "page" && (previousPage?.slug !== selectedPage?.slug || previousPage?.navigationLabel !== selectedPage?.navigationLabel);
   // These are one published snapshot, including after a page/part-only release.
   const snapshotPaths = ["web/index.html", "web/data.js", "web/shop.json", "web/mock.json"];
   const generated = scope?.kind === "menus"
@@ -135,10 +137,10 @@ export async function syncConfig(
     ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path)))
     : scope?.kind === "part"
     ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || [`web/parts/${scope.part}.html`, `web/parts/${scope.part}.json`].includes(path)))
-    : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || path === "web/pages/index.json" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
+    : scope?.kind === "page" ? Object.fromEntries(Object.entries(allGenerated).filter(([path]) => snapshotPaths.includes(path) || path === "web/pages/index.json" || pageNavigationChanged && path === "web/parts/header.html" || selectedPage && [ `web/pages/${selectedPage.slug}.html`, `web/pages/${selectedPage.slug}.json` ].includes(path))) : allGenerated;
   const ids = connection.artifactIds ||= {};
   const folders = connection.artifactFolders ||= {};
-  for (const folder of (scope?.kind === "menus" ? ["web", "admin"] : scope?.kind === "screen" ? ["web"] : scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages"] : ["web", "admin", "web/pages", "web/parts"])) {
+  for (const folder of (scope?.kind === "menus" ? ["web", "admin"] : scope?.kind === "screen" ? ["web"] : scope?.kind === "part" ? ["web", "web/parts"] : scope?.kind === "page" ? ["web", "web/pages", ...(pageNavigationChanged ? ["web/parts"] : [])] : ["web", "admin", "web/pages", "web/parts"])) {
     if (!folders[folder]) {
       folders[folder] = (
         await drive.files.create({

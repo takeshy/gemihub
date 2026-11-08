@@ -250,6 +250,11 @@ test("restores commit without article export waits, with scoped Drive writes and
     writes.clear();
     const requestId = randomUUID();
     const request = () => fetch(origin + `/api/shops/${shop.id}/design-versions/1/restore`, { method: "POST", headers: { Origin: origin, Cookie: `gemihub_session=${shop.id}`, "Content-Type": "application/json" }, body: JSON.stringify({ requestId, revision: shop.revision, target }) });
+    if (target === "page:faq") {
+      drive.failNextUpdate(input => input.fileId === beforeIds["web/parts/header.html"] && !!input.media);
+      assert.equal((await request()).status, 503, "a failed navigation write must leave restoration retryable");
+      assert.equal((await store.shop(shop.id))!.published!.pages[0].slug, "updated-faq");
+    }
     const response = await request();
     assert.equal(response.status, 200, JSON.stringify(await response.json()));
     const restored = (await store.shop(shop.id))!;
@@ -271,12 +276,15 @@ test("restores commit without article export waits, with scoped Drive writes and
       assert.match(publicHtml, part === "header" ? /Archived header/ : /Archived footer/);
       assert.equal(restored.published!.pages[0].body, current.pages[0].body);
     } else if (target === "page:faq") {
-      assert.deepEqual(changed, [...snapshots, "web/pages/index.json", "web/pages/faq.html", "web/pages/faq.json"].sort());
+      assert.deepEqual(changed, [...snapshots, "web/pages/index.json", "web/pages/faq.html", "web/pages/faq.json", "web/parts/header.html"].sort());
       assert.equal(drive.files.get(beforeIds["web/pages/updated-faq.html"])!.trashed, true);
       assert.equal(read("web/pages/access.html"), accessBefore);
       assert.match(publicHtml, /\/pages\/faq/);
       assert.doesNotMatch(publicHtml, /\/pages\/updated-faq/);
       assert.match(publicHtml, /Current header/);
+      assert.match(read("web/parts/header.html"), /\/pages\/faq/);
+      assert.doesNotMatch(read("web/parts/header.html"), /\/pages\/updated-faq/);
+      assert.match(read("web/parts/header.html"), /Current header/);
     } else if (target === "screen:about") {
       assert.deepEqual(changed, [...snapshots].sort());
       assert.deepEqual(restored.published!.screens, archived.screens);

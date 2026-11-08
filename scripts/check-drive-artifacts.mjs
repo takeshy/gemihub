@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, copyFile, cp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join, dirname, resolve, extname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'node:http';
@@ -19,7 +18,9 @@ const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCA
 config.header.imageId = imageId;
 config.pages = [{ id: 'gallery', slug: 'gallery', title: '画像を使ったページ', navigationLabel: '画像のページ', body: '## お店のご案内', layout: 'standard', imageUrl: '', imageId }];
 const output = artifacts(config, shell, undefined, { [imageId]: image });
-const directory = await mkdtemp(join(tmpdir(), 'gemihub-drive-'));
+// Keep files visible to system Chromium installations that isolate the OS temporary directory.
+await mkdir('tmp', { recursive: true });
+const directory = await mkdtemp(resolve('tmp/gemihub-drive-'));
 for (const [path, content] of Object.entries(output)) {
   const target = join(directory, path);
   await mkdir(dirname(target), { recursive: true });
@@ -60,14 +61,16 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: 'ja-JP' });
   page.setDefaultTimeout(10000);
   const remoteRequests = [];
+  const failedRequests = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { if (/^https?:/.test(request.url())) remoteRequests.push(request.url()); });
+  page.on('requestfailed', request => failedRequests.push(request.url()));
   await page.goto(pathToFileURL(file).href);
   await page.getByRole('heading', { name: config.name, exact: true }).waitFor();
   await page.getByRole('heading', { name: 'あなたのご予約', exact: true }).waitFor();
   await page.locator('.site-header .managed-hero-image img').waitFor();
   assert.ok(await page.locator('.site-header .managed-hero-image img').evaluate(img => img.complete && img.naturalWidth > 0));
-  assert.equal(await page.locator('.public-nav button').first().textContent(), 'マイページ');
+  await page.getByRole('button', { name: 'マイページ', exact: true }).waitFor();
   await page.getByRole('button', { name: 'ご予約', exact: true }).click();
   await page.getByRole('heading', { name: '自分のための、ひとときを。', exact: true }).waitFor();
   assert.ok(await page.getByRole('button', { name: new RegExp(config.menus[0].name) }).count());
@@ -114,6 +117,7 @@ try {
   await page.locator('.custom-page .managed-hero-image img').waitFor();
   assert.ok(await page.locator('.custom-page .managed-hero-image img').evaluate(img => img.complete && img.naturalWidth > 0));
   assert.deepEqual(remoteRequests, [], 'file preview must not call a server');
+  assert.deepEqual(failedRequests, [], 'all local dependencies must be embedded, except the separate data.js');
   const changed = { ...source, shop: { ...source.shop, name: '分離データで変更したお店' } };
   await writeFile(dataFile, renderMockScript(changed));
   await page.reload();

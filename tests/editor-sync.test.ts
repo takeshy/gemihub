@@ -146,16 +146,20 @@ test("per-page Drive sync writes selected HTML/JSON and shared snapshots, never 
   const shop: Shop = { id: "shop", owner: "owner@example.com", slug: "shop", revision: 1, history: [], draft: null, published: before, google: { folderId: "root", specId: "spec", historyId: "history", artifactFolders: { web: "web", admin: "admin", "web/pages": "pages" }, artifactIds: { "web/pages/faq.html": "faq-html", "web/pages/faq.json": "faq-json", "web/pages/access.html": "access-html", "web/pages/access.json": "access-json", "web/pages/index.json": "pages-index" } } };
   for (const [path, id] of Object.entries({ "web/index.html": "shop-html", "web/data.js": "shop-data", "web/shop.json": "shop-config", "web/mock.json": "shop-mock" })) shop.google!.artifactIds![path] = id;
   const snapshotIds = ["shop-html", "shop-data", "shop-config", "shop-mock"];
+  shop.google!.artifactFolders!["web/parts"] = "parts";
+  shop.google!.artifactIds!["web/parts/header.html"] = "header-html";
   await syncConfig(shop, config, encrypt("token"), () => {}, { kind: "page", pageId: "faq" });
   assert.deepEqual(writes.map(w => w.fileId).sort(), [...snapshotIds, "faq-html", "faq-json", "history", "pages-index", "spec"].sort());
   assert.equal(writes.find(w => w.fileId === "shop-data")?.media?.mimeType, "text/javascript");
   writes.length = 0;
+  await syncConfig(shop, { ...config, pages: [{ ...config.pages[0], navigationLabel: "New label" }, config.pages[1]] }, encrypt("token"), () => {}, { kind: "page", pageId: "faq" });
+  assert.ok(writes.some(w => w.fileId === "header-html"), "a changed page label refreshes the shared header");
+  writes.length = 0;
   await syncConfig(shop, { ...config, pages: [page("access")] }, encrypt("token"), () => {}, { kind: "page", pageId: "faq" });
   assert.deepEqual(writes.filter(w => w.requestBody?.trashed).map(w => w.fileId).sort(), ["faq-html", "faq-json"]);
   assert.ok(!writes.some(w => w.fileId.startsWith("access")));
+  assert.ok(writes.some(w => w.fileId === "header-html"), "removing a page also removes its navigation link");
   // Part releases also refresh the shared snapshot without changing other page/part files.
-  shop.google!.artifactFolders!["web/parts"] = "parts";
-  shop.google!.artifactIds!["web/parts/header.html"] = "header-html";
   shop.google!.artifactIds!["web/parts/header.json"] = "header-json";
   shop.google!.artifactIds!["web/parts/footer.html"] = "footer-html";
   writes.length = 0;

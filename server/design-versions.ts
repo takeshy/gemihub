@@ -12,6 +12,8 @@ import { managedImageIds } from "./image-references.ts";
 import { screenIds } from "../shared/screens.ts";
 import { partValue, replacePart, themeValue, replaceTheme } from "./pages.ts";
 import { forEachConcurrent } from "./concurrency.ts";
+import { screenCopyKeys } from "../shared/storefront-copy.ts";
+import { defaultAppearance } from "../shared/theme-editing.ts";
 
 // An allowlist: operational settings and all business records can never enter a version.
 const designSchema = z.object({
@@ -24,13 +26,15 @@ const designSchema = z.object({
 export type PublishedDesign = z.infer<typeof designSchema>;
 export type DesignPublication = { number: number; at: string; summary: string; restoredFrom?: number };
 /** Per-target content hashes, so a screen's history can be listed without reading every archive. */
-export type DesignVersion = DesignPublication & { folderId: string; manifestId: string; imageIds?: string[]; fingerprints?: Record<string, string> };
+export type DesignVersion = DesignPublication & { folderId: string; manifestId: string; imageIds?: string[]; fingerprints?: Record<string, string>; fingerprintVersion?: number };
+const designFingerprintVersion = 2;
+export const hasCurrentDesignIndex = (version: DesignVersion) => version.fingerprintVersion === designFingerprintVersion && !!version.fingerprints?.theme;
 type Manifest = { design: PublishedDesign; files: Record<string, string> };
 export type DesignSnapshot = Manifest;
 export const designOf = (config: ShopConfig): PublishedDesign => designSchema.parse(config);
 export const sameDesign = (a: ShopConfig, b: ShopConfig) => isDeepStrictEqual(designOf(a), designOf(b));
 
-/** One restorable part of the design: a built-in screen's layout, a custom page, or a shared part. */
+/** One restorable part of the design: a built-in screen's layout and copy, a custom page, or a shared part. */
 export const designTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("screen"), screen: z.enum(screenIds) }),
   z.object({ kind: z.literal("page"), pageId: z.string().min(1).max(200) }),
@@ -47,7 +51,10 @@ export function parseTargetKey(key: string): DesignTarget {
 /** The target's value in a design; undefined means the target does not exist (a page that was not created yet). */
 function targetValue(design: PublishedDesign, target: DesignTarget): unknown {
   if (target.kind === "theme") return themeValue(design);
-  if (target.kind === "screen") return design.screens?.[target.screen] ?? null;
+  if (target.kind === "screen") return {
+    layout: design.screens?.[target.screen] ?? null,
+    copy: Object.fromEntries(screenCopyKeys[target.screen].filter(key => design.appearance?.copy?.[key] !== undefined).map(key => [key, design.appearance!.copy![key]])),
+  };
   if (target.kind === "part") return partValue(design, target.part);
   return design.pages.find(page => page.id === target.pageId);
 }
@@ -61,21 +68,21 @@ export function designFingerprints(config: ShopConfig | PublishedDesign): Record
 const legacyIndex = new Map<string, Record<string, string>>();
 const legacyIndexLimit = 1000;
 /**
- * Older archives have no index. Compute it from their manifest without changing stored history,
+ * Older archives have no index or omit screen copy. Compute it from their manifest without changing stored history,
  * reading each archive once per process. A version whose archive cannot be read is left unindexed
  * (so it is not listed for a single screen) rather than failing the whole history; it is retried next time.
  */
 export async function indexedDesignVersions(versions: DesignVersion[], storage: Pick<DesignVersionStorage, "readDesign">): Promise<DesignVersion[]> {
   return Promise.all(versions.map(async version => {
-    if (version.fingerprints?.theme) return version;
+    if (hasCurrentDesignIndex(version)) return version;
     let fingerprints = legacyIndex.get(version.manifestId);
     if (!fingerprints) {
       try { fingerprints = designFingerprints(await storage.readDesign(version)); }
-      catch (error) { console.error(error); return version; }
+      catch (error) { console.error(error); return { ...version, fingerprints: undefined }; }
       if (legacyIndex.size >= legacyIndexLimit) legacyIndex.delete(legacyIndex.keys().next().value!);
       legacyIndex.set(version.manifestId, fingerprints);
     }
-    return { ...version, fingerprints };
+    return { ...version, fingerprints, fingerprintVersion: designFingerprintVersion };
   }));
 }
 /**
@@ -87,7 +94,7 @@ export function versionsFor<T extends DesignVersion>(versions: T[], current: Sho
   const key = targetKey(target);
   const seen = new Set([designFingerprints(current)[key]]);
   return versions.filter(version => {
-    const value = version.fingerprints?.[key];
+    const value = hasCurrentDesignIndex(version) ? version.fingerprints?.[key] : undefined;
     if (!value || seen.has(value)) return false;
     seen.add(value);
     return true;
@@ -110,6 +117,16 @@ export function restoreDesign(current: ShopConfig, design: PublishedDesign, targ
       const value = saved.screens?.[target.screen];
       if (value) screens[target.screen] = value; else delete screens[target.screen];
       next.screens = screens;
+      const copy = { ...current.appearance?.copy };
+      for (const key of screenCopyKeys[target.screen]) {
+        if (saved.appearance?.copy?.[key] !== undefined) copy[key] = saved.appearance.copy[key];
+        else delete copy[key];
+      }
+      if (!isDeepStrictEqual(current.appearance?.copy || {}, copy)) {
+        next.appearance = { ...(current.appearance || defaultAppearance) };
+        if (Object.keys(copy).length) next.appearance.copy = copy;
+        else delete next.appearance.copy;
+      }
     } else if (target.kind === "part") return shopSchema.parse(replacePart(next, target.part, partValue(saved, target.part)));
     else {
       const page = saved.pages.find(item => item.id === target.pageId);
@@ -214,7 +231,7 @@ export async function preserveDesignVersion(shop: Shop, operationId: string, sto
   if (!files && required) throw new Error(tr("復元前の状態を版履歴に保存できませんでした"));
   if (files) {
     const imageIds = managedImageIds({ ...shop.published, menus: [], staff: [] });
-    shop.designVersions = [{ ...publication, ...files, imageIds, fingerprints: designFingerprints(shop.published) }, ...(shop.designVersions || [])];
+    shop.designVersions = [{ ...publication, ...files, imageIds, fingerprints: designFingerprints(shop.published), fingerprintVersion: designFingerprintVersion }, ...(shop.designVersions || [])];
   }
   shop.designBackupOperationId = operationId;
   await save();

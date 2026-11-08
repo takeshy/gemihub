@@ -8,6 +8,7 @@ import { runInNewContext } from "node:vm";
 import { readFileSync } from "node:fs";
 import { driveMock } from "../server/drive-mock.ts";
 import { drivePreviewData } from "../src/drive-preview.ts";
+import { inlineDriveShell } from "../server/drive-shell.ts";
 test("generated pages escape owner text; public artifacts do not contain operational data", () => {
   const c = structuredClone(sample);
   c.name = '<script>alert("x")</script>';
@@ -33,9 +34,9 @@ test("generated pages escape owner text; public artifacts do not contain operati
     renderShop({ ...c, hours: { ...c.hours, start: "22:00" } }, ""),
   );
 });
-test("Drive exports inline built code and CSS, keep data separate, and leave served/admin shells intact", () => {
+test("Drive exports use a standalone runtime instead of the split web entry, keep data separate, and leave served/admin shells intact", () => {
   const shell = '<!doctype html><head><title>old</title><script type="module" crossorigin src="/assets/app.js"></script><link rel="modulepreload" href="/assets/shared.js"><link rel="stylesheet" href="/assets/app.css"></head><body><div id="root"></div></body>';
-  const built: Record<string, string> = { "/assets/app.js": 'window.example = "</script>";', "/assets/app.css": 'body { color: green }' };
+  const built: Record<string, string> = { "/drive/preview.js": 'window.example = "</script>";', "/drive/preview.css": 'body { color: green }' };
   const output = artifacts(sample, shell, path => { assert.ok(path in built); return built[path]; });
   const html = output["web/index.html"];
   assert.match(html, /<script src="\.\/data\.js"><\/script>/);
@@ -51,6 +52,7 @@ test("Drive exports inline built code and CSS, keep data separate, and leave ser
   assert.doesNotMatch(readFileSync("index.html", "utf8"), /data\.js/);
   assert.throws(() => artifacts(sample, shell.replace('/assets/app.js', 'https://example.com/app.js')), /同梱できない/);
   assert.throws(() => artifacts(sample, shell.replace('/assets/app.js', '/assets/../private.js')), /同梱できない/);
+  assert.throws(() => artifacts(sample, shell, () => { throw new Error("Standalone build missing"); }), /Standalone build missing/, "do not fall back to an entry whose imports cannot load");
 });
 test("Drive mock startup requires file protocol and valid data, including safely escaped strings", () => {
   const config = structuredClone(sample); config.description = '</script><>&"\u2028\u2029';
@@ -60,6 +62,14 @@ test("Drive mock startup requires file protocol and valid data, including safely
   assert.deepEqual(drivePreviewData("file:", context.window.__GEMIHUB_MOCK__), driveMock(config));
   for (const protocol of ["http:", "https:"]) assert.equal(drivePreviewData(protocol, context.window.__GEMIHUB_MOCK__), undefined);
   for (const value of [undefined, null, {}, { ...driveMock(sample), mode: "live" }]) assert.equal(drivePreviewData("file:", value), undefined);
+});
+test("embedding the standalone runtime preserves HTML strings inside JavaScript and CSS", () => {
+  const js = `window.template = '<link rel="stylesheet" href="/template.css">';`;
+  const css = `div::after { content: '<link rel="stylesheet" href="/template.css">'; }`;
+  const html = inlineDriveShell('<head><script type="module" src="/assets/main.js"></script><link rel="stylesheet" href="/assets/main.css"></head>', path => path.endsWith(".js") ? js : css);
+  assert.ok(html.includes(js));
+  assert.ok(html.includes(css));
+  assert.doesNotMatch(html, /\0drive-asset/);
 });
 test("operational batch rollback discards outbox writes; refresh tokens reject tampering", async () => {
   const store = new Store(":memory:");

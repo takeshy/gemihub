@@ -98,6 +98,8 @@ Pen editing is available only inside this editor, not on published or private st
 
 Apply a selected page's addition/update/deletion or one shared component after showing before/after differences. Do not include other page drafts, sample data, or unrelated business rows. Shared settings precede additional page publication for a new shop. Compare the selected baseline with current live content; retain unrelated remote changes. Preserve other drafts and their baselines after release. Store operation/plan IDs before and after requests; retry the same operation and require completion/status confirmation before resuming editing.
 
+Screen version history compares and restores HTML/CSS together with that screen's `appearance.copy` text. Missing saved overrides restore default text; keep unrelated screen text, header, colors and business settings. Recompute older history indexes from saved designs without writing history during reads. If a page restore changes its URL or navigation label, refresh the Drive header HTML using the current header design as well as the page and shared snapshot files.
+
 ## Conflict preview and merging
 
 Show local and remote read-only previews, including edit/deletion conflicts. Allow Use local, Use remote, or an AI merge using only the selected baseline/local/remote values. Do not let AI change IDs or unrelated settings. Review before adopting the merge locally; publication remains a separate action. Recheck remote state before adoption and compare again if changed. Preserve up to 20 pre-resolution backups of local/baseline/remote and allow local restoration without affecting other screens or samples.
@@ -221,6 +223,8 @@ Text change requests propose additions such as closure days or services, require
 Read settings, services, staff, and business records from Firestore, scoped by shop and record type. Commit business records and operational work together and preserve references and soft-delete behavior. Owners can download all data as JSON or selected record types as CSV from Publication settings. Exclude credentials, other accounts' private chats and binary files; escape spreadsheet formulas in CSV. Editing an export does not change live data. Store images, attachments, specs/history and generated pages in the owner's Drive. Keep public/customer artifacts separate from operational documents and APIs.
 
 Downloaded `web/index.html` must open by double-click with built JS/CSS inlined. Keep rendering input in separate relative `web/data.js` defining `window.__GEMIHUB_MOCK__`, with shop config, preview customer, empty bookings/inquiries, mode=mock, and writes=discarded. Generate shop.json/mock.json from the same source. Escape embedded user strings safely. Practice actions mutate only browser memory and reset on reload; editing data.js changes the display without editing HTML.
+
+`npm run build` also generates a standalone Drive runtime and CSS under `dist/drive`. Embed these in exported HTML so `file://` needs no imported web chunks or extra downloads. Served and admin HTML continue to use the regular web build.
 
 Use the mock only for file:// plus valid data. Missing/invalid data leaves static shop/service content. HTTP/HTTPS always uses the server API regardless of a mock global. Do not add the offline data reference to the served dist/admin shell. Verify actual file:// actions, discarded writes, edited data, missing-data fallback, and HTTP guards.
 

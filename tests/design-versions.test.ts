@@ -1,6 +1,6 @@
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { google } from "googleapis";
 import { createApp } from "../server/app.ts";
@@ -8,12 +8,15 @@ import { Store, type Shop, type User } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
 import { encrypt } from "../server/google.ts";
 import { sample, shopSchema, type ShopConfig } from "../server/domain.ts";
-import { designOf, restoreDesign, isDesignArtifact, driveDesignVersions, preserveDesignVersion } from "../server/design-versions.ts";
+import { designOf, designFingerprints, versionsFor, restoreDesign, isDesignArtifact, driveDesignVersions, preserveDesignVersion } from "../server/design-versions.ts";
 import { scopedConfig, type ReleaseScope } from "../server/pages.ts";
 import { archiveImage } from "../server/image-library.ts";
 import { designDrive } from "./helpers/design-drive.ts";
 import { readFile } from "node:fs/promises";
 import { artifacts } from "../server/artifacts.ts";
+import { screenIds } from "../shared/screens.ts";
+import { storefrontCopyKeys, type StorefrontCopyKey } from "../shared/storefront-copy.ts";
+import { defaultAppearance } from "../shared/theme-editing.ts";
 
 process.env.DEMO_MODE = "true";
 const page = (slug: string) => ({ id: "faq", slug, title: "FAQ", navigationLabel: "FAQ", body: `<p>${slug}</p>`, layout: "standard" as const, imageUrl: "" });
@@ -27,6 +30,93 @@ test("design allowlist preserves every non-design setting and removes absent opt
   for (const key of Object.keys(current) as (keyof ShopConfig)[]) if (!keys.has(key)) assert.deepEqual(restored[key], current[key], key);
   assert.equal(isDesignArtifact("web/blogs/index.html"), false);
   assert.equal(isDesignArtifact("admin/index.html"), false);
+});
+
+test("screen restoration owns its copy, removes newer overrides and preserves other appearance settings", () => {
+  const keys: Record<typeof screenIds[number], StorefrontCopyKey[]> = {
+    about: ["aboutMenus", "aboutStaff", "aboutAccess", "aboutHours", "recentPosts"],
+    reserve: ["bookingTitle", "bookingMenu", "bookingTime", "bookingStaffTime", "bookingConfirm", "bookingSummary"],
+    mine: ["mineBookings", "recentPosts"],
+    contact: ["contactTitle"],
+  };
+  const current = shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, accent: "rose", copy: Object.fromEntries(storefrontCopyKeys.map(key => [key, `Current ${key}`])) } });
+  for (const screen of screenIds) {
+    for (const savedCopy of [undefined, Object.fromEntries(storefrontCopyKeys.map(key => [key, `Saved ${key}`]))]) {
+      const saved = shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, copy: savedCopy } });
+      const restored = restoreDesign(current, designOf(saved), { kind: "screen", screen });
+      const expected = structuredClone(current);
+      expected.screens = {};
+      for (const key of keys[screen]) {
+        if (saved.appearance?.copy?.[key]) expected.appearance!.copy![key] = saved.appearance.copy[key];
+        else delete expected.appearance!.copy![key];
+      }
+      assert.deepEqual(restored, expected, screen);
+      assert.notEqual(designFingerprints(current)[`screen:${screen}`], designFingerprints(saved)[`screen:${screen}`]);
+    }
+  }
+  const noOverrides = restoreDesign(shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, copy: { bookingTitle: "New" } } }), designOf(sample), { kind: "screen", screen: "reserve" });
+  assert.equal(noOverrides.appearance?.copy, undefined, "the last removed override leaves no empty copy object");
+});
+
+test("an older index is not compared with current screen hashes before its archive can be read", () => {
+  const version = { number: 1, at: "now", summary: "Old index", folderId: "folder", manifestId: "unindexed", fingerprints: { ...designFingerprints(sample), "screen:reserve": "legacy-layout-only" } };
+  assert.deepEqual(versionsFor([version], sample, { kind: "screen", screen: "reserve" }), []);
+  assert.deepEqual(versionsFor([version], sample), [version], "the full history remains available without a connection");
+});
+
+test("copy-only and layout-plus-copy publications appear in screen history and restore exported copy, including older indexes", async t => {
+  const drive = designDrive();
+  t.mock.method(google, "drive", (() => drive.client) as never);
+  const store = new Store(":memory:"), server = createApp(store);
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await store.close(); });
+  for (const mode of ["copy", "layout-and-copy", "default-copy"]) {
+    const shop = await store.createShop(`${mode}@example.com`);
+    const user: User = { email: shop.owner, role: "owner", name: "Owner", shopId: shop.id, refreshToken: encrypt("fixture") };
+    await store.put("user", user.email, user);
+    await store.put("session", digest(shop.id), { user, expires: Date.now() + 60000 });
+    const request = async (path: string, data?: unknown) => {
+      const response = await fetch(`${origin}/api/shops/${shop.id}${path}`, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: `gemihub_session=${shop.id}`, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+      assert.equal(response.status, 200, await response.clone().text());
+      return response.json();
+    };
+    const publish = async (config: ShopConfig) => {
+      const fresh = (await store.shop(shop.id))!, id = randomUUID();
+      await store.put("plan", id, { id, shopId: shop.id, base: fresh.revision, config, source: fresh.published, approved: true, summary: [mode], request: "Change screen copy", createdAt: Date.now(), checklist: [] });
+      await request(`/plans/${id}/publish`, {});
+    };
+    const previous = shopSchema.parse({ ...sample, appearance: { ...defaultAppearance, accent: "rose", copy: mode === "default-copy" ? undefined : { bookingTitle: "Old booking title" } } });
+    await publish(previous);
+    const current = shopSchema.parse({ ...previous, appearance: { ...previous.appearance, accent: "rose", copy: { bookingTitle: "New booking title", navReserve: "Current navigation", contactTitle: "Current contact" } }, ...(mode === "layout-and-copy" ? { screens: { reserve: { html: '<section><slot name="booking"></slot></section>', css: "section{padding:24px}" } } } : {}) });
+    await publish(current);
+    let fresh = (await store.shop(shop.id))!;
+    // Simulate an already persisted index from before copy was included in screen hashes.
+    const version = fresh.designVersions![0];
+    delete version.fingerprintVersion;
+    version.fingerprints!["screen:reserve"] = createHash("sha256").update(JSON.stringify(previous.screens?.reserve ?? null)).digest("base64url").slice(0, 22);
+    await store.saveShop(fresh);
+    const history = await request("/design-versions?target=screen%3Areserve");
+    assert.deepEqual(history.versions.map((item: { number: number }) => item.number), [1], mode);
+    assert.deepEqual(await store.shop(shop.id), fresh, "listing an old index is read-only");
+    await request("/design-versions/1/restore", { requestId: randomUUID(), revision: fresh.revision, target: "screen:reserve" });
+    fresh = (await store.shop(shop.id))!;
+    const expectedCopy = { ...current.appearance!.copy };
+    if (mode === "default-copy") delete expectedCopy.bookingTitle;
+    else expectedCopy.bookingTitle = "Old booking title";
+    assert.deepEqual(fresh.published!.appearance!.copy, expectedCopy);
+    assert.equal(fresh.published!.appearance!.accent, "rose");
+    assert.equal(fresh.published!.screens?.reserve, undefined);
+    const exported = JSON.parse(drive.files.get(fresh.google!.artifactIds!["web/shop.json"])!.content);
+    assert.deepEqual(exported.appearance.copy, expectedCopy, "Drive contains restored text and current unrelated text");
+    const publicResponse = await fetch(`${origin}/api/public/${fresh.slug}`, { headers: { Cookie: `gemihub_session=${shop.id}` } });
+    assert.equal(publicResponse.status, 200);
+    assert.deepEqual((await publicResponse.json()).config.appearance.copy, expectedCopy, "the live booking page receives restored copy");
+    const undo = (await request("/design-versions?target=screen%3Areserve")).versions[0].number;
+    await request(`/design-versions/${undo}/restore`, { requestId: randomUUID(), revision: fresh.revision, target: "screen:reserve" });
+    assert.equal((await store.shop(shop.id))!.published!.appearance!.copy!.bookingTitle, "New booking title");
+  }
 });
 
 test("publication snapshots, one-click rollback/redo, retries, retention, owner isolation and judge Drive", async t => {
