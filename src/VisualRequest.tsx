@@ -117,6 +117,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   const [target, setTarget] = useState("");
   const [proposal, setProposal] = useState<{ config: ShopConfig; before: ShopConfig; summary: string[]; visualReview?: { approved: boolean; attempts: number }; context: string; key: string; scope: string }>();
   const submittedMedia = useRef<{ mimeType: "image/png"; data: string } | undefined>(undefined);
+  const submittedImageIds = useRef<string[]>([]);
   const canvas = useRef<HTMLCanvasElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const log = useRef<HTMLDivElement>(null);
@@ -145,7 +146,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   useEffect(() => { remember({ config, plan: initialPlan }); }, [scopeKey, currentKey]);
   const append = (message: { role: "user" | "assistant"; text: string; imageIds?: string[] }) => setMessages(items => [...items, message].slice(-24));
   const clearCapture = () => { setImage(""); setResult(undefined); setTarget(""); setMarked(false); };
-  const discardProposal = () => { setProposal(undefined); clearCapture(); setImageIds([]); pendingContext.current = ""; submittedMedia.current = undefined; setError(""); };
+  const discardProposal = () => { setProposal(undefined); clearCapture(); setImageIds([]); pendingContext.current = ""; submittedMedia.current = undefined; submittedImageIds.current = [];setError(""); };
   const close = () => { stopDictation.current?.(); setOpen(false); discardProposal(); };
   const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
   function moveHistory(offset: number) {
@@ -200,10 +201,12 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
   async function submitRequest(input = instruction) {
     const text = input.trim(); if (locked || !text) return;
     stopDictation.current?.();
+    const requestImageIds = failed.current === text && !imageIds.length ? [...messages.findLast(message => message.role === "user" && message.text === text)?.imageIds || submittedImageIds.current] : [...imageIds];
+    submittedImageIds.current = requestImageIds;
     // A failed send is already visible in the log, but remains the current instruction on retry.
     const previousMessages = (failed.current === text && messages.at(-1)?.role === "user" ? messages.slice(0, -1) : messages).map(({ role, text }) => ({ role, text }));
-    if (failed.current !== text) append({ role: "user", text, imageIds: [...imageIds] });
-    setInstruction(""); setResult(undefined); setTarget("");
+    if (failed.current !== text || imageIds.length) append({ role: "user", text, imageIds: requestImageIds });
+    setInstruction(""); setImageIds([]);setResult(undefined); setTarget("");
     await run(async () => {
       try {
         const source = image ? canvas.current!.toDataURL("image/png") : root.current ? await capturePage(root.current) : "";
@@ -212,7 +215,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
         submittedMedia.current = media;
         if (initialPlan) {
           setWork(current => ({ startedAt: current?.startedAt || Date.now(), stage: "generating" }));
-          const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlan.id}/theme`, { instruction: text, messages: previousMessages, preview: reviewPreview, imageIds, media });
+          const response = await api<{ plan: Plan }>(`/api/shops/${shopId}/plans/${initialPlan.id}/theme`, { instruction: text, messages: previousMessages, preview: reviewPreview, imageIds: requestImageIds, media });
           if (!alive.current) return;
           remember({ config: response.plan.config, plan: response.plan });
           onPlan?.(response.plan); clearCapture(); setImageIds([]); pendingContext.current = "";
@@ -228,7 +231,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
           const selected = response.candidates[0]?.id;
           if (selected) {
             setResult({ ...response, before: structuredClone(config), key: currentKey, scope: scopeKey }); setTarget(selected);
-            const proposed = await propose({ id: response.id, target: selected, instruction: combined, imageIds, media });
+            const proposed = await propose({ id: response.id, target: selected, instruction: combined, imageIds: requestImageIds, media });
             if (!alive.current) return;
             setProposal({ ...proposed, before: structuredClone(config), context: combined, key: currentKey, scope: scopeKey });
           }
@@ -298,7 +301,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       if (!result || !proposalIsCurrent) return false;
       let success = false;
       await run(async () => {
-        const next = await propose({ id: result.id, target, instruction, messages: messages.map(({ role, text }) => ({ role, text })), applied: proposal.context, imageIds, media: submittedMedia.current, revision: proposal.config });
+        const next = await propose({ id: result.id, target, instruction, messages: messages.map(({ role, text }) => ({ role, text })), applied: proposal.context, imageIds: submittedImageIds.current, media: submittedMedia.current, revision: proposal.config });
         if (!alive.current) return;
         setProposal({ ...proposal, ...next, context: [proposal.context, instruction].join("\n\n").slice(-4000) });
         append({ role: "user", text: instruction });

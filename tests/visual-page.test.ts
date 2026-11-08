@@ -9,6 +9,11 @@ import { Store } from "../server/store.ts";
 import { digest } from "../server/auth.ts";
 import * as intelligence from "../server/ai.ts";
 import { screenIds, screenStarter } from "../shared/screens.ts";
+import { pageImageTargets, applyPageImageEdits, samePageImageStructure } from "../server/page-images.ts";
+import { validateVisualChange } from "../server/visual.ts";
+import { validateProposedImages } from "../server/request-images.ts";
+import { uploadMenuImage } from "../server/menu-images.ts";
+import { memoryCustomerFiles } from "../server/customer-files.ts";
 
 process.env.DEMO_MODE = "true";
 const instruction = "店主を反映して。\n紹介メッセージ\n当店では、ただカラーを塗るだけでなく、「丁寧なケア」と「持ちの良さ」にこだわっています。\n「指先を見るたびに気分が上がる」「明日からまた頑張ろうと思える」そんな特別な時間を過ごしていただけるよう、一人ひとりのお悩みに寄り添った施術を心がけています。\n• 保有資格：JNECネイリスト技能検定1級、JNAジェルネイル技能検定上級、ネイルサロン衛生管理士\n• 得意なデザイン：ニュアンスネイル、大人可愛い上品デザイン、シンプルオフィスネイル";
@@ -86,6 +91,78 @@ test("page title and design patches cannot change body, URL, other pages or busi
   for (const patch of [{ body, staff: [] }, { body, title: "Unexpected title" }, { body, slug: "new-url" }, { body, rules: {} }, { body: '<script>alert(1)</script>' }, { css: '.profile{background:url(https://example.com/track)}' }]) {
     await assert.rejects(proposeVisualAppearance(before, instruction, [], { target: "page:staff-introduction:body", generate: async () => JSON.stringify(patch) }));
   }
+});
+
+test("page photo swaps replace the selected illustration in its card without adding a hero or rewriting copy", async () => {
+  const before = config(), imageId = "a".repeat(64);
+  before.pages[0].body = '<svg class="decoration"><path d="M0 0h10"></path></svg><section class="profile"><div class="portrait"><svg width="160" height="160" class="owner-picture"><circle cx="80" cy="80" r="60"></circle></svg></div><h2>店主の紹介</h2><p>資格と紹介文はそのまま</p></section>';
+  const images = [{ id: imageId, name: "写真", mimeType: "image/png", data: "aGVsbG8=" }];
+  const next = await proposeVisualAppearance(before, "写真をこの写真にして", images, { target: "page:staff-introduction:design", generate: async request => {
+    const context = JSON.parse(request.contents[0].parts![0].text!);
+    assert.equal(context.pageImageTargets.length, 2);
+    assert.match(context.pageImageTargets[1].html, /owner-picture/);
+    assert.match(context.imageEditing, /Do not add a top-level imageId/);
+    return JSON.stringify({ imageEdits: [{ index: 1, imageId, alt: "店主の写真" }] });
+  } });
+  const page = next.config.pages[0];
+  assert.equal(page.imageId, undefined);
+  assert.match(page.body, /<div class="portrait"><img width="160" height="160" class="owner-picture"/);
+  assert.match(page.body, new RegExp(`data-image-id="${imageId}"`));
+  assert.match(page.body, /<svg class="decoration">/);
+  assert.equal(samePageImageStructure(before.pages[0].body, page.body), true);
+  assert.deepEqual({ ...next.config, pages: before.pages }, before);
+  assert.doesNotThrow(() => validateProposedImages(next.config, before, images));
+  assert.throws(() => validateProposedImages(next.config, before, []));
+  for (const body of [page.body.replace("資格と紹介文はそのまま", "勝手な書き換え"), page.body.replace('<section class="profile">', '<section class="different">'), page.body.replace(/<img[^>]+>/, "")]) {
+    const invalid = structuredClone(next.config);invalid.pages[0].body = body;
+    assert.throws(() => validateVisualChange(before, invalid, "page:staff-introduction:design"));
+  }
+  assert.throws(() => applyPageImageEdits(before.pages[0].body, [{ index: 99, imageId }]));
+  assert.throws(() => applyPageImageEdits(before.pages[0].body, [{ index: 1, imageId }, { index: 1, imageId }]));
+  const withHero = structuredClone(before);withHero.pages[0].imageId = imageId;
+  const repaired = await proposeVisualAppearance(withHero, "間違えて追加した上部の写真を外して、カードの写真を差し替えて", images, { target: "page:staff-introduction:design", generate: async () => JSON.stringify({ imageId: null, imageUrl: "", imageEdits: [{ index: 1, imageId }] }) });
+  assert.equal(repaired.config.pages[0].imageId, undefined);
+  assert.equal(pageImageTargets(repaired.config.pages[0].body).length, 2);
+});
+
+test("photo-swap API passes the selected attachment into generation and rendered review without publication", async t => {
+  const store = new Store(":memory:"), shop = await store.createShop("owner@example.com");
+  shop.published = config();shop.published.pages[0].body = '<section class="profile"><svg width="160" height="160"><circle cx="80" cy="80" r="60"></circle></svg><p>資格と紹介文</p></section>';
+  shop.published.menus[0].imageId = "b".repeat(64);
+  shop.published.pages[1].body += `<img data-image-id="${"c".repeat(64)}" alt="別ページの写真">`;
+  await store.saveShop(shop);
+  const data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+  const photo = await uploadMenuImage(store, shop, { requestId: randomUUID(), name: "店主の写真.png", mimeType: "image/png", data }, memoryCustomerFiles(store), "");
+  await store.put("session", digest("owner"), { user: { email: shop.owner, name: "Owner", role: "owner" }, expires: Date.now() + 600000 });
+  let generated = 0, reviewed = 0;
+  const server = createApp(store, { ...intelligence,
+    async identifyVisual() { return { ids: ["page:staff-introduction:design"], explanation: "カード内の写真を差し替えます。" }; },
+    async visualAppearance(current, text, images = [], options) {
+      generated++;assert.deepEqual(images.map(image => image.id), [photo.imageId]);
+      return proposeVisualAppearance(current, text, images, { ...options, generate: async () => JSON.stringify({ imageEdits: [{ index: 0, imageId: images[0].id, alt: "店主" }] }) });
+    },
+    async visualReview(input) {
+      reviewed++;assert.equal(input.images[0].id, photo.imageId);
+      assert.deepEqual(Object.keys(input.renderImages), [photo.imageId], "unavailable photos on unrelated pages/menus cannot delay this page's review");
+      assert.equal(input.renderImages[photo.imageId].data, data);
+      assert.match(input.after.pages[0].body, new RegExp(photo.imageId));
+      assert.equal(input.after.pages[0].imageId, undefined);
+      return { approved: true, issues: [] };
+    },
+  });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.closeAllConnections();await new Promise<void>(resolve => server.close(() => resolve()));await store.close(); });
+  const api = async (action: string, data: unknown) => {
+    const response = await fetch(`${origin}/api/shops/${shop.id}/${action}`, { method: "POST", headers: { Origin: origin, Cookie: "gemihub_session=owner", "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    const result = await response.json();assert.equal(response.status, 200, result.error);return result;
+  };
+  const instruction = "写真をこの写真にして", media = { mimeType: "image/png", data };
+  const identified = await api("visual/identify", { media, instruction, displayed: shop.published, local: { base: shop.revision, source: shop.published, pageId: "staff-introduction" } });
+  const next = await api("visual/propose", { id: identified.id, target: "page:staff-introduction:design", instruction, media, imageIds: [photo.imageId] });
+  assert.deepEqual(next.visualReview, { approved: true, attempts: 1 });
+  assert.equal(generated, 1);assert.equal(reviewed, 1);
+  assert.deepEqual((await store.shop(shop.id))!.published, shop.published);
 });
 
 test("page body API uses scoped patches, reviews repairs and returns a draft without publishing", async t => {

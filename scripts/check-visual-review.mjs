@@ -14,6 +14,9 @@ import { standardTheme } from '../shared/theme-editing.ts';
 import { compactGeneratedStyles } from '../server/generated-design.ts';
 import { captureVisualScreens } from '../server/visual-browser.ts';
 import { screenIds, screenStarter } from '../shared/screens.ts';
+import { uploadMenuImage } from '../server/menu-images.ts';
+import { memoryCustomerFiles } from '../server/customer-files.ts';
+import { samePageImageStructure } from '../server/page-images.ts';
 
 process.env.DEMO_MODE = 'true';
 delete process.env.GOOGLE_CLOUD_PROJECT;
@@ -28,10 +31,10 @@ let generations = 0, reviews = 0, initial = false;
 const screenshotHashes = [];
 const ownerIntroduction = '<section class="profile"><h2>店主の紹介</h2><p>丁寧なケアと持ちの良さにこだわっています。</p><ul><li>保有資格：JNECネイリスト技能検定1級、JNAジェルネイル技能検定上級、ネイルサロン衛生管理士</li><li>得意なデザイン：ニュアンスネイル、大人可愛い上品デザイン、シンプルオフィスネイル</li></ul></section>';
 const server = createApp(store, { ...intelligence,
-  async identifyVisual(_media, _targets, instruction) { return instruction.includes('店主') ? { ids: ['page:staff-introduction:body'], explanation: '紹介文を反映します。' } : { ids: ['theme'], explanation: 'The header is selected.' }; },
+  async identifyVisual(_media, _targets, instruction) { return instruction.includes('写真') ? { ids: ['page:staff-introduction:design'], explanation: 'カードの写真を差し替えます。' } : instruction.includes('店主') ? { ids: ['page:staff-introduction:body'], explanation: '紹介文を反映します。' } : { ids: ['theme'], explanation: 'The header is selected.' }; },
   async visualAppearance(current, instruction, images, options) {
     generations++;
-    if (options.target.startsWith('page:')) return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => JSON.stringify({ body: ownerIntroduction }) });
+    if (options.target.startsWith('page:')) return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => JSON.stringify(options.target.endsWith(':design') ? { imageEdits: [{ index: 0, imageId: images[0].id, alt: '店主の写真' }] } : { body: ownerIntroduction }) });
     const repair = /mobile navigation is clipped/.test(instruction);
     if (repair) assert.match(current.appearance.theme.headerCss, /height:20px/, 'repair starts from the rejected candidate');
     return proposeVisualAppearance(current, instruction, images, { ...options, generate: async () => JSON.stringify({ appearance: { theme: { headerCss: repair || instruction.includes('24 pixels') ? '.public-nav{gap:24px}' : '.public-nav{height:20px;overflow:hidden}' } } }) });
@@ -49,9 +52,10 @@ const server = createApp(store, { ...intelligence,
       assert.equal(request.purpose, 'review');
       const parts = request.contents[0].parts;
       const pixels = parts.flatMap(part => part.inlineData ? [part.inlineData] : []);
-      assert.equal(pixels.length, input.media ? 5 : 4, 'the review sees the marks plus before and after at desktop/mobile widths');
-      if (input.media) assert.deepEqual(pixels[0], input.media);
-      const screenshots = input.media ? pixels.slice(1) : pixels;
+      const references = input.images.length + (input.media ? 1 : 0);
+      assert.equal(pixels.length, references + 4, 'the review sees attached photos, the marks and all before/after screenshots');
+      if (input.media) assert.deepEqual(pixels[input.images.length], input.media);
+      const screenshots = pixels.slice(references);
       for (const [index, image] of screenshots.entries()) {
         const bytes = Buffer.from(image.data, 'base64');
         const metadata = await sharp(bytes).metadata();
@@ -101,6 +105,17 @@ try {
   assert.equal(pageResult.config.pages.at(-1).body, ownerIntroduction);
   assert.deepEqual({ ...pageResult.config, pages: pageDraft.pages }, pageDraft);
   assert.deepEqual((await store.shop(shop.id)).published, shop.published);
+  const photoBytes = await sharp({ create: { width: 160, height: 200, channels: 3, background: '#a66b77' } }).png().toBuffer();
+  const photo = await uploadMenuImage(store, shop, { requestId: randomUUID(), name: 'photo.png', mimeType: 'image/png', data: photoBytes.toString('base64') }, memoryCustomerFiles(store), '');
+  const photoDraft = structuredClone(pageResult.config);
+  photoDraft.pages.at(-1).body = photoDraft.pages.at(-1).body.replace('<section class="profile">', '<section class="profile"><div class="portrait"><svg width="160" height="200"><rect width="160" height="200" fill="#eee"/><circle cx="80" cy="70" r="30" fill="#999"/></svg></div>');
+  const photoRequest = await api(shop.id, 'visual/identify', { media, instruction: '写真をこの写真にして', displayed: photoDraft, local: { base: shop.revision, source: shop.published, pageId: 'staff-introduction' } });
+  const photoResult = await api(shop.id, 'visual/propose', { id: photoRequest.id, target: 'page:staff-introduction:design', instruction: '写真をこの写真にして', imageIds: [photo.imageId], media });
+  assert.equal(photoResult.visualReview.approved, true);
+  assert.equal(photoResult.config.pages.at(-1).imageId, undefined);
+  assert.match(photoResult.config.pages.at(-1).body, new RegExp(photo.imageId));
+  assert.ok(samePageImageStructure(photoDraft.pages.at(-1).body, photoResult.config.pages.at(-1).body));
+  assert.deepEqual((await store.shop(shop.id)).published, shop.published);
   for (const id of screenIds) {
     const design = { ...screenStarter(id), css: `${screenStarter(id).css}\nsection{padding:24px}` };
     const edited = await proposeVisualAppearance(shop.published, 'この画面の余白だけ広げて', [], { target: `screen:${id}`, generate: async () => JSON.stringify({ screens: { [id]: design } }) });
@@ -119,5 +134,5 @@ try {
   const afterCompact = await captureVisualScreens({ ...captureInput, config: compacted });
   assert.deepEqual(afterCompact.map(shot => shot.data), beforeCompact.map(shot => shot.data), 'compacting oversized formatting preserves the actual desktop/mobile pixels');
   console.log('Oversized CSS formatting compacts below the limit with identical Chromium screenshots at 1280/390px.');
-  console.log('Real Chromium before/after captures reach the review model at 1280/390px. Rejection -> repair -> recapture -> approval, refinement, custom page introduction, and initial-theme correction passed; publication is unchanged.');
+  console.log('Real Chromium before/after captures reach the review model at 1280/390px. Rejection -> repair -> recapture -> approval, refinement, custom page introduction/photo replacement, and initial-theme correction passed; publication is unchanged.');
 } finally { await new Promise(resolve => server.close(resolve));await store.close(); }

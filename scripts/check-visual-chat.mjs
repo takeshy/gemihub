@@ -8,10 +8,12 @@ import { sample, planSummary, shopSchema } from '../server/domain.ts';
 import * as intelligence from '../server/ai.ts';
 import { digest } from '../server/auth.ts';
 import { requestLocale } from '../server/i18n.ts';
+import { uploadMenuImage } from '../server/menu-images.ts';
+import { memoryCustomerFiles } from '../server/customer-files.ts';
 
 process.env.DEMO_MODE='true';delete process.env.GOOGLE_CLOUD_PROJECT;
 const catalog=JSON.parse(await readFile('shared/en.json','utf8'));
-const store=new Store(':memory:');const identified=[];let annotated;
+const store=new Store(':memory:');const identified=[],receivedImages=[];let annotated,failNext=false;
 const server=createApp(store,{...intelligence,visualReview:async()=>({approved:true,issues:[]}),
   async identifyVisual(media,targets,instruction,_screen,messages){
     annotated=media;identified.push({instruction,messages});
@@ -19,7 +21,9 @@ const server=createApp(store,{...intelligence,visualReview:async()=>({approved:t
     if(instruction.endsWith('unclear'))return{ids:[],explanation:'How would you like this area to look?'};
     return{ids:['description'],explanation:'I’ll change the introduction and keep the rest of the page.'};
   },
-  async propose(text,current,_email,_demo,_images,_region,_themeContext,media){
+  async propose(text,current,_email,_demo,images,_region,_themeContext,media){
+    receivedImages.push(images.map(image=>image.id));
+    if(failNext){failNext=false;throw Object.assign(new Error('Simulated temporary AI failure'),{status:503});}
     assert.deepEqual(media,annotated);
     const description=text.includes('Calm, beautiful nails')?'Calm, beautiful nails':text.includes('落ち着いた美しいネイル')?'落ち着いた美しいネイル':text.includes('Your next favorite nails')?'Your next favorite nails':text.includes('次のお気に入りネイル')?'次のお気に入りネイル':text.includes('Nails for every season')?'Nails for every season':'季節を楽しむネイル';
     const config={...structuredClone(current),description};return{config,summary:planSummary(current,config)};
@@ -45,6 +49,7 @@ try{
     css:'.capture-header{display:block;height:auto;padding:35px 30px 0}.capture-tagline{position:relative;z-index:2}.capture-tagline p{display:inline-block;margin:0;font-size:11px;letter-spacing:.12em;text-transform:uppercase}.capture-body{padding:0 30px 40px}@media(max-width:600px){.capture-header{padding:20px 15px 0}.capture-body{padding:0 15px 24px}}',
   }};
   shop.published=shopSchema.parse(shop.published);await store.saveShop(shop);
+  const photo=await uploadMenuImage(store,shop,{requestId:randomUUID(),name:'Owner photo.png',mimeType:'image/png',data:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='},memoryCustomerFiles(store),'');
   const firstTagline=language==='en'?'Nails for every season':'季節を楽しむネイル',secondTagline=language==='en'?'Your next favorite nails':'次のお気に入りネイル';
   const user={email:shop.owner,name:'Owner',role:'owner',shopId:shop.id};await store.put('user',user.email,user);
   const session=randomUUID();await store.put('session',digest(session),{user,expires:Date.now()+3600000});
@@ -94,17 +99,34 @@ try{
   const review=page.getByRole('dialog',{name:label('修正案を比較'),exact:true});
   const send=async text=>{await input.fill(text);await input.press('Control+Enter');await expect(review).toBeVisible();};
   const accept=async()=>{await review.getByRole('button',{name:'OK',exact:true}).click();await expect(review).toHaveCount(0);};
-  await send(language==='ja'?'囲んだ紹介文を「季節を楽しむネイル」に変えてください。':'Change the circled tagline to “Nails for every season”.');
+  const attach=async()=>{
+    await chat.getByRole('button',{name:label('画像を添付'),exact:true}).click();
+    const picker=page.getByRole('dialog',{name:label('依頼の画像を選ぶ'),exact:true});
+    await picker.getByRole('button',{name:label('{0}を選択').replace('{0}','Owner photo.png'),exact:true}).click();
+    await picker.getByRole('button',{name:label('選択した画像を使う'),exact:true}).click();
+    await expect(chat.locator('.request-image-selection')).toBeVisible();
+  };
+  await attach();
+  let release;const gate=new Promise(resolve=>{release=resolve;});
+  const hold=async route=>{await gate;await route.continue();};
+  await page.route('**/visual/propose',hold);
+  await input.fill(language==='ja'?'囲んだ紹介文を「季節を楽しむネイル」に変えてください。':'Change the circled tagline to “Nails for every season”.');
+  await input.press('Control+Enter');
+  await expect(chat.locator('.request-image-selection')).toHaveCount(0,'sent images leave the composer while the request is still running');
+  await expect(chat.locator('.chat-message-user .chat-message-images')).toHaveCount(1,'the sent photo remains in the conversation');
+  release();await expect(review).toBeVisible();await page.unroute('**/visual/propose',hold);
+  assert.deepEqual(receivedImages.at(-1),[photo.imageId]);
   assert.equal(await page.locator('.visual-chat-confirmation').count(),0,'no target selector or confirmation step');
   await expect(review).toContainText(label('修正後のPC・スマートフォンの画面をAIで確認しました。'));
   await review.getByRole('button',{name:label('さらに変更'),exact:true}).click();
   await review.getByRole('textbox',{name:label('さらに変更したいこと'),exact:true}).fill(language==='ja'?'今の色は変えないでください。':'Keep the current colors.');
   await review.getByRole('button',{name:label('修正案を更新'),exact:true}).click();
-  await expect(review.getByRole('textbox',{name:label('さらに変更したいこと'),exact:true})).toHaveValue('');await accept();
+  await expect(review.getByRole('textbox',{name:label('さらに変更したいこと'),exact:true})).toHaveValue('');assert.deepEqual(receivedImages.at(-1),[photo.imageId],'refinement retains sent photo context');await accept();
   await expect(preview.locator('.capture-tagline p')).toHaveText(firstTagline);
   await expect(canvas).toHaveCount(0);
   const back=page.getByRole('button',{name:label('前の状態に戻る'),exact:true}),forward=page.getByRole('button',{name:label('次の状態に進む'),exact:true});
   await send(language==='ja'?'紹介文は「次のお気に入りネイル」にします。':'Use “Your next favorite nails” as the tagline instead.');
+  assert.deepEqual(receivedImages.at(-1),[],'the next message does not silently attach the previous photo again');
   assert.match(JSON.stringify(identified.at(-1).messages),/Keep the current colors|今の色/,'completed corrections and refinements remain in context');
   await accept();await expect(preview.locator('.capture-tagline p')).toHaveText(secondTagline);
   const calls=identified.length;await back.click();await expect(preview.locator('.capture-tagline p')).toHaveText(firstTagline);await forward.click();assert.equal(identified.length,calls);
@@ -121,8 +143,19 @@ try{
   await send(language==='ja'?'紹介文を「落ち着いた美しいネイル」にしてください。':'Use “Calm, beautiful nails” as the tagline.');
   await review.getByRole('button',{name:label('キャンセル'),exact:true}).click();
   await expect(preview.locator('.capture-tagline p')).toHaveText(thirdTagline);
+  await attach();failNext=true;
+  const retryText=language==='ja'?'紹介文を「季節を楽しむネイル」に変更してください。':'Set the tagline to “Nails for every season”.';
+  await input.fill(retryText);await input.press('Control+Enter');
+  await expect(chat.getByRole('alert')).toContainText('Simulated temporary AI failure');
+  await expect(chat.locator('.request-image-selection')).toHaveCount(0);
+  await expect(input).toHaveValue(retryText);
+  assert.deepEqual(receivedImages.at(-1),[photo.imageId]);
+  await input.press('Control+Enter');await expect(review).toBeVisible();
+  assert.deepEqual(receivedImages.at(-1),[photo.imageId],'a failed send can retry with its original photo after the composer was cleared');
+  await expect(chat.locator('.chat-message-user').filter({hasText:retryText})).toHaveCount(1);
+  await review.getByRole('button',{name:label('キャンセル'),exact:true}).click();
   await chat.getByRole('button',{name:label('閉じる'),exact:true}).click();
-  assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px: red-pen chat, undo/redo, branching and closed-chat navigation passed; edits stay local until explicit publication.`);
+  assert.deepEqual(errors,[]);await context.close();console.log(`${language} ${width}px: red-pen chat, sent-photo composer clearing, history/refinement/retry attachments, undo/redo and navigation passed; edits stay local until explicit publication.`);
  }
 }catch(error){if(active&&!active.isClosed())await active.screenshot({path:'tmp/side-chat/failure.png',fullPage:true}).catch(()=>{});throw error;}
 finally{await browser.close();await new Promise(resolve=>server.close(resolve));await store.close();}

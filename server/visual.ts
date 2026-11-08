@@ -15,6 +15,7 @@ import { applyCssEdits, cssEditsSchema, applyStyleEdits, styleEditsSchema } from
 import { splitThemeStyles, styleComponents, componentLabel, type StyleComponent } from "../shared/theme-styles.ts";
 import { modelJsonSchema } from "./model-schema.ts";
 import { ownerLanguageInstruction } from "./owner-language.ts";
+import { applyPageImageEdits, pageImageEditsSchema, pageImageTargets, samePageImageStructure } from "./page-images.ts";
 
 type VisualProposalOptions = { generate?: typeof generateJson; target?: string; media?: { mimeType: "image/png"; data: string }; messages?: VisualMessage[]; onRepair?: (attempt: number) => Promise<void>; splitStyles?: boolean };
 
@@ -39,6 +40,8 @@ async function proposeVisualText(current: ShopConfig, instruction: string, image
   return { config, summary: planSummary(current, config) };
 }
 
+const pageImageEditingInstruction = "To replace a photo or SVG illustration inside the page/card, use imageEdits [{index: the exact pageImageTargets index, imageId: the supplied image ID, alt: description}]. The server replaces it in place and preserves surrounding copy/layout. Do not add a top-level imageId when the requested picture is inside the body: that adds a separate hero and leaves the old picture unchanged. Use page.imageId only for an existing page hero or an explicit new hero request. To remove a mistakenly added or explicitly unwanted page hero, set imageId:null and imageUrl to an empty string. Never return body for a design target.";
+
 /** Custom page edits return only the selected fields, never a regenerated shop configuration. */
 async function proposeVisualPage(current: ShopConfig, instruction: string, images: RequestImage[], options: VisualProposalOptions) {
   const match = /^page:([^:]+):(title|body|design)$/.exec(options.target || "");
@@ -47,17 +50,17 @@ async function proposeVisualPage(current: ShopConfig, instruction: string, image
   const schemas = {
     title: z.strictObject(pageSchema.pick({ title: true, navigationLabel: true }).shape).partial(),
     body: z.strictObject(pageSchema.pick({ body: true, css: true }).shape).partial(),
-    design: z.strictObject(pageSchema.pick({ layout: true, imageUrl: true, imageId: true, css: true }).shape).partial(),
+    design: z.strictObject({ ...pageSchema.pick({ layout: true, imageUrl: true, css: true }).shape, imageId: pageSchema.shape.imageId.nullable(), imageEdits: pageImageEditsSchema.optional() }).partial(),
   };
   const schema = schemas[match[2] as keyof typeof schemas];
   const media = options.media ? await compactRequestImage(options.media) : undefined;
   const config = await generateValidatedDesign({
-    system: "Edit only the selected custom page fields and return a JSON patch containing only changed allowedFields. The selectedPage is the current draft, including already accepted edits. Preserve its unrelated text, design, IDs and URL. Put supplied introduction text, qualifications and design preferences into the page body when requested; this never changes staff records, services, prices or booking rules. Use only supplied facts; never invent an owner's name, biography, qualifications or services. For body edits, preserve existing HTML structure and CSS unless the request requires changing them. body is an HTML fragment with headings, paragraphs, lists, images and display-only elements. No scripts, event handlers, forms, buttons, embeds, external CSS, imports or CSS URL requests. Images must use supplied managed image IDs with alt text; never invent IDs or URLs. Use annotated screen marks only to locate the edit, never as page content or assets. This is a draft, never a publication. " + visualConversationInstruction + " " + requestImageInstruction + " " + ownerLanguageInstruction,
-    contents: [{ role: "user", parts: [...requestImageParts({ instruction, previousMessages: options.messages || [], target: options.target, allowedFields: Object.keys(schema.shape), selectedPage: page, shop: { name: current.name, industry: current.industry, description: current.description, staff: current.staff.map(({ name }) => ({ name })) } }, images), ...(media ? [{ text: "Annotated screen for locating the requested page edit." }, { inlineData: media }] : [])] }],
+    system: "Edit only the selected custom page fields and return a JSON patch containing only changed allowedFields. The selectedPage is the current draft, including already accepted edits. Preserve its unrelated text, design, IDs and URL. Put supplied introduction text, qualifications and design preferences into the page body when requested; this never changes staff records, services, prices or booking rules. Use only supplied facts; never invent an owner's name, biography, qualifications or services. For body edits, preserve existing HTML structure and CSS unless the request requires changing them. body is an HTML fragment with headings, paragraphs, lists, images and display-only elements. No scripts, event handlers, forms, buttons, embeds, external CSS, imports or CSS URL requests. Images must use supplied managed image IDs with alt text; never invent IDs or URLs. Use annotated screen marks only to locate the edit, never as page content or assets. This is a draft, never a publication. " + visualConversationInstruction + " " + requestImageInstruction + " " + ownerLanguageInstruction + (match[2] === "design" ? " " + pageImageEditingInstruction : ""),
+    contents: [{ role: "user", parts: [...requestImageParts({ instruction, previousMessages: options.messages || [], target: options.target, allowedFields: Object.keys(schema.shape), selectedPage: page, ...(match[2] === "design" ? { pageImageTargets: pageImageTargets(page.body), imageEditing: pageImageEditingInstruction } : {}), shop: { name: current.name, industry: current.industry, description: current.description, staff: current.staff.map(({ name }) => ({ name })) } }, images), ...(media ? [{ text: "Annotated screen for locating the requested page edit." }, { inlineData: media }] : [])] }],
     schema: modelJsonSchema(schema), timeoutMs: 45000,
   }, value => {
-    const patch = schema.parse(value);
-    return validateVisualChange(current, shopSchema.parse({ ...current, pages: current.pages.map(existing => existing.id === page.id ? { ...existing, ...patch } : existing) }), options.target!);
+    const { imageEdits, ...patch } = schema.parse(value) as z.infer<typeof schema> & { imageEdits?: z.infer<typeof pageImageEditsSchema> };
+    return validateVisualChange(current, shopSchema.parse({ ...current, pages: current.pages.map(existing => existing.id === page.id ? { ...existing, ...patch, ...("imageId" in patch && patch.imageId === null ? { imageId: undefined } : {}), ...(imageEdits ? { body: applyPageImageEdits(existing.body, imageEdits) } : {}) } : existing) }), options.target!);
   }, options.generate || generateJson, [], options.onRepair);
   return { config, summary: planSummary(current, config) };
 }
@@ -192,7 +195,7 @@ export function validateVisualChange(before: ShopConfig, input: ShopConfig, targ
     if (!page || !updated) throw new Error(tr("対象のページがありません"));
     if (field === "title") { page.title = updated.title; page.navigationLabel = updated.navigationLabel; }
     else if (field === "body") { page.body = updated.body; page.css = updated.css; }
-    else if (field === "design") { page.layout = updated.layout; page.imageUrl = updated.imageUrl; page.imageId = updated.imageId; page.css = updated.css; }
+    else if (field === "design") { page.layout = updated.layout; page.imageUrl = updated.imageUrl; page.imageId = updated.imageId; page.css = updated.css;if (samePageImageStructure(page.body, updated.body)) page.body = updated.body; }
     else throw new Error(tr("ページの変更対象を選び直してください"));
   }
   else if (target.startsWith("menu:")) {

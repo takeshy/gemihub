@@ -568,11 +568,13 @@ export function createApp(
   async function reviewVisual(shop: Shop, input: Omit<VisualReviewInput, "renderImages">, cache: VisualReviewInput["renderImages"] = {}) {
     const wholeFrame = input.screen === "theme" || input.screen === "initial-theme";
     const frameIds = (config: ShopConfig) => [...themeImageIds(config.appearance?.theme), ...(config.header.imageId ? [config.header.imageId] : [])];
-    const required = new Set(wholeFrame ? [...frameIds(input.before), ...frameIds(input.after)] : [...managedImageIds(input.before), ...managedImageIds(input.after), ...(input.preview?.fixtures?.posts.flatMap(post => postImageIds(post.body)) || [])]);
+    const pageId = input.screen.startsWith("page:") ? input.screen.slice(5) : undefined;
+    const visibleIds = (config: ShopConfig) => pageId ? managedImageIds({ ...config, pages: config.pages.filter(page => page.id === pageId), menus: [], staff: [], screens: {} }) : managedImageIds(config);
+    const required = new Set(wholeFrame ? [...frameIds(input.before), ...frameIds(input.after)] : [...visibleIds(input.before), ...visibleIds(input.after), ...(!pageId ? input.preview?.fixtures?.posts.flatMap(post => postImageIds(post.body)) || [] : [])]);
     const renderImages = { ...cache, ...Object.fromEntries(input.images.filter(image => required.has(image.id)).map(image => [image.id, { mimeType: image.mimeType, data: image.data }])) };
     const ids = [...required].filter(id => !renderImages[id]);
     const token = !store.memory && ids.length ? await ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")) : "";
-    for (const id of ids) renderImages[id] = await readMenuImage(store, shop, id, crmFiles, token, "display");
+    await forEachConcurrent(ids, 4, async id => { currentAiSignal()?.throwIfAborted();renderImages[id] = await readMenuImage(store, shop, id, crmFiles, token, "display"); });
     Object.assign(cache, renderImages);
     return (intelligence.visualReview || reviewRenderedVisual)({ ...input, renderImages });
   }
