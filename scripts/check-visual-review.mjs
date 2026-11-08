@@ -61,6 +61,17 @@ const server = createApp(store, { ...intelligence,
         const metadata = await sharp(bytes).metadata();
         assert.equal(metadata.format, 'jpeg');assert.equal(metadata.width, index % 2 ? 390 : 1280);
         assert.ok(metadata.height > 100);
+        if (input.target.endsWith(':design') && index >= 2) {
+          const { data, info } = await sharp(bytes).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+          let left=info.width,right=-1,top=info.height,bottom=-1;
+          for(let y=0;y<info.height;y++)for(let x=0;x<info.width;x++){
+            const offset=(y*info.width+x)*info.channels;
+            if(Math.abs(data[offset]-166)<8&&Math.abs(data[offset+1]-107)<8&&Math.abs(data[offset+2]-119)<8){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+          }
+          assert.ok(right>left&&bottom>top,'the selected photo is visible');
+          const ratio=(right-left+1)/(bottom-top+1);
+          assert.ok(Math.abs(ratio-0.8)<0.05,`the landscape photo fills its 4:5 portrait frame, rather than leaving a blank area (${ratio})`);
+        }
         await writeFile(`tmp/visual-review/${input.target.startsWith('page:') ? 'page' : initial ? 'initial' : 'header'}-${reviews}-${index}.jpg`, bytes);
       }
       const hashes = screenshots.map(image => digest(image.data));
@@ -105,10 +116,11 @@ try {
   assert.equal(pageResult.config.pages.at(-1).body, ownerIntroduction);
   assert.deepEqual({ ...pageResult.config, pages: pageDraft.pages }, pageDraft);
   assert.deepEqual((await store.shop(shop.id)).published, shop.published);
-  const photoBytes = await sharp({ create: { width: 160, height: 200, channels: 3, background: '#a66b77' } }).png().toBuffer();
+  const photoBytes = await sharp({ create: { width: 240, height: 180, channels: 3, background: '#a66b77' } }).png().toBuffer();
   const photo = await uploadMenuImage(store, shop, { requestId: randomUUID(), name: 'photo.png', mimeType: 'image/png', data: photoBytes.toString('base64') }, memoryCustomerFiles(store), '');
   const photoDraft = structuredClone(pageResult.config);
-  photoDraft.pages.at(-1).body = photoDraft.pages.at(-1).body.replace('<section class="profile">', '<section class="profile"><div class="portrait"><svg width="160" height="200"><rect width="160" height="200" fill="#eee"/><circle cx="80" cy="70" r="30" fill="#999"/></svg></div>');
+  photoDraft.pages.at(-1).body = photoDraft.pages.at(-1).body.replace('<section class="profile">', '<section class="profile"><div class="portrait"><svg viewBox="0 0 160 200" class="portrait-shape"><rect width="160" height="200" fill="#eee"/><circle cx="80" cy="70" r="30" fill="#999"/></svg></div>');
+  photoDraft.pages.at(-1).css += '.portrait{width:160px;aspect-ratio:4/5;display:flex;overflow:hidden}.portrait-shape{width:100%;height:100%;display:block}.profile img{height:auto}';
   const photoRequest = await api(shop.id, 'visual/identify', { media, instruction: '写真をこの写真にして', displayed: photoDraft, local: { base: shop.revision, source: shop.published, pageId: 'staff-introduction' } });
   const photoResult = await api(shop.id, 'visual/propose', { id: photoRequest.id, target: 'page:staff-introduction:design', instruction: '写真をこの写真にして', imageIds: [photo.imageId], media });
   assert.equal(photoResult.visualReview.approved, true);

@@ -14,6 +14,9 @@ import { validateVisualChange } from "../server/visual.ts";
 import { validateProposedImages } from "../server/request-images.ts";
 import { uploadMenuImage } from "../server/menu-images.ts";
 import { memoryCustomerFiles } from "../server/customer-files.ts";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Presentation } from "../src/Presentation.tsx";
 
 process.env.DEMO_MODE = "true";
 const instruction = "店主を反映して。\n紹介メッセージ\n当店では、ただカラーを塗るだけでなく、「丁寧なケア」と「持ちの良さ」にこだわっています。\n「指先を見るたびに気分が上がる」「明日からまた頑張ろうと思える」そんな特別な時間を過ごしていただけるよう、一人ひとりのお悩みに寄り添った施術を心がけています。\n• 保有資格：JNECネイリスト技能検定1級、JNAジェルネイル技能検定上級、ネイルサロン衛生管理士\n• 得意なデザイン：ニュアンスネイル、大人可愛い上品デザイン、シンプルオフィスネイル";
@@ -123,6 +126,15 @@ test("page photo swaps replace the selected illustration in its card without add
   const repaired = await proposeVisualAppearance(withHero, "間違えて追加した上部の写真を外して、カードの写真を差し替えて", images, { target: "page:staff-introduction:design", generate: async () => JSON.stringify({ imageId: null, imageUrl: "", imageEdits: [{ index: 1, imageId }] }) });
   assert.equal(repaired.config.pages[0].imageId, undefined);
   assert.equal(pageImageTargets(repaired.config.pages[0].body).length, 2);
+});
+
+test("managed photo fitting reaches the actual image in published/offline rendering", () => {
+  const id = "a".repeat(64);
+  const html = renderToStaticMarkup(createElement(Presentation, { design: { html: `<img data-image-id="${id}" class="portrait" style="width:50%;height:320px;object-fit:cover;object-position:75% center" alt="店主">`, css: "" }, slots: {}, fallback: null, resolvedImages: { [id]: "data:image/png;base64,aGVsbG8=" } }));
+  const image = html.match(/<img[^>]+>/)![0];
+  assert.match(image, /object-fit:cover/);assert.match(image, /object-position:75% center/);
+  assert.match(image, /width:100%;height:100%/, "the photo fills its wrapper even when theme rules set img height:auto");
+  assert.doesNotMatch(image, /width:50%|height:320px/, "layout dimensions must not be applied twice to wrapper and image");
 });
 
 test("photo-swap API passes the selected attachment into generation and rendered review without publication", async t => {

@@ -14,8 +14,14 @@ export function Presentation({ design, slots, fallback, imageBase, imageSuffix, 
     if (node.nodeName === "#text" && "value" in node) return node.value;
     if (!("tagName" in node)) return null;
     const imageId = node.attrs.find(attr => attr.name === "data-image-id")?.value;
-    if (imageId && resolvedImages?.[imageId]) return <span key={key} className={`theme-image ${node.attrs.find(attr => attr.name === "class")?.value || ""}`} style={presentationStyle(node.attrs.find(attr => attr.name === "style")?.value || "", compiled.animations)}><img src={resolvedImages[imageId]} alt={tr("{0}の画像", node.attrs.find(attr => attr.name === "alt")?.value || "")} /></span>;
-    if (imageId) return imageBase ? <MenuImage key={key} imageId={imageId} imageBase={imageBase} suffix={imageSuffix} name={node.attrs.find(attr => attr.name === "alt")?.value || ""} className={`theme-image ${node.attrs.find(attr => attr.name === "class")?.value || ""}`} style={presentationStyle(node.attrs.find(attr => attr.name === "style")?.value || "", compiled.animations)} /> : <span key={key} data-design-image={imageId}>{node.attrs.find(attr => attr.name === "alt")?.value}</span>;
+    if (imageId) {
+      const style = presentationStyle(node.attrs.find(attr => attr.name === "style")?.value || "", compiled.animations);
+      // The outer span owns layout; fitting/cropping must reach the actual image.
+      const imageStyle: React.CSSProperties = { objectFit: style.objectFit as React.CSSProperties["objectFit"], objectPosition: style.objectPosition, ...(style.objectFit ? { width: "100%", height: "100%" } : {}) };
+      const className = `theme-image ${node.attrs.find(attr => attr.name === "class")?.value || ""}`;
+      if (resolvedImages?.[imageId]) return <span key={key} className={className} style={style}><img src={resolvedImages[imageId]} alt={tr("{0}の画像", node.attrs.find(attr => attr.name === "alt")?.value || "")} style={imageStyle} /></span>;
+      return imageBase ? <MenuImage key={key} imageId={imageId} imageBase={imageBase} suffix={imageSuffix} name={node.attrs.find(attr => attr.name === "alt")?.value || ""} className={className} style={style} imageStyle={imageStyle} /> : <span key={key} data-design-image={imageId}>{node.attrs.find(attr => attr.name === "alt")?.value}</span>;
+    }
     const props: Record<string, unknown> = { key };
     for (const attr of node.attrs) {
       const name = attr.name.toLowerCase();
