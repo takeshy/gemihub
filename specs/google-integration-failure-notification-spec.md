@@ -83,12 +83,13 @@ Drive同期の対象は記事などの永続ジョブとし、公開処理の同
 `integrationIncident` コレクションを追加する。
 
 - `id`: `${shopId}:${type}:${errorClass}:${generation}`。連携種別と安全な分類、発生世代だけで作り、宛先や本文を含めない。
-- `baseKey`: `${shopId}:${type}:${errorClass}`。開いている間の集約と、復旧後の再発判定に使う。
+- `baseKey`: `${shopId}:${type}:${errorClass}`。開いている間の集約と、復旧後の再発判定に使う。最終失敗だけは送れなかったメールごとに `${shopId}:${type}:final:${mailKind}:${inquiryId}`（問い合わせがなければ `job:${jobId}`）とし、別の問い合わせの失敗で表示が上書きされないようにする。この場合の `generation` は発生時刻とし、世代記録を残さない。
 - `shopId`, `type` (`mail` / `drive`), `errorClass` (`auth` / `config` / `transient` / `unknown` / `final`), `generation`。
-- `openedAt`, `lastFailureAt`, `lastSuccessAt`, `failureCount`, `affectedCount`。
-- `terminal`: 既存の上限到達などで再試行が止まった状態。認証・設定不備が原因の場合も原因分類を保ったまま `terminal = true` とする。
+- `openedAt`, `lastFailureAt`, `lastSuccessAt`, `failureCount`, `affectedCount`。`affectedCount` はジョブ単位で数える。ジョブは参加したインシデントを `incidentIds` に持ち、同じインシデントへの再試行・停滞・認証停止では数え直さない。ジョブのない破棄（`shop.google` なし）は1回ごとに1件と数える。
+- `terminal`: 既存の上限到達などで再試行が止まった状態。
 - `firstNotifiedAt`, `lastNotifiedAt`, `nextSummaryAt`, `status` (`open` / `notified` / `resolved` / `ended`)。
-- `resolvedAt`, `resolution` (`succeeded` / `obsolete` / `unavailable` / `archived`)。
+- `resolvedAt`, `resolution` (`succeeded` / `obsolete` / `unavailable` / `archived` / `expired`)。
+- 閉じたインシデントは `OPS_INCIDENT_RETENTION_DAYS`（初期値30日）後に削除し、配信ごとの読み取り量を抑える。
 - `logId` または `requestId`: 運営者が詳細を確認するための安全な参照。顧客情報を含めない。
 
 `integrationIncidentSeq` に `baseKey` ごとの最終世代を保存する。開いているインシデントがある間は同じ世代へ集約し、復旧・終了後に同じ `baseKey` の失敗が起きたら世代を進めて新しいインシデントを作る。
@@ -113,7 +114,7 @@ Drive同期の対象は記事などの永続ジョブとし、公開処理の同
 - `config`: 入力検証エラー、宛先不正、添付の恒久的な不備、403のAPI無効化・管理ポリシー・請求設定など、店主の再接続では直らない設定不備。
 - `transient`: 429、403のレート制限・割り当て超過、5xx、タイムアウト、ネットワークエラー。
 - `unknown`: 分類できない内部エラー。403でも理由を特定できない場合はここに入れ、再接続を案内しない。
-- `final`: 既存の上限到達、添付の復旧不能、宛先消失など、最終的に送れない状態。認証・設定不備が原因の最終失敗は、原因分類（`auth` / `config`）を保ったまま `terminal = true` とし、再接続や設定修正の案内を維持する。
+- `final`: 既存の上限到達、添付の復旧不能、宛先消失など、最終的に送れない状態。送れなかったメールごとの `final` インシデントとし、`errorCode` に原因を残す。原因が認証（`auth`）の場合は、再接続の案内を維持するため共有の `auth` インシデントにも記録する。
 
 `auth` / `config` / `unknown` / `final` は初回から開発者へ通知する。`transient` だけが時間と回数の両方の条件を満たしたときに通知する。
 
@@ -150,7 +151,10 @@ Drive同期の対象は記事などの永続ジョブとし、公開処理の同
 
 - 問い合わせ返信の上限（`maxInquiryMailAttempts`）到達、添付の復旧不能、宛先消失など、既存の仕組みが最終的に送信を止めた場合を `final` とする。
 - 上限のない通常メールは最終失敗を作らない。閾値と停滞だけで検知する。
-- 最終失敗は閾値を待たず、初回から通知する。
+- 最終失敗は閾値を待たず、初回から通知する。再試行がないため6時間ごとのまとめは送らない。
+- 同じ問い合わせへ同じ種類のメール（返信の送り直しなど）が送れたら `succeeded` で閉じる。それ以外は最後の失敗から `OPS_FINAL_ALERT_DAYS`（初期値7日）で `expired` として閉じ、開発者へは通知しない。
+- 店主に表示するのは問い合わせ返信の最終失敗だけとする。その他の最終失敗は再試行していないため「自動で再試行しています」の遅延表示を出さない。
+- 公開・復元の処理中に意図的に止めている `posts` ジョブは、停滞として扱わない。
 
 ## 開発者向け通知
 
@@ -255,7 +259,7 @@ Drive同期の対象は記事などの永続ジョブとし、公開処理の同
 - `Job` に目的・参照・失敗時刻・終了理由・インシデントIDを追加する。
 - `flushJobs` の成功・失敗・対象終了・最終失敗で `terminalReason` とインシデントを更新する。生の `err.message` は通知・集約に使わない。
 - `enqueue` で `shop.google` がない場合に無言で破棄せず、`blocked` 記録を作る。
-- 毎分のワーカーに、停滞検知と通知アウトボックスの処理を追加する。通知処理はメール・Driveのロックを保持しない。
+- 毎分のワーカーに、停滞検知と通知アウトボックスの処理を追加する。通知処理はメール・Driveのロックを保持しない。停滞検知だけは、配信と同じロック（メールはメールロック、Driveは店舗ロック）の中でジョブを読み直して判定する。送信・削除済みのジョブを古い内容で書き戻して再送させたり、復旧済みのインシデントを再オープンしたりしないため。
 - 管理画面の「要対応」にインシデントを追加し、該当機能へのリンクを付ける。
 - 公開処理・PayPalアラート・既存の再試行上限・リマインド取消は変更しない。
 - 運営者向けの詳細リンクは、顧客情報を含まないログIDまたは管理画面の店舗・インシデント参照にする。

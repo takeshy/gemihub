@@ -217,6 +217,7 @@ type Job = {
   lastErrorClass?: IntegrationErrorClass;
   terminalReason?: IntegrationTerminalReason;
   incidentId?: string;
+  incidentIds?: string[];
   attachments?: CustomerAttachment[];
 };
 async function body(req: IncomingMessage, limit = 65536) {
@@ -651,7 +652,7 @@ export function createApp(
             if (!to) {
               job.terminalReason = "unavailable";
               await markDelivery(job.inquiryInteractionId, "failed");
-              await integration.recordFailure({ shop, job, error: Object.assign(new Error("recipient missing"), { code: "RECIPIENT_MISSING" }), final: true, firstFailure: !job.firstFailedAt }).catch(reportError);
+              await integration.recordFailure({ shop, job, error: Object.assign(new Error("recipient missing"), { code: "RECIPIENT_MISSING" }), final: true }).catch(reportError);
               await store.delete("job", job.id);
               return;
             }
@@ -672,11 +673,12 @@ export function createApp(
           if (firstFailure) job.firstFailedAt = at;
           const attached = !!job.attachments?.length;
           const final = !!((job.inquiryInteractionId || attached) && (job.attempts >= maxInquiryMailAttempts || attached && !attachmentsRead && attachmentUnavailable(err)));
-          const result = await integration.recordFailure({ shop, job, error: err, final, firstFailure }).catch(error => { reportError(error); return undefined; });
+          const result = await integration.recordFailure({ shop, job, error: err, final }).catch(error => { reportError(error); return undefined; });
           if (result) {
             job.lastErrorClass = result.errorClass;
             job.lastErrorCode = result.errorCode;
             job.incidentId = result.incident.id;
+            job.incidentIds = result.incidentIds;
           }
           if (final) {
             reportError(err);
@@ -4206,7 +4208,8 @@ export function createApp(
         job("deliver_mail", () => flushMail(shop, true));
         job("integration_sweep", async () => {
           const hasToken = !!(await ownerToken(shop));
-          await integration.sweepShop(shop, { hasToken });
+          // Mail jobs are sent and deleted under the mail lock, Drive jobs under the shop lock (syncFiles).
+          await integration.sweepShop(shop, { hasToken, lock: (type, fn) => store.locked(type === "mail" ? mailLockKey(shop.id) : shop.id, fn) });
         });
         job("paypal_check", () => paypal.check(shop, { notify: true }));
         job("issue_coupons", () => hasActiveCoupons(store, shop).then(active => active ? store.locked(bookingLockKey(shop.id), async () => {

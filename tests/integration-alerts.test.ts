@@ -69,13 +69,15 @@ test("403 is classified by reason instead of always asking the owner to reconnec
 
 test("a transient failure below the threshold stays private, then opens once and summarizes every six hours", async () => {
   const { alerts, advance, sent, shop, job, failures, outbox, now } = await setup();
-  const value = job({ firstFailedAt: iso(now()) });
-  await alerts.recordFailure({ shop, job: value, error: { status: 503 }, firstFailure: true });
+  let value = job({ firstFailedAt: iso(now()) });
+  // Like flushJobs, each retry carries the incidents it already joined, so the job counts once.
+  const fail = async () => { const result = await alerts.recordFailure({ shop, job: value, error: { status: 503 } }); value = { ...value, incidentId: result.incident.id, incidentIds: result.incidentIds }; };
+  await fail();
   assert.deepEqual(await outbox(), [], "no notification before the time and count thresholds");
 
   advance(5 * 60000);
-  await alerts.recordFailure({ shop, job: value, error: { status: 503 }, firstFailure: false });
-  await alerts.recordFailure({ shop, job: value, error: { status: 503 }, firstFailure: false });
+  await fail();
+  await fail();
   await alerts.processOutbox();
   assert.equal(sent.length, 1, "one opened notification");
   const opened = JSON.parse(sent[0].body) as IntegrationPayload;
@@ -99,7 +101,7 @@ test("a transient failure below the threshold stays private, then opens once and
 test("a transient failure that recovers below the threshold notifies nobody", async () => {
   const { alerts, shop, job, failures, outbox } = await setup();
   const value = job();
-  const result = await alerts.recordFailure({ shop, job: value, error: { status: 503 }, firstFailure: true });
+  const result = await alerts.recordFailure({ shop, job: value, error: { status: 503 } });
   await alerts.recordSuccess({
     shop,
     job: { ...value, incidentId: result.incident.id, lastErrorClass: result.errorClass, lastErrorCode: result.errorCode, terminalReason: "sent" },
@@ -135,7 +137,7 @@ test("a stopped webhook keeps the outbox pending with backoff and does not fail 
   const { store, alerts, advance, shop, job, outbox } = await setup({
     send: async () => { if (fail) throw Object.assign(new Error("webhook down"), { status: 503 }); },
   });
-  await alerts.recordFailure({ shop, job: job(), error: { status: 401, errors: [{ reason: "invalid_grant" }] }, firstFailure: true });
+  await alerts.recordFailure({ shop, job: job(), error: { status: 401, errors: [{ reason: "invalid_grant" }] } });
   await alerts.processOutbox();
   const [pending] = await outbox();
   assert.equal(pending.status, "pending");
@@ -164,7 +166,6 @@ test("developer notifications never carry recipient, body, customer, token or ra
     job: value,
     error: Object.assign(new Error("invalid_grant for customer@example.com token=super-secret"), { status: 401 }),
     final: true,
-    firstFailure: true,
   });
   const [entry] = await outbox();
   const payload = JSON.stringify(entry.payload);
@@ -176,7 +177,7 @@ test("developer notifications never carry recipient, body, customer, token or ra
 
 test("owner alerts separate reconnect from delayed mail and only show Drive delay on the dashboard", async () => {
   const mail = await setup();
-  await mail.alerts.recordFailure({ shop: mail.shop, job: mail.job(), error: { status: 403, errors: [{ reason: "serviceDisabled" }] }, firstFailure: true });
+  await mail.alerts.recordFailure({ shop: mail.shop, job: mail.job(), error: { status: 403, errors: [{ reason: "serviceDisabled" }] } });
   assert.deepEqual(await mail.alerts.ownerAlerts(mail.shop), [], "a 403 policy error does not ask for reconnect");
   mail.advance(30 * 60000);
   const mailAlert = (await mail.alerts.ownerAlerts(mail.shop))[0];
@@ -184,7 +185,7 @@ test("owner alerts separate reconnect from delayed mail and only show Drive dela
   assert.equal(mailAlert.affectedCount, 1);
 
   const auth = await setup();
-  await auth.alerts.recordFailure({ shop: auth.shop, job: auth.job(), error: { status: 401 }, firstFailure: true });
+  await auth.alerts.recordFailure({ shop: auth.shop, job: auth.job(), error: { status: 401 } });
   assert.equal((await auth.alerts.ownerAlerts(auth.shop))[0].kind, "reconnect");
 
   const reply = await setup();
@@ -193,14 +194,13 @@ test("owner alerts separate reconnect from delayed mail and only show Drive dela
     job: reply.job({ mailKind: "inquiry_reply", inquiryId: "inquiry-1" }),
     error: { status: 400 },
     final: true,
-    firstFailure: true,
   });
   const replyAlert = (await reply.alerts.ownerAlerts(reply.shop))[0];
   assert.equal(replyAlert.kind, "inquiry_failed");
   assert.equal(replyAlert.inquiryId, "inquiry-1");
 
   const drive = await setup();
-  await drive.alerts.recordFailure({ shop: drive.shop, job: drive.job({ type: "posts" }), error: { status: 503 }, firstFailure: true });
+  await drive.alerts.recordFailure({ shop: drive.shop, job: drive.job({ type: "posts" }), error: { status: 503 } });
   assert.deepEqual(await drive.alerts.ownerAlerts(drive.shop), []);
   drive.advance(15 * 60000);
   assert.equal((await drive.alerts.ownerAlerts(drive.shop))[0].kind, "drive_delay");
@@ -230,7 +230,7 @@ test("a stalled job and a missing token are detected without incrementing job at
 
 test("an unknown webhook format is not posted blindly", async () => {
   const { alerts, sent, shop, job, outbox } = await setup({ env: { OPS_WEBHOOK_FORMAT: "teams" } });
-  await alerts.recordFailure({ shop, job: job(), error: { status: 401 }, firstFailure: true });
+  await alerts.recordFailure({ shop, job: job(), error: { status: 401 } });
   await alerts.processOutbox();
   assert.equal(sent.length, 0);
   const [pending] = await outbox();
@@ -256,7 +256,7 @@ test("webhook formats match the destination instead of posting the canonical pay
 
 test("archiving a shop ends its open incidents without reporting recovery", async () => {
   const { store, alerts, advance, sent, shop, job } = await setup();
-  await alerts.recordFailure({ shop, job: job(), error: { status: 401 }, firstFailure: true });
+  await alerts.recordFailure({ shop, job: job(), error: { status: 401 } });
   await alerts.processOutbox();
   assert.equal(sent.length, 1);
   await store.saveShop({ ...shop, archivedAt: iso(start) });
@@ -323,4 +323,173 @@ test("flushJobs records safe failure metadata and resolves the incident after a 
   assert.equal(resolved.status, "resolved");
   assert.equal(resolved.resolution, "succeeded");
   assert.ok(resolved.lastSuccessAt);
+});
+
+test("a sweep waiting on the delivery lock never writes back a job that was sent and deleted meanwhile", async () => {
+  const { store, alerts, advance, shop, job, failures } = await setup();
+  const value = job({ lastAttemptAt: iso(start) });
+  await store.put("job", value.id, value);
+  advance(6 * 60000);
+  let release!: () => void;
+  const delivery = store.locked("mail-lock", async () => {
+    await new Promise<void>(resolve => { release = resolve; });
+    await store.delete("job", value.id);
+    await alerts.recordSuccess({ shop, job: value });
+  });
+  const sweep = alerts.sweepShop(shop, { hasToken: true, lock: (_type, fn) => store.locked("mail-lock", fn) });
+  await new Promise(resolve => setImmediate(resolve));
+  release();
+  await Promise.all([delivery, sweep]);
+  assert.equal(await store.get("job", value.id), undefined, "the sent job is not resurrected, so it is not mailed again");
+  assert.deepEqual((await failures()).filter(incident => incident.status === "open" || incident.status === "notified"), []);
+});
+
+test("work registered after a transaction commits is persisted, not added to the committed batch", async () => {
+  const { store, shop } = await setup();
+  let done!: Promise<void>;
+  await store.transaction(async () => {
+    await store.put("job", "inside", { id: "inside", shopId: shop.id });
+    store.afterCommit(() => {
+      done = (async () => {
+        await new Promise(resolve => setImmediate(resolve));
+        await store.put("integrationBlocked", "after", { shopId: shop.id, at: iso(start) });
+      })();
+    });
+  });
+  await done;
+  assert.ok(await store.get("job", "inside"));
+  assert.ok(await store.get("integrationBlocked", "after"));
+});
+
+test("a revoked grant returned as HTTP 400 asks the owner to reconnect", async () => {
+  const revoked = { status: 400, response: { status: 400, data: { error: "invalid_grant", error_description: "Token has been expired or revoked." } } };
+  assert.deepEqual(classifyIntegrationError(revoked), { errorClass: "auth", errorCode: "invalid_grant" });
+  assert.deepEqual(classifyIntegrationError({ status: 400, errors: [{ reason: "invalid_grant" }] }), { errorClass: "auth", errorCode: "invalid_grant" });
+  assert.deepEqual(classifyIntegrationError({ status: 400 }), { errorClass: "config", errorCode: "HTTP_400" });
+  const { alerts, shop, job } = await setup();
+  await alerts.recordFailure({ shop, job: job(), error: revoked });
+  assert.equal((await alerts.ownerAlerts(shop))[0].kind, "reconnect");
+});
+
+test("a job whose error class changes resolves every incident it touched when it finally succeeds", async () => {
+  const { alerts, shop, job, failures } = await setup();
+  let value = job({ firstFailedAt: iso(start) });
+  for (const error of [{ status: 503 }, { status: 403, errors: [{ reason: "serviceDisabled" }] }]) {
+    const result = await alerts.recordFailure({ shop, job: value, error });
+    value = { ...value, incidentId: result.incident.id, incidentIds: result.incidentIds, lastErrorClass: result.errorClass };
+  }
+  assert.equal((await failures()).length, 2);
+  await alerts.recordSuccess({ shop, job: value });
+  assert.deepEqual((await failures()).map(incident => incident.status), ["resolved", "resolved"]);
+});
+
+test("the same auth stop right after recovery opens a new incident instead of being throttled", async () => {
+  const { store, alerts, advance, shop, job, failures } = await setup();
+  const first = job();
+  await store.put("job", first.id, first);
+  await alerts.sweepShop(shop, { hasToken: false });
+  await store.delete("job", first.id);
+  await alerts.recordSuccess({ shop, job: first });
+  assert.equal((await failures())[0].status, "resolved");
+
+  advance(60000);
+  const second = job({ id: "job-2" });
+  await store.put("job", second.id, second);
+  await alerts.sweepShop(shop, { hasToken: false });
+  const recurrence = (await failures()).find(incident => incident.status !== "resolved");
+  assert.ok(recurrence, "the recurrence is recorded");
+  assert.equal(recurrence.generation, 2);
+  assert.equal(recurrence.errorCode, "TOKEN_MISSING");
+});
+
+test("a stale incident copy from the sweep cannot reopen an incident that already recovered", async () => {
+  const { alerts, advance, shop, job, failures, outbox } = await setup();
+  const { incident } = await alerts.recordFailure({ shop, job: job(), error: { status: 401 } });
+  const [stale] = await alerts.openIncidents(shop);
+  await alerts.closeIncident(incident, "succeeded");
+  advance(7 * 3600000);
+  await alerts.refreshIncident(stale);
+  const [current] = await failures();
+  assert.equal(current.status, "resolved");
+  assert.ok(!(await outbox()).some(item => item.event === "summary"));
+});
+
+test("a later booking does not hide the nearer visit whose confirmation is delayed", async () => {
+  const { alerts, shop, job, now } = await setup();
+  await alerts.recordFailure({ shop, job: job({ bookingId: "near", bookingStart: iso(now() + 3600000) }), error: { status: 503 } });
+  await alerts.recordFailure({ shop, job: job({ id: "job-2", bookingId: "later", bookingStart: iso(now() + 5 * 86400000) }), error: { status: 503 } });
+  const [incident] = await alerts.openIncidents(shop);
+  assert.equal(incident.bookingId, "near");
+  assert.equal((await alerts.ownerAlerts(shop))[0]?.kind, "mail_delay", "the visit within two hours is still flagged");
+});
+
+test("lost replies to different inquiries stay separate and are not replaced by a later lost message", async () => {
+  const { alerts, shop, job, failures } = await setup();
+  const reply = (id: string, inquiryId: string) => job({ id, mailKind: "inquiry_reply", inquiryId, inquiryInteractionId: `${id}-entry` });
+  await alerts.recordFailure({ shop, job: reply("job-a", "inquiry-a"), error: { status: 503 }, final: true });
+  await alerts.recordFailure({ shop, job: reply("job-b", "inquiry-b"), error: { status: 503 }, final: true });
+  await alerts.recordFailure({ shop, job: job({ id: "job-c", mailKind: "inquiry_receipt", inquiryId: "inquiry-a" }), error: { code: "RECIPIENT_MISSING" }, final: true });
+  const finals = (await failures()).filter(incident => incident.errorClass === "final");
+  assert.equal(finals.length, 3);
+  assert.deepEqual(finals.filter(incident => incident.mailKind === "inquiry_reply").map(incident => incident.inquiryId).sort(), ["inquiry-a", "inquiry-b"]);
+  const alerts_ = await alerts.ownerAlerts(shop);
+  assert.deepEqual(alerts_.map(alert => alert.kind), ["inquiry_failed"], "a lost receipt is not shown as a retrying delay");
+});
+
+test("a lost reply ends when a later reply reaches that inquiry, and otherwise expires quietly", async () => {
+  const { alerts, advance, shop, job, failures, outbox } = await setup();
+  const lost = job({ mailKind: "inquiry_reply", inquiryId: "inquiry-1" });
+  await alerts.recordFailure({ shop, job: lost, error: { status: 503 }, final: true });
+  await alerts.recordSuccess({ shop, job: job({ id: "other", mailKind: "inquiry_reply", inquiryId: "inquiry-2" }) });
+  assert.equal((await failures())[0].status, "notified", "a reply to another inquiry does not answer this one");
+  await alerts.recordSuccess({ shop, job: job({ id: "resent", mailKind: "inquiry_reply", inquiryId: "inquiry-1" }) });
+  assert.equal((await failures())[0].resolution, "succeeded");
+
+  await alerts.recordFailure({ shop, job: job({ id: "job-2", mailKind: "inquiry_reply", inquiryId: "inquiry-3" }), error: { status: 503 }, final: true });
+  advance(6 * 3600000);
+  await alerts.sweepShop(shop, { hasToken: true });
+  assert.ok(!(await outbox()).some(item => item.event === "summary"), "nothing retries a lost message, so no summaries");
+  advance(7 * 86400000);
+  await alerts.sweepShop(shop, { hasToken: true });
+  const expired = (await failures()).find(incident => incident.inquiryId === "inquiry-3");
+  assert.equal(expired?.resolution, "expired");
+  assert.ok(!(await outbox()).some(item => item.event === "ended"), "expiry does not page the developer");
+});
+
+test("a lost message caused by a revoked grant keeps the reconnect guidance", async () => {
+  const { alerts, shop, job } = await setup();
+  await alerts.recordFailure({ shop, job: job({ mailKind: "inquiry_reply", inquiryId: "inquiry-1" }), error: { status: 401 }, final: true });
+  assert.deepEqual((await alerts.ownerAlerts(shop)).map(alert => alert.kind), ["reconnect", "inquiry_failed"]);
+});
+
+test("a stopped job is counted once however long it waits, and each stopped job is counted", async () => {
+  const { store, alerts, advance, shop, job, failures } = await setup();
+  await store.put("job", "job-1", job());
+  for (let minute = 0; minute < 30; minute++) { await alerts.sweepShop(shop, { hasToken: false }); advance(60000); }
+  assert.equal((await failures())[0].affectedCount, 1);
+  await store.put("job", "job-2", job({ id: "job-2" }));
+  await alerts.sweepShop(shop, { hasToken: false });
+  assert.equal((await failures())[0].affectedCount, 2);
+});
+
+test("closed incidents are dropped after the retention period", async () => {
+  const { alerts, advance, shop, job, failures } = await setup();
+  const { incident } = await alerts.recordFailure({ shop, job: job(), error: { status: 401 } });
+  await alerts.closeIncident(incident, "succeeded");
+  advance(29 * 86400000);
+  await alerts.sweepShop(shop, { hasToken: true });
+  assert.equal((await failures()).length, 1);
+  advance(86400000);
+  await alerts.sweepShop(shop, { hasToken: true });
+  assert.deepEqual(await failures(), []);
+});
+
+test("Drive jobs held back by an in-flight publish are not reported as stalled", async () => {
+  const { store, alerts, advance, shop, job, failures } = await setup();
+  const publishing = { ...shop, publishingPlanId: "plan-1" };
+  await store.saveShop(publishing);
+  await store.put("job", "posts-1", job({ id: "posts-1", type: "posts", lastAttemptAt: iso(start) }));
+  advance(20 * 60000);
+  await alerts.sweepShop(publishing, { hasToken: true });
+  assert.deepEqual(await failures(), []);
 });

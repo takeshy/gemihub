@@ -35,6 +35,8 @@ export type IntegrationJob = {
   lastErrorClass?: IntegrationErrorClass;
   terminalReason?: IntegrationTerminalReason;
   incidentId?: string;
+  /** Every incident this job has contributed to; its error class can change between attempts. */
+  incidentIds?: string[];
 };
 
 export type IntegrationIncident = {
@@ -62,7 +64,7 @@ export type IntegrationIncident = {
   summarySeq?: number;
   status: "open" | "notified" | "resolved" | "ended";
   resolvedAt?: string;
-  resolution?: "succeeded" | "obsolete" | "unavailable" | "archived";
+  resolution?: "succeeded" | "obsolete" | "unavailable" | "archived" | "expired";
   logId?: string;
 };
 
@@ -123,7 +125,12 @@ type Config = {
   summaryHours: number;
   ownerMailDelayMinutes: number;
   ownerNearVisitHours: number;
+  finalAlertDays: number;
+  retentionDays: number;
 };
+
+/** Runs `fn` under the lock that the delivery worker holds while it sends and deletes jobs of `type`. */
+export type JobLock = <T>(type: IntegrationType, fn: () => Promise<T>) => Promise<T>;
 
 type Options = {
   store: Store;
@@ -163,6 +170,12 @@ const ageMinutes = (from: string | undefined, now: number) => {
   const started = from ? Date.parse(from) : NaN;
   return Number.isFinite(started) ? Math.max(0, Math.floor((now - started) / 60000)) : 0;
 };
+/** An incident spanning several bookings keeps the visit that comes first, so a nearer customer is never hidden. */
+function nearestStart(current: string | undefined, next: string | undefined, now: number) {
+  const upcoming = [current, next].filter((value): value is string => !!value && Date.parse(value) > now);
+  if (upcoming.length) return upcoming.sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  return next || current;
+}
 export const incidentBaseKey = (shopId: string, type: IntegrationType, errorClass: IntegrationErrorClass) => `${shopId}:${type}:${errorClass}`;
 
 function numberEnv(env: NodeJS.ProcessEnv, name: string, fallback: number) {
@@ -180,6 +193,8 @@ function configOf(env: NodeJS.ProcessEnv): Config {
     summaryHours: numberEnv(env, "OPS_SUMMARY_HOURS", 6),
     ownerMailDelayMinutes: numberEnv(env, "OPS_OWNER_MAIL_DELAY_MINUTES", 30),
     ownerNearVisitHours: numberEnv(env, "OPS_OWNER_NEAR_VISIT_HOURS", 2),
+    finalAlertDays: numberEnv(env, "OPS_FINAL_ALERT_DAYS", 7),
+    retentionDays: numberEnv(env, "OPS_INCIDENT_RETENTION_DAYS", 30),
   };
 }
 
@@ -204,7 +219,8 @@ function errorDetails(error: unknown) {
     code?: unknown;
     reason?: unknown;
     errors?: { reason?: unknown }[];
-    response?: { status?: unknown; data?: { error?: { status?: unknown; errors?: { reason?: unknown }[] } } };
+    // OAuth token endpoints answer `{ error: "invalid_grant" }`; Google APIs answer `{ error: { errors: [...] } }`.
+    response?: { status?: unknown; data?: { error?: string | { status?: unknown; errors?: { reason?: unknown }[] } } };
     cause?: { status?: unknown; reason?: unknown };
   } | null;
   const status = Number(
@@ -213,13 +229,14 @@ function errorDetails(error: unknown) {
     value?.response?.status ??
     value?.cause?.status,
   ) || undefined;
+  const apiError = value?.response?.data?.error;
   const reason = normalizeReason(
     safeCode(value?.errors?.[0]?.reason) ||
-    safeCode(value?.response?.data?.error?.errors?.[0]?.reason) ||
+    (typeof apiError === "object" ? safeCode(apiError?.errors?.[0]?.reason) : safeCode(apiError)) ||
     safeCode(value?.cause?.reason) ||
     safeCode(value?.reason) ||
-    (typeof value?.code === "string" ? safeCode(value.code) : undefined) ||
-    safeCode(value?.response?.data?.error?.status),
+    (typeof value?.code === "string" && !/^\d+$/.test(value.code) ? safeCode(value.code) : undefined) ||
+    (typeof apiError === "object" ? safeCode(apiError?.status) : undefined),
   );
   const errorCode = reason || (status ? `HTTP_${status}` : undefined);
   return { status, reason, errorCode };
@@ -231,11 +248,12 @@ export function classifyIntegrationError(error: unknown, options: { final?: bool
 } {
   const { status, reason, errorCode = "UNKNOWN" } = errorDetails(error);
   if (options.final) return { errorClass: "final", errorCode };
+  // A revoked grant arrives as HTTP 400 from the token endpoint: the owner must reconnect, whatever the status.
+  if (reason && AUTH_REASONS.has(reason)) return { errorClass: "auth", errorCode };
   if ((error as { name?: string } | null)?.name === "ZodError" || status === 400 || status === 422)
     return { errorClass: "config", errorCode };
   if (status === 401) return { errorClass: "auth", errorCode };
   if (status === 403) {
-    if (reason && AUTH_REASONS.has(reason)) return { errorClass: "auth", errorCode };
     if (reason && RATE_REASONS.has(reason)) return { errorClass: "transient", errorCode };
     if (reason && CONFIG_REASONS.has(reason)) return { errorClass: "config", errorCode };
     return { errorClass: "unknown", errorCode };
@@ -244,11 +262,14 @@ export function classifyIntegrationError(error: unknown, options: { final?: bool
     return { errorClass: "transient", errorCode };
   if (reason && RATE_REASONS.has(reason)) return { errorClass: "transient", errorCode };
   if (reason && CONFIG_REASONS.has(reason)) return { errorClass: "config", errorCode };
-  if (reason && AUTH_REASONS.has(reason)) return { errorClass: "auth", errorCode };
   return { errorClass: "unknown", errorCode };
 }
 
 const jobType = (job: IntegrationJob): IntegrationType => job.type === "posts" ? "drive" : "mail";
+/** Whether this job has already been counted in the incident's affected messages. */
+const jobLinked = (job: IntegrationJob, incidentId: string) => job.incidentId === incidentId || !!job.incidentIds?.includes(incidentId);
+/** A message that will never be sent is its own incident, so separate inquiries never overwrite each other. */
+const finalTarget = (job: IntegrationJob) => job.inquiryId ? `${safeCode(job.mailKind) || "mail"}:${job.inquiryId}` : `job:${job.id}`;
 const openStatus = (incident: IntegrationIncident) => incident.status === "open" || incident.status === "notified";
 
 function payloadFor(incident: IntegrationIncident, event: IntegrationEvent, now: number, link: string | undefined, env: NodeJS.ProcessEnv): IntegrationPayload {
@@ -352,9 +373,13 @@ export function integrationAlerts(options: Options) {
     stalled?: boolean;
     terminal?: boolean;
     openedAt?: string;
-    firstFailure?: boolean;
+    /** The failing job. Without one (a discarded intent), every call is a new affected message. */
+    job?: IntegrationJob;
+    /** Final failures are keyed per lost message instead of shared by the whole shop. */
+    target?: string;
   }) {
-    const baseKey = incidentBaseKey(input.shop.id, input.type, input.errorClass);
+    const shared = incidentBaseKey(input.shop.id, input.type, input.errorClass);
+    const baseKey = input.target ? `${shared}:${input.target}` : shared;
     return store.locked(`integration:${baseKey}`, async () => {
       const existing = (await openIncidents(input.shop))
         .filter(incident => incident.baseKey === baseKey)
@@ -365,19 +390,23 @@ export function integrationAlerts(options: Options) {
           ...existing,
           lastFailureAt: at,
           failureCount: existing.failureCount + 1,
-          affectedCount: existing.affectedCount + (input.firstFailure ? 1 : 0),
+          affectedCount: existing.affectedCount + (input.job && jobLinked(input.job, existing.id) ? 0 : 1),
           ...(input.errorCode ? { errorCode: input.errorCode } : {}),
           ...(input.mailKind ? { mailKind: input.mailKind } : {}),
-          ...(input.bookingId ? { bookingId: input.bookingId } : {}),
-          ...(input.bookingStart ? { bookingStart: input.bookingStart } : {}),
           ...(input.inquiryId ? { inquiryId: input.inquiryId } : {}),
           ...(input.stalled ? { stalled: true } : {}),
           ...(input.terminal ? { terminal: true } : {}),
         };
+        const bookingStart = nearestStart(existing.bookingStart, input.bookingStart, now());
+        if (bookingStart && bookingStart !== existing.bookingStart) {
+          updated.bookingStart = bookingStart;
+          if (input.bookingId) updated.bookingId = input.bookingId; else delete updated.bookingId;
+        }
         await store.put("integrationIncident", updated.id, updated);
         return updated;
       }
-      const generation = await nextGeneration(baseKey);
+      // Per-message keys would leave one sequence document per message behind; a timestamp is unique under this lock.
+      const generation = input.target ? now() : await nextGeneration(baseKey);
       const incident: IntegrationIncident = {
         id: `${baseKey}:${generation}`,
         baseKey,
@@ -388,7 +417,7 @@ export function integrationAlerts(options: Options) {
         openedAt: input.openedAt || at,
         lastFailureAt: at,
         failureCount: 1,
-        affectedCount: input.firstFailure === false ? 0 : 1,
+        affectedCount: 1,
         status: "open",
         ...(input.errorCode ? { errorCode: input.errorCode } : {}),
         ...(input.mailKind ? { mailKind: input.mailKind } : {}),
@@ -432,7 +461,21 @@ export function integrationAlerts(options: Options) {
     return ageMinutes(incident.openedAt, at) >= minutes && incident.failureCount >= config().failureCount;
   }
 
-  async function notifyOpened(incident: IntegrationIncident) {
+  /**
+   * Notification state is written from a fresh read under the incident lock: a caller's copy may be
+   * older than a recovery that closed the incident, and writing it back would reopen it.
+   */
+  function withOpenIncident(incident: IntegrationIncident, update: (current: IntegrationIncident) => Promise<IntegrationIncident>) {
+    return store.locked(`integration:${incident.baseKey}`, async () => {
+      const current = await store.get<IntegrationIncident>("integrationIncident", incident.id);
+      if (!current || !openStatus(current)) return current || incident;
+      return update(current);
+    });
+  }
+
+  const notifyOpened = (incident: IntegrationIncident) => withOpenIncident(incident, openedNotice);
+
+  async function openedNotice(incident: IntegrationIncident) {
     if (!shouldNotify(incident, now())) return incident;
     await enqueueOutbox(incident, "opened", 1);
     const at = iso(now());
@@ -449,8 +492,14 @@ export function integrationAlerts(options: Options) {
 
   async function refreshIncident(incident: IntegrationIncident) {
     if (!openStatus(incident)) return incident;
+    return withOpenIncident(incident, summaryNotice);
+  }
+
+  async function summaryNotice(incident: IntegrationIncident) {
     let current = incident;
-    if (!current.firstNotifiedAt) current = await notifyOpened(current);
+    if (!current.firstNotifiedAt) current = await openedNotice(current);
+    // Nothing retries a final failure, so a periodic summary would only repeat the opened notice.
+    if (current.errorClass === "final") return current;
     if (!current.firstNotifiedAt || !current.nextSummaryAt) return current;
     if (now() < Date.parse(current.nextSummaryAt)) return current;
     const seq = (current.summarySeq || 0) + 1;
@@ -465,7 +514,7 @@ export function integrationAlerts(options: Options) {
     return updated;
   }
 
-  async function closeIncident(incident: IntegrationIncident, resolution: "succeeded" | "obsolete" | "unavailable" | "archived") {
+  async function closeIncident(incident: IntegrationIncident, resolution: NonNullable<IntegrationIncident["resolution"]>, notify = true) {
     return store.locked(`integration:${incident.baseKey}`, async () => {
       const current = await store.get<IntegrationIncident>("integrationIncident", incident.id);
       if (!current || !openStatus(current)) return current;
@@ -478,88 +527,102 @@ export function integrationAlerts(options: Options) {
         ...(resolution === "succeeded" ? { lastSuccessAt: at } : {}),
       };
       await store.put("integrationIncident", updated.id, updated);
-      if (current.firstNotifiedAt) await enqueueOutbox(updated, resolution === "succeeded" ? "recovered" : "ended", 1);
+      if (notify && current.firstNotifiedAt) await enqueueOutbox(updated, resolution === "succeeded" ? "recovered" : "ended", 1);
       return updated;
     });
   }
 
   function matchesJob(incident: IntegrationIncident, job: IntegrationJob) {
-    if (job.incidentId === incident.id) return true;
+    if (job.incidentId === incident.id || job.incidentIds?.includes(incident.id)) return true;
     if (job.lastErrorClass === incident.errorClass) return true;
     return incident.errorClass === "auth";
   }
 
+  /** Reads only this shop's jobs: this runs after every delivered message. */
+  const shopJobs = async (shop: Shop) => (await store.entries<IntegrationJob>("job", shop)).map(entry => entry.value);
+
   async function remainingJobs(shop: Shop, type: IntegrationType, incident: IntegrationIncident, excludeJobId?: string) {
-    return (await store.list<IntegrationJob>("job")).filter(job =>
-      job.shopId === shop.id && jobType(job) === type && job.id !== excludeJobId && matchesJob(incident, job));
+    return (await shopJobs(shop)).filter(job =>
+      jobType(job) === type && job.id !== excludeJobId && matchesJob(incident, job));
   }
 
-  async function recordFailure(input: { shop: Shop; job: IntegrationJob; error: unknown; final?: boolean; firstFailure?: boolean; stalled?: boolean; openedAt?: string }) {
+  async function recordFailure(input: { shop: Shop; job: IntegrationJob; error: unknown; final?: boolean; stalled?: boolean; openedAt?: string }) {
     const classified = classifyIntegrationError(input.error);
-    const errorClass: IntegrationErrorClass = input.final && classified.errorClass !== "auth" && classified.errorClass !== "config"
-      ? "final"
-      : classified.errorClass;
     const { errorCode } = classified;
     const type = jobType(input.job);
-    let incident = await upsertIncident({
+    const common = {
       shop: input.shop,
       type,
-      errorClass,
       errorCode,
+      job: input.job,
       ...(input.job.mailKind ? { mailKind: input.job.mailKind } : {}),
       ...(input.job.bookingId ? { bookingId: input.job.bookingId } : {}),
       ...(input.job.bookingStart ? { bookingStart: input.job.bookingStart } : {}),
       ...(input.job.inquiryId ? { inquiryId: input.job.inquiryId } : {}),
-      ...(input.stalled ? { stalled: true } : {}),
-      ...(input.final ? { terminal: true } : {}),
-      ...(input.openedAt ? { openedAt: input.openedAt } : {}),
-      firstFailure: input.firstFailure ?? !input.job.firstFailedAt,
-    });
-    incident = await notifyOpened(incident);
+    };
+    const touched: string[] = [];
+    let incident: IntegrationIncident;
     if (input.final) {
-      // The job will not retry, so an earlier transient incident for the same job is finished, not recovered.
+      // A revoked grant still needs the shared reconnect guidance; the lost message is tracked on its own.
+      if (classified.errorClass === "auth") touched.push((await notifyOpened(await upsertIncident({ ...common, errorClass: "auth" }))).id);
+      incident = await notifyOpened(await upsertIncident({ ...common, errorClass: "final", target: finalTarget(input.job), terminal: true }));
+      touched.push(incident.id);
+      // The job will not retry, so an earlier incident for the same job is finished, not recovered.
       for (const other of await openIncidents(input.shop)) {
-        if (other.id === incident.id || other.type !== type || !matchesJob(other, input.job)) continue;
+        if (touched.includes(other.id) || other.errorClass === "final" || other.type !== type || !matchesJob(other, input.job)) continue;
         if (!(await remainingJobs(input.shop, type, other, input.job.id)).length)
           await closeIncident(other, "unavailable");
       }
+    } else {
+      incident = await notifyOpened(await upsertIncident({
+        ...common,
+        errorClass: classified.errorClass,
+        ...(input.stalled ? { stalled: true } : {}),
+        ...(input.openedAt ? { openedAt: input.openedAt } : {}),
+      }));
     }
-    return { incident, errorClass, errorCode };
+    const incidentIds = [...new Set([...(input.job.incidentIds || []), ...(input.job.incidentId ? [input.job.incidentId] : []), ...touched, incident.id])];
+    return { incident, errorClass: incident.errorClass, errorCode, incidentIds };
   }
 
-  async function recordBlocked(input: { shop: Shop; type: IntegrationType; mailKind?: string }) {
+  /**
+   * A stopped job counts once per incident: it is linked to the incident it joined, and is counted
+   * again only when that incident has recovered and the same failure recurs as a new generation.
+   */
+  async function recordStop(shop: Shop, type: IntegrationType, errorCode: string, job?: IntegrationJob, mailKind = job?.mailKind) {
+    const baseKey = incidentBaseKey(shop.id, type, "auth");
+    if (job && (await openIncidents(shop)).some(incident => incident.baseKey === baseKey && jobLinked(job, incident.id))) return undefined;
+    const incident = await upsertIncident({
+      shop,
+      type,
+      errorClass: "auth",
+      errorCode,
+      ...(job ? { job } : {}),
+      ...(mailKind ? { mailKind } : {}),
+      ...(job?.bookingId ? { bookingId: job.bookingId } : {}),
+      ...(job?.bookingStart ? { bookingStart: job.bookingStart } : {}),
+      ...(job?.inquiryId ? { inquiryId: job.inquiryId } : {}),
+    });
+    return notifyOpened(incident);
+  }
+
+  /** Without a Google connection `enqueue` discards the message, so each call is one more lost message. */
+  async function recordBlocked(input: { shop: Shop; type: IntegrationType; mailKind?: string; job?: IntegrationJob }) {
     if (input.shop.judge) return;
-    const key = `${input.shop.id}:${input.type}:${input.mailKind || "unknown"}`;
-    const last = await store.get<{ at: string }>("integrationBlocked", key);
-    if (last && now() - Date.parse(last.at) < 3600000) return;
-    await store.put("integrationBlocked", key, { shopId: input.shop.id, at: iso(now()) });
-    let incident = await upsertIncident({ shop: input.shop, type: input.type, errorClass: "auth", errorCode: "GOOGLE_NOT_CONNECTED", ...(input.mailKind ? { mailKind: input.mailKind } : {}), firstFailure: true });
-    incident = await notifyOpened(incident);
-    return incident;
+    return recordStop(input.shop, input.type, "GOOGLE_NOT_CONNECTED", input.job, input.mailKind);
   }
 
   async function recordAuthStop(shop: Shop, job: IntegrationJob, code: string) {
-    const key = `${shop.id}:${jobType(job)}:${code}`;
-    const last = await store.get<{ at: string }>("integrationBlocked", key);
-    if (last && now() - Date.parse(last.at) < 600000) return undefined;
-    await store.put("integrationBlocked", key, { shopId: shop.id, at: iso(now()) });
-    let incident = await upsertIncident({
-      shop,
-      type: jobType(job),
-      errorClass: "auth",
-      errorCode: code,
-      ...(job.mailKind ? { mailKind: job.mailKind } : {}),
-      ...(job.bookingId ? { bookingId: job.bookingId } : {}),
-      ...(job.bookingStart ? { bookingStart: job.bookingStart } : {}),
-      ...(job.inquiryId ? { inquiryId: job.inquiryId } : {}),
-      firstFailure: !job.incidentId,
-    });
-    incident = await notifyOpened(incident);
-    return incident;
+    return recordStop(shop, jobType(job), code, job);
   }
 
   async function recordSuccess(input: { shop: Shop; job: IntegrationJob }) {
     for (const incident of (await openIncidents(input.shop)).filter(item => item.type === jobType(input.job))) {
+      if (incident.errorClass === "final") {
+        // A lost message is answered when a later message of the same kind reaches that inquiry.
+        if (input.job.inquiryId && incident.baseKey.endsWith(`:${finalTarget(input.job)}`)) await closeIncident(incident, "succeeded");
+        continue;
+      }
       if (!matchesJob(incident, input.job)) continue;
       if (!(await remainingJobs(input.shop, incident.type, incident, input.job.id)).length)
         await closeIncident(incident, "succeeded");
@@ -567,41 +630,67 @@ export function integrationAlerts(options: Options) {
   }
 
   async function recordObsolete(input: { shop: Shop; job: IntegrationJob }) {
-    for (const incident of (await openIncidents(input.shop)).filter(item => item.type === jobType(input.job))) {
+    for (const incident of (await openIncidents(input.shop)).filter(item => item.type === jobType(input.job) && item.errorClass !== "final")) {
       if (!matchesJob(incident, input.job)) continue;
       if (!(await remainingJobs(input.shop, incident.type, incident, input.job.id)).length)
         await closeIncident(incident, "obsolete");
     }
   }
 
-  async function sweepShop(shop: Shop, options: { hasToken: boolean }) {
-    const jobs = (await store.list<IntegrationJob>("job")).filter(job => job.shopId === shop.id);
-    for (const job of jobs) {
-      const type = jobType(job);
-      if (!shop.google) {
-        await recordBlocked({ shop, type, ...(job.mailKind ? { mailKind: job.mailKind } : {}) });
-        continue;
-      }
-      if (!options.hasToken) {
-        await recordAuthStop(shop, job, "TOKEN_MISSING");
-        continue;
-      }
-      const last = Date.parse(job.lastAttemptAt || job.firstFailedAt || job.createdAt || "");
-      if (!Number.isFinite(last)) continue;
-      const minutes = type === "mail" ? config().mailStallMinutes : config().driveStallMinutes;
-      if (now() - last < minutes * 60000) continue;
-      const error = Object.assign(new Error("stalled"), { status: 504, code: "JOB_STALLED" });
-      const result = await recordFailure({ shop, job, error, firstFailure: !job.firstFailedAt, stalled: true, openedAt: job.lastAttemptAt || job.firstFailedAt || job.createdAt });
-      if (job.incidentId !== result.incident.id || !job.firstFailedAt)
-        await store.put("job", job.id, {
-          ...job,
-          incidentId: result.incident.id,
-          lastErrorClass: result.errorClass,
-          lastErrorCode: result.errorCode,
-          firstFailedAt: job.firstFailedAt || iso(now() - minutes * 60000),
-        });
+  /**
+   * Each job type is inspected under the delivery worker's lock and re-read there. A job sent and
+   * deleted meanwhile is gone, so a stale copy can neither be written back (and mailed again) nor
+   * reopen an incident that its success just resolved.
+   */
+  async function sweepShop(shop: Shop, options: { hasToken: boolean; lock?: JobLock }) {
+    const lock: JobLock = options.lock || ((_type, fn) => fn());
+    const queued = await shopJobs(shop);
+    for (const type of ["mail", "drive"] as const) {
+      if (!queued.some(job => jobType(job) === type)) continue;
+      await lock(type, async () => {
+        // Post pages deliberately wait for an in-flight publish/restore; that wait is not a stalled sync.
+        if (type === "drive" && (await store.shop(shop.id))?.publishingPlanId) return;
+        const jobs = (await shopJobs(shop)).filter(job => jobType(job) === type);
+        for (const job of jobs) await sweepJob(shop, job, options.hasToken);
+      });
     }
-    for (const incident of await openIncidents(shop)) await refreshIncident(incident);
+    const at = now();
+    for (const incident of await incidents(shop)) {
+      if (!openStatus(incident)) {
+        // Closed incidents are history only; dropping old ones bounds the reads made on every delivery.
+        if (incident.resolvedAt && at - Date.parse(incident.resolvedAt) >= config().retentionDays * 86400000)
+          await store.delete("integrationIncident", incident.id);
+        continue;
+      }
+      // The owner has seen a lost message long enough; it ends quietly instead of staying on the dashboard.
+      if (incident.errorClass === "final" && at - Date.parse(incident.lastFailureAt) >= config().finalAlertDays * 86400000)
+        await closeIncident(incident, "expired", false);
+      else await refreshIncident(incident);
+    }
+  }
+
+  async function sweepJob(shop: Shop, job: IntegrationJob, hasToken: boolean) {
+    const type = jobType(job);
+    if (!shop.google || !hasToken) {
+      const incident = shop.google ? await recordAuthStop(shop, job, "TOKEN_MISSING") : await recordBlocked({ shop, type, job });
+      if (incident) await store.put("job", job.id, { ...job, incidentId: incident.id, incidentIds: [...new Set([...(job.incidentIds || []), incident.id])] });
+      return;
+    }
+    const last = Date.parse(job.lastAttemptAt || job.firstFailedAt || job.createdAt || "");
+    if (!Number.isFinite(last)) return;
+    const minutes = type === "mail" ? config().mailStallMinutes : config().driveStallMinutes;
+    if (now() - last < minutes * 60000) return;
+    const error = Object.assign(new Error("stalled"), { status: 504, code: "JOB_STALLED" });
+    const result = await recordFailure({ shop, job, error, stalled: true, openedAt: job.lastAttemptAt || job.firstFailedAt || job.createdAt });
+    if (job.incidentId !== result.incident.id || !job.firstFailedAt || !job.incidentIds?.includes(result.incident.id))
+      await store.put("job", job.id, {
+        ...job,
+        incidentId: result.incident.id,
+        incidentIds: result.incidentIds,
+        lastErrorClass: result.errorClass,
+        lastErrorCode: result.errorCode,
+        firstFailedAt: job.firstFailedAt || iso(now() - minutes * 60000),
+      });
   }
 
   async function deliver(item: NotificationOutboxItem) {
@@ -687,6 +776,8 @@ export function integrationAlerts(options: Options) {
           add({ id: incident.id, kind: "inquiry_failed", type: incident.type, since: incident.openedAt, affectedCount: incident.affectedCount, ...(incident.inquiryId ? { inquiryId: incident.inquiryId } : {}) });
           continue;
         }
+        // Other lost messages are not retrying, so "delayed, retrying automatically" would be untrue.
+        if (incident.errorClass === "final") continue;
         if (incident.type === "mail") {
           const near = incident.bookingStart ? Date.parse(incident.bookingStart) - at <= config().ownerNearVisitHours * 3600000 && Date.parse(incident.bookingStart) > at : false;
           if (near || ageMinutes(incident.openedAt, at) >= config().ownerMailDelayMinutes)
