@@ -19,8 +19,10 @@ test("LP HTML contains localized content and metadata before JavaScript runs", (
     assert.ok(html.includes(`rel="canonical" href="https://gemihub.net/lp${locale === "en" ? "?lang=en" : ""}"`));
     assert.ok(html.includes(`href="/?lang=${locale}"`));
     assert.match(html, /src="\/assets\/app.js"/);
-    assert.ok(html.includes(locale === "ja" ? "お店のWebページを、" : "Your shop’s website."));
+    assert.ok(html.includes(locale === "ja" ? "お店のシステムを、" : "Your shop’s system,"));
     assert.ok(!html.includes("/api/"));
+    assert.match(html, /<section id="payments"/);
+    assert.ok(html.indexOf('id="payments"') < html.indexOf('id="operations"'));
     assert.match(html, /data-feature="customers"/);
     assert.match(html, /data-feature="analytics"/);
     assert.ok(html.includes(locale === "ja" ? "お客様情報" : "Customer records"));
@@ -47,7 +49,14 @@ test("LP is public on the management host without database/session access; other
     assert.equal(english.headers.get("Content-Language"), "en");
     assert.match(english.headers.get("Content-Type")!, /text\/html/);
     assert.match(english.headers.get("Content-Security-Policy")!, /frame-ancestors 'none'/);
-    assert.match(await english.text(), /Your shop’s website\./);
+    assert.match(await english.text(), /Your shop’s system,/);
+    const video = await fetch(base + "/lp/gemihub-demo-1min-en.mp4", { headers: { Range: "bytes=0-99" } });
+    if (video.status !== 404) { // Present once the app has been built.
+      assert.equal(video.status, 206);
+      assert.equal(video.headers.get("Content-Type"), "video/mp4");
+      assert.match(video.headers.get("Content-Range")!, /^bytes 0-99\/\d+$/);
+      assert.equal((await video.arrayBuffer()).byteLength, 100);
+    }
     const head = await fetch(base + "/lp", { method: "HEAD" });
     assert.equal(head.status, 200);
     assert.equal(await head.text(), "");

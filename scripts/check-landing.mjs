@@ -42,8 +42,26 @@ try {
     assert.equal(await refund.locator('.lp-resale-steps li').count(), 3);
     assert.match(await refund.innerText(), /7,000/);
     assert.match(await refund.innerText(), /9,000/);
-    assert.match(await refund.innerText(), locale === 'ja' ? /再予約は保証されません/ : /not guaranteed/);
+    assert.equal(await refund.locator('.lp-refund-table tbody tr').count(), 4);
+    assert.ok(await page.locator('#payments').evaluate(element => !!(element.compareDocumentPosition(document.querySelector('#operations')) & Node.DOCUMENT_POSITION_FOLLOWING)),'refunds come before the operation features');
+    assert.equal(await page.locator('.lp-nav a[href="#payments"]').count(),1);
+    for(const target of ['#lp-creation-red-circle','#lp-creation-consult','#payments']) {
+      assert.equal(await page.locator(`.lp-intro-strip a[href="${target}"]`).count(),1);
+      assert.equal(await page.locator(target).count(),1);
+    }
+    const terms = refund.locator('details');
+    assert.doesNotMatch(await refund.locator('.lp-payments-body > p').allInnerTexts().then(texts=>texts.join('')), locale === 'ja' ? /再予約は保証されません/ : /not guaranteed/);
+    await terms.locator('summary').click();
+    assert.match(await terms.innerText(), locale === 'ja' ? /再予約は保証されません/ : /not guaranteed/);
+    await terms.locator('summary').click();
+    assert.doesNotMatch(await page.locator('.lp-hero-copy').innerText(), locale === 'ja' ? /Webページ/ : /website/i);
     assert.match(await page.locator('.lp-data').innerText(), locale === 'ja' ? /公開ページはサービス側から配信/ : /Published pages are served by the service/);
+    const demo=page.locator('.lp-demo video');
+    assert.equal(await demo.getAttribute('preload'),'none');
+    await demo.evaluate(video=>{video.muted=true;return video.play();});
+    await page.waitForFunction(()=>document.querySelector('.lp-demo video').currentTime>0.3);
+    assert.ok(Math.abs(await demo.evaluate(video=>video.duration)-65.6)<1,'the demo is the one-minute cut');
+    await demo.evaluate(video=>video.pause());
     const faq=page.locator('.lp-faq summary').first();await faq.focus();await faq.press('Enter');
     assert.equal(await page.locator('.lp-faq details').first().getAttribute('open'),'');
     await faq.press('Enter');
@@ -69,7 +87,14 @@ try {
           await section.screenshot({path:`tmp/lp/${locale}-${width}-${feature}.png`});
         }
       }
+      if(width===390){
+        const positions=await page.evaluate(()=>{const top=selector=>document.querySelector(selector).getBoundingClientRect().top+scrollY;return {hero:top('.lp-hero'),link:top('.lp-intro-strip a[href="#payments"]'),heading:top('#lp-payments-heading'),card:top('.lp-refund-card'),body:top('.lp-payments-body')};});
+        assert.ok(positions.link-positions.hero<=2*844,`${locale}: refund link within two screens of the hero (${Math.round(positions.link-positions.hero)}px)`);
+        assert.ok(positions.heading<positions.card&&positions.card<positions.body,`${locale}: refund example precedes the explanation on mobile`);
+      }
       if([1440,390].includes(width)){
+        await page.evaluate(()=>scrollTo(0,0));
+        await page.locator('#payments').screenshot({path:`tmp/lp/${locale}-${width}-payments.png`});
         await page.evaluate(()=>scrollTo(0,0));
         await page.screenshot({path:`tmp/lp/${locale}-${width}.png`,fullPage:true});
         await page.screenshot({path:`tmp/lp/${locale}-${width}-hero.png`});
@@ -83,15 +108,17 @@ try {
     await page.waitForURL(url=>url.pathname==='/'&&url.searchParams.get('lang')===locale);
     await page.getByRole('heading',{level:1}).waitFor();
     await context.close();
-    console.log(`${locale}: AI creation and red-circle editing lead the page; all features, FAQ, images, 1440/768/390/320px layouts and onboarding link passed.`);
+    console.log(`${locale}: AI creation, refunds before operations, three-strength links; all features, FAQ, images, 1440/768/390/320px layouts and onboarding link passed.`);
   }
   const context=await browser.newContext({javaScriptEnabled:false});
   const page=await context.newPage();
   await page.goto(origin+'/lp?lang=en');
-  assert.ok((await page.getByRole('heading',{level:1}).innerText()).includes('Your shop’s website.'));
+  assert.ok((await page.getByRole('heading',{level:1}).innerText()).includes('Your shop’s system,'));
   for(const feature of ['booking','customers','analytics','posts','phone']) {
     assert.ok(await page.locator(`article[data-feature="${feature}"]`).isVisible(),`${feature}: visible with JavaScript disabled`);
   }
+  await page.locator('.lp-payments summary').click();
+  assert.match(await page.locator('.lp-payments details').innerText(), /not guaranteed/);
   await page.locator('.lp-faq summary').first().click();
   assert.equal(await page.locator('.lp-faq details').first().getAttribute('open'),'');
   await context.close();

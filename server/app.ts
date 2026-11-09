@@ -1199,6 +1199,29 @@ export function createApp(
         res.end(method === "HEAD" ? undefined : renderLanding(shell!));
         return;
       }
+      // The LP demo video and its poster frame. Like the LP itself, they need no database.
+      if (/^\/lp\/[a-z0-9-]+\.(?:mp4|jpg)$/.test(path) && host === appHost && (method === "GET" || method === "HEAD")) {
+        let data: Buffer;
+        try { data = await readFile(resolve("dist", `.${path}`)); }
+        catch { fail(404, tr("見つかりません")); }
+        const video = path.endsWith(".mp4");
+        res.setHeader("Content-Type", video ? "video/mp4" : "image/jpeg");
+        res.setHeader("Cache-Control", "no-cache");
+        // Safari plays a video only from a server that answers byte-range requests.
+        const range = video ? /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "") : null;
+        if (video) res.setHeader("Accept-Ranges", "bytes");
+        if (range && (range[1] || range[2])) {
+          const size = data!.length;
+          const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+          const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+          if (start > end || start >= size) { res.writeHead(416, { "Content-Range": `bytes */${size}` }); res.end(); return; }
+          res.writeHead(206, { "Content-Range": `bytes ${start}-${end}/${size}`, "Content-Length": end - start + 1 });
+          res.end(method === "HEAD" ? undefined : data!.subarray(start, end + 1));
+          return;
+        }
+        res.end(method === "HEAD" ? undefined : data!);
+        return;
+      }
       if (path === "/sw.js" && host === appHost && (method === "GET" || method === "HEAD")) {
         res.setHeader("Content-Type", "application/javascript; charset=utf-8");
         res.setHeader("Cache-Control", "no-store");

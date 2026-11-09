@@ -3,8 +3,8 @@ import { getLocale, tr } from "../shared/i18n";
 import { Brand } from "./Brand";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
-export const landingTitle = () => tr("gemihub — お店のWeb制作と相談を、AIといつでも自由に。");
-export const landingDescription = () => tr("人に依頼するように、AIといつでも自由にお店のWebページを制作。赤丸で示して修正を頼み、お店のデータ・設定・仕組みを理解したAIに、おしゃべりしながら相談できます。");
+export const landingTitle = () => tr("gemihub — お店の予約と運営を、AIに言葉で頼める。");
+export const landingDescription = () => tr("人に頼むのと同じやり方で、AIにお店の予約ページと運営の仕組みを頼めます。赤丸で囲んで修正を頼み、PayPalの前払いと返金、キャンセル枠の再募集まで。");
 
 function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d={diagonal ? "M6 18 18 6M6 6h12v12" : "M4 12h15m-6-6 6 6-6 6"} /></svg>;
@@ -59,32 +59,49 @@ function FeatureOverview() {
     { id: "customers", label: tr("お客様情報"), title: tr("次の「いらっしゃいませ」に。"), text: tr("氏名・メール、予約・お問い合わせ、来店回数・利用金額をお客様ごとに。メモと施術写真も残して、次の接客につなげられます。"), image: "57-customer-detail.jpg", alt: tr("お客様の基本情報・来店実績・接客メモをまとめて確認する詳細画面"), guide: "customer-notes" },
     { id: "analytics", label: tr("売上・アクセス分析"), title: tr("お店の変化が、見えてくる。"), text: tr("スタッフ別・メニュー別の売上を、日別・月別で比較。予約ページの閲覧から確定まで、アクセスの変化と合わせて、お店の今を確かめられます。"), image: "56-sales-comparison.jpg", alt: tr("スタッフごとの売上推移を色分けして比較するグラフ"), guide: "staff-sales" },
     { id: "posts", label: tr("ブログ・お知らせ"), title: tr("お店の今を、届ける。"), text: tr("季節のメニューも、臨時休業のお知らせも。自分で書いても、AIと一緒に考えても。写真を添えて、お店のページへ。"), image: "58-blog-editor.jpg", alt: tr("写真と文章を編集するブログ画面"), guide: "post-edit" },
-    { id: "phone", label: tr("AI電話受付"), title: tr("手が離せないときも、電話を受け付ける。"), text: tr("施術中など手が離せないときも、AIが電話を受け、対応可能な予約や問い合わせを受け付けます。Twilioの電話番号との連携・受付設定が必要です。予約は来店時の現金払い。前払いを使うお店は当日の空き枠のみ、使わないお店は予約可能期間内が対象です。再募集枠は電話では扱いません。"), image: "59-phone-settings.jpg", alt: tr("電話番号・受付時間・応対ルールを設定するAI電話受付の画面"), guide: "phone-reception" },
+    { id: "phone", label: tr("AI電話受付"), title: tr("手が離せないときも、電話を受け付ける。"), text: tr("施術中でも、AIが電話に出ます。営業時間や料金に答え、予約と問い合わせを受け付けます。"), note: tr("Twilioの電話番号が必要です。電話での予約は、来店時の現金払いです。"), image: "59-phone-settings.jpg", alt: tr("電話番号・受付時間・応対ルールを設定するAI電話受付の画面"), guide: "phone-reception" },
   ] as const;
   return <div className="lp-operation-grid">
     {features.map(feature => <article key={feature.id} className="lp-feature-layout" data-feature={feature.id} aria-labelledby={`lp-feature-${feature.id}`}>
-      <div className="lp-feature-copy"><span className="lp-kicker">{feature.label}</span><h3 id={`lp-feature-${feature.id}`}>{feature.title}</h3><p>{feature.text}</p><a href={`/manual?lang=${getLocale()}#guide-${feature.guide}`}>{tr("使い方を見てみる")}<Arrow /></a></div>
+      <div className="lp-feature-copy"><span className="lp-kicker">{feature.label}</span><h3 id={`lp-feature-${feature.id}`}>{feature.title}</h3><p>{feature.text}</p>{"note" in feature && <p className="lp-feature-note">{feature.note}</p>}<a href={`/manual?lang=${getLocale()}#guide-${feature.guide}`}>{tr("使い方を見てみる")}<Arrow /></a></div>
       <div className="lp-product-frame"><div className="lp-window-bar"><span>● ● ●</span><span>gemihub / {feature.label}</span></div><img src={`/manual/${getLocale() === "en" ? "en/" : ""}${feature.image}`} alt={feature.alt} width="1280" height="900" loading="lazy" /></div>
     </article>)}
   </div>;
+}
+
+function RefundSection() {
+  const rows = [
+    [tr("24時間以上"), "100%", tr("再募集なし（全額返金）"), "100%"],
+    [tr("24〜12時間"), "70%", tr("10%OFF"), "90%"],
+    [tr("12〜1時間"), "40%", tr("30%OFF"), "70%"],
+    [tr("1時間未満"), "0%", tr("半額"), "50%"],
+  ];
+  return <section id="payments" className="lp-payments lp-container" aria-labelledby="lp-payments-heading">
+    <div className="lp-payments-head"><span className="lp-kicker">02 — {tr("お金のやりとりも、やさしく")}</span><h2 id="lp-payments-heading">{tr("キャンセル枠を、次のお客様へ。")}<br />{tr("予約が入ると、返金アップ。")}</h2></div>
+    <div className="lp-payments-example">
+      <div className="lp-refund-card"><div className="lp-refund-top"><span className="lp-kicker">{tr("既定の返金条件での例")}</span><span className="lp-paypal">PayPal</span></div><p className="lp-refund-amount"><span>{tr("予約時のお支払い")}</span><b>¥10,000</b></p><ol className="lp-resale-steps"><li><b>{tr("① 18時間前にキャンセル")}</b><span>{tr("通常の返金予定額は7,000円（70%）。")}</span></li><li><b>{tr("② 10%OFFで再募集")}</b><span>{tr("9,000円の枠として、開始12時間前まで募集。")}</span></li><li><b>{tr("③ 成立すると9,000円を返金")}</b><span>{tr("返金額が7,000円から9,000円に増えます。")}</span></li></ol><p className="lp-refund-footnote">{tr("期限までに成立しなければ、キャンセル時に確認した7,000円で返金します。返金額・割引率・期限は予約時の条件により異なります。")}</p></div>
+      <table className="lp-refund-table"><caption>{tr("既定の返金条件での一覧")}</caption><thead><tr><th scope="col">{tr("来店まで")}</th><th scope="col">{tr("通常の返金")}</th><th scope="col">{tr("別の方の価格")}</th><th scope="col">{tr("成立したときの返金")}</th></tr></thead><tbody>{rows.map(([until, ...cells]) => <tr key={until}><th scope="row">{until}</th>{cells.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody></table>
+    </div>
+    <div className="lp-payments-body"><p>{tr("前払いなので、来店がなくても売上が残ります。キャンセルされた枠は割引で再募集し、埋まればお客様への返金が増えます。")}</p><p>{tr("再募集が成立しても、お店の売上は減りません。お店都合のキャンセルは、全額返金します。")}</p><details><summary>{tr("対象になる予約と注意点")}<span aria-hidden="true">＋</span></summary><p>{tr("PayPalで支払済みで、すべてのメニュー・追加メニューが再募集可、かつ受付期限内の予約が対象です。全額返金の期間など、返金アップの条件を満たさない場合は通常のキャンセルになります。")}</p><p>{tr("再予約は保証されません。受付期限と返金予定額はキャンセルの確認画面に表示します。事前決済にはPayPalの設定が必要です。")}</p></details><a href={`/manual?lang=${getLocale()}#guide-cancellation`}>{tr("使い方を見てみる")}<Arrow /></a></div>
+  </section>;
 }
 
 export function LandingPage() {
   const start = appLink();
   return <div className="lp">
     <a className="lp-skip" href="#lp-main">{tr("本文へ移動")}</a>
-    <header className="lp-header"><Brand href="/lp" /><nav className="lp-nav" aria-label={tr("サービス紹介のメニュー")}><a href="#features">{tr("AIでつくる")}</a><a href="#operations">{tr("公開後の機能")}</a><a href="#faq">{tr("よくある質問")}</a></nav><div className="lp-header-actions"><LanguageSwitcher /><div className="lp-header-invite"><small>{tr("現在は招待制です")}</small><a className="lp-header-start" href={start}>{tr("はじめる")}<Arrow diagonal /></a></div></div></header>
+    <header className="lp-header"><Brand href="/lp" /><nav className="lp-nav" aria-label={tr("サービス紹介のメニュー")}><a href="#features">{tr("AIでつくる")}</a><a href="#payments">{tr("返金の仕組み")}</a><a href="#operations">{tr("公開後の機能")}</a><a href="#faq">{tr("よくある質問")}</a></nav><div className="lp-header-actions"><LanguageSwitcher /><div className="lp-header-invite"><small>{tr("現在は招待制です")}</small><a className="lp-header-start" href={start}>{tr("はじめる")}<Arrow diagonal /></a></div></div></header>
     <main id="lp-main">
       <section className="lp-hero lp-container" aria-labelledby="lp-heading">
-        <div className="lp-hero-copy"><span className="lp-kicker"><span className="lp-dot" />{tr("人に頼むように、AIに頼めるWeb制作。")}</span><h1 id="lp-heading">{tr("お店のWebページを、")}<br /><span>{tr("いつでも、自由に。")}</span></h1><p className="lp-hero-lead">{tr("イメージを伝え、画面を見ながら相談し、修正を頼む。")}<br />{tr("人に制作を依頼するようなやり方で、AIとつくれます。")}</p><p className="lp-hero-lead lp-hero-consult">{tr("お店のデータ・設定・仕組みを理解しているAIに、")}<br />{tr("おしゃべりしながら、いつでも相談できます。")}</p><a className="lp-button" href={start}>{tr("AIとWebページをつくる")}<Arrow /></a><p className="lp-cta-note">{tr("現在は招待制です。招待パスワードをご用意ください。")}<br />{tr("まずは画面を確かめるところから。公開はそのあとで。")}</p><a className="lp-scroll-link" href="#features"><span>↓</span>{tr("AIでのつくり方を見る")}</a></div>
+        <div className="lp-hero-copy"><span className="lp-kicker"><span className="lp-dot" />{tr("人に頼むのと同じやり方で、AIにお店のシステムを頼める。")}</span><h1 id="lp-heading">{tr("お店のシステムを、")}<br /><span>{tr("言葉で。")}</span></h1><p className="lp-hero-lead">{tr("予約ページも、前払いも、お客様の記録も。")}<br />{tr("話して、赤丸で囲んで、確かめてから公開。")}</p><p className="lp-hero-lead lp-hero-consult">{tr("お店のデータ・設定・仕組みを理解しているAIに、")}<br />{tr("おしゃべりしながら、いつでも相談できます。")}</p><a className="lp-button" href={start}>{tr("AIとお店のシステムをつくる")}<Arrow /></a><p className="lp-cta-note">{tr("現在は招待制です。招待パスワードをご用意ください。")}<br />{tr("まずは画面を確かめるところから。公開はそのあとで。")}</p><a className="lp-scroll-link" href="#features"><span>↓</span>{tr("AIでのつくり方を見る")}</a></div>
         <HeroPreview />
       </section>
-      <div className="lp-intro-strip"><span>{tr("つくる時間を、向き合う時間に。")}</span><div><span>{tr("AIと話してつくる")}</span><i>→</i><span>{tr("赤丸で囲んで直す")}</span><i>→</i><span>{tr("確かめて公開")}</span></div></div>
+      <nav className="lp-intro-strip" aria-label={tr("3つの強み")}><a href="#lp-creation-red-circle"><i>1</i>{tr("赤丸で囲んで直す")}</a><a href="#lp-creation-consult"><i>2</i>{tr("お店を知っているAIに相談する")}</a><a href="#payments"><i>3</i>{tr("キャンセル枠を、次のお客様へ")}</a></nav>
+      <section className="lp-demo lp-container" aria-labelledby="lp-demo-heading"><span className="lp-kicker" id="lp-demo-heading">{tr("1分でわかるgemihub（英語の音声と字幕）")}</span><div className="lp-product-frame"><video controls playsInline preload="none" poster="/lp/gemihub-demo-1min-en.jpg" aria-labelledby="lp-demo-heading"><source src="/lp/gemihub-demo-1min-en.mp4" type="video/mp4" /></video></div></section>
       <WebsiteCreation />
-      <section id="operations" className="lp-section lp-container" aria-labelledby="lp-operations-heading"><div className="lp-section-heading"><div><span className="lp-kicker">02 — {tr("公開したあとも、お店を支える")}</span><h2 id="lp-operations-heading">{tr("つくったページで、")}<br />{tr("お店の毎日も、スムーズに。")}</h2></div><p>{tr("予約受付、お客様の記録、お知らせ、売上やアクセスの確認。ページを公開したあとに必要な機能も、ひとつにつながります。")}</p></div><FeatureOverview /></section>
-      <section className="lp-payments lp-container" aria-labelledby="lp-payments-heading"><div><span className="lp-kicker">03 — {tr("お金のやりとりも、やさしく")}</span><h2 id="lp-payments-heading">{tr("キャンセル枠を、次のお客様へ。")}<br />{tr("予約が入ると、返金アップ。")}</h2><p>{tr("キャンセル → 割引で再募集 → 成立すると返金アップ。対象の予約は、代わりのお客様を募集できます。お店都合のキャンセルは、全額返金します。")}</p><p>{tr("PayPalで支払済みで、すべてのメニュー・追加メニューが再募集可、かつ受付期限内の予約が対象です。全額返金の期間など、返金アップの条件を満たさない場合は通常のキャンセルになります。")}</p><a href={`/manual?lang=${getLocale()}#guide-cancellation`}>{tr("使い方を見てみる")}<Arrow /></a><p className="lp-payment-note">{tr("再予約は保証されません。受付期限と返金予定額はキャンセルの確認画面に表示します。事前決済にはPayPalの設定が必要です。")}</p></div>
-        <div className="lp-refund-card"><div className="lp-refund-top"><span className="lp-kicker">{tr("既定の返金条件での例")}</span><span className="lp-paypal">PayPal</span></div><p className="lp-refund-amount"><span>{tr("予約時のお支払い")}</span><b>¥10,000</b></p><ol className="lp-resale-steps"><li><b>{tr("① 18時間前にキャンセル")}</b><span>{tr("通常の返金予定額は7,000円（70%）。")}</span></li><li><b>{tr("② 10%OFFで再募集")}</b><span>{tr("9,000円の枠として、開始12時間前まで募集。")}</span></li><li><b>{tr("③ 成立すると9,000円を返金")}</b><span>{tr("返金額が7,000円から9,000円に増えます。")}</span></li></ol><p className="lp-refund-footnote">{tr("期限までに成立しなければ、キャンセル時に確認した7,000円で返金します。返金額・割引率・期限は予約時の条件により異なります。")}</p></div>
-      </section>
+      <RefundSection />
+      <section id="operations" className="lp-section lp-container" aria-labelledby="lp-operations-heading"><div className="lp-section-heading"><div><span className="lp-kicker">03 — {tr("公開したあとも、お店を支える")}</span><h2 id="lp-operations-heading">{tr("つくったページで、")}<br />{tr("お店の毎日も、スムーズに。")}</h2></div><p>{tr("予約受付、お客様の記録、お知らせ、売上やアクセスの確認。ページを公開したあとに必要な機能も、ひとつにつながります。")}</p></div><FeatureOverview /></section>
+      <section className="lp-ai-roles lp-container" aria-labelledby="lp-ai-roles-heading"><h2 id="lp-ai-roles-heading">{tr("AIに任せること、任せないこと。")}</h2><ul><li><span className="lp-kicker">Gemini (Vertex AI)</span><p>{tr("会話と、赤丸を付けた画面から、ページや設定の案をつくります。")}</p></li><li><span className="lp-kicker">Gemini Live</span><p>{tr("声での相談と、電話の受付を担当します。")}</p></li><li><span className="lp-kicker">{tr("サーバー")}</span><p>{tr("空き枠の計算、金額、返金の実行はサーバーが決めます。AIはPayPalの記録を読むだけで、書き込みません。")}</p></li></ul></section>
       <section className="lp-data"><div className="lp-container lp-data-inner"><Flower className="lp-data-flower" /><div><span className="lp-kicker">{tr("お店が育てたものは、お店のもの。")}</span><h2>{tr("データも、あなたの手の中に。")}</h2><p>{tr("予約・お客様情報はサービス側に保存し、JSON・CSVで書き出せます。")}</p><p>{tr("写真や書き出したページは、お店のGoogle Driveに保存されます。")}</p><p>{tr("公開ページはサービス側から配信します。Driveにある保存用コピーとは別です。")}</p><a href={`/manual?lang=${getLocale()}#guide-data`}>{tr("データの保存について知る")}<Arrow /></a></div><div className="lp-data-labels"><span>JSON / CSV</span><span>Google Drive</span></div></div></section>
       <section id="faq" className="lp-section lp-container lp-faq" aria-labelledby="lp-faq-heading"><div><span className="lp-kicker">Q & A</span><h2 id="lp-faq-heading">{tr("はじめる前に、")}<br />{tr("気になること。")}</h2></div><div className="lp-faq-list">{[
         [tr("パソコンやシステムに詳しくなくても使えますか？"), tr("はい。お店のことや変更したいことを、文章や声で伝えられます。できあがった内容を画面で確認してから、公開や変更を進めます。")],
@@ -92,10 +109,10 @@ export function LandingPage() {
         [tr("公開したあとも、メニューや営業時間を変えられますか？"), tr("はい。管理画面で編集できるほか、AIに言葉で変更を依頼できます。変更する内容を確認してから、お客様のページへ反映します。")],
         [tr("お客様の情報は誰が見られますか？"), tr("お客様情報や非公開の接客メモは、店主と許可されたスタッフが運営画面で確認できます。お客様には、ご本人向けの予約情報などを表示します。")],
         [tr("売上や予約の傾向も確認できますか？"), tr("はい。「分析」でスタッフ別・メニュー別の売上、予約ページの閲覧と確定、アクセスを日別・月別で確認できます。期間は過去7・30・90日で、売上は施術終了済みの有効な予約が対象です。")],
-        [tr("どんな準備が必要ですか？"), tr("現在は招待制で、招待パスワードとGoogleアカウントが必要です。予約・お客様情報はサービス側に保存し、書き出せます。写真や書き出したページはGoogle Driveに保存し、公開ページはサービス側から配信します。事前決済にはPayPal、AI電話受付にはTwilioとの連携・受付設定が必要です。")],
+        [tr("どんな準備が必要ですか？"), tr("Googleアカウントがあれば始められます（現在は招待パスワードも必要です）。PayPalとTwilioは、前払いと電話受付を使うときだけ設定します。予約・お客様情報はサービス側に保存し、書き出せます。写真や書き出したページはGoogle Driveに保存し、公開ページはサービス側から配信します。")],
       ].map(([question, answer]) => <details key={question}><summary>{question}<span aria-hidden="true">＋</span></summary><p>{answer}</p></details>)}</div></section>
-      <section className="lp-final"><div className="lp-container"><Flower /><span className="lp-kicker">YOUR SHOP, YOUR WORDS.</span><h2>{tr("あなたのお店のWebページを、")}<br />{tr("AIと、一緒につくりませんか。")}</h2><p>{tr("お店のこと、少し聞かせてください。")}</p><a className="lp-button" href={start}>{tr("AIとWebページをつくる")}<Arrow /></a><p className="lp-cta-note">{tr("現在は招待制です。招待パスワードをご用意ください。")}</p></div></section>
+      <section className="lp-final"><div className="lp-container"><Flower /><span className="lp-kicker">YOUR SHOP, YOUR WORDS.</span><h2>{tr("あなたのお店のシステムを、")}<br />{tr("AIと、一緒につくりませんか。")}</h2><p>{tr("お店のこと、少し聞かせてください。")}</p><a className="lp-button" href={start}>{tr("AIとお店のシステムをつくる")}<Arrow /></a><p className="lp-cta-note">{tr("現在は招待制です。招待パスワードをご用意ください。")}</p></div></section>
     </main>
-    <footer className="lp-footer lp-container"><div><Brand href="/lp" /><p>{tr("お店のシステムを、言葉で。")}</p></div><nav aria-label={tr("関連ページ")}><a href={`/manual?lang=${getLocale()}`}>{tr("使い方")}</a><a href={`/policy?lang=${getLocale()}`}>{tr("プライバシーポリシー")}</a><a href={`/terms?lang=${getLocale()}`}>{tr("利用規約")}</a><a href={start}>{tr("お店の管理画面へ")}<Arrow diagonal /></a></nav><span>© gemihub</span></footer>
+    <footer className="lp-footer lp-container"><div><Brand href="/lp" /><p>{tr("つくる時間を、向き合う時間に。")}</p></div><nav aria-label={tr("関連ページ")}><a href={`/manual?lang=${getLocale()}`}>{tr("使い方")}</a><a href={`/policy?lang=${getLocale()}`}>{tr("プライバシーポリシー")}</a><a href={`/terms?lang=${getLocale()}`}>{tr("利用規約")}</a><a href={start}>{tr("お店の管理画面へ")}<Arrow diagonal /></a></nav><span>© gemihub</span></footer>
   </div>;
 }
