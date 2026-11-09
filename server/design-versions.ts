@@ -14,6 +14,7 @@ import { partValue, replacePart, themeValue, replaceTheme } from "./pages.ts";
 import { forEachConcurrent } from "./concurrency.ts";
 import { screenCopyKeys } from "../shared/storefront-copy.ts";
 import { defaultAppearance } from "../shared/theme-editing.ts";
+import { stableJson } from "../shared/stable-json.ts";
 
 // An allowlist: operational settings and all business records can never enter a version.
 const designSchema = z.object({
@@ -62,8 +63,11 @@ const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(valu
 export function designFingerprints(config: ShopConfig | PublishedDesign): Record<string, string> {
   const design = designSchema.parse(config);
   const targets: DesignTarget[] = [{ kind: "theme" }, ...screenIds.map(screen => ({ kind: "screen" as const, screen })), { kind: "part", part: "header" }, { kind: "part", part: "footer" }, ...design.pages.map(page => ({ kind: "page" as const, pageId: page.id }))];
-  return Object.fromEntries(targets.map(target => [targetKey(target), hash(targetValue(design, target))]));
+  // "all" hashes the whole design (key order independent), so a whole-design version equal to now can be recognised.
+  return { ...Object.fromEntries(targets.map(target => [targetKey(target), hash(targetValue(design, target))])), all: hash(stableJson(design)) };
 }
+/** True only when the version is known to hold exactly the current design; unindexed versions are never "same". */
+export const sameAsCurrent = (version: DesignVersion, current: ShopConfig) => !!version.fingerprints?.all && version.fingerprints.all === designFingerprints(current).all;
 // An archive never changes, so its index can be cached by manifest for the life of the process.
 const legacyIndex = new Map<string, Record<string, string>>();
 const legacyIndexLimit = 1000;

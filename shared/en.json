@@ -4211,5 +4211,13 @@
   "支払い済みのサンプルには、0より大きい料金のメニューを選んでください": "Choose a service with a price above zero for paid samples",
   "サンプル予約の支払い・返金": "Sample booking payments and refunds",
   "サンプルデータの「支払い・返金の状態」で、設定に従う・支払いなし・PayPal支払い済み・支払い済みかつ返金済みを選べます。返金率も指定でき、過去の保存済みサンプルには従来のお店の決済設定を使います。": "In sample data, Payment and refund status lets you follow the settings, show no payment, show PayPal paid, or show paid and refunded. You can also set a refund percentage. Previously saved samples keep following the shop’s payment settings.",
-  "「予約」「マイページ」のサンプルでは「支払い・返金の状態」と返金率を選べます。「支払い・返金済みのサンプル予約を追加」で例を追加し、「サンプルをプレビューに反映」で確認します。実際の支払い・返金や本番予約には反映しません。": "In Booking and My page samples, choose Payment and refund status and a refund percentage. Use Add a paid and refunded sample booking to add an example, then Apply samples to preview to check it. This does not affect real payments, refunds or bookings."
+  "「予約」「マイページ」のサンプルでは「支払い・返金の状態」と返金率を選べます。「支払い・返金済みのサンプル予約を追加」で例を追加し、「サンプルをプレビューに反映」で確認します。実際の支払い・返金や本番予約には反映しません。": "In Booking and My page samples, choose Payment and refund status and a refund percentage. Use Add a paid and refunded sample booking to add an example, then Apply samples to preview to check it. This does not affect real payments, refunds or bookings.",
+  "版履歴を読み直してからお試しください": "Reload the version history and try again.",
+  "復元を取り消せませんでした。Google の接続を確認してから、もう一度お試しください。": "The restore could not be cancelled. Check the Google connection and try again.",
+  "版 {0} の保存ファイルを読み込めませんでした。Google の接続を確認して再試行するか、復元を取り消してください。": "The saved files for version {0} could not be read. Check the Google connection and retry, or cancel the restore.",
+  "版 {0} の保存ファイルを読み込めませんでした。Google の接続を確認してから、もう一度お試しください。": "The saved files for version {0} could not be read. Check the Google connection and try again.",
+  "この版は今のデザインと同じです。戻す必要はありません。": "This version is the same as the current design. There is nothing to restore.",
+  "中断した復元を取り消し、今の公開状態のまま予約受付を再開します。よろしいですか？": "Cancel the interrupted restore and resume bookings with the current published design?",
+  "中断した復元を取り消しました。デザインは復元前のままです。": "The interrupted restore was cancelled. The design is unchanged.",
+  "復元を取り消す": "Cancel restore"
 }

@@ -53,7 +53,7 @@ import { resolve, extname } from "node:path";
 import { z } from "zod";
 import { Store, bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
-import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions, hasCurrentDesignIndex } from "./design-versions.ts";
+import { driveDesignVersions, demoDesignVersions, preserveDesignVersion, retireDesignVersions, pruneDesignVersions, nextDesignPublication, currentDesignPublication, restoreDesign, sameDesign, parseTargetKey, targetKey, versionsFor, targetLabel, indexedDesignVersions, hasCurrentDesignIndex, sameAsCurrent } from "./design-versions.ts";
 import { createInitialTheme, initialThemeConfig, initialIntroductionPages, initialThemePreview, type ThemeRun } from "./initial-theme.ts";
 import { aggregateCustomers, customerSummaries, phoneCustomerSchema, phoneKey, ensurePhoneCustomer, savePhoneCustomer, customerFilterSchema, customerSince, customerImages, customerAttachmentSchema, normalizeEmail, type CustomerNote, type CustomerAttachment, type Inquiry, type CustomerRecord } from "./customers.ts";
 import { attachmentUnavailable, googleCustomerFiles, memoryCustomerFiles, readAttachment, type CustomerFiles } from "./customer-files.ts";
@@ -2606,12 +2606,55 @@ export function createApp(
             if (pendingRestore && targetKey(pendingRestore.target) === targetKey(target) && !visible.some(version => version.number === pendingRestore.version.number))
               visible.splice(9, 1, pendingRestore.version);
             return json(res, {
-              versions: visible.map(({ number, at, summary }) => ({ number, at, summary })),
+              // "same": restoring the whole design to this version would change nothing.
+              versions: visible.map(version => ({ number: version.number, at: version.at, summary: version.summary, ...(!target && fresh.published && sameAsCurrent(version, fresh.published) ? { same: true } : {}) })),
               revision: fresh.revision,
               current: fresh.published ? currentDesignPublication(fresh) : null,
               pendingRestore: pendingRestore ? { requestId: pendingRestore.requestId, number: pendingRestore.version.number, target: targetKey(pendingRestore.target) } : null,
               publishing: !!fresh.publishingPlanId,
             });
+          }
+          if (action === "design-versions/restore/cancel" && method === "POST") {
+            // An interrupted restore whose retry can never succeed (its archive or images are gone) must not keep
+            // bookings and editing paused. Cancelling re-applies the current production design to Drive, so
+            // files a partial restore already wrote go back to what production still says.
+            assertOwner(user, fresh);
+            const input = z.object({ requestId: z.uuid() }).parse(await body(req));
+            const pending = fresh.designRestore;
+            if (!pending) return json(res, { ok: true });
+            if (pending.requestId !== input.requestId) fail(409, tr("版履歴を読み直してからお試しください"));
+            const token = await ownerToken(fresh);
+            if (!token && !demoEnabled()) fail(503, tr("店主の Google 再接続が必要です"));
+            if (token && fresh.published) {
+              try {
+                fresh.google = await provisionShop(fresh, fresh.published, token);
+                await store.saveShop(fresh);
+                await syncConfig(fresh, fresh.published, token, async () => await store.saveShop(fresh), undefined, await menuImageSnapshot(store, fresh, fresh.published, crmFiles, token));
+              } catch (error) {
+                fresh.publishingError = error instanceof Error ? error.message : tr("Google 連携エラー");
+                await store.saveShop(fresh);
+                reportError(error);
+                fail(503, tr("復元を取り消せませんでした。Google の接続を確認してから、もう一度お試しください。"));
+              }
+            }
+            // The publication did not advance: its provisional archive must not spend a history slot.
+            // Queue deletion with the cancellation so a failed Drive trash can be retried safely.
+            if (fresh.designBackupOperationId === `restore:${pending.requestId}`) {
+              const backup = fresh.designVersions?.find(version => version.number === currentDesignPublication(fresh).number);
+              if (backup) {
+                fresh.designVersions = fresh.designVersions!.filter(version => version !== backup);
+                fresh.designVersionTrash = [...(fresh.designVersionTrash || []), backup];
+              }
+              delete fresh.designBackupOperationId;
+            }
+            delete fresh.designRestore;
+            delete fresh.publishingPlanId;
+            delete fresh.publishingError;
+            await store.saveShop(fresh);
+            await pruneDesignVersions(fresh, token ? driveDesignVersions(token) : demoDesignVersions(store), async () => store.saveShop(fresh)).catch(reportError);
+            // Article exports held back while the restore was pending can run again.
+            await enqueue(fresh, "posts");
+            return json(res, { ok: true });
           }
           const designRestore = action.match(/^design-versions\/(\d+)\/restore$/);
           if (designRestore && method === "POST") {
@@ -2634,10 +2677,19 @@ export function createApp(
               try { return await work(); }
               finally { if (!store.memory) console.info(JSON.stringify({ event: "restoration_phase", shopId: fresh.id, requestId: input.requestId, target: targetKey(target), phase, state: "finished", durationMs: Date.now() - started })); }
             };
-            const snapshot = await timed("read", () => versions.read(version));
+            let snapshot: Awaited<ReturnType<typeof versions.read>>;
+            try { snapshot = await timed("read", () => versions.read(version)); }
+            catch (error) {
+              reportError(error);
+              fail(503, pending
+                ? tr("版 {0} の保存ファイルを読み込めませんでした。Google の接続を確認して再試行するか、復元を取り消してください。", version.number)
+                : tr("版 {0} の保存ファイルを読み込めませんでした。Google の接続を確認してから、もう一度お試しください。", version.number));
+            }
             let config: ShopConfig;
             try { config = restoreDesign(fresh.published, snapshot.design, target); }
             catch (error) { fail(409, error instanceof Error ? error.message : tr("操作できませんでした")); }
+            // Restoring the current design would only spend a history slot and push the oldest version out.
+            if (!pending && sameDesign(fresh.published, config)) fail(409, tr("この版は今のデザインと同じです。戻す必要はありません。"));
             await validateMenuImages(store, fresh, config);
             // A restore must always be undoable: refuse before pausing bookings when the current state cannot be archived.
             if (fresh.designBackupOperationId !== `restore:${input.requestId}` && !versions.ready(fresh))

@@ -294,6 +294,67 @@ test("publication snapshots, one-click rollback/redo, retries, retention, owner 
   assert.equal((await restore(shop, oldestNumber, pendingList.pendingRestore.requestId)).status, 200);
   assert.equal((await latest(shop)).designVersions!.length, 10);
 
+  // A version holding exactly today's design is marked, and restoring it is refused without spending a history slot.
+  assert.equal((await publish(shop, withFooter((await latest(shop)).published!, "Same A"), { kind: "part", part: "footer" })).status, 200);
+  assert.equal((await publish(shop, withFooter((await latest(shop)).published!, "Same B"), { kind: "part", part: "footer" })).status, 200);
+  const sameA = (await latest(shop)).designVersions![0].number;
+  assert.equal((await publish(shop, withFooter((await latest(shop)).published!, "Same A"), { kind: "part", part: "footer" })).status, 200);
+  const sameB = (await latest(shop)).designVersions![0].number;
+  const sameList = (await request(shop, "/design-versions")).body.versions as { number: number; same?: boolean }[];
+  assert.equal(sameList.find(version => version.number === sameA)!.same, true);
+  assert.equal(sameList.find(version => version.number === sameB)!.same, undefined);
+  fresh = await latest(shop);
+  assert.equal((await restore(shop, sameA)).status, 409);
+  assert.equal((await latest(shop)).revision, fresh.revision, "an identical restore changes nothing");
+  assert.deepEqual((await latest(shop)).designVersions!.map(version => version.number), fresh.designVersions!.map(version => version.number));
+
+  // An interrupted restore whose archive is gone can be cancelled; Drive goes back to the current design.
+  const stuckId = randomUUID();
+  drive.failNextUpdate(input => input.fileId === fresh.google!.artifactIds!["web/shop.json"] && !!input.media);
+  assert.equal((await restore(shop, sameB, stuckId)).status, 503);
+  const stuck = await latest(shop);
+  assert.equal(stuck.designRestore!.requestId, stuckId);
+  drive.files.get(stuck.designRestore!.version.manifestId)!.trashed = true;
+  const unreadableRetry = await restore(shop, sameB, stuckId);
+  assert.equal(unreadableRetry.status, 503);
+  assert.match(unreadableRetry.body.error, /取り消/);
+  assert.equal((await request(shop, "/design-versions/restore/cancel", { requestId: randomUUID() })).status, 409, "only the pending restore can be cancelled");
+  drive.failNextUpdate(input => input.fileId === stuck.google!.artifactIds!["web/shop.json"] && !!input.media);
+  assert.equal((await request(shop, "/design-versions/restore/cancel", { requestId: stuckId })).status, 503);
+  const failedCancel = await latest(shop);
+  assert.equal(failedCancel.designRestore!.requestId, stuckId, "a failed cancellation remains retryable");
+  assert.deepEqual(failedCancel.designVersions, stuck.designVersions, "the provisional backup remains until Drive is reconciled");
+  assert.equal((await request(shop, "/design-versions/restore/cancel", { requestId: stuckId })).status, 200);
+  fresh = await latest(shop);
+  assert.equal(fresh.designRestore, undefined);
+  assert.equal(fresh.publishingPlanId, undefined);
+  assert.equal(fresh.revision, stuck.revision);
+  assert.equal(fresh.designBackupOperationId, undefined, "cancelling clears the provisional backup's operation marker");
+  assert.deepEqual(fresh.designVersions, stuck.designVersions!.slice(1), "cancelling preserves all ten original history entries");
+  assert.ok(drive.files.get(stuck.designVersions![0].folderId)!.trashed, "the cancelled restore's provisional archive is removed from Drive");
+  assert.deepEqual(designOf(fresh.published!), designOf(stuck.published!), "cancelling keeps the current design");
+  assert.deepEqual(publicFiles(fresh), await generated(fresh), "Drive is rewritten from the current design");
+  assert.equal((await request(shop, "/design-versions/restore/cancel", { requestId: stuckId })).status, 200, "cancelling twice is harmless");
+  assert.equal((await publish(shop, withFooter(fresh.published!, "After cancel"), { kind: "part", part: "footer" })).status, 200, "publishing works again");
+  const afterCancelPublish = await latest(shop);
+  assert.deepEqual(afterCancelPublish.designVersions!.map(version => version.number), [stuck.designPublication!.number, ...fresh.designVersions!.slice(0, 9).map(version => version.number)], "the next publication archives the current number once and retires only one version");
+  drive.files.get(stuck.designRestore!.version.manifestId)!.trashed = false;
+
+  const cancelledAgain = randomUUID();
+  drive.failNextUpdate(input => input.fileId === afterCancelPublish.google!.artifactIds!["web/shop.json"] && !!input.media);
+  assert.equal((await restore(shop, sameA, cancelledAgain)).status, 503);
+  const provisional = (await latest(shop)).designVersions![0];
+  drive.failNextUpdate(input => input.fileId === provisional.folderId && input.requestBody?.trashed === true);
+  assert.equal((await request(shop, "/design-versions/restore/cancel", { requestId: cancelledAgain })).status, 200);
+  const cancelledState = await latest(shop);
+  assert.deepEqual(cancelledState.designVersions, afterCancelPublish.designVersions, "failed cleanup does not leave a provisional history entry");
+  assert.deepEqual(cancelledState.designVersionTrash, [provisional], "failed cleanup is durably queued");
+  assert.equal((await restore(shop, sameA)).status, 200, "a fresh restore also works after cancellation");
+  fresh = await latest(shop);
+  assert.deepEqual(fresh.designVersions!.map(version => version.number), [afterCancelPublish.designPublication!.number, ...afterCancelPublish.designVersions!.slice(0, 9).map(version => version.number)], "a fresh restore archives the current number once and retires only one version");
+  assert.ok(drive.files.get(provisional.folderId)!.trashed, "a fresh restore retries the cancelled backup's cleanup");
+  assert.equal(fresh.designVersionTrash!.length, 0);
+
   // Per-screen restore: the history lists only versions whose state of that screen differs from now,
   // and restoring replaces just that screen while every other part keeps its current design.
   const aboutA = { html: '<section><h2>A</h2><slot name="menus"></slot></section>', css: "" };

@@ -5,7 +5,8 @@ import { createRequestId } from "./request-id";
 import type { DesignPublication } from "../server/design-versions";
 
 type VersionList = {
-  versions: DesignPublication[];
+  /** `same`: the whole design already equals this version, so restoring it would change nothing. */
+  versions: (DesignPublication & { same?: boolean })[];
   current: DesignPublication | null;
   revision: number;
   publishing: boolean;
@@ -64,6 +65,21 @@ export function DesignVersionHistory({ shopId, revision, timeZone, disabled = fa
       if (next && !next.pendingRestore && next.revision !== request.revision) attempt.current = undefined;
     } finally { setBusy(false); }
   }
+  async function cancelPending() {
+    if (!list?.pendingRestore || busy) return;
+    if (!window.confirm(tr("中断した復元を取り消し、今の公開状態のまま予約受付を再開します。よろしいですか？"))) return;
+    setBusy(true); setError(""); setNotice("");
+    try {
+      await api(`/api/shops/${shopId}/design-versions/restore/cancel`, { requestId: list.pendingRestore.requestId });
+      attempt.current = undefined;
+      setNotice(tr("中断した復元を取り消しました。デザインは復元前のままです。"));
+      await load();
+      await onRestored();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      await load().catch(() => undefined);
+    } finally { setBusy(false); }
+  }
   return <details className="panel design-version-history" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary>{target ? tr("「{0}」の版履歴", label) : tr("版履歴")}{list ? ` (${list.versions.length})` : ""}</summary>
     <p className="small muted">{target
@@ -75,10 +91,11 @@ export function DesignVersionHistory({ shopId, revision, timeZone, disabled = fa
     {list && !list.versions.length && <p className="design-version-empty">{target ? tr("「{0}」の今と違うデザインは、まだ版履歴にありません。", label) : tr("保存された版はまだありません。次にデザインを公開すると、現在の公開状態がここに保存されます。")}</p>}
     {list?.pendingRestore && <div className="notice"><p>{pendingHere ? tr("復元が未完了です。同じ版の復元を再試行してください。") : tr("ほかの画面の復元が未完了です。この画面から再試行できます。")}</p>
       {!pendingHere && <button disabled={disabled || busy} onClick={() => void restore(list.pendingRestore!.number, list.pendingRestore)}>{tr("中断した復元を再試行")}</button>}
+      {" "}<button disabled={busy} onClick={() => void cancelPending()}>{tr("復元を取り消す")}</button>
     </div>}
     {list?.publishing && !list.pendingRestore && <p className="notice">{tr("公開処理が終わってから復元できます。")}</p>}
     {!!list?.versions.length && <ol className="design-version-list">{list.versions.map(version => {
-      const current = !target && !list.pendingRestore && list.current?.restoredFrom === version.number;
+      const current = !target && !list.pendingRestore && (list.current?.restoredFrom === version.number || !!version.same);
       const retry = pendingHere && list.pendingRestore!.number === version.number || reusable(version.number);
       return <li key={version.number} data-design-version={version.number}>
         <div><strong>{tr("版 {0}", version.number)}</strong> <time dateTime={version.at}>{new Date(version.at).toLocaleString(intlLocale(), { timeZone, timeZoneName: "short" })}</time><p>{version.summary}</p></div>
