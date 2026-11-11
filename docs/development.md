@@ -21,7 +21,7 @@ Screen-edit reviews require a built preview (`npm run build`) and Chromium: set 
 
 ## Manual images
 
-After building Storybook, run `npm run capture:manual:cancellations` to capture the Japanese and English cancellation guide. `npm run check:manual` checks all referenced images, translated instructions, image zoom and mobile layout.
+After building Storybook, run `npm run capture:manual:cancellations` to capture the Japanese and English cancellation guide. `npm run check:manual` checks all referenced images, translated instructions, image zoom and mobile layout. `npm run capture:manual:guides` captures the add-on service, phone customer registration and PayPal attention guides, and `npm run check:manual:guides` checks their goal links, related links and images at desktop and phone widths.
 
 ## Traffic and diagnostic logs
 

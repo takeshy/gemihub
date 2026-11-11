@@ -69,7 +69,7 @@
     <text x="430" y="720">• PayPal prepayment on → phone bookings for today only</text>
     <text x="430" y="770">• Discounted replacement slots are never sold by phone</text>
     <text x="430" y="820">• Callers cancel only their own cash phone bookings,</text>
-    <text x="450" y="850">before the shop's deadline</text>
+    <text x="450" y="850">any time before the booking starts</text>
     <text x="430" y="900">• No silent hang-up after a failed booking</text>
   </g>
   <rect x="118" y="944" width="1044" height="164" rx="14" fill="#fdf8e8" stroke="#e8d9a8" stroke-dasharray="6 5"/>

@@ -1320,6 +1320,40 @@ pre {
   color: #65814f;
   font-size: 11px;
 }
+.manual-goals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+.manual-goals b {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.manual-goals a {
+  padding: 8px 14px;
+  background: #fff;
+  border: 1px solid #b9cba6;
+  border-radius: 8px;
+  color: var(--green);
+  font-size: 12px;
+  text-decoration: none;
+}
+.manual-goals a:hover {
+  background: #f4f6ee;
+}
+.manual-step .manual-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 22px 0 0;
+  font-size: 12px;
+}
+.manual-related b {
+  flex-basis: 100%;
+  font-size: 11px;
+}
 .manual-layout {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);

@@ -104,7 +104,9 @@
     "capture:manual:priorities": "node scripts/capture-manual-priorities.mjs",
     "check:manual:priorities": "node scripts/capture-manual-priorities.mjs --check",
     "capture:manual:history": "node scripts/capture-manual-history.mjs",
-    "check:manual:history": "node scripts/capture-manual-history.mjs --check"
+    "check:manual:history": "node scripts/capture-manual-history.mjs --check",
+    "capture:manual:guides": "node scripts/capture-manual-guides.mjs",
+    "check:manual:guides": "node scripts/capture-manual-guides.mjs --check"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.6",
