@@ -21,7 +21,7 @@ gemihub のコードを触る人向けの手順です。デモを動かすだけ
 
 ## マニュアル画像
 
-キャンセルのマニュアル画像は、Storybookのビルド後に `npm run capture:manual:cancellations` で日英を生成できます。`npm run check:manual` で画像の参照先・日英の手順・画像の拡大・スマートフォン表示を確認できます。
+キャンセルのマニュアル画像は、Storybookのビルド後に `npm run capture:manual:cancellations` で日英を生成できます。`npm run check:manual` で画像の参照先・日英の手順・画像の拡大・スマートフォン表示を確認できます。追加メニュー・電話番号でのお客様登録・PayPalの「要対応」の画像は `npm run capture:manual:guides` で生成し、`npm run check:manual:guides` で目的別の入口・関連リンク・画像をPC／スマートフォン幅で確認できます。
 
 ## アクセス集計と診断ログ
 
