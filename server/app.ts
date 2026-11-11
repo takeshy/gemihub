@@ -49,7 +49,7 @@ import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { resolveTxt } from "node:dns/promises";
 import { readFile } from "node:fs/promises";
-import { resolve, extname } from "node:path";
+import { resolve, extname, sep } from "node:path";
 import { z } from "zod";
 import { Store, bookingLockKey, mailLockKey, postLockKey, isArchivedShop, type Shop, type User } from "./store.ts";
 import { resetShop } from "./shop-reset.ts";
@@ -4137,7 +4137,7 @@ export function createApp(
       }
       const root = resolve("dist");
       const file = resolve(root, `.${path}`);
-      if (!file.startsWith(`${root}/`)) {
+      if (!file.startsWith(`${root}${sep}`)) {
         if (path !== "/") fail(404, tr("見つかりません"));
       }
       const manualAsset = /^\/manual\/(?:en\/)?[a-z0-9-]+\.jpg$/.test(path);
