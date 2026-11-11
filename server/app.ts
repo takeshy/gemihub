@@ -99,7 +99,7 @@ import { converse, draftText, type ShopData } from "./assistant.ts";
 import { paypalOps, relevantProposals } from "./paypal-ops.ts";
 import { attachAssistantLive, liveConfigured, type LiveConnector } from "./assistant-live.ts";
 import { callerNumber, createPhoneUpgrade, normalizeNumber, phoneLiveConfigured, phoneSettingsOf, phoneSettingsSchema, phoneStreamContext, phoneStreamToken, requirePhoneMenuSelection, samePhoneNumber, spokenPhonePin, twilioCredentials, twimlConnect, twimlGatherPin, twimlSay, validTwilioSignature, withinPhoneHours, type PhoneConnector, type PhoneHost } from "./phone-reception.ts";
-import { aiUsage, setProviderResolver, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, withAiDeadline, currentAiSignal, type AiProvider } from "./llm.ts";
+import { aiUsage, setProviderResolver, currentProvider, providerReady, testProvider, openAiStatus, vertexStatus, generateJson, withAiDeadline, currentAiSignal, type AiProvider } from "./llm.ts";
 import {
   session,
   login,
@@ -109,6 +109,8 @@ import {
   checkOrigin,
   origin,
   demoEnabled,
+  demoCustomerEmail,
+  demoShoppersEnabled,
   appendCookie,
 } from "./auth.ts";
 
@@ -296,6 +298,14 @@ export function createApp(
   const inquiryStorage = (shop: Shop): InquiryFileStorage => async () => ({ files: crmFiles, token: store.memory ? "" : await store.ownerToken(shop) || fail(503, tr("店主の Google 再接続が必要です")) });
   const pageFiles = storefrontFiles || (store.memory ? memoryStorefrontFiles(store) : bucketStorefrontFiles());
   const ownerToken = (shop: Shop) => store.ownerToken(shop);
+  /** The demo customer arrives already registered, so a demo booking skips the member form. */
+  const ensureDemoCustomer = async (customer: User, shopId: string) => {
+    const key = `${shopId}:${customer.email}`;
+    if (await store.get("customer", key)) return;
+    await store.put("customer", key, {
+      shopId, email: customer.email, name: customer.name, birthDate: "1990-01-01", gender: "not_specified", updatedBy: customer.email, updatedAt: new Date().toISOString(),
+    });
+  };
   const customerLoginLog = async (user: User) => {
     if (user.role !== "customer" || !user.shopId) return;
     try {
@@ -1417,6 +1427,7 @@ export function createApp(
               }
             : null,
           demo: demoEnabled(),
+          aiName: (await currentProvider()) === "openai" ? "GPT" : "Gemini",
           hosted: hosted?.slug,
           invite: accessPasswordEnabled(),
           assistantVoice: liveConfigured(),
@@ -1871,7 +1882,7 @@ export function createApp(
             email: emailSchema.optional(),
           })
           .parse(await body(req));
-        const email = input.email || `${input.role}@example.com`;
+        const email = input.email || (input.role === "customer" ? demoCustomerEmail : "owner@example.com");
         let shop = input.shopId ? await store.shop(input.shopId) : undefined;
         if (input.role === "owner") {
           shop =
@@ -1886,9 +1897,7 @@ export function createApp(
           shopId: shop.id,
         };
         if (input.role === "owner") await store.put("user", email, u);
-        else if (!await store.get("customer", `${shop.id}:${email}`)) await store.put("customer", `${shop.id}:${email}`, {
-          shopId: shop.id, email, name: u.name, birthDate: "1990-01-01", gender: "not_specified", updatedBy: email, updatedAt: new Date().toISOString(),
-        });
+        else await ensureDemoCustomer(u, shop.id);
         await login(store, res, u);
         await customerLoginLog(u);
         return json(res, { ok: true });
@@ -3574,6 +3583,15 @@ export function createApp(
           fail(404, tr("公開されたお店がありません"));
         if (hosted && hosted.id !== shopRef.id) fail(404, tr("お店がありません"));
         const action = publicRoute[2] || "";
+        // Demo mode needs no customer sign-in: anyone who is not this shop's customer acts as its shared demo
+        // customer. The session is left alone, so a demo owner trying their own storefront stays the owner.
+        const shopper = async (shop: Shop): Promise<User | undefined> => {
+          if (user?.role === "customer" && user.shopId === shop.id) return user;
+          if (!demoShoppersEnabled()) return undefined;
+          const demo: User = { email: demoCustomerEmail, name: tr("デモのお客様"), role: "customer", shopId: shop.id };
+          await ensureDemoCustomer(demo, shop.id);
+          return demo;
+        };
         if (["auth/email", "auth/email/info", "auth/email/verify"].includes(action) && method === "POST") {
           const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
           assertStorefrontAccess(shop);
@@ -3633,24 +3651,24 @@ export function createApp(
           assertStorefrontAccess(shop);
           const input = z.object({ event: z.enum(customerScreens) }).strict().parse(await body(req, 200));
           if (await operator(user, shop)) return json(res, { ok: true, ignored: true });
-          if (!user || user.role !== "customer" || user.shopId !== shop.id) fail(403, tr("このお店のお客様としてログインしてください"));
-          limitTelemetry(`${shop.id}:activity:${user.email}`);
-          logs.activity(shop.id, user.email, input.event);
+          const visitor = await shopper(shop) || fail(403, tr("このお店のお客様としてログインしてください"));
+          limitTelemetry(`${shop.id}:activity:${visitor.email}`);
+          logs.activity(shop.id, visitor.email, input.event);
           return json(res, { ok: true });
         }
         if (action === "inquiries" && method === "POST") {
           // Receiving and uploading attachments can be slow, so neither holds the shop lock.
           const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
           assertStorefrontAccess(shop);
-          if (!user || user.role !== "customer" || user.shopId !== shop.id) fail(401, tr("このお店のお客様としてログインしてください"));
-          if (!memberProfile(await store.get("customer", `${shop.id}:${user.email}`))) fail(428, tr("先に会員情報を登録してください"));
+          const visitor = await shopper(shop) || fail(401, tr("このお店のお客様としてログインしてください"));
+          if (!memberProfile(await store.get("customer", `${shop.id}:${visitor.email}`))) fail(428, tr("先に会員情報を登録してください"));
           const input = await body(req, 15 * 1024 * 1024);
-          await stagePublicInquiry(store, shop, user.email, input, inquiryStorage(shop));
+          await stagePublicInquiry(store, shop, visitor.email, input, inquiryStorage(shop));
           const accepted = await store.locked(shop.id, async () => {
             const fresh = await store.shop(shop.id) || fail(404, tr("お店がありません"));
             assertStorefrontAccess(fresh);
             const config = await effective(fresh);
-            return createPublicInquiry(store, fresh, user.email, input, q => notify(fresh, config, user.email, tr("{0} お問い合わせを受け付けました", config.name), q.message, undefined, q.attachments, { mailKind: "inquiry_receipt", inquiryId: q.id }));
+            return createPublicInquiry(store, fresh, visitor.email, input, q => notify(fresh, config, visitor.email, tr("{0} お問い合わせを受け付けました", config.name), q.message, undefined, q.attachments, { mailKind: "inquiry_receipt", inquiryId: q.id }));
           });
           await flushMail(shop);
           void syncPaymentHistory(shop.id).catch(reportError);
@@ -3663,11 +3681,8 @@ export function createApp(
           const shop = await store.shop(shopRef.id) || fail(404, tr("お店がありません"));
           if (initialPageRead && (!shop.published || isArchivedShop(shop))) fail(404, tr("公開されたお店がありません"));
           assertStorefrontAccess(shop);
-          const customer = () => {
-            if (!user || user.role !== "customer" || user.shopId !== shop.id)
-              fail(401, tr("このお店のお客様としてログインしてください"));
-            return user!;
-          };
+          const visitor = await shopper(shop);
+          const customer = () => visitor || fail(401, tr("このお店のお客様としてログインしてください"));
           const paidCancellation = action.match(/^bookings\/([^/]+)\/(cancel|cancel-quote)$/);
           if (paidCancellation && ((method === "POST" && paidCancellation[2] === "cancel") || (method === "GET" && paidCancellation[2] === "cancel-quote"))) {
             const u = customer();
@@ -3753,7 +3768,7 @@ export function createApp(
             return ({ profile });
           }
           if (!action && method === "GET") {
-            const isCustomer = user?.role === "customer" && user.shopId === shop.id;
+            const isCustomer = !!visitor;
             const profile = isCustomer ? await ownProfile() : undefined;
             return ({
               config:
@@ -3765,6 +3780,7 @@ export function createApp(
               isOperator: await operator(user, shop),
               customerProfile: profile,
               registrationRequired: isCustomer && !profile,
+              ...(visitor && visitor !== user ? { demoCustomer: { email: visitor.email, name: visitor.name } } : {}),
               preview: false,
               publication: shop.publication || "public",
               recentPosts: livePosts.slice(0, 5).map(summarizePost),
@@ -3848,7 +3864,7 @@ export function createApp(
             const views = [];
             for (const t of open) {
               const view = await transferView(t);
-              if (view?.bookingActive) views.push({ ...view, available: !buyerBusy(t, now), mine: !!user && t.seller === user.email });
+              if (view?.bookingActive) views.push({ ...view, available: !buyerBusy(t, now), mine: !!visitor && t.seller === visitor.email });
             }
             return (views.sort((a, b) => a.start.localeCompare(b.start)));
           }

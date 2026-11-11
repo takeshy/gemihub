@@ -1,3 +1,4 @@
+import { aiName } from "./ai-name";
 import { storefrontText } from "../shared/storefront-copy";
 import { Pagination, usePagination } from "./Pagination";
 import { tr } from "../shared/i18n";
@@ -272,7 +273,7 @@ export function BlogEditor({
             key={index}
             className={`article-chat-message ${message.role}`}
           >
-            <b>{message.role === "user" ? tr("あなた") : "AI"}</b>
+            <b>{message.role === "user" ? tr("あなた") : aiName()}</b>
             <p>{message.text}</p>
           </div>
         ))}

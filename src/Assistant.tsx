@@ -1,3 +1,4 @@
+import { aiName } from "./ai-name";
 import { tr } from "../shared/i18n";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useApi } from "./api";
@@ -139,7 +140,7 @@ export function Assistant({ shop, voice, userEmail, acceptPlan, reload, conversa
     <div ref={log} className="chat-log assistant-log" role="log" aria-label={tr("アシスタントとの会話")} aria-live="polite">
       {!messages.length && <p className="muted">{tr("例：「直近30日の売上は？」「売上が多いメニューは？」「キャンセルしたら返金はどうなる？」")}</p>}
       {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}>
-        <b>{message.role === "user" ? tr("あなた") : "AI"}{message.voice && <small className="muted">{tr("（音声）")}</small>}</b>
+        <b>{message.role === "user" ? tr("あなた") : aiName()}{message.voice && <small className="muted">{tr("（音声）")}</small>}</b>
         {message.role === "assistant" ? <AssistantAnswer text={message.text} /> : <div className="pre-wrap">{message.text}</div>}
         {!!message.sources?.length && <p className="assistant-sources small muted">{tr("根拠：")}{message.sources.map(source => <span key={source.path} className="pill" title={source.path}>{source.title}</span>)}</p>}
       </article>)}

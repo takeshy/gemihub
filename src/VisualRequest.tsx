@@ -1,3 +1,4 @@
+import { aiName } from "./ai-name";
 import { tr } from "../shared/i18n";
 import { useLeaveGuard } from "./leave-guard";
 import { createPortal } from "react-dom";
@@ -293,7 +294,7 @@ export function VisualRequest({shopId, config, root, local, screen, onLocalChang
       <p className="small">{tr("赤ペンで囲むか、変えたいことをそのまま書いてください。")}</p>
       <div className="visual-chat-view">{historyControls}<button type="button" className="text-button" disabled={locked} onClick={() => image ? clearCapture() : void capture()}>{image ? tr("画面を操作する") : tr("赤ペンで囲む")}</button></div>
       <div ref={log} className="chat-log visual-chat-log" role="log" aria-label={tr("画面の修正の会話")} aria-live="polite">
-        {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}><b>{message.role === "user" ? tr("あなた") : "AI"}</b><div className="pre-wrap">{message.text}</div>{!!message.imageIds?.length && <div className="chat-message-images">{message.imageIds.map((id, i) => <MenuImage key={id} imageId={id} imageBase={`/api/shops/${shopId}/menu-images`} name={tr("添付画像{0}", i + 1)} className="chat-message-image" />)}</div>}</article>)}
+        {messages.map((message, index) => <article key={index} className={`chat-message chat-message-${message.role}`}><b>{message.role === "user" ? tr("あなた") : aiName()}</b><div className="pre-wrap">{message.text}</div>{!!message.imageIds?.length && <div className="chat-message-images">{message.imageIds.map((id, i) => <MenuImage key={id} imageId={id} imageBase={`/api/shops/${shopId}/menu-images`} name={tr("添付画像{0}", i + 1)} className="chat-message-image" />)}</div>}</article>)}
         {error && <p className="alert" role="alert">{error}</p>}
       </div>
       {busy && work && !proposal && <VisualGenerationStatus shopId={shopId} work={work} />}

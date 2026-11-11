@@ -1,5 +1,5 @@
 import { serviceName } from "../shared/brand.ts";
-import { origin } from "./auth.ts";
+import { allowDemoShoppers, origin } from "./auth.ts";
 import { createApp } from "./app.ts";
 import { Store } from "./store.ts";
 if (process.env.NODE_ENV === "production") {
@@ -12,6 +12,7 @@ if (process.env.NODE_ENV === "production") {
   if (process.env.JUDGE_INVITE && process.env.PAYPAL_ENVIRONMENT === "live")
     throw new Error("Judge access requires the PayPal sandbox");
 }
+allowDemoShoppers();
 const port = Number(process.env.PORT || 3000);
 const store = new Store();
 const server = createApp(store);

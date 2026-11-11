@@ -1,4 +1,5 @@
 import { storefrontText } from "../shared/storefront-copy";
+import { setAiName, type AiName } from "./ai-name";
 import { primaryNavigationItems } from "../shared/navigation";
 import { InquiryFilePicker, useInquiryFiles } from "./InquiryFiles";
 import { serviceName } from "../shared/brand";
@@ -90,7 +91,7 @@ export type Workspace = Shop & {
   integrationAlerts?: OwnerIntegrationAlert[];
   publicUrl: string;
 };
-export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; hosted?: string; invite?: boolean; judgeCustomer?: boolean; judgeOwnerAvailable?: boolean; judgePublished?: boolean; assistantVoice?: boolean };
+export type Session = { user: (User & { admin?: boolean }) | null; demo: boolean; aiName?: AiName; hosted?: string; invite?: boolean; judgeCustomer?: boolean; judgeOwnerAvailable?: boolean; judgePublished?: boolean; assistantVoice?: boolean };
 const weekdays = () => [tr("日"), tr("月"), tr("火"), tr("水"), tr("木"), tr("金"), tr("土")];
 export type AppProps = {
   path?: string;
@@ -125,7 +126,7 @@ export function App({
     if (!judgeSession) return;
     try { sessionStorage.setItem(judgeControlsKey, judgeControlsHidden ? "1" : "0"); } catch { /* storage unavailable */ }
   }, [judgeSession, judgeControlsHidden]);
-  const refresh = () => api<Session>("/api/session").then(setSession);
+  const refresh = () => api<Session>("/api/session").then(next => { setAiName(next.aiName); setSession(next); });
   const judgePublishedChanged = useCallback((published: boolean) => {
     setSession(current => current?.user?.judge && current.judgePublished !== published ? { ...current, judgePublished: published } : current);
   }, []);
@@ -204,10 +205,6 @@ export function App({
         </div>
       </header>}
       <main>
-        {session.demo && (
-          <div className="demo-banner">
-            {tr("デモモード · Google には接続せず、サンプルで動作を確認できます。")}</div>
-        )}
         {showJudgeControls && session.user?.judge && !isPublic && (
           <div className="demo-banner judge-banner">
             {tr("審査員アクセス · メールは送信されません。内容は")}<a href="/judge-menu">{tr("審査メニュー")}</a>{tr("で確認できます。")}</div>
@@ -1367,6 +1364,7 @@ export function PublicShop({
     registrationRequired?: boolean;
     paymentSimulation?: boolean;
     isOperator?: boolean;
+    demoCustomer?: { email: string; name: string };
   }>();
   const { money: yen, when, shopTime, displayTimeZone, timeZoneLabel } = useShopDisplay(regionOf(data?.config));
   const [menu, setMenu] = useState("");
@@ -1406,9 +1404,10 @@ export function PublicShop({
   const [pane, setPane] = useState(initialPane || (session.user ? "mine" : "about"));
   const [completedBooking, setCompletedBooking] = useState<Booking>();
   const [requestId, setRequestId] = useState(() => createRequestId());
-  const isCustomer =
-    session.user?.role === "customer" && session.user.shopId === data?.shopId;
-  const confirmed = completedBooking && isCustomer && completedBooking.customer === session.user?.email && completedBooking.shopId === data?.shopId ? completedBooking : undefined;
+  // In demo mode the server lets every visitor book as a shared demo customer, with no sign-in.
+  const shopper = session.user?.role === "customer" && session.user.shopId === data?.shopId ? session.user : data?.demoCustomer;
+  const isCustomer = !!shopper;
+  const confirmed = completedBooking && isCustomer && completedBooking.customer === shopper?.email && completedBooking.shopId === data?.shopId ? completedBooking : undefined;
   const lastActivity = useRef("");
   const lastPageView = useRef("");
   useEffect(() => {
@@ -1434,12 +1433,12 @@ export function PublicShop({
   useEffect(() => {
     if (!isCustomer || !data || data.isOperator || data.paymentSimulation || category || pageSlug || confirmed || location.protocol === "file:") { lastActivity.current = ""; return; }
     const event = pane === "reserve" ? "reserve_view" : pane === "mine" ? "mypage_view" : "";
-    const key = `${base}:${session.user?.email}:${event}`;
+    const key = `${base}:${shopper?.email}:${event}`;
     if (!event) { lastActivity.current = ""; return; }
     if (lastActivity.current === key) return;
     lastActivity.current = key;
     void api(`${base}/activity`, { event }).catch(() => {});
-  }, [api, base, isCustomer, data?.shopId, data?.paymentSimulation, data?.isOperator, pane, category, pageSlug, confirmed, session.user?.email]);
+  }, [api, base, isCustomer, data?.shopId, data?.paymentSimulation, data?.isOperator, pane, category, pageSlug, confirmed, shopper?.email]);
   const leavePaymentReturn = (nextPane: string, coupon?: string) => {
     const query = new URLSearchParams(search);
     if (onPaneChange) return false;
@@ -1469,14 +1468,14 @@ export function PublicShop({
     }
   };
   const finishBooking = (booking: Booking | undefined) => {
-    if (!booking || booking.status !== "active" || booking.customer !== session.user?.email || booking.shopId !== data?.shopId) return false;
+    if (!booking || booking.status !== "active" || booking.customer !== shopper?.email || booking.shopId !== data?.shopId) return false;
     setCompletedBooking(booking);
     setMine(current => current.some(previous => previous.id === booking.id) ? current.map(previous => previous.id === booking.id ? booking : previous) : [...current,booking]);
     setCheckouts(current => current.filter(checkout => checkout.id !== booking.id));
     setPane("reserve");
     return true;
   };
-  useEffect(() => { setCompletedBooking(undefined); }, [base, session.user?.email]);
+  useEffect(() => { setCompletedBooking(undefined); }, [base, shopper?.email]);
   const confirmCheckout = async (id: string, abandon = false) => {
     const result = await api<{ ok: boolean; booking?: Booking; checkout: PendingCheckout }>(`${base}/checkouts/${id}/${abandon ? "abandon" : "capture"}`, {});
     if (result.ok && finishBooking(result.booking)) return;
@@ -1577,7 +1576,7 @@ export function PublicShop({
     return () => {
       cancelled = true;
     };
-  }, [requestedDate, automaticDate, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, session.user?.email, timesRetry]);
+  }, [requestedDate, automaticDate, menu, optionIds, staff, data, category, pageSlug, pane, confirmed, isCustomer, shopper?.email, timesRetry]);
   useEffect(() => {
     run(loadMine);
   }, [isCustomer]);
@@ -1610,7 +1609,7 @@ export function PublicShop({
     <p>{tr("会員登録またはログイン後に、メニューと日時を選んでご予約ください。")}</p>
     {!hideHeader && <a className="button primary" href="#customer-signin">{tr("会員登録・ログインへ")}</a>}
   </section>;
-  const mineMember = () => isCustomer ? <div className="member-information"><span>{data.customerProfile?.name || session.user!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div> : null;
+  const mineMember = () => isCustomer ? <div className="member-information"><span>{data.customerProfile?.name || shopper!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div> : null;
   const minePanel = () => (
             <div className="panel">
               <h2>{storefrontText(c, "mineBookings")}</h2>
@@ -1892,8 +1891,8 @@ export function PublicShop({
                 />
               </Field>
               <Field label={tr("メールアドレス")}>
-                <input aria-label={tr("メールアドレス")} type="email" autoComplete="email" required readOnly value={session.user?.email || ""} />
-                <small className="muted">{session.user ? tr("認証済みのメールアドレスです。返信はこちらに届きます。") : tr("ログインすると、お名前とメールアドレスが自動入力されます。")}</small>
+                <input aria-label={tr("メールアドレス")} type="email" autoComplete="email" required readOnly value={shopper?.email || session.user?.email || ""} />
+                <small className="muted">{shopper || session.user ? tr("認証済みのメールアドレスです。返信はこちらに届きます。") : tr("ログインすると、お名前とメールアドレスが自動入力されます。")}</small>
               </Field>
               <Field label={tr("ご相談内容")}>
                 <textarea
@@ -1944,10 +1943,10 @@ export function PublicShop({
       <ThemeBody config={c} imageBase={`${base}/images`}>
       {!hideHeader&&!isCustomer&&<section id="customer-signin" tabIndex={-1} className="public-auth" aria-label={tr("会員登録・ログイン")}>
         <div className="public-auth-intro"><strong>{tr("ご予約をご利用の方へ")}</strong><p>{data.googleAuthUrl ? tr("メールアドレスまたはGoogleアカウントでご利用いただけます。") : tr("メールアドレスでご利用いただけます。")}</p></div>
-        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><button className="primary" onClick={() => setEmailLoginOpen(true)}>{tr("会員登録")}</button></div><div><span>{tr("登録済みの方")}</span><button onClick={() => setEmailLoginOpen(true)}>{tr("ログイン")}</button></div>{session.demo&&<button type="button" onClick={()=>run(async()=>{await api("/api/demo-login",{role:"customer",shopId:data.shopId});location.reload();})}>{tr("お客様デモでログイン")}</button>}</div>
+        <div className="public-auth-actions"><div><span>{tr("初めての方")}</span><button className="primary" onClick={() => setEmailLoginOpen(true)}>{tr("会員登録")}</button></div><div><span>{tr("登録済みの方")}</span><button onClick={() => setEmailLoginOpen(true)}>{tr("ログイン")}</button></div></div>
       </section>}
       <CustomerEmailLogin base={base} shopName={c.name} googleAuthUrl={data.googleAuthUrl} open={emailLoginOpen} onClose={() => setEmailLoginOpen(false)}/>
-      {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={session.user!.email} name={session.user!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
+      {isCustomer && data.registrationRequired ? <CustomerRegistration base={base} email={shopper!.email} name={shopper!.name} profile={data.customerProfile} onSaved={profile => { setData(current => current && { ...current, customerProfile: profile, registrationRequired: false }); setName(profile.name); setPane("reserve"); }} /> : pageSlug ? (
         c.pages.find(page => page.slug === pageSlug) ? <CustomPage page={c.pages.find(page => page.slug === pageSlug)!} imageBase={`${base}/images`} /> : <p className="alert">{tr("ページがありません。")}</p>
       ) : category && articleKinds(c).includes(category) ? (
         <PublicBlog

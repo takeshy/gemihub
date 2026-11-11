@@ -5,6 +5,12 @@ import type { Store, User } from "./store.ts";
 export const origin = () => new URL(process.env.APP_ORIGIN || "http://localhost:3000").origin;
 export const demoEnabled = () =>
   process.env.DEMO_MODE === "true" && process.env.NODE_ENV !== "production";
+/** Every storefront visitor in demo mode books as this one customer, without signing in. */
+export const demoCustomerEmail = "customer@example.com";
+let demoShoppers = false;
+/** Only the server entry turns this on: test harnesses that run in demo mode still check real customer sign-in. */
+export function allowDemoShoppers() { demoShoppers = true; }
+export const demoShoppersEnabled = () => demoShoppers && demoEnabled();
 export type Session = {
   user: User;
   expires: number;
