@@ -284,7 +284,7 @@ const chapters: { id: string; title: string; steps: Step[] }[] = [
           tr("「要対応」の下の「通知の設定」を開くと、「メールで通知する」のオン・オフと「ダイジェストの時刻」を選べます。「通知設定を保存」で反映します。オンの場合、緊急の項目は見つかった時点で、そのほかはお店の時間で指定した時刻以降に1日1回まとめて、店主にメールで届きます。"),
         ]; },
         image: "72-paypal-attention.jpg",
-        extra: [{ image: "73-paypal-consult.jpg", get caption() { return tr("「相談する」を押すと、AIの説明の下に「PayPalの提案」が表示されます。承認するまで実行されません。"); } }],
+        extra: [{ image: "73-paypal-consult.jpg", get caption() { return tr("「相談する」を押すとAIが説明します。対応案がある場合は、AIの説明の下に「PayPalの提案」として表示されます。承認するまで実行されません。"); } }],
         get caption() { return tr("ダッシュボードの「要対応」。項目ごとに「相談する」と、対応案の「承認して実行」があります。金額と予約はサンプルです。"); },
         get tip() { return tr("「要対応」と「承認して実行」は店主だけに表示されます。AIはPayPalに書き込まず、金額も決めません。対応案が表示されない項目は、この画面からは実行できません。「相談する」で状況を確認してください。"); },
         get related() { return [{ id: "system", label: tr("「相談・質問」でお店のことを聞く") }, { id: "cancellation", label: tr("キャンセル後の返金予定額を確認する") }]; },

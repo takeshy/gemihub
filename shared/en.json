@@ -4268,7 +4268,6 @@
   "「実行しました」の案内と、更新された「要対応」を確認します。「状態が変わっています。最新の状態を確認してください。」と表示された場合は実行されていません。「まだ完了を確認できません。最新の状態を表示しました。」の場合は項目が残ります。どちらも、表示し直された内容を確認してください。": "Check the “Done” message and the refreshed “Attention needed” list. “The state has changed. Please review the latest state.” means nothing was run. With “Still not confirmed complete. Showing the latest state.”, the item stays in the list. In both cases, review the refreshed content.",
   "最新の状態をすぐ調べるには「今すぐチェック」を押します。完了すると要対応の件数と確認日時が表示されます。通知がオンの場合、まだ通知していない項目はこのときメールでも届きます。押さなくても約1時間ごとに自動でチェックします。": "To check the latest state right away, select “Check now”. When it finishes, it shows the number of items and the time of the check. If notifications are on, items not yet notified are also emailed at this point. Without it, a check runs automatically about once an hour.",
   "「要対応」の下の「通知の設定」を開くと、「メールで通知する」のオン・オフと「ダイジェストの時刻」を選べます。「通知設定を保存」で反映します。オンの場合、緊急の項目は見つかった時点で、そのほかはお店の時間で指定した時刻以降に1日1回まとめて、店主にメールで届きます。": "Open “Notification settings” below “Attention needed” to turn “Notify by email” on or off and choose the “Digest time”. Select “Save notification settings” to apply. When on, urgent items are emailed to the owner when found, and the rest are sent once a day in a digest after the chosen hour in the shop's time.",
-  "「相談する」を押すと、AIの説明の下に「PayPalの提案」が表示されます。承認するまで実行されません。": "After “Ask about this”, “PayPal proposals” appear under the AI's explanation. Nothing runs until you approve.",
   "ダッシュボードの「要対応」。項目ごとに「相談する」と、対応案の「承認して実行」があります。金額と予約はサンプルです。": "“Attention needed” on the dashboard. Each item has “Ask about this”, and proposed actions have “Approve and run”. Amounts and bookings are sample data.",
   "「要対応」と「承認して実行」は店主だけに表示されます。AIはPayPalに書き込まず、金額も決めません。対応案が表示されない項目は、この画面からは実行できません。「相談する」で状況を確認してください。": "“Attention needed” and “Approve and run” are shown to the owner only. AI never writes to PayPal or decides amounts. An item without a proposed action cannot be run from this screen; use “Ask about this” to check its situation.",
   "決済や返金は「この予約の支払いは完了していますか？」「この返金は完了していますか？」「この「要対応」は何を確認すればよいですか？」のように聞けます。AIはお店の台帳とPayPalの記録を読み取り専用で調べます。相談しただけでは決済や返金の処理は実行されません。「PayPalの提案」が表示された場合も、店主が「承認して実行」を押したときだけ実行されます。": "Ask about payments and refunds with questions such as “Has this booking been paid?”, “Has this refund completed?” or “What should I check for this ‘Attention needed’ item?”. AI looks up the shop's ledger and PayPal records read-only. Asking never runs a payment or refund. Even when “PayPal proposals” appear, they run only when the owner selects “Approve and run”.",
@@ -4278,5 +4277,6 @@
   "AIに相談する": "Ask AI",
   "予約・決済・返金を管理する": "Manage bookings, payments and refunds",
   "目的から探す": "Find by goal",
-  "関連する手順": "Related steps"
+  "関連する手順": "Related steps",
+  "「相談する」を押すとAIが説明します。対応案がある場合は、AIの説明の下に「PayPalの提案」として表示されます。承認するまで実行されません。": "After “Ask about this”, the AI explains the item. If there is a proposed action, it appears under the AI's explanation as “PayPal proposals”. Nothing runs until you approve."
 }
