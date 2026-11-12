@@ -82,6 +82,10 @@ Move the current-settings infographic and data/permissions overview to the Dashb
 
 After public publication, always show Payments & refunds and Resell cancelled slots in the owner's sidebar, including when nothing needs attention. The payment screen shows attention items, pending payments and payment/refund history. The resale screen shows listed, sold, closed and withdrawn listings and links to booking details. Start without a date filter.
 
+Use color and a left marker tied to `aria-current="page"` for the selected sidebar destination. The Payments & refunds icon follows the shop's currency (`$` for USD, `¥` for JPY), independently of interface language.
+
+Preserve valid selectors for generated `::before`, `::after`, `::placeholder` and other pseudo-elements when scoping theme CSS. Do not force every navigation item to appear when the theme intentionally presents a smaller selection.
+
 At initial theme creation, render real input fields, booking buttons and disabled buttons at desktop and mobile widths. Measure primary copy and controls on solid backgrounds: require 4.5:1 text contrast, or 3:1 for large headings, and return failures for repair before model approval. Distinguish disabled buttons with borders rather than fading their text through whole-button opacity. Image and gradient backgrounds remain subject to visual review rather than inferred numeric contrast.
 
 All fixed editing chats (screens, Entire page, Pages & features, and articles) support Collapse and an Open chat tab at the right edge, or bottom-right on phones. Folding releases the reserved page space while retaining messages, unsent text, red annotations, pending work, and proposals. Reopening does not recapture the screen, resend, or publish.

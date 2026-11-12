@@ -412,6 +412,7 @@ function Dashboard({
   useEffect(() => { if (shop && session.user?.judge) onPublishedChange?.(!!shop.published); }, [shop?.id, !!shop?.published, session.user?.judge, onPublishedChange]);
   const creating = !!shop?.isOwner && !shop.published;
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
+  const shopRegion = shop?.published ? regionOf(shop.published) : shop?.regionDefault || regionOf(null);
   // The dashboard needs a published configuration; staff of an unpublished shop start on their own page.
   const fallbackTab = shop?.published ? "dashboard" : "staff";
   const activeTab = (!publiclyPublished && ["bookings", "payments", "transfers", "customers", "analytics", "coupons"].includes(tab)) || (tab === "dashboard" && !shop?.published)
@@ -467,7 +468,7 @@ function Dashboard({
     ...(shop?.isOwner ? [["try", "✧", tr("AIとお店をつくる")]] : []),
     ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")], ["analytics", "▥", tr("分析")]] : []),
     ...(publiclyPublished && shop?.isOwner ? [["coupons", "◇", tr("クーポン")]] : []),
-    ...(publiclyPublished && shop?.isOwner ? [["payments", "¥", tr("決済・返金")], ["transfers", "↻", tr("キャンセル枠の再販売")]] : []),
+    ...(publiclyPublished && shop?.isOwner ? [["payments", currencyOf(shopRegion) === "USD" ? "$" : "¥", tr("決済・返金")], ["transfers", "↻", tr("キャンセル枠の再販売")]] : []),
     ["inquiries", "✉", tr("お問い合わせ")],
     ...(articleKinds(shop?.published).length ? [["blog", "✎", articleKinds(shop?.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop?.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
     ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
@@ -480,7 +481,7 @@ function Dashboard({
   const currentMenuLabel = view === "build" && shop?.published ? tr("ページ追加・機能変更") : [...menuItems, ...settingItems].find(([id]) => id === view)?.[2];
   const shopUrl = shop?.published ? new URL(shop.publicUrl, location.origin).href : undefined;
   return (
-    <ShopRegionContext.Provider value={shop?.published ? regionOf(shop.published) : shop?.regionDefault || regionOf(null)}>
+    <ShopRegionContext.Provider value={shopRegion}>
     <div className={`dashboard${creating || !shop ? " dashboard-creation" : ""}`}>
       {shop && !creating && <aside className={mobileMenuOpen ? "mobile-menu-open" : ""} onKeyDown={event => {
         if (event.key === "Escape" && mobileMenuOpen) { event.preventDefault(); closeMobileMenu(); }

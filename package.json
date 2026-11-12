@@ -24,6 +24,8 @@
     "check:shop-reset": "node --import tsx scripts/check-shop-reset.mjs",
     "check:judge-controls": "node --import tsx scripts/check-judge-controls.mjs",
     "check:judge-usability": "node --import tsx scripts/check-judge-usability.mjs",
+    "check:management-menu-state": "node --import tsx scripts/check-management-menu-state.mjs",
+    "check:theme-pseudo-elements": "node --import tsx scripts/check-theme-pseudo-elements.mjs",
     "check:initial-theme": "node --import tsx scripts/check-initial-theme.mjs",
     "check:onboarding-recovery": "node --import tsx scripts/check-onboarding-recovery.mjs",
     "check:theme-layout": "node --import tsx scripts/check-theme-layout.mjs",

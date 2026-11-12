@@ -96,7 +96,15 @@ export function compilePresentation(design: Presentation): Compiled {
     const parsed = selectorParser().astSync(rule.selector);
     parsed.walkPseudos(pseudo => { if ([":root", ":host"].includes(pseudo.value)) pseudo.replaceWith(selectorParser.className({ value: "design-root" })); });
     parsed.walkTags(tag => { if (["html", "body"].includes(tag.value)) tag.replaceWith(selectorParser.className({ value: "design-root" })); });
-    rule.selector = parsed.nodes.map(selector => `.${id} :is(${selector.toString()})`).join(",");
+    rule.selector = parsed.nodes.map(selector => {
+      // Pseudo-elements are not valid inside :is(). Keep them (and any following
+      // states) outside the wrapper so generated labels and placeholders still render.
+      const index = selector.nodes.findIndex(node => node.type === "pseudo" && (node.value.startsWith("::") || [":before", ":after", ":first-line", ":first-letter"].includes(node.value.toLowerCase())));
+      if (index < 0) return `.${id} :is(${selector.toString()})`;
+      const element = selector.nodes.slice(0, index).map(node => node.toString()).join("") || "*";
+      const pseudo = selector.nodes.slice(index).map(node => node.toString()).join("");
+      return `.${id} :is(${element})${pseudo}`;
+    }).join(",");
   });
   cssRoot.walkDecls(decl => checkDeclaration(decl, animations));
   const compiled = { nodes, css: cssRoot.toString(), id, slots, imageIds: [...new Set(imageIds)], animations };

@@ -27,6 +27,7 @@
 .dashboard aside nav .sidebar-screen-tree button,
 .dashboard aside nav summary { font-size: 14px; line-height: 1.6; }
 .dashboard aside nav button { min-height: 44px; max-width: 100%; text-align: left; }
+.dashboard > aside nav button[aria-current="page"] { background: #edf2e7 !important; color: #35563b !important; font-weight: 600; box-shadow: inset 3px 0 var(--green); }
 .dashboard .sidebar-bottom { font-size: 14px; }
 .dashboard .chat-message:not(:where(.public-shop *)) { font-size: 16px; }
 .dashboard .chat-composer > textarea { font-size: 16px; }
