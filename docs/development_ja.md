@@ -44,6 +44,7 @@ gemihub のコードを触る人向けの手順です。デモを動かすだけ
 | `GOOGLE_CLOUD_LOCATION` | Vertex AI のロケーション（例：`us-central1`） |
 | `VERTEX_MODEL` | 使用する Gemini モデル ID |
 | `VERTEX_REVIEW_MODEL` | 初回テーマ確認用モデル（省略時は `VERTEX_MODEL` を独立した文脈で使用） |
+| `VERTEX_DESIGN_MODEL` | テーマ・ページのHTML/CSS生成用モデル（省略時は `VERTEX_MODEL`） |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントの認証情報（リダイレクトURI: `${APP_ORIGIN}/auth/google/callback`） |
 | `APP_ORIGIN` | 管理画面のオリジン（ローカルでは `http://localhost:3000`） |
 | `STOREFRONT_BUCKET` | 生成した公開ページを置く非公開の Cloud Storage バケット（Firestore 利用時は必須。インメモリのデモではメモリに保存）。作成手順は [infra/README_ja.md](../infra/README_ja.md#公開htmlのバケット配信) を参照 |

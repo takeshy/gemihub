@@ -8,7 +8,7 @@ import { standardTheme } from "../shared/theme-editing.ts";
 import { sharedThemeCss } from "../shared/theme-styles.ts";
 import { visualGenerationTimeoutMs, visualModelTimeoutMs } from "../shared/visual-progress.ts";
 
-test("each visual model call gets 120 seconds and a retry leaves room for rendered review", { timeout: 5000 }, async t => {
+test("each visual model call gets 180 seconds and a retry leaves room for rendered review", { timeout: 5000 }, async t => {
   const key = process.env.OPENAI_API_KEY, model = process.env.OPENAI_MODEL;
   process.env.OPENAI_API_KEY = "test";process.env.OPENAI_MODEL = "test-model";
   t.after(() => {

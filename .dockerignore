@@ -5,6 +5,7 @@ dist
 .env
 .env.*
 !.env.example
-infra
+infra/*
+!infra/domain-controller.py
 tmp
 storybook-static

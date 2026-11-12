@@ -7,7 +7,7 @@ locals {
     "gmail.googleapis.com", "calendar-json.googleapis.com",
   ])
   image = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}/gemihub-web:bootstrap"
-  hosts = distinct([var.app_domain, "*.${var.site_domain}"])
+  hosts = distinct(concat([var.app_domain, "*.${var.site_domain}"], keys(var.custom_domains)))
 }
 
 resource "google_project_service" "app" {

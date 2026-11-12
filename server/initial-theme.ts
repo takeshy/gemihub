@@ -115,7 +115,7 @@ export async function createInitialTheme(input: { config: ShopConfig; request: s
   while (state.attempts < 3 || state.candidate) {
     if (!state.candidate) {
       state = { ...state, attempts: state.attempts + 1, review: undefined, renderedReview: undefined }; await persist();
-      const raw = await model({ system: generationSystem + "\n" + layoutInstruction + "\n" + themeComponentInstruction + "\n" + generatedStyleInstruction, schema: modelJsonSchema(generationSchema), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
+      const raw = await model({ purpose: "design", system: generationSystem + "\n" + layoutInstruction + "\n" + themeComponentInstruction + "\n" + generatedStyleInstruction, schema: modelJsonSchema(generationSchema), contents: [{ role: "user", parts: parts({ request: state.request, shop: state.config, layoutContext, previousTheme: state.previousCandidate, feedback: state.feedback }) }] });
       const parsed = themeSchema.safeParse(normalizeInitialNavigation(compactGeneratedStyles((() => { try { return JSON.parse(raw); } catch { return null; } })()), state.config));
       if (!parsed.success) { state = { ...state, feedback: parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`), candidate: undefined }; await persist(); continue; }
       state = { ...state, candidate: splitThemeStyles(parsed.data) }; await persist();

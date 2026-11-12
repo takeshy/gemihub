@@ -44,6 +44,7 @@ Update `.env` (see `.env.example` for all options):
 | `GOOGLE_CLOUD_LOCATION` | Vertex AI location (e.g., `us-central1`) |
 | `VERTEX_MODEL` | Gemini model ID on Vertex AI |
 | `VERTEX_REVIEW_MODEL` | Optional first-theme review model; defaults to `VERTEX_MODEL` in a fresh context |
+| `VERTEX_DESIGN_MODEL` | Optional model for theme and page HTML/CSS generation; defaults to `VERTEX_MODEL` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Web application OAuth credentials (redirect URI: `${APP_ORIGIN}/auth/google/callback`) |
 | `APP_ORIGIN` | Management origin (e.g., `http://localhost:3000` locally) |
 | `STOREFRONT_BUCKET` | Private Cloud Storage bucket for generated storefront pages (required with Firestore; the in-memory demo keeps them in memory). Deployment creates it: see [infra/README.md](../infra/README.md#generated-storefront-storage) |

@@ -34,7 +34,7 @@ test("responsive page patches change only selected declarations at the requested
   const patch = { cssEdits: [{ selector: ".card", media: "(max-width:760px)", declarations: [{ property: "min-width", value: "0" }, { property: "padding", value: "12px" }] }] };
   const result = await proposeVisualAppearance(before, "見切れてる。スマホだと。", [], { target: "page:staff-introduction:design", generate: async request => {
     assert.match(request.system, /return only small cssEdits/);
-    assert.equal(request.timeoutMs, 120000);
+    assert.equal(request.timeoutMs, 180000);
     assert.doesNotMatch(JSON.stringify(request.schema), /"(?:minItems|maxItems)":/);
     return JSON.stringify(patch);
   } });
@@ -100,7 +100,7 @@ test("owner introduction edits generate only page copy while preserving business
     assert.deepEqual(request.contents[0].parts!.at(-1), { inlineData: media });
     assert.deepEqual(Object.keys(request.schema.properties as object), ["body", "css", "cssEdits"]);
     assert.equal(request.schema.additionalProperties, false);
-    assert.equal(request.timeoutMs, 120000);
+    assert.equal(request.timeoutMs, 180000);
     return JSON.stringify({ body });
   } });
   assert.equal(next.config.pages[0].body, body);

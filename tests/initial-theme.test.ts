@@ -17,7 +17,7 @@ const photo = (id: string) => ({ id: id.repeat(64), name: `${id}.png`, mimeType:
 test("initial themes compact generated formatting before validation and review", async () => {
   let generations = 0;
   const result = await createInitialTheme({ config: sample, request: "Keep the design", images: [] }, {}, async call => {
-    if (call.purpose) return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
+    if (call.purpose === "review") return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
     generations++;
     const schema = call.schema as { required: string[]; properties: { css: { maxLength?: number; const?: string } } };
     for (const field of ["styles", "headerCss", "bodyCss", "footerCss"]) assert.ok(schema.required.includes(field));
@@ -34,7 +34,7 @@ test("initial themes compact generated formatting before validation and review",
 test("initial theme requests avoid Vertex's bounded-array grammar while retaining style limits", async () => {
   let generated = 0;
   const result = await createInitialTheme({ config: sample, request: "No announcements", images: [] }, {}, async call => {
-    if (call.purpose) return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
+    if (call.purpose === "review") return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
     generated++;
     if (/"(?:minItems|maxItems)":/.test(JSON.stringify(call.schema)))
       throw Object.assign(new Error("Request contains an invalid argument."), { status: 400 });
@@ -62,7 +62,7 @@ test("generation and review see the actual shop text and enabled navigation slot
   config.header.title = "A long shop name with room for all navigation";
   config.pages = [{ id: "services", slug: "services", title: "Services", navigationLabel: "Staff and services", body: "", layout: "standard", imageUrl: "" }];
   config.appearance = { accent: "sage", layout: "standard", imageUrl: "", articles: { blogs: false, announcements: true } };
-  const calls: ("review" | undefined)[] = [];
+  const calls: (string | undefined)[] = [];
   await createInitialTheme({ config, request: "An airy salon theme", images: [] }, {}, async call => {
     calls.push(call.purpose);
     const input = JSON.parse(call.contents[0].parts![0].text!);
@@ -77,20 +77,20 @@ test("generation and review see the actual shop text and enabled navigation slot
     assert.doesNotMatch(example, />ブログ</);
     assert.match(call.system, /spans.*buttons.*anchors/);
     assert.match(call.system, /narrow preview/);
-    if (call.purpose) {
+    if (call.purpose === "review") {
       assert.match(input.renderedHeader, /height:auto/);
       return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
     }
     return JSON.stringify(theme);
   });
-  assert.deepEqual(calls, [undefined, "review"]);
+  assert.deepEqual(calls, ["design", "review"]);
 });
 
 test("duplicate theme menus are repaired before review without hiding unsafe markup or changing the requested pages", async () => {
   const config = structuredClone(sample);
   const candidate = { ...theme, headerHtml: '<header><nav><a href="/?pane=reserve">ご予約</a><span>お問い合わせ</span></nav><slot name="title"></slot><slot name="navigation"></slot></header>', footerHtml: '<footer><a href="/?pane=reserve">ご予約</a><a href="https://example.com/social">Social</a><slot name="content"></slot></footer>' };
   const result = await createInitialTheme({config,request:"Make the shop",images:[]},{},async call=>{
-    if(!call.purpose)return JSON.stringify(candidate);
+    if(call.purpose !== "review")return JSON.stringify(candidate);
     const input=JSON.parse(call.contents[0].parts![0].text!);
     assert.doesNotMatch(input.theme.headerHtml, /<nav>|ご予約|お問い合わせ/);
     assert.doesNotMatch(input.theme.footerHtml, /ご予約/);
@@ -107,10 +107,10 @@ test("duplicate theme menus are repaired before review without hiding unsafe mar
 test("preview rejects unmanaged images, and a deliberate retry repairs an exhausted run using its saved feedback", async () => {
   const input={config:structuredClone(sample),request:"A calm shop",images:[]};
   let saved:ThemeRun|undefined;
-  await assert.rejects(createInitialTheme(input,{save:async state=>{saved=state;}},async call=>JSON.stringify(call.purpose?{approved:false,issues:["Increase contrast"],imageUsage:[]}:theme)),{status:422});
+  await assert.rejects(createInitialTheme(input,{save:async state=>{saved=state;}},async call=>JSON.stringify(call.purpose==="review"?{approved:false,issues:["Increase contrast"],imageUsage:[]}:theme)),{status:422});
   let generations=0;
   const result=await createInitialTheme(input,{state:saved},async call=>{
-    if(call.purpose)return JSON.stringify({approved:true,issues:[],imageUsage:[]});
+    if(call.purpose === "review")return JSON.stringify({approved:true,issues:[],imageUsage:[]});
     generations++;
     const data=JSON.parse(call.contents[0].parts![0].text!);
     assert.deepEqual(data.feedback,["Increase contrast"]);
@@ -147,10 +147,10 @@ test("reviewer distinguishes a page reference from a logo asset and repairs an i
   let calls = 0; const purposes: unknown[] = []; const persisted: ThemeRun[] = [];
   const state = await createInitialTheme({ config: original, request: "Use a as the style reference. Use b as my logo.", images: [reference, logo] }, { save: async s => { persisted.push(structuredClone(s)); } }, async input => {
     purposes.push(input.purpose); calls++;
-    if (!input.purpose) return JSON.stringify({ ...theme, headerHtml: `<header><img data-image-id="${calls===1?reference.id:logo.id}" alt="Logo"><slot name="navigation"></slot></header>` });
+    if (input.purpose !== "review") return JSON.stringify({ ...theme, headerHtml: `<header><img data-image-id="${calls===1?reference.id:logo.id}" alt="Logo"><slot name="navigation"></slot></header>` });
     return JSON.stringify({ approved: true, issues: [], imageUsage: [{ id: reference.id, purpose: "reference" }, { id: logo.id, purpose: "asset" }] });
   });
-  assert.equal(state.attempts, 2); assert.equal(calls, 4); assert.deepEqual(purposes, [undefined, "review", undefined, "review"]);
+  assert.equal(state.attempts, 2); assert.equal(calls, 4); assert.deepEqual(purposes, ["design", "review", "design", "review"]);
   assert.deepEqual(themeImageIds(state.candidate), [logo.id]); assert.deepEqual(original, sample, "backend settings were not rewritten by the theme loop");
   assert.ok(persisted.some(s => s.feedback.length));
   assert.ok(persisted.some(s => s.feedback.length && s.previousCandidate), "repair receives the rejected HTML/CSS as well as the review");
@@ -165,11 +165,11 @@ test("reviewer distinguishes a page reference from a logo asset and repairs an i
 test("review loop stops at three attempts and resumes review after a temporary failure without regenerating", async () => {
   let generations=0, reviews=0; let saved:ThemeRun|undefined;
   const input={config:structuredClone(sample),request:"A different layout",images:[]};
-  const model=async (call: {purpose?:"review"}) => { if(!call.purpose){generations++;return JSON.stringify(theme);}reviews++;if(reviews===1)throw new Error("review network failed");return JSON.stringify({approved:true,issues:[],imageUsage:[]}); };
+  const model=async (call: {purpose?: string}) => { if(call.purpose !== "review"){generations++;return JSON.stringify(theme);}reviews++;if(reviews===1)throw new Error("review network failed");return JSON.stringify({approved:true,issues:[],imageUsage:[]}); };
   await assert.rejects(createInitialTheme(input,{save:async state=>{saved=state;}},model),/review network failed/);
   const result=await createInitialTheme(input,{state:saved},model);assert.equal(result.review?.approved,true);assert.equal(generations,1);assert.equal(reviews,2);
   let rejected=0;
-  await assert.rejects(createInitialTheme(input,{},async call=>{if(!call.purpose)return JSON.stringify(theme);rejected++;return JSON.stringify({approved:false,issues:["Duplicate navigation"],imageUsage:[]});}),{status:422});
+  await assert.rejects(createInitialTheme(input,{},async call=>{if(call.purpose !== "review")return JSON.stringify(theme);rejected++;return JSON.stringify({approved:false,issues:["Duplicate navigation"],imageUsage:[]});}),{status:422});
   assert.equal(rejected,3);
 });
 

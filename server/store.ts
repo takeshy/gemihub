@@ -42,6 +42,8 @@ export type Shop = {
   domain?: string;
   domainToken?: string;
   domainVerified?: boolean;
+  /** New claims wait for verified HTTPS before becoming the public URL. */
+  domainManaged?: boolean;
   /** Reset shops remain as audit records, but are never served or synchronized. */
   archivedAt?: string;
   /** Present on shops created through hackathon judge access; stored in the operator's demo Google Drive. */

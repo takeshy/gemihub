@@ -77,6 +77,8 @@ export type Plan = {
 };
 export type Inquiry = Omit<import("../server/customers").Inquiry, "shopId" | "at"> & { at?: string };
 export type Workspace = Shop & {
+  domainConnection?: import("../shared/custom-domain").DomainConnection;
+  domainAddress?: string;
   isOwner: boolean;
   plans: Plan[];
   bookings: Booking[];
@@ -1243,6 +1245,24 @@ function Settings({
   const api = useApi();
   const [domain, setDomain] = useState(shop.domain || "");
   const [exportTable, setExportTable] = useState("bookings");
+  useEffect(() => { setDomain(shop.domain || ""); }, [shop.domain]);
+  useEffect(() => {
+    if (!shop.isOwner || !shop.domainVerified || shop.domainConnection?.status === "connected") return;
+    let checking = false;
+    const timer = window.setInterval(() => {
+      if (checking) return;
+      checking = true;
+      void api<{ connection: Workspace["domainConnection"] | null }>(`/api/shops/${shop.id}/domain/status`).then(result => {
+        if (result.connection?.status !== shop.domainConnection?.status ||
+            result.connection?.authorization?.data !== shop.domainConnection?.authorization?.data ||
+            result.connection?.dns?.authorization !== shop.domainConnection?.dns?.authorization ||
+            result.connection?.dns?.address !== shop.domainConnection?.dns?.address) return reload();
+      }).catch(() => {}).finally(() => { checking = false; });
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [api, shop.id, shop.isOwner, shop.domainVerified, shop.domainConnection, reload]);
+  const connection = shop.domainConnection;
+  const needsCname = !!connection?.authorization && ["dns_required", "retrying"].includes(connection.status) && connection.dns?.authorization !== true;
   return (
     <div className="panel">
       {hasLegacyNotes && <section className="legacy-notes-settings"><h2>{tr("旧環境からの引き継ぎ")}</h2><p>{tr("ノートとAIチャットはkiokuflowへ移動しました")}</p><a className="button" href="/settings/migration">{tr("引き継ぎの案内を開く")}</a></section>}
@@ -1295,25 +1315,54 @@ function Settings({
         <button disabled={!shop.isOwner}>{tr("ドメインを設定")}</button>
       </form>
       {shop.domainToken && (
-        <div className="config-summary">
+        <div className="config-summary custom-domain-settings">
+          {shop.domainVerified && <div className="custom-domain-status" data-state={connection?.status || "preparing"} role="status">
+            <span className="custom-domain-status-indicator" aria-hidden="true" />
+            <div className="custom-domain-status-content"><strong>{
+            needsCname ? tr("CNAME レコードの追加が必要です") :
+            connection?.status === "connected" ? tr("独自ドメインで接続済み") :
+            connection?.status === "dns_required" ? tr("接続先の A レコードを確認してください") :
+            connection?.status === "certificate_pending" ? tr("HTTPS 証明書を発行しています") :
+            connection?.status === "connecting" ? tr("HTTPS でお店への接続を確認しています") :
+            connection?.status === "retrying" ? tr("接続を再確認しています。DNS レコードを確認してください。") :
+            tr("証明書の確認用 DNS レコードを準備しています")
+          }</strong>
+            {needsCname && <p>{tr("所有権の確認は完了しました。証明書を発行するため、下の CNAME レコードを DNS 管理画面に追加してください。追加済みの場合は反映をお待ちください。")}</p>}
+            {!connection?.authorization && <p>{tr("準備ができると、追加する CNAME レコードがここに表示されます。")}</p>}
+            </div></div>}
           <p>{tr("DNS 管理画面で次のレコードを追加してください。")}</p>
           <code>TXT _gemihub.{shop.domain}</code>
           <pre>{shop.domainToken}</pre>
-          <p className="small">
-            {tr("加えて、このサービスの公開先への DNS 接続と HTTPS 証明書をサーバーの運用担当者に設定してもらってください。")}</p>
-          <p className="pill">
-            {shop.domainVerified ? tr("所有権を確認済み") : tr("所有権の確認待ち")}
-          </p>
+          {shop.domainAddress && <><code>A {shop.domain}</code><pre>{shop.domainAddress}</pre></>}
+          {connection?.authorization && <section className="custom-domain-cname" data-required={needsCname || undefined}>
+            <h4>{needsCname ? tr("次に追加する CNAME レコード") : tr("証明書用の CNAME レコード")}</h4>
+            <code>CNAME {connection.authorization.name}</code>
+            <pre>{connection.authorization.data}</pre>
+          </section>}
+          <p className="small">{tr("表示された DNS レコードを追加してください。証明書の発行とお店への接続は自動で行います。")}</p>
+          <p className="small">{tr("同じホスト名の古い A・AAAA レコードがある場合は置き換えてください。DNS のプロキシ機能は無効にし、確認用 TXT と CNAME は接続後も残してください。")}</p>
+          {connection?.status !== "connected" && <p className="small">{tr("接続が完了するまでは、現在のお店のアドレスを引き続き使えます。反映には時間がかかる場合があります。")}</p>}
+          <div className="custom-domain-footer">
+            <p className="pill">
+              {shop.domainVerified ? tr("所有権を確認済み") : tr("所有権の確認待ち")}
+            </p>
+            <div className="custom-domain-actions">
           <button
             disabled={!shop.isOwner}
             onClick={() =>
               run(async () => {
-                await api(`/api/shops/${shop.id}/domain/verify`, {});
+                if (!shop.domainVerified) await api(`/api/shops/${shop.id}/domain/verify`, {});
                 await reload();
               })
             }
           >
-            {tr("DNS の所有権を確認する")}</button>
+            {shop.domainVerified ? tr("接続状況を更新") : tr("DNS の所有権を確認する")}</button>
+          {shop.isOwner && <button type="button" onClick={() => run(async () => {
+            await api(`/api/shops/${shop.id}/domain/remove`, {});
+            await reload();
+          })}>{tr("独自ドメインを解除")}</button>}
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -117,9 +117,25 @@ terraform -chdir=../gemihub/infra output -json shared_lb_registration \
   > /tmp/gemihub-web-lb-registration.json
 ```
 
-kiokuflow の既存 private 設定に、出力の `shared_vm_backends.gemihub-web` と `shared_vm_hosts.gemihub-web` を**マージ**します。既存の kiokuflow / Kakeratta / Geo の backend 指定は残してください。`terraform/environments/prod` で plan を確認して apply します。追加設定がない状態の既存ホスト規則は変わりません。独自ドメインを店舗へ追加する場合は、そのドメインの証明書・DNS・`shared_vm_hosts.gemihub-web`・登録の `hosts` も別途追加します。店主画面の TXT 確認だけでは LB の設定は増えません。
+kiokuflow の既存 private 設定に、出力の `shared_vm_backends.gemihub-web` と `shared_vm_hosts.gemihub-web` を**マージ**します。既存の kiokuflow / Kakeratta / Geo の backend 指定は残してください。`terraform/environments/prod` で plan を確認して apply します。追加設定がない状態の既存ホスト規則は変わりません。一般ユーザーの独自ドメインは、下記の専用コントローラーが接続します。
 
 証明書が `ACTIVE`、`shared-apps-gemihub-web` が healthy になったことを確認し、管理画面・店舗サブドメイン・Google ログイン・再ログイン後の永続化・実際のモデル呼出を確認します。共有 health check は TCP 到達性の確認であり、OAuth / Firestore / Vertex AI の疎通確認ではありません。
+
+### 店舗の独自ドメインの自動接続
+
+店主が任意の取得済みドメインを登録し、表示された TXT・A と、所有権確認後の証明書認証用 CNAME を自分の DNS に追加します。1分ごとの専用コントローラーが証明書を発行し、既存 URL map の店舗ホスト規則と専用 Nginx include だけを更新します。実際の HTTPS 接続で店舗 ID が一致するまで公開 URL は従来のものを維持します。一般ユーザーのドメインを tfvars に追加する必要はありません。
+
+初回はこの state の専用 SA・限定 IAM・ドメイン一覧オブジェクトを apply し、kiokuflow 側の `storefront_domain_registry_bucket` に `storefront_bucket` の出力を設定します。kiokuflow の Terraform も同じ一覧を読み、後日の apply で自動接続ドメインを消さない構成です。
+
+```sh
+terraform -chdir=infra output -json domain_controller_config > /tmp/gemihub-domains.json
+# domain-controller.py / install-domain-controller.sh / この設定 JSON を VM の一時ディレクトリへ転送
+sudo bash /path/to/install-domain-controller.sh /path/to/source /path/to/gemihub-domains.json
+```
+
+VM 再作成時にもこの初期設定を復元します。既存 VM では Kakeratta のコード・コンテナ・登録バンドルを変更せず、専用 timer と Nginx reload だけで動作します。通常の gemihub 配信は稼働中イメージからコントローラーを更新します。コントローラーは専用 SA を代理認証し、ウェブ実行アカウントには共有フロントエンドの管理権限を付与しません。DNS プロバイダーの変更権限も不要です。状態は `domainConnection` として店舗データと分け、確認用トークンの世代が一致するものだけを表示します。解除・店舗アーカイブ・未確認ドメインは配信対象から外します。
+
+運営者自身が管理する既存 Cloud DNS zone にレコードを作成する場合だけ、任意の `custom_domains = { "reserve.example.com" = { dns_project_id = "example-dns-project", dns_zone = "example-com" } }` を使えます。例えば `nail.takeshy.work` のレコードは takeshy.work 環境の既存ゾーンを使い、このアプリの state が追加レコードを管理します。ゾーン自体や既存レコードを別 state に取り込まず、所有権 TXT は維持します。
 
 ## 継続デプロイと検証
 

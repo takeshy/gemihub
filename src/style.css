@@ -2896,3 +2896,66 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .visual-generation-status[data-stage="complete"] .visual-generation-indicator { animation: none; border-color: var(--green); background: #cddfc4; }
 @keyframes visual-generation-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .visual-generation-indicator { animation: none; } }
+
+.custom-domain-settings code { display: block; overflow-wrap: anywhere; }
+.custom-domain-settings pre { overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.custom-domain-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #cad7c5;
+  border-inline-start: 4px solid #597c52;
+  border-radius: 10px;
+  background: #fff;
+  color: #244b40;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.custom-domain-status strong { font-weight: 700; }
+.custom-domain-status-indicator {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #c5d2c0;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: custom-domain-spin 1s linear infinite;
+}
+.custom-domain-status[data-state="dns_required"] .custom-domain-status-indicator {
+  animation: none;
+  border-color: currentColor;
+  background: #e8f0e3;
+}
+.custom-domain-status[data-state="connected"] .custom-domain-status-indicator,
+.custom-domain-status[data-state="retrying"] .custom-domain-status-indicator {
+  display: grid;
+  place-items: center;
+  animation: none;
+  border: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.custom-domain-status[data-state="connected"] .custom-domain-status-indicator::before { content: "✓"; }
+.custom-domain-status[data-state="retrying"] { color: #7d420b; background: #fff8ed; border-color: #dfc49b; }
+.custom-domain-status[data-state="retrying"] .custom-domain-status-indicator::before { content: "!"; }
+.custom-domain-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 20px; }
+.custom-domain-footer > .pill { margin: 0; }
+.custom-domain-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.custom-domain-actions button { margin: 0; min-height: 44px; }
+@keyframes custom-domain-spin { to { transform: rotate(360deg); } }
+@media (max-width: 600px) {
+  .custom-domain-footer { align-items: flex-start; }
+  .custom-domain-actions { width: 100%; flex-direction: column; align-items: stretch; }
+}
+@media (prefers-reduced-motion: reduce) { .custom-domain-status-indicator { animation: none; } }
+
+.custom-domain-status-content { min-width: 0; }
+.custom-domain-status .custom-domain-status-content p { margin: 8px 0 0; color: inherit; font-size: 14px; line-height: 1.7; }
+.custom-domain-status-indicator { margin-block: 4px; align-self: flex-start; }
+.custom-domain-cname { margin: 20px 0; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.custom-domain-cname[data-required] { border: 2px solid #597c52; background: #f0f6ec; }
+.custom-domain-cname h4 { margin: 0 0 12px; color: #244b40; font-size: 15px; }
+.custom-domain-cname pre { margin-bottom: 0; }

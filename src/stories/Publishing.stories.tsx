@@ -27,3 +27,10 @@ export const PublicationError: Story = {
 };
 
 export const PublishedHistory: Story = { name: "公開後の画面確認・全体の版履歴", args: { scenario: "published-history" } };
+
+export const DomainDNS: Story = { name: "独自ドメイン・DNS待ち", args: { scenario: "domain-dns" } };
+export const DomainCertificate: Story = { name: "独自ドメイン・証明書発行中", args: { scenario: "domain-certificate" } };
+export const DomainConnected: Story = { name: "独自ドメイン・接続済み", args: { scenario: "domain-connected" } };
+export const DomainRetrying: Story = { name: "独自ドメイン・再確認中", args: { scenario: "domain-retrying" } };
+
+export const DomainPreparing: Story = { name: "独自ドメイン・証明書DNS準備中", args: { scenario: "domain-preparing" } };

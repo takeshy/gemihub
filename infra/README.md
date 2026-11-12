@@ -125,9 +125,25 @@ terraform -chdir=../gemihub/infra output -json shared_lb_registration \
   > /tmp/gemihub-web-lb-registration.json
 ```
 
-Merge `shared_vm_backends.gemihub-web` and `shared_vm_hosts.gemihub-web` into kiokuflow's existing private configuration, preserving kiokuflow/Kakeratta/Geo backends. Review/apply the plan in `terraform/environments/prod`. Existing rules are unchanged when no extension is configured. Custom storefront domains additionally require certificates, DNS, `shared_vm_hosts.gemihub-web`, and registration `hosts`; owner-side TXT verification alone does not update load-balancer routing.
+Merge `shared_vm_backends.gemihub-web` and `shared_vm_hosts.gemihub-web` into kiokuflow's existing private configuration, preserving kiokuflow/Kakeratta/Geo backends. Review/apply the plan in `terraform/environments/prod`. Existing rules are unchanged when no extension is configured. Customer domains use the dedicated self-service controller below.
 
 Check that the certificate is `ACTIVE` and `shared-apps-gemihub-web` is healthy. Then verify management/storefront hosts, Google login, persistence after logging in again, and actual model calls. The shared TCP health check proves reachability only, not OAuth, Firestore, or Vertex connectivity.
+
+### Automatic custom storefront domains
+
+Owners register any domain they own and add the displayed TXT and A records, then the certificate authorization CNAME after ownership verification. A dedicated controller runs every minute, issues the certificate, and updates only the booking host rule and its own Nginx include. The public URL remains unchanged until real HTTPS verification identifies the intended shop. Customer domains require no per-domain tfvars updates.
+
+Apply this state's dedicated service account, scoped IAM and registry object first. Set kiokuflow's `storefront_domain_registry_bucket` to this state's storefront bucket so future Terraform runs preserve automatically connected domains.
+
+```sh
+terraform -chdir=infra output -json domain_controller_config > /tmp/gemihub-domains.json
+# Transfer domain-controller.py, install-domain-controller.sh and this JSON to a temporary VM directory.
+sudo bash /path/to/install-domain-controller.sh /path/to/source /path/to/gemihub-domains.json
+```
+
+Restore this initialization when recreating the VM. Existing Kakeratta code, containers and registration bundles are unchanged; the separate timer reloads Nginx. Normal gemihub deployments update the controller from the running image. The controller impersonates its own service account; the web runtime receives no shared frontend management permissions and neither needs DNS provider write access. Generation-bound `domainConnection` records stay separate from shop writes. Disconnected, archived and unverified claims lose routing.
+
+The optional `custom_domains` map is only for operator-managed Cloud DNS records in an existing zone, for example `custom_domains = { "reserve.example.com" = { dns_project_id = "example-dns-project", dns_zone = "example-com" } }`. The `nail.takeshy.work` deployment uses the existing takeshy.work environment's zone. Only the additional records belong to this state; preserve existing DNS state and the owner's TXT record.
 
 ## Continuous deployment and verification
 

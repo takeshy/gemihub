@@ -48,6 +48,8 @@ import {
 import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { AsyncResource } from "node:async_hooks";
 import { resolveTxt } from "node:dns/promises";
+import { currentDomainConnection, domainReady } from "./custom-domain.ts";
+import type { DomainConnection } from "../shared/custom-domain.ts";
 import { readFile } from "node:fs/promises";
 import { resolve, extname, sep } from "node:path";
 import { z } from "zod";
@@ -1247,6 +1249,13 @@ export function createApp(
       }
       // Judge shops disappear when judge access ends; a reset archives the previous shop.
       const allShops = (await store.list<Shop>("shop")).filter(shop => !isArchivedShop(shop) && (!shop.judge || judgeActive()));
+      if (path === "/.well-known/gemihub-domain" && method === "GET" && host !== appHost) {
+        const domainShop = allShops.find(s => s.domainVerified && s.domain === host);
+        if (domainShop) {
+          res.setHeader("Cache-Control", "no-store");
+          return json(res, { shopId: domainShop.id, domain: host });
+        }
+      }
       const hosted =
         host !== appHost
           ? allShops.find(
@@ -1919,10 +1928,15 @@ export function createApp(
           const locale = await store.get<{ locale: "ja" | "en" }>("shopLocale", shop.id);
           if (locale?.locale !== getLocale()) await store.put("shopLocale", shop.id, { locale: getLocale() });
         }
+        const domainSettings = await store.get<{ address: string }>("domainSettings", "current");
         return json(res, {
           shops: await Promise.all(
-            shops.map(async (shop) => ({
+            shops.map(async (shop) => {
+              const domainConnection = currentDomainConnection(shop, await store.get<DomainConnection>("domainConnection", shop.id));
+              return {
               ...shop,
+              domainConnection,
+              domainAddress: process.env.CUSTOM_DOMAIN_ADDRESS || domainSettings?.address || domainConnection?.address || "",
               isOwner: user.email === shop.owner,
               bookings: await store.bookings(shop.id),
               paymentCheckouts: (await store.list<Checkout>("checkout")).filter(c => c.shopId === shop.id && ["creating", "awaiting_approval", "capturing", "captured"].includes(c.phase)).map(c => ({ ...checkoutView(c), customer: c.customer, name: c.booking.name })),
@@ -1952,12 +1966,13 @@ export function createApp(
               // Judges stay on the management origin, where their trial customer session also lives.
               publicUrl: shop.judge
                 ? `/s/${shop.slug}`
-                : shop.domainVerified
+                : domainReady(shop, domainConnection)
                 ? `https://${shop.domain}`
                 : process.env.SITE_DOMAIN
                   ? `https://${shop.slug}.${process.env.SITE_DOMAIN}`
                   : `/s/${shop.slug}`,
-            })),
+              };
+            }),
           ),
         });
       }
@@ -2010,6 +2025,12 @@ export function createApp(
           (await store.shop(ownerRoute[1])) || fail(404, tr("お店がありません"));
         await assertOperator(user, shop);
         const action = ownerRoute[2] || "";
+        if (action === "domain/status" && method === "GET") {
+          assertOwner(user, shop);
+          const connection = currentDomainConnection(shop, await store.get<DomainConnection>("domainConnection", shop.id));
+          res.setHeader("Cache-Control", "no-store");
+          return json(res, { connection: connection || null });
+        }
         if (action === "inquiries" && method === "GET") return json(res, await inquiries(shop));
         const inquiryFile = action.match(/^inquiries\/([^/]+)\/files\/([^/]+)$/);
         if (inquiryFile && method === "GET") {
@@ -3543,27 +3564,45 @@ export function createApp(
               if (
                 domain === appHost ||
                 (await store.list<Shop>("shop")).some(
-                  (s) => !isArchivedShop(s) && s.id !== fresh.id && s.domain === domain,
+                  (s) => !isArchivedShop(s) && s.id !== fresh.id && s.domainVerified && s.domain === domain,
                 )
               )
                 fail(409, tr("このドメインは利用できません"));
+              if (fresh.domain === domain) return json(res, { ok: true });
+              if (domain === process.env.SITE_DOMAIN || domain.endsWith(`.${process.env.SITE_DOMAIN}`) ||
+                  ["gemihub.net", "kiokuflow.net", "kakeratta.net"].some(suffix => domain === suffix || domain.endsWith(`.${suffix}`)))
+                fail(409, tr("このドメインは利用できません"));
               fresh.domain = domain;
               fresh.domainVerified = false;
+              fresh.domainManaged = true;
               fresh.domainToken = randomBytes(24).toString("hex");
               await savePublicShop(fresh);
               return json(res, { ok: true });
             });
           }
+          if (action === "domain/remove" && method === "POST") {
+            assertOwner(user, fresh);
+            delete fresh.domain;
+            delete fresh.domainToken;
+            delete fresh.domainVerified;
+            delete fresh.domainManaged;
+            await savePublicShop(fresh);
+            return json(res, { ok: true });
+          }
           if (action === "domain/verify" && method === "POST") {
             assertOwner(user, fresh);
             if (!fresh.domain || !fresh.domainToken)
               fail(400, tr("先にドメインを設定してください"));
-            const records = await resolveTxt(`_gemihub.${fresh.domain}`).catch(() => []);
-            if (!records.some((r) => r.join("") === fresh.domainToken))
-              fail(400, tr("確認用 TXT レコードが見つかりません"));
-            fresh.domainVerified = true;
-            await savePublicShop(fresh);
-            return json(res, { ok: true });
+            return await store.locked(`domain:${fresh.domain}`, async () => {
+              const records = await resolveTxt(`_gemihub.${fresh.domain}`).catch(() => []);
+              if (!records.some((r) => r.join("") === fresh.domainToken))
+                fail(400, tr("確認用 TXT レコードが見つかりません"));
+              if ((await store.list<Shop>("shop")).some(s => !isArchivedShop(s) && s.id !== fresh.id && s.domainVerified && s.domain === fresh.domain))
+                fail(409, tr("このドメインは利用できません"));
+              fresh.domainVerified = true;
+              await savePublicShop(fresh);
+              return json(res, { ok: true });
+            });
           }
           if (action === "documents" && method === "GET")
             return json(

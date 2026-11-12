@@ -163,6 +163,7 @@ export type Scenario =
   | "data"
   | "data-empty"
   | "settings"
+  | "domain-preparing" | "domain-dns" | "domain-certificate" | "domain-connected" | "domain-retrying"
   | "sync-error"
   | "publication-error"
   | "reservation"
@@ -248,7 +249,7 @@ export function scenarioProps(scenario: Scenario) {
           "calendar-member": "staff",
           "calendar-missing-staff": "staff",
           data: "basic", "data-empty": "basic",
-          settings: "settings", "published-history": "settings",
+          settings: "settings", "domain-preparing": "settings", "domain-dns": "settings", "domain-certificate": "settings", "domain-connected": "settings", "domain-retrying": "settings", "published-history": "settings",
           "sync-error": "bookings",
         } as Partial<Record<Scenario, string>>
       )[scenario] || "build",
@@ -431,6 +432,21 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
         ? "gemihub-storybook-verification-token"
         : undefined,
   };
+  if (scenario === "settings" || scenario.startsWith("domain-")) {
+    shop.domain = "reserve.example.com";
+    shop.domainToken = "gemihub-storybook-verification-token";
+    shop.domainAddress = "203.0.113.10";
+    if (scenario !== "settings") {
+      shop.domainVerified = true;
+      shop.domainConnection = {
+        domain: shop.domain, generation: "sample", address: shop.domainAddress, updatedAt: new Date().toISOString(),
+        status: scenario === "domain-preparing" ? "preparing" : scenario === "domain-connected" ? "connected" : scenario === "domain-certificate" ? "certificate_pending" : scenario === "domain-retrying" ? "retrying" : "dns_required",
+        dns: { address: true, authorization: scenario !== "domain-dns" },
+        authorization: scenario === "domain-preparing" ? undefined : { type: "CNAME", name: "_acme-challenge_example.reserve.example.com.", data: "example.authorize.certificatemanager.goog." },
+      };
+      if (scenario === "domain-connected") shop.publicUrl = "https://reserve.example.com";
+    }
+  }
   if (["system", "system-payment", "system-owner-only", "management-dashboard-staff", "management-dashboard-provisional"].includes(scenario)) shop.inquiries[0].status = "new";
   if (scenario === "management-dashboard-empty") { shop.bookings = []; shop.inquiries = []; }
   if (scenario === "management-dashboard-staff") shop.isOwner = false;
@@ -1162,8 +1178,19 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
       shop.domainToken = "gemihub-storybook-verification-token";
       shop.domainVerified = false;
       result = { ok: true };
+    } else if (action.endsWith("/domain/status")) {
+      result = { connection: shop.domainConnection || null };
+    } else if (action.endsWith("/domain/remove")) {
+      delete shop.domain;
+      delete shop.domainToken;
+      delete shop.domainVerified;
+      delete shop.domainConnection;
+      shop.publicUrl = "/s/salon-nagi";
+      result = { ok: true };
     } else if (action.endsWith("/domain/verify")) {
       shop.domainVerified = true;
+      shop.domainAddress = "203.0.113.10";
+      shop.domainConnection = { domain: shop.domain!, generation: "sample", address: shop.domainAddress, updatedAt: new Date().toISOString(), status: "dns_required", dns: { address: true, authorization: false }, authorization: { type: "CNAME", name: "_acme-challenge_example." + shop.domain + ".", data: "example.authorize.certificatemanager.goog." } };
       result = { ok: true };
     } else if (
       action.startsWith("/api/public/")

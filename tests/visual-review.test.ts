@@ -33,7 +33,7 @@ test("visual review receives the rendered before/after pixels at both widths and
     },
     model: async input => {
       assert.equal(input.purpose, "review");
-      assert.equal(input.timeoutMs, 120000);
+      assert.equal(input.timeoutMs, 180000);
       const parts = input.contents[0].parts!;
       const images = parts.flatMap(part => part.inlineData ? [part.inlineData] : []);
       assert.equal(images.length, 4);
@@ -69,14 +69,14 @@ test("initial theme corrections require rendered approval, use feedback to repai
     reviews++; assert.equal(config.name, sample.name);
     return { approved: reviews > 1, issues: reviews > 1 ? [] : ["The mobile title is clipped"] };
   } }, async request => {
-    if (request.purpose) return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
+    if (request.purpose === "review") return JSON.stringify({ approved: true, issues: [], imageUsage: [] });
     generated++; if (generated > 1) assert.match(JSON.stringify(request.contents), /mobile title is clipped/);
     return JSON.stringify(theme);
   });
   assert.equal(result.renderedReview?.approved, true); assert.equal(generated, 2); assert.equal(reviews, 2);
   let saved: typeof result | undefined;
   generated = 0;
-  const model = async (request: { purpose?: "review" }) => { if (!request.purpose) generated++; return JSON.stringify(request.purpose ? { approved: true, issues: [], imageUsage: [] } : theme); };
+  const model = async (request: { purpose?: string }) => { if (request.purpose !== "review") generated++; return JSON.stringify(request.purpose === "review" ? { approved: true, issues: [], imageUsage: [] } : theme); };
   await assert.rejects(createInitialTheme(input, { save: async state => { saved = state; }, reviewRendered: async () => { throw new Error("capture failed"); } }, model), /capture failed/);
   const resumed = await createInitialTheme(input, { state: saved, reviewRendered: async () => ({ approved: true, issues: [] }) }, model);
   assert.equal(resumed.renderedReview?.approved, true); assert.equal(generated, 1, "a capture retry does not regenerate the saved candidate");

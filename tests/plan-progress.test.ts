@@ -31,7 +31,7 @@ test("progress and saved conversations remain readable during generation, reveal
     calls++;
     assert.equal(current,null);
     const result=await createInitialTheme({config:{...structuredClone(sample),notificationEmail:email},request:text,images:images||[]},context,async call=>{
-      if(!call.purpose){
+      if(call.purpose !== "review"){
         if(fail)throw new Error("Temporary model failure");
         if(!generatingDone){generatingDone=true;generating.resolve();await generationGate.promise;}
         else {repairing.resolve();await repairGate.promise;}

@@ -17,6 +17,8 @@ output "shared_vm_registration" {
         image         = local.image
         hosts         = local.hosts
         env = merge({
+          CUSTOM_DOMAINS_ENABLED                                          = "true"
+          CUSTOM_DOMAIN_ADDRESS                                           = data.google_compute_global_address.shared.address
           NODE_ENV                                                        = "production"
           DEMO_MODE                                                       = "false"
           PORT                                                            = "8080"
@@ -28,6 +30,7 @@ output "shared_vm_registration" {
           GOOGLE_CLOUD_LOCATION                                           = var.vertex_location
           VERTEX_MODEL                                                    = var.vertex_model
           VERTEX_REVIEW_MODEL                                             = var.vertex_review_model
+          VERTEX_DESIGN_MODEL                                             = var.vertex_design_model
           GEMINI_MODEL                                                    = var.vertex_model
           GEMINI_IMAGE_MODEL                                              = var.image_model
           VERTEX_IMAGE_LOCATION                                           = var.image_location

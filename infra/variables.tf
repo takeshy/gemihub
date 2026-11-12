@@ -66,6 +66,12 @@ variable "vertex_review_model" {
   default     = ""
 }
 
+variable "vertex_design_model" {
+  description = "Optional model for theme and page HTML/CSS generation; empty uses vertex_model."
+  type        = string
+  default     = ""
+}
+
 variable "openai_review_model" {
   description = "Optional first-theme review model; empty uses openai_model in a separate context."
   type        = string

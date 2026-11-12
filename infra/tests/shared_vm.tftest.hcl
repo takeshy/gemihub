@@ -3,11 +3,40 @@ mock_provider "google" { alias = "shared" }
 mock_provider "random" {}
 
 variables {
+  custom_domains = {}
   dns_project_id = "example-dns"
   dns_zone       = "gemihub-net"
   vertex_model   = "configured-text-model"
   image_model    = "configured-image-model"
   repository     = ""
+}
+
+run "custom_storefront_domain" {
+  command = plan
+  variables {
+    manage_app_domain_dns_certificate = false
+    custom_domains = {
+      "reserve.example.org" = { dns_project_id = "other-dns", dns_zone = "example-org" }
+    }
+  }
+  assert {
+    condition = (
+      google_dns_record_set.custom["reserve.example.org"].project == "other-dns" &&
+      google_dns_record_set.custom["reserve.example.org"].managed_zone == "example-org" &&
+      google_dns_record_set.custom_validation["reserve.example.org"].project == "other-dns" &&
+      google_certificate_manager_certificate.custom["reserve.example.org"].managed[0].domains == tolist(["reserve.example.org"]) &&
+      google_certificate_manager_certificate_map_entry.custom["reserve.example.org"].hostname == "reserve.example.org" &&
+      keys(google_dns_record_set.app) == ["*.shops.gemihub.net"]
+    )
+    error_message = "Custom domains need independent DNS/TLS in their own DNS zone without changing existing records."
+  }
+  assert {
+    condition = (
+      contains(output.shared_vm_registration.additional_apps.gemihub-web.hosts, "reserve.example.org") &&
+      contains(output.shared_lb_registration.shared_vm_hosts.gemihub-web, "reserve.example.org")
+    )
+    error_message = "Custom domains must reach the booking runtime through both the LB and Nginx."
+  }
 }
 
 run "isolated_runtime" {

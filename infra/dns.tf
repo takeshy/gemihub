@@ -11,7 +11,7 @@ data "google_compute_global_address" "shared" {
 
 locals {
   certificate_domains = toset(var.manage_app_domain_dns_certificate ? [var.app_domain, var.site_domain] : [var.site_domain])
-  managed_hosts       = toset(var.manage_app_domain_dns_certificate ? local.hosts : ["*.${var.site_domain}"])
+  managed_hosts       = toset(var.manage_app_domain_dns_certificate ? [var.app_domain, "*.${var.site_domain}"] : ["*.${var.site_domain}"])
 }
 
 resource "google_certificate_manager_dns_authorization" "app" {

@@ -74,6 +74,11 @@ def deploy(image):
             return
         wait_healthy(image)
     subprocess.run(['python3', str(ROOT / 'register.py'), '--persist'], check=True)
+    # This service owns its domain controller; no other application's code or
+    # container is restarted. Initial root timer/config installation is separate.
+    if Path('/etc/gemihub-domains.json').is_file():
+        subprocess.run(['docker', 'cp', APP + ':/app/infra/domain-controller.py', '/opt/gemihub-domains/controller.py'], check=True)
+        Path('/opt/gemihub-domains/controller.py').chmod(0o755)
     with open(ROOT / 'deploy.lock', 'a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         current = json.loads((ROOT / 'runtime.json').read_text())['apps'][APP]['image']

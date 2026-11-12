@@ -21,7 +21,7 @@ test("first-review red pen saves a reviewed replacement, preserves backend confi
   const plan={id:randomUUID(),shopId:shop.id,base:0,config,source:null,requiresSetup:true,approved:false,createdAt:Date.now(),summary:["Theme"],checklist:[],chat:{id:chat.id,requestId}};await store.put("plan",plan.id,plan);
   await attachChatPlan(store,shop,shop.owner,plan.chat,plan.id);
   let calls=0;const requests:string[]=[];
-  const server=createApp(store,{...ai,visualReview:async()=>({approved:true,issues:[]}),initialTheme:async(input,context)=>{calls++;requests.push(input.request);assert.equal(input.screen?.data,png);return createInitialTheme(input,context,async call=>JSON.stringify(call.purpose?{approved:true,issues:[],imageUsage:[]}:{...theme,css:theme.css+" main{padding:48px}"}));}});
+  const server=createApp(store,{...ai,visualReview:async()=>({approved:true,issues:[]}),initialTheme:async(input,context)=>{calls++;requests.push(input.request);assert.equal(input.screen?.data,png);return createInitialTheme(input,context,async call=>JSON.stringify(call.purpose==="review"?{approved:true,issues:[],imageUsage:[]}:{...theme,css:theme.css+" main{padding:48px}"}));}});
   await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));const origin=`http://127.0.0.1:${(server.address() as AddressInfo).port}`;process.env.APP_ORIGIN=origin;
   t.after(async()=>{server.close();await store.close();});
   const request=(path:string,data?:unknown,cookie="")=>fetch(origin+path,{method:data===undefined?"GET":"POST",headers:{Origin:origin,Cookie:cookie,"Content-Type":"application/json"},body:data===undefined?undefined:JSON.stringify(data)});
