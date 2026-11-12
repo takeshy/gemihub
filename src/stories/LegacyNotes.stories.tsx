@@ -2,7 +2,7 @@ import React from "react";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { LegacyNotes } from "../LegacyNotes";
 const meta = { title: "運営/はじめる/旧環境からの引き継ぎ", component: LegacyNotes,
-  parameters: { layout: "fullscreen" }, args: { onCheck: () => undefined },
+  parameters: { layout: "fullscreen" }, args: { check: async () => undefined },
   decorators: [(Story) => <main><Story /></main>],
 } satisfies Meta<typeof LegacyNotes>;
 export default meta;

@@ -1,4 +1,4 @@
-export const visualModelTimeoutMs = 180000;
+export const visualModelTimeoutMs = 120000;
 export const visualGenerationTimeoutMs = 8 * 60 * 1000;
 export type VisualStage = "waiting" | "preparing" | "identifying" | "generating" | "reviewing" | "repairing" | "complete" | "failed";
 export type VisualGenerationProgress = {

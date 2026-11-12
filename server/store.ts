@@ -68,6 +68,8 @@ export type User = {
   /** Calendar consent obtained during owner sign-in; encrypted, never sent to the browser. */
   calendarRefreshToken?: string;
   legacyNotes?: boolean;
+  /** The owner chose to continue without finishing the kiokuflow handover; later sign-ins skip the detector. */
+  legacyNotesSkipped?: boolean;
   /** A hackathon judge account created from the invitation URL; it has no Google token of its own. */
   judge?: boolean;
   /** A new owner signed in with Google but has not entered the invitation password yet. */

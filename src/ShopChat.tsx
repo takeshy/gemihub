@@ -165,7 +165,8 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
     if(!published)setViewPlan(next);
   }
   async function send(input=text) {
-    const value=input.trim();if(!value||!context)return;
+    // An image alone is a complete message; the server still needs words, so it gets a short note.
+    const value=input.trim()||(imageIds.length?tr("添付画像を送ります。"):"");if(!value||!context)return;
     const saved=await ensureChat();setViewPlan(undefined);
     const previous=pending.current;
     const requestId=previous?.text===value&&JSON.stringify(previous.imageIds)===JSON.stringify(imageIds)?previous.id:createRequestId();
@@ -211,12 +212,12 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
     {generationStale&&generationRunning&&<p className="notice">{tr("処理状況を確認しています。しばらく変わらない場合は、画面イメージの作成を再試行できます。")}</p>}
     {review}
     <form className="chat-composer" aria-label={tr("メッセージの入力")} onSubmit={event=>{event.preventDefault();dictationStop.current?.();void run(()=>send());}}>
-      <textarea ref={composer} aria-label={tr("AIに伝えたいこと")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event=>submitOnShortcut(event)} rows={3} required maxLength={4000} disabled={working} value={text} onChange={event=>setText(event.target.value)} placeholder={tr("メッセージを入力…")}/>
+      <textarea ref={composer} aria-label={tr("AIに伝えたいこと")} aria-keyshortcuts="Control+Enter Meta+Enter" onKeyDown={event=>submitOnShortcut(event)} rows={3} required={!imageIds.length} maxLength={4000} disabled={working} value={text} onChange={event=>setText(event.target.value)} placeholder={tr("メッセージを入力…")}/>
 
       <div className="chat-composer-toolbar">
         {isOwner&&<RequestImagePicker shopId={shopId} value={imageIds} onChange={setImageIds} disabled={working||listening} label={tr("画像を添付")}/>}
         {isOwner&&<DictationButton value={text} onChange={setText} onSend={value=>void run(()=>send(value))} onListening={setListening} stopRef={dictationStop} disabled={working}/>}
-        <button type="submit" className="primary chat-send" disabled={working||!text.trim()}>{tr("送信")}</button>
+        <button type="submit" className="primary chat-send" disabled={working||!text.trim()&&!imageIds.length}>{tr("送信")}</button>
       </div>
     </form>
     </>}

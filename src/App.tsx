@@ -234,7 +234,7 @@ export function App({
         ) : path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.accessPending ? (
           <AccessPassword email={session.user.email} run={run} />
         ) : path !== "/manual" && !isPublic && session.user?.role === "owner" && session.user.legacyNotes ? (
-          <LegacyNotes email={session.user.email} onCheck={() => void run(async () => { await api("/api/legacy-notes/check", {}); navigate("/"); })} />
+          <LegacyNotes email={session.user.email} check={async force => { await api("/api/legacy-notes/check", { force }); navigate("/"); }} />
         ) : path === "/manual" && !isPublic ? (
           <Manual />
         ) : isPublic ? (

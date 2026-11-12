@@ -1449,12 +1449,15 @@ export function createApp(
         if (user?.role !== "owner") fail(403, tr("店主としてログインしてください"));
         const saved = await store.get<User>("user", user.email);
         if (!saved?.refreshToken) fail(403, tr("Google のアクセス権を再承認してください"));
-        let accessToken: string;
-        try { accessToken = (await clients(saved.refreshToken).auth.getAccessToken()).token || ""; }
-        catch { fail(401, tr("Google のアクセス権を再承認してください")); }
-        if (await hasLegacyNotes(accessToken)) fail(409, tr("旧設定が残っています。kiokuflowでデータの引き継ぎを完了してから、もう一度確認してください。"));
+        const { force } = z.object({ force: z.boolean().optional() }).parse(await body(req));
+        if (!force) {
+          let accessToken: string;
+          try { accessToken = (await clients(saved.refreshToken).auth.getAccessToken()).token || ""; }
+          catch { fail(401, tr("Google のアクセス権を再承認してください")); }
+          if (await hasLegacyNotes(accessToken)) fail(409, tr("旧設定が残っています。kiokuflowでデータの引き継ぎを完了してから、もう一度確認してください。"));
+        }
         const own = allShops.find(shop => shop.owner === user.email) || await store.createShop(user.email, regionForRequest(req));
-        const updated: User = { ...saved, shopId: own.id, legacyNotes: false };
+        const updated: User = { ...saved, shopId: own.id, legacyNotes: false, ...(force ? { legacyNotesSkipped: true } : {}) };
         await store.put("user", user.email, updated);
         await login(store, res, updated);
         return json(res, { success: true });
@@ -1665,7 +1668,8 @@ export function createApp(
           u.calendarRefreshToken = tokens.refresh_token ? u.refreshToken : existing?.calendarRefreshToken;
           if (!u.refreshToken || !u.calendarRefreshToken)
             fail(400, tr("Google のアクセス権を再承認してください"));
-          u.legacyNotes = await hasLegacyNotes(tokens.access_token || "");
+          if (existing?.legacyNotesSkipped) u.legacyNotesSkipped = true;
+          u.legacyNotes = !u.legacyNotesSkipped && await hasLegacyNotes(tokens.access_token || "");
           // Do not create an empty shop just because an existing note user signed in.
           // While sign-up is invitation-only, a new owner first enters the invitation password.
           const existingShop = allShops.find((s) => s.owner === email);

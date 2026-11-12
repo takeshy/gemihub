@@ -454,7 +454,7 @@ Verify with `npm test`, `npm run check:storefront-static`, and the shared public
 
 - Show identification, generation, desktop/mobile review and refinement stages with elapsed seconds in both the side chat and refinement dialog. Read server progress by request ID, with owner-only access.
 - Generate small color, icon or spacing changes as selector/declaration patches to existing theme CSS. Preserve unrelated declarations and screens, and apply the same scope, HTML/CSS safety and rendered-review validation.
-- Allow up to 180 seconds for each identification, generation or rendered-review model call, with an eight-minute budget for generation, retries, repair and review together (excluding the wait for another edit of the same shop and receiving the request). Abort model and browser work at expiry. Never approve or publish an unreviewed result.
+- Allow up to 120 seconds for each identification, generation or rendered-review model call, with an eight-minute budget for generation, retries, repair and review together (excluding the wait for another edit of the same shop and receiving the request). Abort model and browser work at expiry. Never approve or publish an unreviewed result.
 - Render the owner's phone preview and comparisons in an independent phone-width viewport so authored media queries use the phone width even on desktop. Red-pen captures include the full phone page and its loaded photos. Preview interactions continue to use fictional data.
 - Generate small custom-page CSS changes as selector/declaration patches, with an optional media condition. Preserve unrelated rules and desktop layouts when changing a phone breakpoint.
 - Translate non-JSON upstream errors into readable error messages while retaining the instruction and pen marks.

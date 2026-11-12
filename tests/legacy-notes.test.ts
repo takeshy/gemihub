@@ -113,6 +113,20 @@ test("old note owners must migrate before creating or managing a shop; completio
   assert.equal(checks, before);
   const customerCookie = customer.headers.get("Set-Cookie")!.split(";")[0];
   assert.equal((await originalFetch(base + "/api/legacy-notes/check", { method: "POST", headers: { Cookie: customerCookie, Origin: base } })).status, 403);
+  // An owner may continue while the old settings remain; later sign-ins do not ask again.
+  email = "forced@example.com"; pending = true;
+  const forcedLogin = await signIn();
+  assert.equal(forcedLogin.headers.get("Location"), "/settings/migration");
+  const forcedCookie = forcedLogin.headers.get("Set-Cookie")!.split(";")[0];
+  const check = (data: unknown) => originalFetch(base + "/api/legacy-notes/check", { method: "POST", headers: { Cookie: forcedCookie, Origin: base, "Content-Type": "application/json" }, body: JSON.stringify(data) });
+  assert.equal((await check({})).status, 409);
+  assert.equal((await check({ force: "yes" })).status, 400);
+  assert.equal((await check({ force: true })).status, 200);
+  const forced = await store.get<User>("user", email);
+  assert.equal(forced?.legacyNotes, false); assert.equal(forced?.legacyNotesSkipped, true);
+  assert.ok((await store.list<Shop>("shop")).some(item => item.owner === email));
+  assert.equal((await signIn()).headers.get("Location"), "/");
+  assert.equal((await store.get<User>("user", email))?.legacyNotesSkipped, true);
 });
 
 
