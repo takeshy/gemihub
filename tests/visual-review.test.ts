@@ -33,7 +33,7 @@ test("visual review receives the rendered before/after pixels at both widths and
     },
     model: async input => {
       assert.equal(input.purpose, "review");
-      assert.equal(input.timeoutMs, 120000);
+      assert.equal(input.timeoutMs, 180000);
       const parts = input.contents[0].parts!;
       const images = parts.flatMap(part => part.inlineData ? [part.inlineData] : []);
       assert.equal(images.length, 4);

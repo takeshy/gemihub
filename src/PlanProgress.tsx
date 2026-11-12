@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { ChatGeneration } from "../server/shop-chat";
 import { tr } from "../shared/i18n";
 import { PreviewSurface } from "./ScreenGallery";
+import { FunctionalOverview } from "./FunctionalOverview";
 
 export function PlanProgress({ generation, shopId }: { generation: ChatGeneration; shopId: string }) {
   const [now, setNow] = useState(Date.now());
@@ -14,6 +15,8 @@ export function PlanProgress({ generation, shopId }: { generation: ChatGeneratio
     <ol className="plan-progress-steps">{[tr("ページの内容"), tr("デザイン作成"), tr("確認・自動修正")].map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined}>{index < step ? "✓ " : `${index + 1}. `}{label}</li>)}</ol>
     {stage !== "failed" && <p className="small muted">{tr("目安は2〜4分です。経過 {0}分{1}秒", Math.floor(seconds / 60), seconds % 60)}{generation.attempts > 1 && " " + tr("自動調整 {0}回目", generation.attempts)}</p>}
     <p className="small muted">{tr("会話は保存されています。再読み込みしても続きから確認できます。")}</p>
-    {generation.preview && <details open><summary>{tr("作成途中のページを見る")}</summary><p className="small muted">{tr("確認前の画面案です。自動修正で見た目が変わることがあります。予約などの操作は練習用です。")}</p><div className="generation-preview"><PreviewSurface key={JSON.stringify(generation.preview)} config={generation.preview} shopId={shopId} screen={{ id: "about", name: tr("お店のこと"), description: tr("お店の紹介"), pane: "about" }} /></div></details>}
+    {/* Until a generated theme exists the page would render in the default colours, so show what is being prepared instead. */}
+    {generation.preview && !generation.preview.appearance?.theme && <details open><summary>{tr("用意するページと機能")}</summary><FunctionalOverview pages={generation.preview.pages.map(page => page.title)} articles={generation.preview.appearance?.articles} /></details>}
+    {generation.preview?.appearance?.theme && <details open><summary>{tr("作成途中のページを見る")}</summary><p className="small muted">{tr("確認前の画面案です。自動修正で見た目が変わることがあります。予約などの操作は練習用です。")}</p><div className="generation-preview"><PreviewSurface key={JSON.stringify(generation.preview)} config={generation.preview} shopId={shopId} screen={{ id: "about", name: tr("お店のこと"), description: tr("お店の紹介"), pane: "about" }} /></div></details>}
   </section>;
 }

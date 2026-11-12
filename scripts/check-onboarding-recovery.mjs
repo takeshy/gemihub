@@ -24,7 +24,7 @@ const server=createApp(store,{...intelligence,
     proposalCalls++;const gates=runs.get(email);assert.ok(gates);assert.equal(current,null);
     let generations=0,reviews=0;
     const run=await createInitialTheme({config:{...structuredClone(sample),name:'Moon Atelier',notificationEmail:email},request:text,images},context,async call=>{
-      if(!call.purpose){generations++;await(generations===1?gates.generate.promise:gates.repair.promise);return JSON.stringify(exampleTheme);}
+      if(call.purpose!=="review"){generations++;await(generations===1?gates.generate.promise:gates.repair.promise);return JSON.stringify(exampleTheme);}
       reviews++;if(reviews===1){await gates.review.promise;return JSON.stringify({approved:false,issues:['Improve heading spacing'],imageUsage:[]});}
       return JSON.stringify({approved:true,issues:[],imageUsage:[]});
     });
@@ -62,11 +62,13 @@ try{
     await page.getByRole('button',{name:label('画面イメージを作成する'),exact:true}).click();
     const progress=page.getByRole('region',{name:label('プレビューの作成状況'),exact:true});
     await expect(progress.getByText(label('ページのデザインを作成しています…'),{exact:true})).toBeVisible();
-    await expect(progress.locator('.preview-surface h1')).toHaveText('Moon Atelier');
+    await expect(progress.locator('.functional-overview')).toBeVisible();
+    await expect(progress.locator('.preview-surface')).toHaveCount(0);
     assert.equal(await page.getByRole('button',{name:label('仮公開する'),exact:true}).count(),0);
     gates.generate.resolve();
     await expect(progress.getByText(label('デザインと表示を確認しています…'),{exact:true})).toBeVisible();
     await expect(progress.locator('.theme-masthead')).toBeVisible();
+    await expect(progress.locator('.functional-overview')).toHaveCount(0);
     await page.screenshot({path:`tmp/onboarding-recovery/review-${language}-${width}.png`,fullPage:true});
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await page.reload();
