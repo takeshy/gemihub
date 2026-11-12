@@ -69,7 +69,7 @@ test("relaxed generation cannot bypass array limits or shop validation", async t
   setProviderResolver(async () => "openai");
   t.after(() => { setOpenAiClient(undefined); setProviderResolver(async () => "vertex"); });
   const invalid = [
-    { ...structuredClone(sample), menus: [] },
+    { ...structuredClone(sample), menus: [{ ...sample.menus[0], price: -1 }] },
     { ...structuredClone(sample), staff: Array.from({ length: 31 }, (_, i) => ({ ...sample.staff[0], id: `staff-${i}` })) },
     { ...structuredClone(sample), menus: Array.from({ length: 51 }, (_, i) => ({ ...sample.menus[0], id: `menu-${i}` })) },
     { ...structuredClone(sample), rules: { ...sample.rules, payment: { enabled: true, refundTiers: [] } } },
@@ -102,7 +102,7 @@ test("initial GPT proposals accept interview facts without requesting full booki
   assert.equal(result.config.description, "");assert.equal(result.config.address, "");
   assert.equal(result.config.pages[0].layout, "standard");assert.equal(result.config.pages[0].imageUrl, "");
   assert.deepEqual(result.config.appearance!.theme, splitThemeStyles(theme));assert.equal(result.themeReview!.approved, true);
-  assert.equal(result.config.menus[0].price, Math.round(sample.menus[0].price / 100));
+  assert.deepEqual(result.config.menus, [], "new shops do not inherit sample services or prices");
   assert.deepEqual(result.config.staff, []);assert.equal(result.config.ownerBooking, true);assert.deepEqual(result.config.rules, sample.rules);
   assert.ok(shopSchema.safeParse(result.config).success);
 });

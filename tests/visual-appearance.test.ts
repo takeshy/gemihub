@@ -116,7 +116,7 @@ test("header edits receive the annotated screen and publish/restore their HTML, 
   const standard = { ...structuredClone(sample), appearance: undefined };
   const customized = await proposeVisualAppearance(standard, "Change header spacing", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { theme: { headerCss: "header{padding:24px}" } } }) });
   assert.equal(customized.config.appearance!.theme!.bodyHtml, standardTheme.bodyHtml);
-  assert.match(renderToStaticMarkup(createElement(ChromePreview, { config: customized.config, part: "header" })), /A LITTLE MOMENT, JUST FOR YOU\./);
+  assert.match(renderToStaticMarkup(createElement(ChromePreview, { config: customized.config, part: "header" })), /お店のこと/);
   const cleared = await proposeVisualAppearance(customized.config, "Remove header styles", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { theme: { headerCss: "" } } }) });
   assert.equal(cleared.config.appearance!.theme!.headerCss, undefined);
   const navigationOnly = await proposeVisualAppearance(standard, "Rename navigation", [], { target: "part:header", generate: async () => JSON.stringify({ appearance: { copy: { navReserve: "Book" } } }) });

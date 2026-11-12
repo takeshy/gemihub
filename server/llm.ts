@@ -2,6 +2,7 @@ import { tr } from "../shared/i18n.ts";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { GoogleGenAI, Modality, type Content, type GenerateContentResponse, type Part } from "@google/genai";
 import OpenAI, { toFile } from "openai";
+import { observedAiCall } from "./ai-diagnostics.ts";
 
 // Provider-neutral AI access. Callers speak Gemini-shaped Content/Part; the OpenAI
 // implementation translates them, so prompts, schemas and tool loops stay shared.
@@ -52,6 +53,9 @@ export async function withAiDeadline<T>(timeoutMs: number, run: () => Promise<T>
  * Runs one model call. With `timeoutMs`, a call that has not answered in time is aborted and retried
  * once: an occasional response takes minutes while the same request normally answers in seconds.
  */
+/** The limit a call really runs under: its own timeout, cut short by what is left of the operation. */
+const effectiveTimeout = (timeoutMs: number | undefined, until: number | undefined) =>
+  until === undefined ? timeoutMs : Math.max(0, Math.min(timeoutMs ?? Infinity, until - Date.now()));
 async function withDeadline<T>(timeoutMs: number | undefined, run: (signal?: AbortSignal) => Promise<T>): Promise<T> {
   const operation = aiDeadline.getStore();
   if (!timeoutMs && !operation) return run();
@@ -157,23 +161,26 @@ function textModel(provider: AiProvider, purpose?: AiPurpose) {
 }
 
 /** Generates JSON text matching the schema. Callers keep validating with zod. */
-export async function generateJson(input: { system: string; contents: Content[]; schema: Record<string, unknown>; location?: string; unavailableMessage?: string; purpose?: AiPurpose; timeoutMs?: number }): Promise<string> {
+export async function generateJson(input: { system: string; contents: Content[]; schema: Record<string, unknown>; location?: string; unavailableMessage?: string; purpose?: AiPurpose; diagnosticStage?: "identify"; timeoutMs?: number }): Promise<string> {
   const provider = await requireText(input.unavailableMessage || tr("AI の接続がまだ設定されていません"));
   await beforeModelCall();
-  if (provider === "openai") {
-    const response = await withDeadline(input.timeoutMs, signal => openai().responses.create({
-      model: textModel("openai", input.purpose),
-      instructions: input.system,
-      input: toOpenAiInput(input.contents),
-      text: { format: { type: "json_schema", name: "result", schema: input.schema, strict: false } },
-    }, signal ? { signal, maxRetries: 0 } : undefined));
-    return response.output_text || "{}";
-  }
-  const response = await withDeadline(input.timeoutMs, signal => vertexClient(input.location).models.generateContent({
-    model: textModel("vertex", input.purpose), contents: input.contents,
-    config: { responseMimeType: "application/json", responseJsonSchema: input.schema, systemInstruction: input.system, ...(signal ? { abortSignal: signal } : {}) },
-  }));
-  return response.text || "{}";
+  const operation = aiDeadline.getStore();
+  return observedAiCall({ provider, model: textModel(provider, input.purpose), stage: input.diagnosticStage || input.purpose || "text", timeoutMs: effectiveTimeout(input.timeoutMs, operation?.until) }, async () => {
+    if (provider === "openai") {
+      const response = await withDeadline(input.timeoutMs, signal => openai().responses.create({
+        model: textModel("openai", input.purpose),
+        instructions: input.system,
+        input: toOpenAiInput(input.contents),
+        text: { format: { type: "json_schema", name: "result", schema: input.schema, strict: false } },
+      }, signal ? { signal, maxRetries: 0 } : undefined));
+      return response.output_text || "{}";
+    }
+    const response = await withDeadline(input.timeoutMs, signal => vertexClient(input.location).models.generateContent({
+      model: textModel("vertex", input.purpose), contents: input.contents,
+      config: { responseMimeType: "application/json", responseJsonSchema: input.schema, systemInstruction: input.system, ...(signal ? { abortSignal: signal } : {}) },
+    }));
+    return response.text || "{}";
+  });
 }
 
 /** One tool-calling round. The result keeps Gemini's shape so the shared tool loop is unchanged. */

@@ -836,7 +836,7 @@ export function createMockClient(scenario: Scenario, chatScope?: string): ApiCli
       } else if (input.target === "part:header") next.header.title = tr("季節を楽しむアトリエ");
       else if (String(input.target).startsWith("component:") && next.appearance?.theme?.styles) {
         const component = String(input.target).slice(10);
-        next.appearance.theme.styles = next.appearance.theme.styles.map(style => style.component === component ? { ...style, css: style.css.replaceAll("#70435c", "#237c45").replaceAll("#006d77", "#237c45") } : style);
+        next.appearance.theme.styles = next.appearance.theme.styles.map(style => style.component === component ? { ...style, css: style.css + ".icon{color:#237c45}" } : style);
       }
       else if (input.target === "theme") { next.header.title = tr("季節を楽しむアトリエ"); next.footer.text = tr("お会いできる日を楽しみにしています。"); }
       else if (input.target === "part:footer") next.footer.text = tr("お会いできる日を楽しみにしています。");

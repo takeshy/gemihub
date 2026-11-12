@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { confirmLeave } from "./leave-guard";
 
-export const dashboardTabs = ["dashboard", "build", "assistant", "try", "basic", "menus", "staff", "images", "settings", "bookings", "customers", "analytics", "coupons", "inquiries", "blog", "manual"] as const;
+export const dashboardTabs = ["dashboard", "build", "assistant", "try", "basic", "menus", "staff", "images", "settings", "bookings", "payments", "transfers", "customers", "analytics", "coupons", "inquiries", "blog", "manual"] as const;
 export type DashboardTab = typeof dashboardTabs[number];
 export function dashboardTab(value: string | null | undefined, fallback: DashboardTab = "dashboard"): DashboardTab {
   if (value === "team") return "staff";

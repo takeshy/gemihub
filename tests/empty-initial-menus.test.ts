@@ -1,0 +1,51 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import type { AddressInfo } from "node:net";
+import { createApp } from "../server/app.ts";
+import { Store } from "../server/store.ts";
+import { shopSchema, sample } from "../server/domain.ts";
+
+test("new shops start without services; private setup works and public publication requires a registered service", async t => {
+  process.env.DEMO_MODE = "true";
+  const project = process.env.GOOGLE_CLOUD_PROJECT; delete process.env.GOOGLE_CLOUD_PROJECT;
+  t.after(() => { if (project !== undefined) process.env.GOOGLE_CLOUD_PROJECT = project; });
+  const store = new Store(":memory:");
+  const server = createApp(store);
+  await new Promise<void>(done => server.listen(0, "127.0.0.1", done));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`; process.env.APP_ORIGIN = origin;
+  t.after(async () => { server.closeAllConnections(); await new Promise<void>(done => server.close(() => done())); await store.close(); });
+  let cookie = "";
+  async function api(path: string, data?: unknown) {
+    const response = await fetch(origin + path, { method: data === undefined ? "GET" : "POST", headers: { Origin: origin, Cookie: cookie, "Content-Type": "application/json" }, body: data === undefined ? undefined : JSON.stringify(data) });
+    cookie ||= response.headers.get("set-cookie")?.split(";")[0] || "";
+    return { status: response.status, body: await response.json() };
+  }
+  await api("/api/demo-login", { role: "owner", email: "empty-menus@example.com" });
+  const shop = (await store.list<import("../server/store.ts").Shop>("shop"))[0];
+  const base = `/api/shops/${shop.id}`;
+  const proposal = await api(`${base}/plan`, { text: "Create a new shop" });
+  assert.equal(proposal.status, 200);
+  assert.deepEqual(proposal.body.config.menus, []);
+  assert.deepEqual(proposal.body.config.staff, []);
+  assert.equal(shopSchema.safeParse({ ...sample, menus: [], staff: [] }).success, true);
+  const plan = proposal.body;
+  assert.equal((await api(`${base}/plans/${plan.id}/approve`, {})).status, 200);
+  assert.equal((await api(`${base}/plans/${plan.id}/publish`, { publication: "provisional" })).status, 200);
+  const before = (await store.shop(shop.id))!;
+  const preview = (await api(`${base}/publication-preview`)).body;
+  const blocked = await api(`${base}/publication`, { publication: "public", revision: preview.revision, hash: preview.hash });
+  assert.equal(blocked.status, 400);
+  assert.match(blocked.body.error, /メニュー|service/);
+  assert.equal((await store.shop(shop.id))!.publication, "provisional");
+  assert.equal((await store.shop(shop.id))!.revision, before.revision);
+  const update = (await api(`${base}/plan`, { text: "Update the description", config: { ...plan.config, description: "Updated" } })).body;
+  assert.equal((await api(`${base}/plans/${update.id}/approve`, {})).status, 200);
+  assert.equal((await api(`${base}/plans/${update.id}/publish`, { publication: "public" })).status, 400, "the plan route cannot bypass the menu requirement");
+  const menus = [{ id: "consultation", name: "相談", duration: 60, price: 3000, active: true }];
+  assert.equal((await api(`${base}/live-settings/menus`, { value: menus, previous: [], requestId: randomUUID() })).status, 200);
+  const ready = (await api(`${base}/publication-preview`)).body;
+  assert.equal((await api(`${base}/publication`, { publication: "public", revision: ready.revision, hash: ready.hash })).status, 200);
+  assert.equal((await api(`${base}/live-settings/menus`, { value: [], previous: menus, requestId: randomUUID() })).status, 400, "a public shop cannot save its last service away");
+  assert.deepEqual((await store.shop(shop.id))!.published!.menus, menus);
+});

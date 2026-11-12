@@ -8,6 +8,43 @@ gemihub のコードを触る人向けの手順です。デモを動かすだけ
 
 開発サーバーで動かす場合は、別々のターミナルで `npm run dev`（APIサーバー）と `npm run dev:web`（Vite: http://localhost:5173）を実行します。
 
+JSON形式のAI呼び出しは、対象判定（`identify`）・デザイン生成（`design`）・レビュー（`review`）などの工程、モデル名、開始・終了、所要時間、失敗時のHTTPステータスを `ai_model_call` として出力します。ローカルの `DEMO_MODE=true` では `tmp/ai-requests.ndjson` にも追記し、開発サーバーの再起動後も確認できます。依頼文・画像・認証情報・上流のエラー本文は記録しません。本番は標準出力へ出し、ローカルファイルは作りません。
+
+`npm run build` 後の `npm run check:theme-palette` は、暖色・青系・暗色の実際の予約画面とページ全体の見本をPC・スマートフォン幅で検証します。テーマの色指定と未指定時の色の継承を確認し、外部AIは呼び出しません。
+
+## テーマの共通色
+
+`theme.styles` の `component: "base"` に配色をまとめます。`.design-root`（またはスコープ変換される `:root`）で `--primary` または `--secondary` を定義すると、標準部品が共通色へ追従します。変数のない既存テーマは従来のCSSを維持します。共通部品のCSSへ色の固定値を複製する必要はありません。
+
+```css
+.design-root {
+  --primary: #70435c;
+  --on-primary: #ffffff;
+  --secondary: #80532d;
+  --on-secondary: #ffffff;
+  --background: #faf6f0;
+  --surface: #fffdfb;
+  --text: #2a1839;
+  --muted-text: #715b75;
+  --border: #d8cbbf;
+  --success: #34613e;
+  --warning: #805400;
+  --danger: #a52928;
+}
+```
+
+| 色変数 | 参照する部品 |
+| --- | --- |
+| `primary` / `on-primary` | 主要ボタン、リンク、アイコン、フォーカス |
+| `secondary` / `on-secondary` | 補助ボタン、分類・キャンセルの表示 |
+| `background` / `surface` | ページ背景、カード、入力欄、お便り、決済欄 |
+| `text` / `muted-text` / `border` | 本文、補助文字、枠線 |
+| `success` / `warning` / `danger` | 予約確定・返金完了、返金確認中、確認が必要な返金・エラー |
+
+淡い背景の `--primary-container` / `--secondary-container` と文字色の `--on-primary-container` / `--on-secondary-container` も指定できます。未指定なら主要色と `surface` から背景を作り、主要色を文字色にします。状態表示の `--success-container` / `--warning-container` / `--danger-container` も同様です。`--info` は `secondary`、`--focus` は `primary` が既定です。暗色テーマでは文字と背景の両方を指定し、状態の区別とコントラストを確認してください。
+
+既存部品の `--green` / `--cream` / `--line` / `--muted` と選択状態の `--selected-*` は自動で共通色を参照します。意図的な例外は部品自身のCSSで指定できます。基本スタイルは保存済みCSSの前に、表示時だけ挿入されるため、保存するテーマを肥大化させません。公開ページ・編集プレビュー・HTML出力で同じスコープを使い、管理画面に漏らしません。
+
 ## 修正後の画面レビュー
 
 修正後の画面レビューには、ビルド済みのプレビュー（`npm run build`）とChromiumが必要です。`CHROMIUM`にインストール済みの実行ファイルを指定するか、`npx playwright install --with-deps chromium`で対応ブラウザーを用意します。本番用DockerにはChromiumと日本語フォントを含みます。`npm run check:visual-review`は実ブラウザーでの撮影と指摘・再修正の流れをテスト用AI応答で検証します。撮影用ブラウザーは認証情報を持たず、外部ネットワークへの要求を遮断し、読み込めない外部画像はレビュー時に明示します。

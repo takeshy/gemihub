@@ -58,7 +58,6 @@ try{
     await newPage.waitFor();
     assert.equal(await newPage.locator('details').getAttribute('open'),"","new page content is expanded immediately");
     await newPage.getByRole('heading',{name:'初めてのお客様へ',exact:true}).waitFor();
-    await page.locator('.shop-change-chat .chat-panel-collapse').click();
     await page.locator('.request-review').screenshot({path:`tmp/new-page-review-${width}.png`});
     await page.getByRole("button",{name:"チャットに戻る",exact:true}).click();
     // Reloading restores the current conversation; a new one keeps past conversations behind the scenes.
@@ -68,7 +67,7 @@ try{
     assert.equal(await page.getByText(/保存したチャット|新しいチャット|このチャットの文脈/).count(),0);
     // A successful publication leaves the old transcript in history and opens a fresh chat.
     await page.getByRole("button",{name:"変更案を確認する",exact:true}).click();
-    await page.locator('.shop-change-chat .chat-panel-collapse').click();
+    assert.equal(await page.locator('.shop-change-chat').isVisible(),true,'the proposal can be applied while the chat stays expanded');
     await page.getByRole("button",{name:"変更内容を反映する",exact:true}).click();
     await composer.waitFor();
     assert.equal(await page.locator('.chat-message-user').count(),0,"publication starts a fresh conversation");
@@ -173,8 +172,8 @@ try{
     await voiceToggle.click();await dictate([["ほかにはありません。以上。",true]]);
     await page.getByRole("heading",{name:"下記の画面でいいですか？",exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.__recognitions.every(rec=>!rec.active)),true);
-    // "1、2、3" chooses introduction, booking and blog (announcements are option 4): six screens.
-    assert.equal(await page.locator('.screen-name-list li').count(),6);
+    // "1、2、3" chooses blog, announcements and staff introduction in addition to the four required screens.
+    assert.equal(await page.locator('.screen-name-list li').count(),9);
     assert.equal(await page.locator('.theme-preview .site-header').count(),1);
     assert.deepEqual(errors,[]);
     await context.close();

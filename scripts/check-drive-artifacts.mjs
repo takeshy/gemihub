@@ -72,7 +72,7 @@ try {
   assert.ok(await page.locator('.site-header .managed-hero-image img').evaluate(img => img.complete && img.naturalWidth > 0));
   await page.getByRole('button', { name: 'マイページ', exact: true }).waitFor();
   await page.getByRole('button', { name: 'ご予約', exact: true }).click();
-  await page.getByRole('heading', { name: '自分のための、ひとときを。', exact: true }).waitFor();
+  await page.getByRole('heading', { name: '予約', exact: true }).waitFor();
   assert.ok(await page.getByRole('button', { name: new RegExp(config.menus[0].name) }).count());
   assert.deepEqual(await page.locator('script[src]').evaluateAll(elements => elements.map(e => e.getAttribute('src'))), ['./data.js']);
   assert.equal(await page.locator('link[rel="stylesheet"]').count(), 0);

@@ -2,6 +2,7 @@ import postcss, { type ChildNode } from "postcss";
 import selectorParser from "postcss-selector-parser";
 import { z } from "zod";
 import { tr } from "./i18n.ts";
+import { themePaletteCss, usesThemePalette } from "./theme-palette.ts";
 
 export const themeCssLimit = 24000;
 export const componentCssLimit = 12000;
@@ -21,7 +22,10 @@ export type StyledTheme = { css: string; frame?: boolean; styles?: ThemeStyle[];
 export function componentLabel(component: StyleComponent): string {
   return { base: tr("共通の色・基本スタイル"), typography: tr("見出し・文章"), buttons: tr("ボタン"), cards: tr("カード"), forms: tr("入力欄"), icons: tr("アイコン"), notices: tr("案内・エラー表示"), navigation: tr("ナビゲーション") }[component];
 }
-export const sharedThemeCss = (theme: StyledTheme) => [theme.css, ...(theme.styles || []).map(style => style.css)].filter(Boolean).join("\n");
+export function sharedThemeCss(theme: StyledTheme) {
+  const authored = [theme.css, ...(theme.styles || []).map(style => style.css)].filter(Boolean).join("\n");
+  return usesThemePalette(authored) ? themePaletteCss + "\n" + authored : authored;
+}
 
 /** Classify by the element being styled; ancestor classes do not own descendants. */
 export function selectorComponent(selector: string): StyleComponent {

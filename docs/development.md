@@ -6,7 +6,44 @@ Notes for people working on gemihub. To just run the demo, see [Getting Started]
 
 ## Development servers
 
+JSON AI calls emit `ai_model_call` events with the stage (`identify`, `design`, `review` or general text), model, start/end, duration and failure HTTP status. Local `DEMO_MODE=true` also appends these events to `tmp/ai-requests.ndjson`, preserving them across development-server restarts. Prompts, images, credentials and upstream error bodies are excluded. Production writes to standard output only.
+
+After `npm run build`, run `npm run check:theme-palette` to verify warm, blue and dark palettes in actual booking screens and whole-page samples at desktop and phone widths. It checks explicit theme colours and inherited defaults without external AI calls.
+
 For development with hot reload, run `npm run dev` (server) and `npm run dev:web` (Vite at http://localhost:5173) in separate terminals.
+
+## Shared theme colours
+
+Define semantic colours in one `theme.styles` entry with `component: "base"`, on `.design-root` (or the scoped `:root`). Declaring `--primary` or `--secondary` enables the shared component palette. Legacy themes without these declarations retain their existing CSS.
+
+```css
+.design-root {
+  --primary: #70435c;
+  --on-primary: #ffffff;
+  --secondary: #80532d;
+  --on-secondary: #ffffff;
+  --background: #faf6f0;
+  --surface: #fffdfb;
+  --text: #2a1839;
+  --muted-text: #715b75;
+  --border: #d8cbbf;
+  --success: #34613e;
+  --warning: #805400;
+  --danger: #a52928;
+}
+```
+
+| Roles | Components |
+| --- | --- |
+| `primary` / `on-primary` | Primary buttons, links, icons and focus |
+| `secondary` / `on-secondary` | Secondary buttons, categories and cancelled statuses |
+| `background` / `surface` | Page backgrounds, cards, fields, news and payment details |
+| `text` / `muted-text` / `border` | Body text, supporting text and borders |
+| `success` / `warning` / `danger` | Confirmed bookings/completed refunds, pending refunds, refund errors and alerts |
+
+Optional `--primary-container` / `--on-primary-container` and `--secondary-container` / `--on-secondary-container` control soft surfaces and their text. Otherwise backgrounds mix the main colour with `surface`, and foregrounds use the main colour. Status container colours work the same way. `--info` defaults to secondary, and `--focus` to primary. Dark themes should specify readable foregrounds and preserve distinct status colours.
+
+Legacy `--green` / `--cream` / `--line` / `--muted` and `--selected-*` variables are bridged automatically. Individual component CSS can override the defaults. The application prepends its shared styles at render time rather than saving them into every theme. Live pages, editing previews and HTML output use the same scoped palette; operator UI remains isolated.
 
 ## Screen-edit reviews
 

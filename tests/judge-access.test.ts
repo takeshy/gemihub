@@ -14,9 +14,44 @@ import { availableSlots, bookingCalendars, calendarScope, type CalendarGateway }
 import { decrypt, encrypt } from "../server/google.ts";
 import { digest } from "../server/auth.ts";
 import { aiUsage, currentProvider, generateJson, generateWithTools, setOpenAiClient, toOpenAiInput } from "../server/llm.ts";
+import type { Booking } from "../server/domain.ts";
+import type { Checkout } from "../server/payments.ts";
+import type { JudgeMail } from "../server/judge.ts";
+import { defaultRefundTiers } from "../server/payment-domain.ts";
 
 process.env.DEMO_MODE = "true";
 const invite = "i".repeat(40);
+
+test("reconciled judge payment mail keeps the booking language across requests", async t => {
+  process.env.JUDGE_INVITE = invite;
+  process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
+  const { store, call, cookies } = await start(t);
+  const owner = cookies(await call("/api/judge/start?lang=en", { invite }))[0];
+  const shop = (await store.list<Shop>("shop"))[0];
+  shop.published = structuredClone(sample); shop.published.name = "Moon Atelier";
+  shop.publication = "public"; shop.locale = "ja"; await store.saveShop(shop);
+  const at = new Date().toISOString();
+  for (const language of ["en", "ja"] as const) {
+    for (const cancelled of [false, true]) {
+      const id = randomUUID();
+      const booking: Booking = { id, shopId: shop.id, customer: "customer@example.com", name: "Customer", menuId: "simple", staffId: "aoi", price: 5500, message: "", start: "2026-12-15T01:00:00Z", end: "2026-12-15T02:00:00Z", status: cancelled ? "cancelled" : "active", createdAt: at, locale: language,
+        payment: { provider: "paypal", environment: "sandbox", orderId: id, captureId: id, amount: 5500, currency: "JPY", policy: defaultRefundTiers, ...(cancelled ? { cancellation: { at, by: "customer@example.com", reason: "customer" as const, percent: 100, amount: 5500, status: "completed" as const, requestId: id, refundId: id } } : {}) } };
+      await store.put("checkout", id, { id, shopId: shop.id, customer: booking.customer, booking, policy: defaultRefundTiers, environment: "sandbox", phase: "confirmed", expires: Date.now(), createdAt: Date.now(), returnUrl: "", cancelUrl: "", orderId: id } satisfies Checkout);
+      const previous = new Set((await store.list<JudgeMail>("judgeMail")).map(mail => mail.id));
+      assert.equal((await call(`/api/shops/${shop.id}/retry?lang=${language === "en" ? "ja" : "en"}`, {}, owner)).status, 200);
+      const mails = await store.list<JudgeMail>("judgeMail");
+      const mail = mails.find(mail => !previous.has(mail.id) && mail.to === booking.customer);
+      assert.ok(mail);
+      if (language === "en") {
+        assert.doesNotMatch(mail.subject + mail.body, /予約|返金|支払|様/);
+        assert.match(mail.subject, /Moon Atelier/);
+      } else assert.match(mail.subject, cancelled ? /予約キャンセル・返金/ : /ご予約を承りました/);
+    }
+  }
+  const count = (await store.list<JudgeMail>("judgeMail")).length;
+  await call(`/api/shops/${shop.id}/retry?lang=en`, {}, owner);
+  assert.equal((await store.list<JudgeMail>("judgeMail")).length, count, "reconciliation deduplicates each payment event");
+});
 
 async function start(t: { after: (fn: () => unknown) => void }, store = new Store(":memory:")) {
   const server = createApp(store);
@@ -38,7 +73,7 @@ async function start(t: { after: (fn: () => unknown) => void }, store = new Stor
   return { store, base, call, cookies, session };
 }
 
-test("English judge samples use dollars despite Japanese browser settings, retaining the region on resume", async t => {
+test("English judge setup starts without services and retains its US region across language changes", async t => {
   process.env.JUDGE_INVITE = invite;
   process.env.JUDGE_UNTIL = new Date(Date.now() + 86400000).toISOString();
   const { store, base, call, cookies } = await start(t);
@@ -54,7 +89,7 @@ test("English judge samples use dollars despite Japanese browser settings, retai
   assert.equal(proposal.status, 200);
   const plan = await proposal.json() as { config: { region: { country: string }; menus: { price: number }[] } };
   assert.equal(plan.config.region.country, "US");
-  assert.equal(plan.config.menus[0].price, 55);
+  assert.deepEqual(plan.config.menus, []);
   assert.equal((await call("/api/judge/start?lang=ja", { invite }, owner)).status, 200);
   assert.deepEqual((await store.shop(shop.id))!.regionDefault, shop.regionDefault, "a language switch does not convert an existing shop");
   const reset = await call("/api/judge/reset?lang=en", { requestId: randomUUID() }, owner);

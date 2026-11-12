@@ -141,11 +141,12 @@ try {
     await chat.getByRole('button', { name: label('変更案を確認する'), exact: true }).click();
     const proposal = page.locator('.shop-change-review .request-review'); await expect(proposal).toBeVisible();
     await expect(proposal.locator('.screen-added')).toHaveText(label('追加'));
-    await expect(proposal.locator('.theme-preview')).toBeVisible();
-    await chat.getByRole('button', { name: label('チャットを折り畳む'), exact: true }).click();
-    await expect(proposal).toBeVisible(); await expect(chat).toBeHidden();
-    await page.locator('.chat-panel-restore').click(); await expect(chat).toBeVisible();
-    await chat.getByRole('button', { name: label('閉じる'), exact: true }).click(); await expect(proposal).toBeVisible();
+    await expect(proposal.locator('.theme-preview')).toHaveCount(0); // A page addition keeps the shared theme unchanged.
+    await expect(chat).toBeVisible();
+    await proposal.getByRole('button', { name: label('変更内容を反映する'), exact: true }).click({ trial: true });
+    await page.keyboard.press('Escape'); await expect(proposal).toHaveCount(0); await expect(input).toBeFocused();
+    await chat.getByRole('button', { name: label('変更案を確認する'), exact: true }).click();
+    await expect(proposal).toBeVisible();
     assert.equal((await store.shop(shop.id)).published.pages.length, 1, 'viewing the proposal never publishes it');
     await proposal.getByRole('button', { name: label('チャットに戻る'), exact: true }).click(); await expect(chat).toBeVisible();
     await chat.getByRole('button', { name: label('閉じる'), exact: true }).click();
@@ -169,6 +170,11 @@ try {
     await staffPage.goto(`${origin}/?lang=${language}`); await expect(staffPage.locator('.management-dashboard')).toBeVisible();
     await expect(staffPage.locator('.sidebar-editor')).toHaveCount(0);
     await staffPage.goto(`${origin}/?tab=try&lang=${language}`); await expect(staffPage.locator('.management-dashboard')).toBeVisible();
+    for (const tab of ['payments', 'transfers']) {
+      await staffPage.goto(`${origin}/?tab=${tab}&lang=${language}`); await expect(staffPage.locator('.management-dashboard')).toBeVisible();
+      await expect(staffPage.locator('.payment-operations')).toHaveCount(0);
+      assert.deepEqual((await (await staffContext.request.get(`${origin}/api/shops/${shop.id}/operations?lang=${language}`)).json()).transferHistory, []);
+    }
     await staffContext.close();
     console.log(`${language} ${width}px: default dashboard, shop-timezone bookings, new inquiries, list links, pagination, scope separation, both side chats, saved drafts, proposals and staff permissions passed.`);
   }

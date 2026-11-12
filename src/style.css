@@ -1,6 +1,39 @@
 /* Important rules in the first layer also cover late-loaded editors and theme CSS.
    Keep pinch zoom enabled; fix the small control text that triggers focus zoom. */
 @layer mobile-inputs {
+  /* Working navigation and sign-in controls must remain usable inside generated themes. */
+  .public-shop .booking-login-button {
+    background: var(--primary, var(--green)) !important;
+    color: var(--on-primary, #fff) !important;
+    border-color: var(--primary, var(--green)) !important;
+    white-space: normal !important;
+    max-width: 100%;
+  }
+  .public-shop .public-nav {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+  .public-shop .public-nav > * {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  @container storefront (max-width: 760px) {
+    .public-shop header:has(.public-nav) {
+      height: auto !important;
+      flex-wrap: wrap !important;
+    }
+    .public-shop [data-design-slot=navigation] {
+      flex: 1 1 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+  }
   @media (max-width: 760px), (hover: none) and (pointer: coarse) {
     input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"], [type="reset"], [type="image"], [type="hidden"], [type="color"]),
     textarea,
@@ -367,7 +400,7 @@ aside nav button > span {
   font-size: 18px;
   color: #86927c;
 }
-.active {
+.active:not(:where(.public-shop *)) {
   background: #edf2e7 !important;
   color: #35563b !important;
 }
@@ -750,8 +783,8 @@ pre {
   color: #8a9285;
 }
 .status.active {
-  background: #edf4e5;
-  color: #608047;
+  background: #edf2e7;
+  color: #35563b;
 }
 .status.cancelled,
 .status.no_show {
@@ -927,6 +960,7 @@ pre {
 .public-nav .active {
   border-bottom: 2px solid #53794b;
   background: none !important;
+  color: #35563b;
 }
 .reservation-layout {
   display: grid;
@@ -941,6 +975,11 @@ pre {
   padding: 30px;
 }
 .reservation-layout > .panel:first-child { container: booking-form / inline-size; }
+.reservation-layout .booking-step { display: grid; gap: 18px; margin-top: 32px; min-width: 0; }
+.reservation-layout .booking-step > h3 { margin: 0; }
+.reservation-layout .booking-step > .field { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.reservation-layout .booking-step > .time-grid { margin: 4px 0 8px; }
+.reservation-layout .booking-step > .waitlist-request { margin: 0; }
 .booking-mobile-summary { display: none; }
 .booking-summary {
   align-self: start;
@@ -1861,6 +1900,23 @@ pre {
 .visual-request textarea { margin: 12px 0; }
 .public-shop.accent-rose { --green: #813c56; --cream: #faedf1; --line: #ead5df; --selected-bg: #faedf1; --selected-border: #813c56; --selected-ink: #813c56; }
 .public-shop.accent-navy { --green: #263e68; --cream: #edf2fa; --line: #d5dfeb; --selected-bg: #edf2fa; --selected-border: #263e68; --selected-ink: #263e68; }
+/* Custom themes inherit their own text colour instead of the standard sage palette.
+   Generated .design-root variables and component rules can still override these defaults. */
+.public-shop.custom-theme {
+  --selected-bg: color-mix(in srgb, currentColor 10%, transparent);
+  --selected-border: currentColor;
+  --selected-ink: currentColor;
+}
+:where(.public-shop.custom-theme) .booking-summary,
+:where(.public-shop.custom-theme) .waitlist-request,
+:where(.public-shop.custom-theme) .empty-slots {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  color: inherit;
+}
+:where(.public-shop.custom-theme) .booking-summary .line-flower,
+:where(.public-shop.custom-theme) .menu-options small {
+  color: inherit;
+}
 .public-shop.accent-rose .salon-hero { background: #faedf1; color: #813c56; }
 .public-shop.accent-navy .salon-hero { background: #edf2fa; color: #263e68; }
 .public-shop.layout-compact .salon-hero { padding: 24px; }
@@ -2241,9 +2297,9 @@ pre {
 .managed-hero-image > span { display: block; padding: 24px; background: #eff2eb; border-radius: 14px; }
 .image-library { min-width: 0; }
 .image-library .section-top, .image-library .actions { flex-wrap: wrap; }
-.image-library-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 18px 0; }
-.image-library-tools label { display: grid; gap: 8px; font-size: 12px; }
-.image-library input[type="file"] { max-width: 100%; }
+.image-library-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; margin: 18px 0; }
+.image-library .image-library-tools > label { display: grid; gap: 8px; margin: 0; min-width: 0; width: min(340px, 100%); max-width: 100%; font-size: 12px; }
+.image-library input[type="file"] { width: 100%; min-width: 0; max-width: 100%; }
 .image-library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 18px; margin-top: 24px; }
 .image-library-grid figure { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 14px; border: 1px solid var(--line); border-radius: 12px; min-width: 0; background: white; }
 .image-library-grid .image-selected { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
@@ -2617,6 +2673,7 @@ pre {
 .theme-placeholder { gap: 12px; margin: 20px; min-width: 0; display: grid; border: 2px dashed currentColor; border-radius: 12px; padding: 16px; }
 .theme-placeholder > strong, .theme-placeholder > p { text-align: center; margin: 0; }
 .theme-sample-card { margin: 0; min-width: 0; }
+:where(.theme-sample-card) .booking-summary { display: block; position: static; }
 .theme-sample-fields { display: grid; gap: 12px; }
 .theme-sample-fields label { display: grid; gap: 6px; min-width: 0; }
 .theme-sample-fields input, .theme-sample-fields select, .theme-sample-fields textarea { width: 100%; min-width: 0; }
@@ -2781,6 +2838,11 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .phone-booking form, .phone-customer form { margin-top: 12px; }
 
 .management-dashboard { display: grid; gap: 22px; min-width: 0; }
+.payment-operations { display: grid; gap: 22px; min-width: 0; }
+.payment-operations > .section-top, .payment-operations > .panel { margin: 0; }
+.payment-operations > .section-top { flex-wrap: wrap; gap: 12px; }
+.payment-operations h1 { font-size: 24px; margin: 0; }
+.payment-operations .booking-card > div { min-width: 0; overflow-wrap: anywhere; }
 .management-dashboard > .section-top { margin: 0; flex-wrap: wrap; }
 .management-dashboard h1 { font-size: 24px; margin: 0 0 8px; }
 .dashboard-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; align-items: start; }
@@ -2813,6 +2875,9 @@ body.visual-chat-open { --visual-chat-width: 380px; padding-right: var(--visual-
 .page-change-inventory h2 { font-size: 20px; }
 .shop-change-review:empty { display: none; }
 .shop-change-review .request-review { margin: 0; padding: 24px; background: #fffdf8; border: 1px solid var(--line); border-radius: 14px; }
+.shop-change-review-dialog .request-review { padding: 0; border: 0; }
+.shop-change-review-dialog .request-review > .actions { position: sticky; bottom: -24px; padding: 16px 0; margin-bottom: -24px; background: #fffdf8; border-top: 1px solid var(--line); flex-wrap: wrap; }
+@media (max-width: 760px) { .shop-change-review-dialog .request-review > .actions { bottom: -16px; margin-bottom: -16px; } }
 .visual-chat-panel[hidden] { display: none; }
 .shop-change-chat > .shop-request { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
 .shop-change-chat .shop-request > p { flex-shrink: 0; font-size: 12px; line-height: 1.7; }

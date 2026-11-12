@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { createApp } from '../server/app.ts';
+import { allowDemoShoppers } from '../server/auth.ts';
 import { Store } from '../server/store.ts';
 import { sample, slots } from '../server/domain.ts';
 import { requestLocale } from '../server/i18n.ts';
@@ -12,6 +13,8 @@ import { artifacts } from '../server/artifacts.ts';
 import { dateIn, regionOf } from '../shared/region.ts';
 
 process.env.DEMO_MODE='true';
+// As in the server entry: demo visitors book as the demo customer without signing in.
+allowDemoShoppers();
 const store=new Store(':memory:');const server=createApp(store);
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin=`http://127.0.0.1:${server.address().port}`;process.env.APP_ORIGIN=origin;
@@ -68,7 +71,7 @@ try{
   const chat=page.getByRole('log',{name:'Chat with AI',exact:true});
   // The demo interview asks for the name and logo first, as in tests/i18n.test.ts.
   await chat.getByText('What is your shop’s name?',{exact:true}).waitFor();
-  for(const [answer,expected] of [['Moon Atelier',/logo/],['No logo',/What kind of business do you run\?/],['A nail salon',/Choose the features/],['1,2,3,4',/other pages/],['No other pages',/Anything else/]]){
+  for(const [answer,expected] of [['Moon Atelier',/logo/],['No logo',/What kind of business do you run\?/],['A nail salon',/Choose any additional features/],['1,2,3,4',/other pages/],['No other pages',/Anything else/]]){
     await page.getByLabel('Your message to AI',{exact:true}).fill(answer);
     await page.getByRole('button',{name:'Send',exact:true}).click();
     await chat.getByText(expected).last().waitFor();
@@ -78,8 +81,9 @@ try{
   await page.getByRole('button',{name:'Send',exact:true}).click();
   await page.getByRole('heading',{name:'Are these screens right for your shop?',exact:true}).waitFor();
   await page.getByRole('button',{name:'Publish private preview',exact:true}).click();
-  await page.locator('aside nav').getByRole('button',{name:/Try and edit screens$/}).waitFor();
-  await page.locator('.local-preview-screen').waitFor();
+  await page.getByRole('heading',{name:'Private preview',exact:true}).waitFor();
+  // A new shop starts without services and cannot be published publicly until one is bookable.
+  {const created=(await store.list('shop')).find(item=>item.published&&!item.published.menus.length);assert.ok(created);created.published.menus=structuredClone(sample.menus);await store.saveShop(created);}
   await page.getByRole('link',{name:'Review screens and publish',exact:true}).click();
   await page.getByRole('heading',{name:'Review screens and publish',exact:true}).waitFor();
   await page.getByRole('button',{name:'Publish publicly',exact:true}).click();
@@ -87,9 +91,8 @@ try{
   let response=await context.request.get(origin+'/api/workspace',{headers:{'X-Gemihub-Language':'en'}});
   const shop=(await response.json()).shops[0];
   await page.goto(origin+'/s/'+shop.slug+'?pane=reserve');
-  await page.getByRole('button',{name:'Log in as a demo customer',exact:true}).click();
   await page.getByRole('button',{name:'Book now',exact:true}).click();
-  await page.getByRole('heading',{name:'A little time for yourself.',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Booking',exact:true}).waitFor();
   const config=(await (await context.request.get(origin+'/api/public/'+shop.slug)).json()).config;
   let date,slot;
   for(let offset=2;offset<=config.rules.advanceDays;offset++){date=dateIn(Date.now()+offset*86400000,regionOf(config).timeZone);slot=slots(config,[],date,config.menus[0].id)[0];if(slot)break;}
@@ -119,7 +122,7 @@ try{
   for(const path of images){assert.ok(path.startsWith('/manual/en/'));const r=await context.request.get(origin+path);assert.equal(r.status(),200,path);}
   await page.setViewportSize({width:390,height:844});
   await page.goto(origin+'/s/'+shop.slug+'?pane=reserve');
-  await page.getByRole('heading',{name:'A little time for yourself.',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Booking',exact:true}).waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'English mobile page must not overflow');
   console.log('English LP, language persistence, onboarding, private/public publication, booking/cancellation, inquiry, manual assets, and mobile layout passed.');
 
@@ -133,7 +136,7 @@ try{
   await filePage.getByRole('heading',{name:'Your bookings',exact:true}).waitFor();
   assert.equal(await filePage.locator('html').getAttribute('lang'),'en');
   await filePage.getByRole('button',{name:'Book now',exact:true}).click();
-  await filePage.getByRole('heading',{name:'A little time for yourself.',exact:true}).waitFor();
+  await filePage.getByRole('heading',{name:'Booking',exact:true}).waitFor();
   await mkdir(join(directory,'missing'));
   await copyFile(join(directory,'web/index.html'),join(directory,'missing/index.html'));
   await filePage.goto(pathToFileURL(join(directory,'missing/index.html')).href);

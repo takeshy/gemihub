@@ -94,7 +94,7 @@ try {
   await capture("03-rules.jpg", ".live-settings-rules");
   await open("plan-review", "下記の画面でいいですか？");
   await capture("04-plan.jpg", ".request-review");
-  await open("provisional-page", "自分のための、ひとときを。");
+  await open("provisional-page", "予約");
   await capture("05-provisional-page.jpg");
   await open("provisional", "現在のお店の設定");
   await capture("05-provisional.jpg", ".publication-status");
@@ -110,7 +110,7 @@ try {
   await capture("07-registration.jpg", ".customer-registration");
   await open("anonymous", "メニュー", "お客様の画面/会員登録・ログイン");
   await capture("07-login-entry.jpg");
-  await open("customer", "自分のための、ひとときを。");
+  await open("customer", "予約");
   assert.equal(await page.getByRole("heading", { name: "お店からのお便り", exact: true }).count(), 0);
   await page.getByLabel("ご希望の日付（日本時間）").fill(bookingDate);
   await page.getByRole("button", { name: "10:00", exact: true }).click();
@@ -265,7 +265,7 @@ try {
   await capture("25-menu-images.jpg", ".menu-edit-block");
   await page.getByRole("button", { name: "保存", exact: true }).click();
   await page.getByRole("status").filter({ hasText: "保存しました。" }).waitFor();
-  await open("reservation", "自分のための、ひとときを。", "運営/設定/メニュー画像");
+  await open("reservation", "予約", "運営/設定/メニュー画像");
   await page.locator(".menu-image img").first().waitFor();
   await capture("25-menu-public.jpg", ".reservation-layout");
   await open("list", /^お客様一覧/, "運営/予約・お客様/お客様");

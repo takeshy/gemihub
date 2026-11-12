@@ -92,7 +92,8 @@ test("local pen changes stay drafts; stale releases fail and retries publish onc
     async propose(_text: string, current: ShopConfig | null) {
       const config = structuredClone(current || sample);
       config.name = "ペンで変更した店名";
-      if (badProposal) config.menus[0].price++;
+      // A draftless shop has no menus, so the out-of-scope change touches another field.
+      if (badProposal) config.address += "（変更）";
       return { config, summary: ["店名を変更"] };
     },
     async proposeArticle() { return { title: "title", excerpt: "", body: "body" }; },

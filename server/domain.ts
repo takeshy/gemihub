@@ -54,7 +54,6 @@ export const shopSchema = z
           transferable: z.boolean().optional(),
         }),
       )
-      .min(1)
       .max(50),
     staff: z
       .array(
@@ -196,6 +195,10 @@ export type Booking = {
   updatedBy?: string;
   updatedAt?: string;
 };
+/** Menus a customer can book on their own: shown, and not an add-on to another menu. */
+export const bookableMenus = (config: Pick<ShopConfig, "menus">) => config.menus.filter(menu => menu.active && !menu.optionFor);
+/** A shop before its first proposal: sample wording only, with no services or staff of its own. */
+export const emptyShop = (email: string): ShopConfig => ({ ...structuredClone(sample), menus: [], staff: [], ownerBooking: true, notificationEmail: email });
 export const sample: ShopConfig = {
   get name() { return tr("nail atelier 凪"); },
   industry: "nail",

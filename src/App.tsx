@@ -8,6 +8,7 @@ import { Pagination, usePagination } from "./Pagination";
 import { tr, intlLocale, listSeparator } from "../shared/i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { PaymentDetails } from "./PaymentDetails";
+import { PaymentOperations } from "./PaymentOperations";
 import { WaitlistRequest, WaitlistWishes, type SlotWish } from "./Waitlist";
 import { BookingTransferControl, TransferBuying, TransferHistory, TransferOffers, type CancellationQuote, type MyTransfers, type TransferCheckout, type TransferListing } from "./Transfers";
 import { BookingComplete } from "./BookingComplete";
@@ -47,7 +48,7 @@ import { createRequestId } from "./request-id";
 import { dashboardTab, useDashboardNavigation } from "./dashboard-navigation";
 import React, { useCallback, useEffect, useState, useRef, useId } from "react";
 import { useApi } from "./api";
-import { bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, menuAllowsOption, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
+import { bookableMenus, bookingStaff, bookingStaffName, bookingMenuName, bookingDates, menuSelection, menuAllowsOption, hoursText, specialDaysText, ownerStaffId, type ShopConfig, type Booking } from "../server/domain";
 import type { Shop, User } from "../server/store";
 import "./style.css";
 import "./ManagementTypography.css";
@@ -84,6 +85,7 @@ export type Workspace = Shop & {
   bookings: Booking[];
   paymentCheckouts?: { id: string; start: string; amount: number; currency?: Currency; phase: string; review: boolean; customer: string; name: string }[];
   transferListings?: { id: string; bookingId: string; price: number; currency: Currency; discountPercent: number; deadline: string; buying: boolean; review: boolean; unsold: number }[];
+  transferHistory?: (NonNullable<Workspace["transferListings"]>[number] & { phase: "listed" | "sold" | "expired" | "withdrawn" })[];
   paypalAlerts?: PayPalAlertState;
   paypalSettings?: { enabled: boolean; digestHour: number };
   phoneSettings?: PhoneSettings;
@@ -412,7 +414,7 @@ function Dashboard({
   const publiclyPublished = !!shop?.published && shop.publication !== "provisional";
   // The dashboard needs a published configuration; staff of an unpublished shop start on their own page.
   const fallbackTab = shop?.published ? "dashboard" : "staff";
-  const activeTab = (!publiclyPublished && ["bookings", "customers", "analytics", "coupons"].includes(tab)) || (tab === "dashboard" && !shop?.published)
+  const activeTab = (!publiclyPublished && ["bookings", "payments", "transfers", "customers", "analytics", "coupons"].includes(tab)) || (tab === "dashboard" && !shop?.published)
     ? fallbackTab : tab;
   const view = creating ? "build" : activeTab;
   function closeMobileMenu() {
@@ -436,7 +438,7 @@ function Dashboard({
   }
   useEffect(() => {
     if (!shop) return;
-    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons"].includes(tab) ? fallbackTab : view;
+    const allowed = !shop.isOwner && ["try", "images", "basic", "menus", "coupons", "payments", "transfers"].includes(tab) ? fallbackTab : view;
     if (allowed !== tab) navigation.visit(allowed, shop.id, undefined, undefined, true);
   }, [shop?.id, shop?.isOwner, view, tab, publiclyPublished]);
   useEffect(() => {
@@ -465,6 +467,7 @@ function Dashboard({
     ...(shop?.isOwner ? [["try", "✧", tr("AIとお店をつくる")]] : []),
     ...(publiclyPublished ? [["bookings", "▦", tr("予約を管理")], ["customers", "♧", tr("お客様")], ["analytics", "▥", tr("分析")]] : []),
     ...(publiclyPublished && shop?.isOwner ? [["coupons", "◇", tr("クーポン")]] : []),
+    ...(publiclyPublished && shop?.isOwner ? [["payments", "¥", tr("決済・返金")], ["transfers", "↻", tr("キャンセル枠の再販売")]] : []),
     ["inquiries", "✉", tr("お問い合わせ")],
     ...(articleKinds(shop?.published).length ? [["blog", "✎", articleKinds(shop?.published).length === 2 ? tr("ブログ・お知らせ") : articleKinds(shop?.published)[0] === "blogs" ? tr("ブログ") : tr("お知らせ")]] : []),
     ...(!shop?.isOwner ? [["staff", "♧", tr("自分のカレンダー")]] : []),
@@ -598,6 +601,7 @@ function Dashboard({
                 {view === "bookings" && (
                   <Reservations key={shop.id} shop={shop} run={run} reload={load} open={setTab} />
                 )}
+                {(view === "payments" || view === "transfers") && shop.isOwner && <PaymentOperations key={`${shop.id}:${view}`} mode={view} shop={shop} reload={load} onAsk={askFromDashboard} open={setTab} />}
                 {view === "customers" && <Customers key={`${shop.id}:${initialCustomer}:${initialCustomerImages}:${initialInquiryId}`} shopId={shop.id} config={shop.published} initialEmail={initialCustomer} initialImages={initialCustomerImages} initialInquiryId={initialInquiryId} backToInquiries={()=>setTab("inquiries")} inquiriesChanged={()=>reloadInquiries(shop.id)} />}
                 {view === "blog" && (
                   <BlogEditor
@@ -795,7 +799,7 @@ export function ConfigEditor({
       {(!section || section === "menus") && <>
       <h3>{tr("メニュー")}</h3>
       <label className="check-field"><input type="checkbox" checked={showHiddenMenus} onChange={event => setShowHiddenMenus(event.target.checked)} /><span>{tr("非表示も表示")}</span></label>
-      {!showHiddenMenus && !c.menus.some(menu => menu.active) && <p className="small muted">{tr("有効なメニューはありません。「非表示も表示」をONにすると、無効なメニューを確認・編集できます。")}</p>}
+      {!c.menus.length ? <p className="small muted">{tr("メニューはまだ登録されていません。「＋ メニューを追加」から登録してください。")}</p> : !showHiddenMenus && !c.menus.some(menu => menu.active) && <p className="small muted">{tr("有効なメニューはありません。「非表示も表示」をONにすると、無効なメニューを確認・編集できます。")}</p>}
       {c.menus.map((m, i) => !showHiddenMenus && !m.active ? null : (
         <div className="menu-edit-block" key={m.id}><div className="edit-row">
           <Field label={tr("メニュー名")}>
@@ -1656,7 +1660,7 @@ export function PublicShop({
   const loginRequired = () => <section className="panel booking-login-required" aria-label={tr("ご予約にはログインが必要です。") }>
     <h2>{tr("ご予約にはログインが必要です。")}</h2>
     <p>{tr("会員登録またはログイン後に、メニューと日時を選んでご予約ください。")}</p>
-    {!hideHeader && <a className="button primary" href="#customer-signin">{tr("会員登録・ログインへ")}</a>}
+    {!hideHeader && <a className="button primary booking-login-button" href="#customer-signin">{tr("会員登録・ログインへ")}</a>}
   </section>;
   const mineMember = () => isCustomer ? <div className="member-information"><span>{data.customerProfile?.name || shopper!.name} {tr(" さん")}</span><button type="button" onClick={() => setData(current => current && { ...current, registrationRequired: true })}>{tr("会員情報を変更")}</button></div> : null;
   const minePanel = () => (
@@ -1741,13 +1745,14 @@ export function PublicShop({
     if (onPaneChange) { onPaneChange("mine"); return; }
     setPane("mine");
     void run(loadMine);
-  }} onNew={() => { if (leavePaymentReturn("reserve")) return; setCompletedBooking(undefined); setSelected(""); setTimes([]); setBookingMessage(""); setPaymentConsent(false); setRequestId(createRequestId()); }}/> : (
+  }} onNew={() => { if (leavePaymentReturn("reserve")) return; setCompletedBooking(undefined); setSelected(""); setTimes([]); setBookingMessage(""); setPaymentConsent(false); setRequestId(createRequestId()); }}/> : !bookableMenus(c).length ? <section className="panel"><h2>{storefrontText(c, "bookingTitle")}</h2><p className="notice" role="status">{tr("予約メニューは準備中です。")}</p></section> : (
             <>
             <TransferOffers base={base} listings={listings} name={name} busy={busy} run={run} simulation={data.paymentSimulation} onStarted={startTransfer} />
             <div className="reservation-layout">
               <div className="panel">
                 <span className="eyebrow">RESERVATION</span>
                 <h2>{storefrontText(c, "bookingTitle")}</h2>
+                <div className="booking-step">
                 <h3 ref={couponBookingHeading} tabIndex={-1}>{storefrontText(c, "bookingMenu")}</h3>
                 <div className="menu-options">
                   {c.menus
@@ -1775,6 +1780,8 @@ export function PublicShop({
                     ))}
                 </div>
                 {!!allowedOptions.length && <fieldset className="booking-options"><legend>{tr("追加メニュー（任意）")}</legend><p className="small muted">{tr("選んだ追加メニューの料金と所要時間を合算して空き時間を確認します。同じグループは1つまで選べます。")}</p>{allowedOptions.map(option => <label className="booking-option" key={option.id}><input type="checkbox" checked={optionIds.includes(option.id)} disabled={busy} onChange={event => setOptionIds(current => event.target.checked ? [...current.filter(id => !option.optionGroup || c.menus.find(menu => menu.id === id)?.optionGroup !== option.optionGroup), option.id] : current.filter(id => id !== option.id))}/><MenuImage imageId={option.imageId} imageBase={`${base}/images`} name={option.name} className="booking-option-image"/><span><b>{option.name}</b><small>{yen(option.price)} · {option.duration}{tr("分")}</small></span></label>)}</fieldset>}
+                </div>
+                <div className="booking-step">
                 <h3>{storefrontText(c, c.staff.some(person => person.id !== ownerStaffId) ? "bookingStaffTime" : "bookingTime")}</h3>
                 {c.staff.some(person => person.id !== ownerStaffId) && <Field label={tr("スタッフ")}>
                   <select
@@ -1827,6 +1834,8 @@ export function PublicShop({
                     {tr("この日にご案内できる時間はありません。別の日付をお選びください。")}{" "}<button type="button" onClick={()=>setAutomaticDate(true)}>{tr("予約できる最初の日を探す")}</button></p>
                 )}
                 {isCustomer && !!selection && <WaitlistRequest base={base} config={c} date={date} menuId={menu} optionIds={optionIds} staffId={staff} busy={busy} run={run} notify={notify} reload={loadMine} />}
+                </div>
+                <div className="booking-step">
                 <h3>{storefrontText(c, "bookingConfirm")}</h3>
                 {selection && <div className="booking-mobile-summary"><p>{selection.base.name}</p>{!!selection.options.length && <ul>{selection.options.map(option => <li key={option.id}>{option.name} · {yen(option.price)}</li>)}</ul>}<p><b className="price">{yen(totalPrice)}</b> · {tr("合計 {0}分", selection.duration)}</p><p>{selected ? when(selected) : tr("日時をお選びください")}</p></div>}
                 <Field label={tr("お名前")}>
@@ -1886,6 +1895,7 @@ export function PublicShop({
                   {c.rules.payment?.enabled && totalPrice > 0 ? data.paymentSimulation ? tr("支払い・予約を練習する") : tr("PayPalで支払いへ進む") : tr("この内容で予約する")}{" "}
                   →
                 </button>
+                </div>
               </div>
               <div className="panel booking-summary">
                 <span className="line-flower">✳</span>

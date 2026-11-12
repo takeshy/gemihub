@@ -67,7 +67,7 @@ text=text.replace('entry.title === title', '(entry.title === title || manualCata
 text=text.replace('locale: "ja-JP"','locale: "en-US"').replace('"public/manual"','"public/manual/en"').replace('&viewMode=story`','&viewMode=story&globals=locale:en`');
 text=text.replace('  await capture("13-storage.jpg", ".data-overview");','  await capture("13-storage.jpg", ".data-overview");\n  await capture("21-system.jpg", ".shop-build-layout");');
 text=text.replace('  assert.deepEqual(errors, []);', `
-  await open("local-editor", "A little time for yourself.");
+  await open("local-editor", "Booking");
   await page.getByRole("button", { name: "Make changes", exact: true }).click();
   const canvas = page.getByLabel("Screen for circling the area to change");
   await canvas.waitFor();

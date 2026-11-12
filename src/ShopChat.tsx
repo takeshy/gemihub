@@ -48,6 +48,11 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
   const alive = useRef(true);
   const log = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
+  const reviewDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = reviewDialog.current;
+    if (published && reviewHost && viewPlan && dialog && !dialog.open) dialog.showModal();
+  }, [published, reviewHost, viewPlan?.id]);
   const creationId = useRef(createRequestId());
   const pending = useRef<{text:string;imageIds:string[];id:string}|undefined>(undefined);
   function acceptChat(value:ChatData) {
@@ -191,7 +196,7 @@ export function ShopChat({shopId,published,isOwner,context,currentConfig,plan:le
   const messages=chat?.messages || [];
   const extraPages=viewPlan?.config.pages.filter(page=>!currentConfig?.pages.some(existing=>existing.id===page.id)) || [];
   const reviewContent=viewPlan&&<section className="request-review" aria-label={tr("変更案の確認")}><h3>{intent==="new-page"?tr("このページを追加してよいですか？"):tr("このように変更してよいですか？")}</h3><ul className="check-list">{viewPlan.summary.map((summary,index)=><li key={index}>{summary}</li>)}</ul><ScreenGallery key={viewPlan.id} config={viewPlan.config} previousConfig={currentConfig} shopId={shopId}/>{extraPages.length>0&&<section className="new-page-review" aria-label={tr("追加するページ")}><h4>{tr("追加するページとメニュー")}</h4>{extraPages.map(page=><div key={page.id}><h5>{page.title}</h5><p>{tr("お客様向けのメニューに「")}{page.navigationLabel}{tr("」を追加します。")}</p><details open><summary>{tr("ページの内容を見る")}</summary><CustomPage page={page} imageBase={`${prefix}/images`}/></details></div>)}</section>}<p>{viewPlan.base===context?.revision?tr("まだ反映していません。直したいことは、修正チャットで続けて伝えられます。"):tr("以前の変更案です。今の設定に合わせて直す場合は、チャットで続けて依頼してください。")}</p><div className="actions"><button type="button" onClick={()=>{setViewPlan(undefined);onReturnToChat?.();}}>{tr("チャットに戻る")}</button><button type="button" className="primary" disabled={working||viewPlan.base!==context?.revision} onClick={()=>void run(()=>onAccept(viewPlan))}>{viewPlan.approved?tr("反映を再試行"):tr("変更内容を反映する")}</button></div></section>;
-  const review = reviewHost && reviewContent ? createPortal(reviewContent, reviewHost) : reviewContent;
+  const review = reviewHost && reviewContent ? createPortal(<dialog ref={reviewDialog} className="visual-change-review shop-change-review-dialog" aria-label={tr("変更案の確認")} onCancel={() => { setViewPlan(undefined); onReturnToChat?.(); }}>{reviewContent}</dialog>, reviewHost) : reviewContent;
   if(restoring&&!viewPlan)return <p role="status">{tr("保存した会話を読み込んでいます…")}</p>;
   if(restoreError&&!viewPlan)return <div className="alert" role="alert"><p>{error}</p><button onClick={()=>setRestoreRetry(value=>value+1)}>{tr("もう一度読み込む")}</button></div>;
   if(published&&!isOwner)return <p className="muted">{tr("変更は店主が行います。質問はメニューの「相談・質問」からどうぞ。")}</p>;

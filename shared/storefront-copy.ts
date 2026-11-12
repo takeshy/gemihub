@@ -17,16 +17,16 @@ export const storefrontCopyDefaults = {
   aboutAccess: "アクセス",
   aboutHours: "営業時間",
   mineBookings: "あなたのご予約",
-  bookingTitle: "自分のための、ひとときを。",
+  bookingTitle: "予約",
   bookingMenu: "01 メニューを選ぶ",
   bookingTime: "02 日時",
   bookingStaffTime: "02 スタッフと日時",
   bookingConfirm: "03 予約内容を確認",
   bookingSummary: "ご予約内容",
   contactTitle: "お問い合わせ",
-  blogsIntro: "お店の日々や、季節のおすすめをお届けします。",
-  announcementsIntro: "お店からの大切なご案内です。",
-  headerEyebrow: "A LITTLE MOMENT, JUST FOR YOU.",
+  blogsIntro: "ブログの記事一覧です。",
+  announcementsIntro: "お知らせの一覧です。",
+  headerEyebrow: "お店のこと",
 } as const;
 export type StorefrontCopyKey = keyof typeof storefrontCopyDefaults;
 export const storefrontCopyKeys = Object.keys(storefrontCopyDefaults) as StorefrontCopyKey[];
