@@ -3,7 +3,7 @@ import type { ShopConfig } from "./domain.ts";
 import type { RequestImage } from "./request-images.ts";
 import { compactRequestImage, requestImageParts } from "./request-images.ts";
 import { generateJson } from "./llm.ts";
-import { captureVisualScreens } from "./visual-browser.ts";
+import { captureVisualScreens, type RenderedVisual } from "./visual-browser.ts";
 import { getLocale, tr } from "../shared/i18n.ts";
 import { visualConversationInstruction, type VisualMessage } from "../shared/visual-conversation.ts";
 import type { VisualPreviewOptions, VisualReview } from "../shared/visual-review.ts";
@@ -18,11 +18,28 @@ export type VisualReviewInput = {
   media?: { mimeType: "image/png"; data: string };
   renderImages: Record<string, { mimeType: string; data: string }>;
 };
+export function contrastFeedback(screens: RenderedVisual[]) {
+  return [...new Set(screens.flatMap(screen => (screen.contrastIssues || []).map(issue =>
+    tr("{0}px・{1}「{2}」の文字のコントラストは{3}:1です。最低{4}:1を確保してください。背景色だけを変えた場合も、文字色と無効状態のボタンを読める配色にしてください。", screen.width, issue.element, issue.text, issue.ratio, issue.minimum)
+  )))].slice(0, 8);
+}
+/** Initial creation uses the same real component samples, without another model call. */
+export async function checkInitialThemeContrast(config: ShopConfig, images: RequestImage[]) {
+  const screenshots = await captureVisualScreens({config, screen: "initial-theme", locale: getLocale(), options: {}, images: Object.fromEntries(images.map(image => [image.id, {mimeType: image.mimeType, data: image.data}]))});
+  return contrastFeedback(screenshots);
+}
 export async function reviewRenderedVisual(input: VisualReviewInput, dependencies: { capture?: typeof captureVisualScreens; model?: typeof generateJson } = {}): Promise<VisualReview> {
   const capture = dependencies.capture || captureVisualScreens;
   const common = { screen: input.screen, locale: getLocale(), options: { ...input.preview, fixtures: input.preview?.fixtures || sampleFixtures(input.before) }, images: input.renderImages };
   const before = await capture({ ...common, config: input.before });
   const after = await capture({ ...common, config: input.after });
+  const relevant = after.map(screen => ({...screen, contrastIssues: (screen.contrastIssues || []).filter(issue => {
+    if (["theme", "initial-theme"].includes(input.screen)) return true;
+    const existing = before.find(previous => previous.width === screen.width)?.contrastIssues?.find(previous => previous.element === issue.element && (issue.index === undefined || previous.index === undefined ? previous.text === issue.text : previous.index === issue.index));
+    return !existing || issue.ratio < existing.ratio - .1;
+  })}));
+  const contrastIssues = contrastFeedback(relevant);
+  if (contrastIssues.length) return { approved: false, issues: contrastIssues };
   const parts = requestImageParts({ instruction: input.instruction, target: input.target, screen: input.screen, previousMessages: input.messages || [], beforeConfig: input.before, proposedConfig: input.after, responseLanguage: getLocale() }, input.images);
   if (input.media) parts.push({ text: "ANNOTATED REQUEST: the red marks identify the requested location. They are not part of the site or the proposed design." }, { inlineData: await compactRequestImage(input.media) });
   for (const [stage, screenshots] of [["before", before], ["after", after]] as const) for (const screenshot of screenshots) {

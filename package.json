@@ -103,6 +103,7 @@
     "check:visual-progress": "node --import tsx scripts/check-visual-progress.mjs",
     "check:theme-components": "node --import tsx scripts/check-theme-components.mjs",
     "check:theme-palette": "node --import tsx scripts/check-theme-palette.mjs",
+    "check:theme-contrast": "node --import tsx scripts/check-theme-contrast.mjs",
     "capture:manual:priorities": "node scripts/capture-manual-priorities.mjs",
     "check:manual:priorities": "node scripts/capture-manual-priorities.mjs --check",
     "capture:manual:history": "node scripts/capture-manual-history.mjs",

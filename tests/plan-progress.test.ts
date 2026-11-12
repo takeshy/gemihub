@@ -26,8 +26,8 @@ test("progress and saved conversations remain readable during generation, reveal
   await appendChatMessage(store,shop,chat,{role:"user",text:"月のアトリエです。落ち着いた雰囲気で、ほかにはありません。",requestId:reference.requestId});
   await appendChatMessage(store,shop,chat,{role:"assistant",text:"画面イメージを作成します。",requestId:reference.requestId,detail:{ready:true,changeRequest:true}});
   const generating=latch(),generationGate=latch(),reviewing=latch(),reviewGate=latch(),repairing=latch(),repairGate=latch();
-  let fail=false,calls=0;
-  const server=createApp(store,{...ai,async propose(text,current,email,_demo,images,_region,context){
+  let fail=false,calls=0,contrastChecks=0;
+  const server=createApp(store,{...ai,async themeContrast(){contrastChecks++;return [];},async propose(text,current,email,_demo,images,_region,context){
     calls++;
     assert.equal(current,null);
     const result=await createInitialTheme({config:{...structuredClone(sample),notificationEmail:email},request:text,images:images||[]},context,async call=>{
@@ -65,6 +65,7 @@ test("progress and saved conversations remain readable during generation, reveal
   progress=await (await request(`/conversations/${chat.id}/progress`)).json();
   assert.equal(progress.stage,"repairing");assert.equal(progress.attempts,2);
   repairGate.resolve();const result=await pending;assert.equal(result.status,200);
+  assert.equal(contrastChecks,2,"the application checks each initial theme candidate before model review");
   const plan=await result.json();
   progress=await (await request(`/conversations/${chat.id}/progress`)).json();
   assert.equal(progress.stage,"complete");assert.equal(progress.planId,plan.id);assert.equal(progress.preview,undefined);

@@ -9,6 +9,12 @@
     white-space: normal !important;
     max-width: 100%;
   }
+  .public-shop button:disabled {
+    opacity: 1 !important;
+    border-style: dashed !important;
+    box-shadow: none !important;
+    cursor: not-allowed;
+  }
   .public-shop .public-nav {
     display: flex !important;
     flex-wrap: wrap !important;

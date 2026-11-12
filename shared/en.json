@@ -4335,5 +4335,6 @@
   "{0}%引き": "{0}% off",
   "代わりの方が支払い手続き中": "A replacement customer is completing payment",
   "PayPalの決済結果を照合してください": "Check the payment result against PayPal",
-  "受付期限：{0}": "Listing deadline: {0}"
+  "受付期限：{0}": "Listing deadline: {0}",
+  "{0}px・{1}「{2}」の文字のコントラストは{3}:1です。最低{4}:1を確保してください。背景色だけを変えた場合も、文字色と無効状態のボタンを読める配色にしてください。": "At {0}px, {1} “{2}” has text contrast {3}:1. Ensure at least {4}:1. Even when changing only the background, keep text and disabled buttons readable."
 }

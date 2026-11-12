@@ -126,7 +126,7 @@ import {
 } from "./ai.ts";
 import { shopSystem, systemSvg } from "./shop-system.ts";
 import { visualMessagesSchema, withVisualConversation } from "../shared/visual-conversation.ts";
-import { generateReviewedVisual, reviewRenderedVisual, type VisualReviewInput } from "./visual-review.ts";
+import { generateReviewedVisual, reviewRenderedVisual, checkInitialThemeContrast, type VisualReviewInput } from "./visual-review.ts";
 import { visualPreviewOptionsSchema } from "./visual-browser.ts";
 import {
   mediaSchema,
@@ -285,6 +285,7 @@ export function createApp(
     phoneRules?: typeof proposePhoneRules;
     visualAppearance?: typeof proposeVisualAppearance;
     visualReview?: typeof reviewRenderedVisual;
+    themeContrast?: typeof checkInitialThemeContrast;
   } = { propose, proposeArticle, identifyVisual, explainSystem, visualAppearance: proposeVisualAppearance },
   calendar: CalendarGateway = calendarGateway,
   customerFiles?: CustomerFiles,
@@ -3378,7 +3379,7 @@ export function createApp(
                     themeRunId ? { state: themeState, ...(savedChat ? { shopName: initialInterviewFacts(savedChat.messages).name, articles: initialInterviewFacts(savedChat.messages).articles, introductions: initialInterviewFacts(savedChat.messages).introductions } : {}), save: async state => {
                       await store.put("initialThemeRun", themeRunId, state);
                       await saveGeneration({ stage: state.candidate ? "reviewing" : state.feedback.length ? "repairing" : "generating", attempts: state.attempts, preview: initialThemePreview(state) });
-                    } } : undefined,
+                    }, checkContrast: candidate => (intelligence.themeContrast || checkInitialThemeContrast)(candidate, images) } : undefined,
                   );
               if (!current && savedChat) {
                 const facts = initialInterviewFacts(savedChat.messages);

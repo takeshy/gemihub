@@ -115,6 +115,7 @@ function ThemeSamples({ config }: { config: ShopConfig }) {
         <label className="field">{tr("メッセージ")}<textarea readOnly rows={2} value={tr("メッセージの見本です。")} /></label>
       </div>
       <div className="actions"><button type="button" className="primary">{tr("予約する")}</button><button type="button">{tr("戻る")}</button><button type="button" className="selected">{tr("選択中")}</button><a>{tr("詳しく見る")}</a><svg className="icon" role="img" aria-label={tr("アイコン")} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg></div>
+      <div className="actions"><button type="button" className="primary" disabled>{tr("この内容で予約する")} →</button></div>
       <p className="notice">{tr("ご案内の見本です。実際の予約や送信は行いません。")}</p>
       <div className="menu-options"><button type="button" className="selected"><span>{tr("サンプルメニュー")}<small>60{tr("分")}</small></span><strong><span aria-hidden="true">●</span></strong></button></div>
       <aside className="booking-summary"><span className="line-flower" aria-hidden="true">✳</span><p>{tr("サンプルメニュー")}</p></aside>

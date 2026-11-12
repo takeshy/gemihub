@@ -7,11 +7,12 @@ import { fixturesSchema } from "../src/local-preview.ts";
 import type { VisualPreviewData } from "../shared/visual-review.ts";
 import { tr } from "../shared/i18n.ts";
 import { currentAiSignal } from "./llm.ts";
+import { findLowContrastText } from "../shared/contrast-check.ts";
 
 export const visualPreviewOptionsSchema = z.object({
   fixtures: fixturesSchema.optional(), hideHeader: z.boolean().optional(), hideFooter: z.boolean().optional(), articleKey: z.string().max(240).optional(),
 });
-export type RenderedVisual = { width: number; height: number; mimeType: "image/jpeg"; data: string; unavailableImages: string[] };
+export type RenderedVisual = { width: number; height: number; mimeType: "image/jpeg"; data: string; unavailableImages: string[]; contrastIssues?: ReturnType<typeof findLowContrastText> };
 // Bound browser memory independently of the number of simultaneous model requests.
 let rendering: Promise<unknown> = Promise.resolve();
 export async function captureVisualScreens(input: VisualPreviewData): Promise<RenderedVisual[]> {
@@ -68,11 +69,12 @@ async function capture(input: VisualPreviewData): Promise<RenderedVisual[]> {
       await page.waitForFunction(() => [...document.images].every(image => image.complete) && ![...document.querySelectorAll(".theme-image,.managed-hero-image,.menu-image")].some(node => !(node instanceof HTMLImageElement) && !node.querySelector("img")));
       if (await page.evaluate(() => window.visualPreviewError) || errors.length) throw new Error("Visual preview failed to render");
       const surface = page.locator(selector);
+      const contrastIssues = await page.evaluate(findLowContrastText, selector);
       const bounds = await surface.boundingBox();
       if (!bounds || bounds.height < 1 || bounds.height > 20000) throw new Error("Visual preview has invalid dimensions");
       const screenshot = await surface.screenshot({ type: "jpeg", quality: 85, animations: "disabled", timeout: 15000 });
       const image = await sharp(screenshot).resize({ width: 1600, height: 8000, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer({ resolveWithObject: true });
-      results.push({ width, height: Math.ceil(bounds.height), mimeType: "image/jpeg", data: image.data.toString("base64"), unavailableImages: [...unavailableImages] });
+      results.push({ width, height: Math.ceil(bounds.height), mimeType: "image/jpeg", data: image.data.toString("base64"), unavailableImages: [...unavailableImages], contrastIssues });
       await page.close();
     }
     return results;
